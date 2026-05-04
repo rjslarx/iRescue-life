@@ -8181,6 +8181,28 @@ Crawl-delay: 1
         }
       }
 
+      // Task #175: Sync compliance_obligations whenever staff edits a field
+      // that can satisfy an obligation — neuter status flipping to
+      // spayed/neutered, a microchip number being assigned, or a status
+      // change to 'adopted' (the adoption form may have just inserted
+      // pending obligations that the animal already satisfies). Runs
+      // unconditionally; the matcher itself short-circuits if there are no
+      // pending obligations for the animal.
+      const matcherTriggers: string[] = [];
+      if ('neuterStatus' in data && data.neuterStatus) matcherTriggers.push(`neuterStatus=${data.neuterStatus}`);
+      if ('microchipNumber' in data) matcherTriggers.push(`microchipNumber updated`);
+      if (requestedStatus === 'adopted') matcherTriggers.push('status=adopted');
+      if (matcherTriggers.length > 0) {
+        try {
+          const { autoCompletePendingObligations } = await import('./services/compliance-obligation-matcher');
+          await autoCompletePendingObligations(req.tenant!.id, animal.id, {
+            actorNote: `Animal updated: ${matcherTriggers.join(', ')}`,
+          });
+        } catch (matcherErr) {
+          console.error('[ComplianceMatcher] animal PATCH hook failed:', matcherErr);
+        }
+      }
+
       // Skip when finalizeAdoption already wrote the animal_audit_logs
       // entry for this exact status flip (avoids a duplicate row).
       if (!isAdoptedTransition) {
@@ -32065,6 +32087,14 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
         } catch (supersedeErr) {
           console.error('[CalendarMedical] Vaccine supersession failed:', supersedeErr);
         }
+        try {
+          const { autoCompletePendingObligations } = await import('./services/compliance-obligation-matcher');
+          await autoCompletePendingObligations(req.tenant!.id, animalId, {
+            actorNote: `Vaccine ${vaccine.itemName} scheduled via calendar`,
+          });
+        } catch (matcherErr) {
+          console.error('[ComplianceMatcher] calendar-vaccine hook failed:', matcherErr);
+        }
         result = { id: vaccine.id, type: 'vaccine' };
       } else if (type === 'exam') {
         const { medicalExams } = await import('@shared/schema');
@@ -32105,6 +32135,14 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
           });
         } catch (supersedeErr) {
           console.error('[CalendarMedical] PCR supersession failed:', supersedeErr);
+        }
+        try {
+          const { autoCompletePendingObligations } = await import('./services/compliance-obligation-matcher');
+          await autoCompletePendingObligations(req.tenant!.id, animalId, {
+            actorNote: `PCR ${record.careName ?? 'record'} scheduled via calendar`,
+          });
+        } catch (matcherErr) {
+          console.error('[ComplianceMatcher] calendar-PCR hook failed:', matcherErr);
         }
         result = { id: record.id, type: 'preventative_care' };
       } else {
@@ -33250,6 +33288,19 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
         console.error('[MEDICAL BACKUP] Failed to initiate sync:', syncError);
       }
 
+      // Task #175: A completed wellness/recheck exam can satisfy a
+      // vet_checkup compliance obligation. Skip future-dated (pending) exams.
+      if (exam.status === 'completed') {
+        try {
+          const { autoCompletePendingObligations } = await import('./services/compliance-obligation-matcher');
+          await autoCompletePendingObligations(req.tenant!.id, req.params.animalId, {
+            actorNote: `Exam ${exam.examType} completed`,
+          });
+        } catch (matcherErr) {
+          console.error('[ComplianceMatcher] exam create hook failed:', matcherErr);
+        }
+      }
+
       res.json({ exam });
     } catch (error) {
       next(error);
@@ -33502,6 +33553,19 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
       } catch (supersedeErr) {
         console.error('[Vaccine] Supersession of older same-family records failed:', supersedeErr);
       }
+
+      // Task #175: After logging a vaccine, close any compliance obligation
+      // (rabies, dhpp_booster, heartworm_test if it's an HW antigen, etc.)
+      // that the new dose now satisfies.
+      try {
+        const { autoCompletePendingObligations } = await import('./services/compliance-obligation-matcher');
+        await autoCompletePendingObligations(req.tenant!.id, req.params.animalId, {
+          actorNote: `Vaccine ${vaccine.itemName} logged by staff`,
+        });
+      } catch (matcherErr) {
+        console.error('[ComplianceMatcher] vaccine create hook failed:', matcherErr);
+      }
+
       // Sync medical records to backup (non-blocking)
       try {
         const { syncAnimalMedicalRecords } = await import('./lib/animalBackupService');
@@ -36514,6 +36578,19 @@ Email: ${application.applicantEmail || ''}`
         return res.status(404).json({ error: 'Animal not found' });
       }
 
+      // Task #175: A neuter-status flip to spayed/neutered can satisfy a
+      // spay_neuter compliance obligation.
+      if (neuterStatus === 'spayed' || neuterStatus === 'neutered') {
+        try {
+          const { autoCompletePendingObligations } = await import('./services/compliance-obligation-matcher');
+          await autoCompletePendingObligations(req.tenant!.id, req.params.animalId, {
+            actorNote: `Neuter status set to ${neuterStatus}`,
+          });
+        } catch (matcherErr) {
+          console.error('[ComplianceMatcher] medical/update-status hook failed:', matcherErr);
+        }
+      }
+
       res.json({ animal });
     } catch (error) {
       next(error);
@@ -37122,6 +37199,18 @@ Email: ${application.applicantEmail || ''}`
         console.error('[PreventativeCare] Supersession of older same-series records failed:', supersedeErr);
       }
 
+      // Task #175: Close any compliance obligation that this PCR satisfies
+      // (heartworm_prevention_proof, flea_tick_prevention, fecal_test, etc.).
+      // Combo-safe: a heartworm-only product won't close a flea/tick obligation.
+      try {
+        const { autoCompletePendingObligations } = await import('./services/compliance-obligation-matcher');
+        await autoCompletePendingObligations(req.tenant!.id, record.animalId, {
+          actorNote: `PCR ${record.careName ?? 'record'} logged by staff`,
+        });
+      } catch (matcherErr) {
+        console.error('[ComplianceMatcher] PCR create hook failed:', matcherErr);
+      }
+
       // Update animal's medicalDueDates cache if the care type covers heartworm or flea/tick
       if (careTypeInfo && effectiveNextDueDate && data.animalId && (careTypeInfo.coversHeartworm || careTypeInfo.coversFleaTick)) {
         try {
@@ -37206,6 +37295,17 @@ Email: ${application.applicantEmail || ''}`
               });
             } catch (supersedeErr) {
               console.error('[PreventativeCare] Follow-up supersession failed:', supersedeErr);
+            }
+            // Task #175: A future-dated follow-up record can satisfy an
+            // ongoing-prevention obligation if its next_due_date covers the
+            // contractual due date.
+            try {
+              const { autoCompletePendingObligations } = await import('./services/compliance-obligation-matcher');
+              await autoCompletePendingObligations(req.tenant!.id, followUpRecord.animalId, {
+                actorNote: `PCR follow-up auto-scheduled`,
+              });
+            } catch (matcherErr) {
+              console.error('[ComplianceMatcher] PCR follow-up hook failed:', matcherErr);
             }
           }
         } catch (followUpError) {
@@ -38059,6 +38159,24 @@ Email: ${application.applicantEmail || ''}`
               updatedAt: new Date(),
             })
             .where(eq(preventativeCareRecords.id, confirmation.preventativeCareRecordId));
+        }
+      }
+
+      // Task #175: Sync compliance_obligations whenever staff approves an
+      // adopter confirmation. Pass the confirmation's file_url so the closed
+      // obligation row carries the actual proof document the adopter
+      // uploaded. Only the obligations whose satisfaction criteria are met
+      // by the new state get closed (e.g. a Bravecto confirmation that does
+      // NOT cover heartworm will NOT close the heartworm obligation).
+      if (action === 'approve') {
+        try {
+          const { autoCompletePendingObligations } = await import('./services/compliance-obligation-matcher');
+          await autoCompletePendingObligations(req.tenant!.id, confirmation.animalId, {
+            proofDocumentUrl: confirmation.fileUrl ?? null,
+            actorNote: `Approved by reviewer ${req.user!.id} (confirmation ${confirmation.id})`,
+          });
+        } catch (matcherErr) {
+          console.error('[ComplianceMatcher] approve hook failed:', matcherErr);
         }
       }
 

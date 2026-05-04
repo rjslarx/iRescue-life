@@ -1,0 +1,517 @@
+import { and, asc, desc, eq, gte, sql } from "drizzle-orm";
+import { db } from "../db";
+import {
+  animals,
+  complianceObligations,
+  medicalExams,
+  preventativeCareRecords,
+  preventativeCareTypes,
+  vaccineRecords,
+  type ComplianceObligation,
+} from "@shared/schema";
+import { vaccineFamily } from "./medical-supersession";
+
+/**
+ * Auto-resolution engine for `compliance_obligations`.
+ *
+ * Each obligation row created at adoption time (e.g. "Heartworm Prevention by
+ * 2026-04-03", "Spay/Neuter Certificate") is matched against the live medical
+ * + animal-profile state every time staff log a new PCR / vaccine / exam, OR
+ * approve an adopter-uploaded confirmation, OR change the animal's
+ * neuter/microchip fields. Satisfied obligations flip to `completed` so the
+ * adopter portal stops showing them as "Nd overdue" once the underlying
+ * record is actually present.
+ *
+ * The same logic runs in a one-time startup backfill so historical state
+ * (e.g. Pogo's heartworm obligation that was already satisfied by a Bravecto
+ * confirmation that did NOT cover heartworm) gets reconciled correctly.
+ */
+
+const SLACK_DAYS_BEFORE_OBLIGATION = 30;
+const RECENT_EXAM_DAYS = 365;
+
+type ObligationRow = ComplianceObligation;
+
+type AnimalSnapshot = {
+  id: string;
+  status: string | null;
+  neuterStatus: string | null;
+  microchipNumber: string | null;
+};
+
+type PcrEvent = {
+  id: string;
+  careCategory: string | null;
+  careName: string | null;
+  dateAdministered: Date;
+  nextDueDate: Date | null;
+  coversHeartworm: boolean;
+  coversFleaTick: boolean;
+};
+
+type VaccineEvent = {
+  id: string;
+  itemName: string;
+  family: string;
+  dateGiven: Date;
+};
+
+type ExamEvent = {
+  id: string;
+  examDate: Date;
+  status: string | null;
+};
+
+type AnimalState = {
+  animal: AnimalSnapshot;
+  pcrs: PcrEvent[];
+  vaccines: VaccineEvent[];
+  exams: ExamEvent[];
+};
+
+function toDate(value: Date | string | null | undefined): Date | null {
+  if (value == null) return null;
+  const d = value instanceof Date ? value : new Date(value);
+  return Number.isFinite(d.getTime()) ? d : null;
+}
+
+function obligationFloor(obl: ObligationRow): Date {
+  const created = toDate(obl.createdAt) ?? new Date(0);
+  const floor = new Date(created.getTime());
+  floor.setDate(floor.getDate() - SLACK_DAYS_BEFORE_OBLIGATION);
+  return floor;
+}
+
+function recentExamFloor(): Date {
+  const d = new Date();
+  d.setDate(d.getDate() - RECENT_EXAM_DAYS);
+  return d;
+}
+
+async function loadState(
+  tenantId: string,
+  animalId: string,
+): Promise<AnimalState | null> {
+  const [animalRow] = await db
+    .select({
+      id: animals.id,
+      status: animals.status,
+      neuterStatus: animals.neuterStatus,
+      microchipNumber: animals.microchipNumber,
+    })
+    .from(animals)
+    .where(and(eq(animals.id, animalId), eq(animals.tenantId, tenantId)))
+    .limit(1);
+  if (!animalRow) return null;
+
+  const pcrRows = await db
+    .select({
+      id: preventativeCareRecords.id,
+      careCategory: preventativeCareRecords.careCategory,
+      careName: preventativeCareRecords.careName,
+      dateAdministered: preventativeCareRecords.dateAdministered,
+      nextDueDate: preventativeCareRecords.nextDueDate,
+      coversHeartworm: preventativeCareTypes.coversHeartworm,
+      coversFleaTick: preventativeCareTypes.coversFleaTick,
+    })
+    .from(preventativeCareRecords)
+    .leftJoin(
+      preventativeCareTypes,
+      eq(preventativeCareTypes.id, preventativeCareRecords.careTypeId),
+    )
+    .where(
+      and(
+        eq(preventativeCareRecords.tenantId, tenantId),
+        eq(preventativeCareRecords.animalId, animalId),
+      ),
+    )
+    .orderBy(desc(preventativeCareRecords.dateAdministered));
+
+  const pcrs: PcrEvent[] = [];
+  for (const row of pcrRows) {
+    const dt = toDate(row.dateAdministered);
+    if (!dt) continue;
+    pcrs.push({
+      id: row.id,
+      careCategory: row.careCategory ?? null,
+      careName: row.careName ?? null,
+      dateAdministered: dt,
+      nextDueDate: toDate(row.nextDueDate),
+      coversHeartworm: row.coversHeartworm === true,
+      coversFleaTick: row.coversFleaTick === true,
+    });
+  }
+
+  const vaxRows = await db
+    .select({
+      id: vaccineRecords.id,
+      itemName: vaccineRecords.itemName,
+      dateGiven: vaccineRecords.dateGiven,
+    })
+    .from(vaccineRecords)
+    .where(
+      and(
+        eq(vaccineRecords.tenantId, tenantId),
+        eq(vaccineRecords.animalId, animalId),
+      ),
+    )
+    .orderBy(desc(vaccineRecords.dateGiven));
+
+  const vaccines: VaccineEvent[] = [];
+  for (const row of vaxRows) {
+    const dt = toDate(row.dateGiven);
+    if (!dt) continue;
+    vaccines.push({
+      id: row.id,
+      itemName: row.itemName,
+      family: vaccineFamily(row.itemName),
+      dateGiven: dt,
+    });
+  }
+
+  const examRows = await db
+    .select({
+      id: medicalExams.id,
+      examDate: medicalExams.examDate,
+      status: medicalExams.status,
+    })
+    .from(medicalExams)
+    .where(
+      and(
+        eq(medicalExams.tenantId, tenantId),
+        eq(medicalExams.animalId, animalId),
+        gte(medicalExams.examDate, recentExamFloor()),
+      ),
+    )
+    .orderBy(desc(medicalExams.examDate));
+
+  const exams: ExamEvent[] = [];
+  for (const row of examRows) {
+    const dt = toDate(row.examDate);
+    if (!dt) continue;
+    exams.push({ id: row.id, examDate: dt, status: row.status ?? null });
+  }
+
+  return {
+    animal: {
+      id: animalRow.id,
+      status: animalRow.status ?? null,
+      neuterStatus: animalRow.neuterStatus ?? null,
+      microchipNumber: animalRow.microchipNumber ?? null,
+    },
+    pcrs,
+    vaccines,
+    exams,
+  };
+}
+
+function findCoveringPcrForOngoing(
+  state: AnimalState,
+  obl: ObligationRow,
+  predicate: (e: PcrEvent) => boolean,
+): PcrEvent | null {
+  const floor = obligationFloor(obl);
+  const dueBy = toDate(obl.contractualDueDate);
+  // Pick the latest dose administered on/after the obligation's floor that
+  // also covers the contractual due date.
+  //
+  // When the obligation HAS a contractualDueDate, an ongoing-prevention dose
+  // must come with a `next_due_date` that lands on/after the due date — a
+  // dose with no follow-up scheduled is by definition not "ongoing", so it
+  // can't satisfy a prevention-by-X-date contract. (Architect feedback,
+  // Task #175 review.) When the obligation has no due-by, we accept any
+  // dose that covers the obligation type — the contract is open-ended.
+  for (const e of state.pcrs) {
+    if (!predicate(e)) continue;
+    if (e.dateAdministered < floor) continue;
+    if (dueBy) {
+      if (!e.nextDueDate) continue;
+      if (e.nextDueDate < dueBy) continue;
+    }
+    return e;
+  }
+  return null;
+}
+
+function findCoveringPcrOneShot(
+  state: AnimalState,
+  obl: ObligationRow,
+  predicate: (e: PcrEvent) => boolean,
+): PcrEvent | null {
+  const floor = obligationFloor(obl);
+  for (const e of state.pcrs) {
+    if (!predicate(e)) continue;
+    if (e.dateAdministered < floor) continue;
+    return e;
+  }
+  return null;
+}
+
+function findCoveringVaccine(
+  state: AnimalState,
+  obl: ObligationRow,
+  family: string,
+): VaccineEvent | null {
+  const floor = obligationFloor(obl);
+  for (const v of state.vaccines) {
+    if (v.family !== family) continue;
+    if (v.dateGiven < floor) continue;
+    return v;
+  }
+  return null;
+}
+
+function findCoveringExam(
+  state: AnimalState,
+  obl: ObligationRow,
+): ExamEvent | null {
+  const floor = obligationFloor(obl);
+  for (const e of state.exams) {
+    if (e.examDate < floor) continue;
+    if (e.status && e.status !== "completed") continue;
+    return e;
+  }
+  return null;
+}
+
+function nameMatches(careName: string | null, regex: RegExp): boolean {
+  if (!careName) return false;
+  return regex.test(careName.toLowerCase());
+}
+
+type Match =
+  | { kind: "pcr"; eventId: string }
+  | { kind: "vaccine"; eventId: string }
+  | { kind: "exam"; eventId: string }
+  | { kind: "animal"; field: "neuterStatus" | "microchipNumber" };
+
+function obligationMatch(
+  obl: ObligationRow,
+  state: AnimalState,
+): Match | null {
+  const labelLower = (obl.label || "").toLowerCase();
+  const type = (obl.obligationType || "").toLowerCase();
+
+  // 1. spay_neuter — animal field
+  if (type === "spay_neuter" || /spay|neuter/.test(labelLower)) {
+    const ns = (state.animal.neuterStatus || "").toLowerCase();
+    if (ns === "spayed" || ns === "neutered") {
+      return { kind: "animal", field: "neuterStatus" };
+    }
+    return null;
+  }
+
+  // 2. microchip_registration — animal field
+  if (type === "microchip_registration" || /microchip/.test(labelLower)) {
+    const m = (state.animal.microchipNumber || "").trim();
+    if (m.length > 0) {
+      return { kind: "animal", field: "microchipNumber" };
+    }
+    return null;
+  }
+
+  // 3. heartworm_prevention_proof / flea_tick_prevention — ongoing PCR
+  if (
+    type === "heartworm_prevention_proof" ||
+    /heartworm.*(prevent|preventative|prophyla)|hw.*prevent/.test(labelLower)
+  ) {
+    // If the label explicitly says "test", route to one-shot test instead.
+    if (/heartworm.*test|hw.*test/.test(labelLower)) {
+      const oneShot = findCoveringPcrOneShot(
+        state,
+        obl,
+        (e) => nameMatches(e.careName, /heartworm.*test|hw.*test|antigen/),
+      );
+      if (oneShot) return { kind: "pcr", eventId: oneShot.id };
+      const vax = findCoveringVaccine(state, obl, "hw_test");
+      if (vax) return { kind: "vaccine", eventId: vax.id };
+      return null;
+    }
+    const e = findCoveringPcrForOngoing(state, obl, (p) => p.coversHeartworm);
+    return e ? { kind: "pcr", eventId: e.id } : null;
+  }
+
+  if (type === "flea_tick_prevention" || /flea.*tick|flea\b|tick\b/.test(labelLower)) {
+    const e = findCoveringPcrForOngoing(state, obl, (p) => p.coversFleaTick);
+    return e ? { kind: "pcr", eventId: e.id } : null;
+  }
+
+  // 4. rabies (and rabies_booster legacy)
+  if (type === "rabies" || type === "rabies_booster" || /rabies/.test(labelLower)) {
+    const v = findCoveringVaccine(state, obl, "rabies");
+    return v ? { kind: "vaccine", eventId: v.id } : null;
+  }
+
+  // 5. dhpp_booster
+  if (
+    type === "dhpp_booster" ||
+    /dhpp|dappv|da2pp|distemper|parvo/.test(labelLower)
+  ) {
+    const v = findCoveringVaccine(state, obl, "dhpp");
+    return v ? { kind: "vaccine", eventId: v.id } : null;
+  }
+
+  // 6. heartworm_test (legacy / label-only)
+  if (type === "heartworm_test" || /heartworm.*test|hw.*test/.test(labelLower)) {
+    const oneShot = findCoveringPcrOneShot(
+      state,
+      obl,
+      (e) => nameMatches(e.careName, /heartworm.*test|hw.*test|antigen/),
+    );
+    if (oneShot) return { kind: "pcr", eventId: oneShot.id };
+    const vax = findCoveringVaccine(state, obl, "hw_test");
+    if (vax) return { kind: "vaccine", eventId: vax.id };
+    return null;
+  }
+
+  // 7. fecal_test
+  if (type === "fecal_test" || /fecal|stool|parasite\s*screen/.test(labelLower)) {
+    const e = findCoveringPcrOneShot(
+      state,
+      obl,
+      (p) => nameMatches(p.careName, /fecal|stool|parasite.*screen/),
+    );
+    return e ? { kind: "pcr", eventId: e.id } : null;
+  }
+
+  // 8. vet_checkup
+  if (type === "vet_checkup" || /vet.*check|wellness|check.?up/.test(labelLower)) {
+    const e = findCoveringExam(state, obl);
+    return e ? { kind: "exam", eventId: e.id } : null;
+  }
+
+  // 9. obedience_training / ongoing_treatment / custom — no auto-detection.
+  return null;
+}
+
+export type ObligationCloseoutResult = {
+  completedCount: number;
+  completedIds: string[];
+};
+
+/**
+ * Given an animal that just had a medical event recorded (or an animal field
+ * change), close out any pending compliance_obligations whose satisfaction
+ * criteria are now met.
+ *
+ * `proofDocumentUrl` is optional: when staff approves an adopter-uploaded
+ * confirmation, the file_url is propagated onto the closed obligation so the
+ * audit trail shows the actual proof doc the adopter sent in.
+ */
+export async function autoCompletePendingObligations(
+  tenantId: string,
+  animalId: string,
+  opts: {
+    proofDocumentUrl?: string | null;
+    actorNote?: string;
+  } = {},
+): Promise<ObligationCloseoutResult> {
+  try {
+    const pending = await db
+      .select()
+      .from(complianceObligations)
+      .where(
+        and(
+          eq(complianceObligations.tenantId, tenantId),
+          eq(complianceObligations.animalId, animalId),
+          sql`${complianceObligations.status} IN ('pending', 'overdue')`,
+        ),
+      )
+      .orderBy(asc(complianceObligations.contractualDueDate));
+
+    if (pending.length === 0) {
+      return { completedCount: 0, completedIds: [] };
+    }
+
+    const state = await loadState(tenantId, animalId);
+    if (!state) {
+      return { completedCount: 0, completedIds: [] };
+    }
+
+    const completedIds: string[] = [];
+    const now = new Date();
+    const noteSuffix = opts.actorNote ? ` — ${opts.actorNote}` : "";
+
+    for (const obl of pending) {
+      const match = obligationMatch(obl, state);
+      if (!match) continue;
+
+      const matchSummary =
+        match.kind === "animal"
+          ? `animal.${match.field}`
+          : `${match.kind}:${match.eventId}`;
+      const newNotes = `${obl.notes ? obl.notes + " | " : ""}Auto-completed by matching ${matchSummary}${noteSuffix}`;
+
+      await db
+        .update(complianceObligations)
+        .set({
+          status: "completed" as const,
+          completedAt: now,
+          notes: newNotes,
+          proofDocumentUrl: opts.proofDocumentUrl ?? obl.proofDocumentUrl,
+          updatedAt: now,
+        })
+        .where(eq(complianceObligations.id, obl.id));
+
+      completedIds.push(obl.id);
+    }
+
+    if (completedIds.length > 0) {
+      console.log(
+        `[ComplianceMatcher] Auto-completed ${completedIds.length} obligation(s) for animal ${animalId} (tenant ${tenantId})`,
+      );
+    }
+
+    return { completedCount: completedIds.length, completedIds };
+  } catch (err) {
+    console.error(
+      "[ComplianceMatcher] autoCompletePendingObligations failed:",
+      err,
+    );
+    return { completedCount: 0, completedIds: [] };
+  }
+}
+
+/**
+ * Used by the startup backfill to iterate every pending obligation across
+ * all tenants. Returns total count of obligations newly closed.
+ */
+export async function runComplianceObligationBackfill(): Promise<{
+  scanned: number;
+  completed: number;
+  perTenant: Record<string, number>;
+}> {
+  const rows = await db
+    .select({
+      tenantId: complianceObligations.tenantId,
+      animalId: complianceObligations.animalId,
+    })
+    .from(complianceObligations)
+    .where(
+      sql`${complianceObligations.status} IN ('pending', 'overdue')`,
+    );
+
+  // De-dupe (tenant,animal) so we run the matcher once per animal.
+  const seen = new Set<string>();
+  const pairs: { tenantId: string; animalId: string }[] = [];
+  for (const r of rows) {
+    const k = `${r.tenantId}::${r.animalId}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    pairs.push({ tenantId: r.tenantId, animalId: r.animalId });
+  }
+
+  let completed = 0;
+  const perTenant: Record<string, number> = {};
+  for (const p of pairs) {
+    const res = await autoCompletePendingObligations(p.tenantId, p.animalId, {
+      actorNote: "Startup backfill (Task #175)",
+    });
+    completed += res.completedCount;
+    if (res.completedCount > 0) {
+      perTenant[p.tenantId] = (perTenant[p.tenantId] || 0) + res.completedCount;
+    }
+  }
+
+  return { scanned: pairs.length, completed, perTenant };
+}

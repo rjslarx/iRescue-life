@@ -14,6 +14,7 @@ import { backfillNewPagePermissions } from "./services/page-permissions-seeding"
 import { seedPlatformPreventativeProtocols } from "./services/preventative-protocols-seeding";
 import { backfillSupersededPreventativeCare } from "./scripts/backfill-superseded-preventative-care";
 import { backfillTerminalAnimalMedicalCleanup } from "./scripts/backfill-terminal-animal-medical-cleanup";
+import { backfillComplianceObligationsSync } from "./scripts/backfill-compliance-obligations-sync";
 import { backfillAdoptionsFromApplications } from "./scripts/backfill-adoptions-from-applications";
 import { db } from "./db";
 import { medicalCatalog, medicalPrescriptions, medicalDoses } from "@shared/schema";
@@ -329,5 +330,13 @@ app.use((req, res, next) => {
     // (Kanban-adopted or PATCH-adopted historically didn't insert). Without
     // this row the adopter compliance/warning engine silently skips them.
     backfillAdoptionsFromApplications();
+
+    // Task #175: One-time sync of compliance_obligations against existing
+    // PCR/vaccine/exam/animal-field state. Closes obligations that were
+    // already satisfied at adoption time (e.g. spay_neuter when neuter_status
+    // was already set, or microchip_registration when chip was on file).
+    // Runtime hooks in vaccine create, PCR create, exam create, animal PATCH,
+    // and the staff confirmation-approve endpoint handle new events.
+    backfillComplianceObligationsSync();
   });
 })();
