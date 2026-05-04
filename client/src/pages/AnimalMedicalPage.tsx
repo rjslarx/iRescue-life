@@ -1918,15 +1918,44 @@ export default function AnimalMedicalPage() {
                       <div className="flex gap-2 flex-wrap">
                         {isActive ? (
                           <>
-                            <Button
-                              variant="default"
-                              size="sm"
-                              onClick={() => openDoseChartDialog(rx)}
-                              data-testid={`button-chart-dose-${rx.id}`}
-                            >
-                              <Plus className="w-4 h-4 mr-1" />
-                              Administer
-                            </Button>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="default"
+                                  size="sm"
+                                  onClick={() =>
+                                    chartDoseMutation.mutate({
+                                      prescriptionId: rx.id,
+                                      administeredAt: new Date().toISOString(),
+                                    })
+                                  }
+                                  disabled={chartDoseMutation.isPending}
+                                  data-testid={`button-quick-log-${rx.id}`}
+                                >
+                                  <CheckCircle2 className="w-4 h-4 mr-1" />
+                                  Log Given
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>One-click: records this dose as given right now.</p>
+                              </TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => openDoseChartDialog(rx)}
+                                  data-testid={`button-chart-dose-${rx.id}`}
+                                >
+                                  <Plus className="w-4 h-4 mr-1" />
+                                  Administer…
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Set a custom time or add notes.</p>
+                              </TooltipContent>
+                            </Tooltip>
                             <Button
                               variant="outline"
                               size="sm"

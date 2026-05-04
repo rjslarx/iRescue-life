@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Pill, CheckCircle2, Clock, AlertCircle, Printer, XCircle } from "lucide-react";
@@ -153,6 +154,12 @@ export default function MedicalTasksPage() {
     const localISO = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
     setAdministerTime(localISO);
     setIsDialogOpen(true);
+  };
+
+  // One-click quick log: marks the dose given at "now" with no notes.
+  // Use the existing administer mutation directly, no dialog.
+  const handleQuickLog = (dose: any) => {
+    administerMutation.mutate({ doseId: dose.id });
   };
 
   const confirmAdminister = () => {
@@ -336,8 +343,8 @@ export default function MedicalTasksPage() {
                         const daysOverdue = getDaysOverdue(dose.dueDate);
 
                         return (
+                          <div key={dose.id}>
                           <div
-                            key={dose.id}
                             className={`flex items-start gap-4 p-4 rounded-lg border border-destructive/30 ${
                               isGiven || isUnable ? 'bg-muted/50' : 'bg-destructive/5'
                             }`}
@@ -400,27 +407,61 @@ export default function MedicalTasksPage() {
                                 </Badge>
                               )}
                             </div>
-                            <div className="no-print flex gap-2">
+                            <div className="no-print flex gap-2 flex-wrap">
                               {isPending && (
                                 <>
-                                  <Button
-                                    size="sm"
-                                    onClick={() => handleAdminister(dose, animal)}
-                                    data-testid={`button-administer-overdue-${dose.id}`}
-                                  >
-                                    Administer
-                                  </Button>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        size="sm"
+                                        onClick={() => handleQuickLog(dose)}
+                                        disabled={administerMutation.isPending}
+                                        data-testid={`button-quick-log-overdue-${dose.id}`}
+                                      >
+                                        <CheckCircle2 className="w-4 h-4 mr-1" />
+                                        Log Given
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p>One-click: records as given right now.</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => handleAdminister(dose, animal)}
+                                        data-testid={`button-administer-overdue-${dose.id}`}
+                                      >
+                                        Administer…
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p>Set a custom time or add notes.</p>
+                                    </TooltipContent>
+                                  </Tooltip>
                                   <Button
                                     size="sm"
                                     variant="outline"
                                     onClick={() => handleUnable(dose, animal)}
                                     data-testid={`button-unable-overdue-${dose.id}`}
                                   >
-                                    Unable to Administer
+                                    Unable
                                   </Button>
                                 </>
                               )}
                             </div>
+                          </div>
+                          {isPending && daysOverdue > 14 && (
+                            <p
+                              className="text-xs text-muted-foreground italic mt-2 px-4"
+                              data-testid={`hint-stale-overdue-${dose.id}`}
+                            >
+                              Pending since {format(new Date(dose.dueDate), 'MMM d, yyyy')}. If it was already given,
+                              click <strong>Log Given</strong> to record it. If it can't be given, click <strong>Unable</strong>.
+                            </p>
+                          )}
                           </div>
                         );
                       })}
@@ -548,23 +589,47 @@ export default function MedicalTasksPage() {
                                 </Badge>
                               )}
                             </div>
-                            <div className="no-print flex gap-2">
+                            <div className="no-print flex gap-2 flex-wrap">
                               {isPending && (
                                 <>
-                                  <Button
-                                    size="sm"
-                                    onClick={() => handleAdminister(dose, animal)}
-                                    data-testid={`button-administer-${dose.id}`}
-                                  >
-                                    Administer
-                                  </Button>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        size="sm"
+                                        onClick={() => handleQuickLog(dose)}
+                                        disabled={administerMutation.isPending}
+                                        data-testid={`button-quick-log-${dose.id}`}
+                                      >
+                                        <CheckCircle2 className="w-4 h-4 mr-1" />
+                                        Log Given
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p>One-click: records as given right now.</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => handleAdminister(dose, animal)}
+                                        data-testid={`button-administer-${dose.id}`}
+                                      >
+                                        Administer…
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p>Set a custom time or add notes.</p>
+                                    </TooltipContent>
+                                  </Tooltip>
                                   <Button
                                     size="sm"
                                     variant="outline"
                                     onClick={() => handleUnable(dose, animal)}
                                     data-testid={`button-unable-${dose.id}`}
                                   >
-                                    Unable to Administer
+                                    Unable
                                   </Button>
                                 </>
                               )}
