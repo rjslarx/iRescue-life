@@ -124,7 +124,7 @@ export async function backfillAdoptionsFromApplications(): Promise<void> {
           .map((o) => `${o.animal_name ?? "?"} (${o.animal_id} / tenant ${o.tenant_id})`)
           .join("; ");
         console.warn(
-          `[Startup] Adoptions backfill: ${totalOrphans} adopted animal(s) have no linked application — staff must add adopter info manually. Sample: ${sample}${totalOrphans > 10 ? " (…)" : ""}`,
+          `[Startup] Adoptions backfill: ${totalOrphans} adopted animal(s) have no eligible stage='adopted' application on file (the only stage this backfill uses) — staff must add adopter info manually via the Record Adoption form. Sample: ${sample}${totalOrphans > 10 ? " (…)" : ""}`,
         );
       }
     } catch (orphanErr) {
