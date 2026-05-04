@@ -35331,7 +35331,16 @@ Email: ${application.applicantEmail || ''}`
           };
           const nextDose = computeNextScheduledDose(givenAtDate, prescription.frequency, protocol);
           const dailyDosing = isDailyDosingFrequency(prescription.frequency);
-          const pastEndDate = !!(nextDose && prescription.endDate && nextDose > new Date(prescription.endDate));
+          // Day-inclusive end-date comparison: end_date is stored as date-only
+          // (midnight). Compare the next dose against END-OF-DAY of endDate so
+          // the final on-day dose isn't clipped one early (e.g., day-3 morning
+          // of a 3-day SID course should still count as within endDate).
+          let pastEndDate = false;
+          if (nextDose && prescription.endDate) {
+            const endOfDay = new Date(prescription.endDate);
+            endOfDay.setHours(23, 59, 59, 999);
+            pastEndDate = nextDose > endOfDay;
+          }
           const shouldClear = (dailyDosing && !prescription.endDate) || pastEndDate;
           // Advance if we have a valid next dose AND we're not in a terminate case.
           // Only clear nextScheduledDose for the intended cases (daily-dosing without
@@ -35603,7 +35612,13 @@ Email: ${application.applicantEmail || ''}`
         };
         const nextDose = computeNextScheduledDose(givenAtDate, prescription.frequency, protocol);
         const dailyDosing = isDailyDosingFrequency(prescription.frequency);
-        const pastEndDate = !!(nextDose && prescription.endDate && nextDose > new Date(prescription.endDate));
+        // Day-inclusive end-date comparison (see PATCH endpoint for rationale).
+        let pastEndDate = false;
+        if (nextDose && prescription.endDate) {
+          const endOfDay = new Date(prescription.endDate);
+          endOfDay.setHours(23, 59, 59, 999);
+          pastEndDate = nextDose > endOfDay;
+        }
         const shouldClear = (dailyDosing && !prescription.endDate) || pastEndDate;
         if (nextDose && !shouldClear) {
           await db

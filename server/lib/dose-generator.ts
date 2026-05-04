@@ -73,8 +73,9 @@ export function generateDosesForPrescription(options: DoseGeneratorOptions): Gen
       end = new Date(start.getTime());
     }
   } else if (isDailyDosingFreq && !isOneTime) {
-    console.warn(`[DOSE-GEN]   WARNING: Daily-dosing prescription ${prescription.id} (${prescription.medicationName}, ${prescription.frequency}) has no endDate — generating only the first day's doses to avoid runaway schedule. Set a Duration / End Date or use "End Treatment".`);
+    console.warn(`[DOSE-GEN]   WARNING: Daily-dosing prescription ${prescription.id} (${prescription.medicationName}, ${prescription.frequency}) has no endDate — generating exactly one starting dose to avoid runaway schedule. Set a Duration / End Date or use "End Treatment".`);
     end = new Date(start.getTime()); // limit to first day only
+    endDateIsBacklogged = true; // reuse the backlogged flag → single-dose path below
   } else {
     end = new Date(start.getTime() + 30 * 24 * 60 * 60 * 1000); // Default 30 days for interval freqs only
   }
@@ -199,15 +200,20 @@ export function generateDosesForPrescription(options: DoseGeneratorOptions): Gen
     }
   } else {
     console.log(`[DOSE-GEN]   PATH: DAILY-BASED (${doseTimes.length} times/day)`);
+    // For daily-dosing freqs with no real endDate (endDateIsBacklogged means
+    // either backlogged or runaway-protection triggered), emit exactly ONE
+    // starting dose regardless of BID/TID/QID multiplicity.
+    const singleDoseOnly = endDateIsBacklogged;
+    const effectiveDoseTimes = singleDoseOnly ? doseTimes.slice(0, 1) : doseTimes;
     // DAILY-BASED: Generate doses each day with multiple times per day if needed
     for (let d = new Date(start); d <= effectiveEnd && doses.length < MAX_DOSES; d.setDate(d.getDate() + 1)) {
-      for (let i = 0; i < doseTimes.length && doses.length < MAX_DOSES; i++) {
+      for (let i = 0; i < effectiveDoseTimes.length && doses.length < MAX_DOSES; i++) {
         const doseTime = new Date(d);
-        let { hour, minute } = doseTimes[i];
+        let { hour, minute } = effectiveDoseTimes[i];
         
         const nowMinutes = now.getHours() * 60 + now.getMinutes();
         const morningMinutes = morningTime.hour * 60 + morningTime.minute;
-        if (!isHistorical && isFirstDay(d) && doseTimes.length === 1 && nowMinutes >= morningMinutes) {
+        if (!isHistorical && isFirstDay(d) && effectiveDoseTimes.length === 1 && nowMinutes >= morningMinutes) {
           hour = now.getHours();
           minute = now.getMinutes();
         }
