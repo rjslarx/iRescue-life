@@ -3,6 +3,22 @@ import { applications, animals, adoptions, dismissedWidgetItems, type InsertAppl
 import { eq, and, desc, inArray, sql } from 'drizzle-orm';
 
 /**
+ * Thrown when finalizeAdoption() fails inside updateApplicationStage() for an
+ * 'adopted' transition. Surfacing the structured `code` (e.g. 'no_application',
+ * 'microchip_pending', 'animal_not_found') lets the caller distinguish the
+ * failure mode without string matching, while preserving a real Error type
+ * (no `any` cast).
+ */
+export class FinalizeAdoptionError extends Error {
+  readonly code: string;
+  constructor(message: string, code: string) {
+    super(message);
+    this.name = 'FinalizeAdoptionError';
+    this.code = code;
+  }
+}
+
+/**
  * Ensure an `adoptions` row exists for (tenant, animal). Source of truth for
  * adopter contact info used by every reminder/warning/compliance engine.
  *
@@ -375,7 +391,34 @@ export async function updateApplicationStage(
   
   const oldStage = currentApp.stage;
   const animalId = currentApp.animalId;
-  
+
+  // Path B: when transitioning to 'adopted', finalize the adoption FIRST
+  // (before the application stage update is committed). finalizeAdoption()
+  // handles the adoption row insert, animal status flip + location clear,
+  // microchip transfer, animal audit log, AND it promotes the application
+  // stage to 'adopted' itself. Doing it first means a finalize failure
+  // throws BEFORE we update applications.stage, so we cannot leave the
+  // application marked adopted with no adoption row / animal flip behind
+  // it. Microchip policy is 'skip' on purpose: dragging a card to "Adopted"
+  // on the Kanban board should not be blocked by chip transfer state
+  // (staff use a different workflow to verify chips).
+  const isAdoptedTransition = stage === 'adopted' && oldStage !== 'adopted';
+  if (isAdoptedTransition) {
+    const { finalizeAdoption } = await import('./adoptions');
+    const result = await finalizeAdoption(tenantId, animalId, {
+      applicationId,
+      microchipPolicy: 'skip',
+      actor: userId ? { id: userId } : undefined,
+      auditNote: 'Adopted via Kanban stage change',
+    });
+    if (!result.ok) {
+      throw new FinalizeAdoptionError(
+        `finalizeAdoption failed for animal ${animalId} from application ${applicationId}: ${result.code}`,
+        result.code,
+      );
+    }
+  }
+
   const [application] = await db
     .update(applications)
     .set({
@@ -432,37 +475,14 @@ export async function updateApplicationStage(
     }
   }
   
-  // Sync animal status based on the new application stage
-  await syncAnimalStatusFromApplicationStage(tenantId, animalId, stage, applicationId);
-
-  // Path B fix (Task #164): when transitioning to 'adopted', ensure an
-  // `adoptions` row exists so the adopter compliance/warning engines (which
-  // inner-join on `adoptions` for adopter contact info) can reach the
-  // adopter. Idempotent — if a row already exists for (tenant, animal) it's
-  // left alone. Skips the microchip-pending guard that POST /api/adoptions
-  // applies, on purpose: dragging a card to "Adopted" on the Kanban board
-  // should not be blocked by chip transfer state (staff use a different
-  // workflow to verify chips).
-  if (stage === 'adopted' && oldStage !== 'adopted') {
-    try {
-      const result = await ensureAdoptionRowForAnimal(tenantId, animalId, {
-        applicationId,
-      });
-      if (result.created) {
-        console.log(
-          `[Adoption sync] Created adoptions row for animal ${animalId} from application ${applicationId} (Kanban stage→adopted)`,
-        );
-      }
-    } catch (err) {
-      console.error(
-        `[Adoption sync] Failed to create adoptions row for animal ${animalId} from application ${applicationId}:`,
-        err,
-      );
-      // Don't throw — stage update already committed. The startup backfill
-      // and a future sweep will catch this.
-    }
+  // Sync animal status based on the new application stage (non-adopted
+  // transitions only — the 'adopted' transition was already handled by
+  // finalizeAdoption() above, which owns animal status, location clear,
+  // adoption row, and audit log for that case).
+  if (!isAdoptedTransition) {
+    await syncAnimalStatusFromApplicationStage(tenantId, animalId, stage, applicationId);
   }
-  
+
   return application;
 }
 

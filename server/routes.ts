@@ -7927,74 +7927,78 @@ Crawl-delay: 1
         data.adoptionDate = new Date();
       }
 
-      // Path C fix (Task #164): when transitioning an animal to 'adopted'
-      // via direct PATCH (e.g. the edit-animal form), ensure we capture
-      // adopter contact info into the `adoptions` table — every reminder
-      // / warning / compliance engine inner-joins on that table. The
-      // ordering is:
-      //   1. Pre-resolve the source (existing adoption OR exact candidate
-      //      application id, with stage-priority adopted > approved/trial).
-      //   2. If neither is available, hard-fail 400 BEFORE flipping status.
-      //   3. Insert the adoption row (using the resolved applicationId, so
-      //      it cannot fall back to "no_application" at insert time).
-      //   4. Then run updateAnimal to flip status.
-      // If updateAnimal fails after the insert, the leftover adoption row
-      // is harmless (the heartworm engine joins on animals.status='adopted'
-      // too) and is reused on the next attempt — better than allowing a
-      // status flip without adopter info, which is the explicit anti-goal.
+      // Path C: when transitioning an animal to 'adopted' via direct PATCH
+      // (e.g. the edit-animal form), funnel through the unified
+      // finalizeAdoption() service so the adoption row, location-clearing,
+      // application-stage sync, microchip transfer, and audit log all stay
+      // consistent with Paths A and B. Microchip policy is 'skip' here on
+      // purpose — staff editing the animal record are not in a chip
+      // verification flow (the Record Adoption form is). If no adopter
+      // info is on file, finalizeAdoption hard-fails BEFORE the flip.
       const isAdoptedTransition =
         data.status === 'adopted' &&
         existingAnimal &&
         existingAnimal.status !== 'adopted';
 
+      // Capture pre-delete status / locationType so the downstream
+      // status-change side effects (audit log, terminal-status cleanup,
+      // activity log description) still fire correctly even after we
+      // strip adoption-owned fields from `data` for Path C.
+      const requestedStatus: string | undefined = data.status;
+      const requestedLocationType: string | undefined = data.locationType;
+
       if (isAdoptedTransition) {
         try {
-          const {
-            resolveAdopterSourceForAnimal,
-            ensureAdoptionRowForAnimal,
-          } = await import('./services/applications');
-          const source = await resolveAdopterSourceForAnimal(
-            req.tenant!.id,
-            req.params.id,
-          );
-          if (!source.ok) {
-            return res.status(400).json({
-              error: 'Missing adopter information',
-              code: 'ADOPTION_INFO_REQUIRED',
-              message:
-                'This animal has no adoption application on file — please use the Record Adoption form to capture adopter contact info before marking as adopted.',
-            });
-          }
-          if (!source.alreadyExists) {
-            const result = await ensureAdoptionRowForAnimal(
-              req.tenant!.id,
-              req.params.id,
-              {
-                applicationId: source.applicationId,
-                adoptionDate: data.adoptionDate,
-              },
-            );
-            if (result.reason === 'no_application') {
-              // Should be impossible given the pre-resolved candidate id,
-              // but guard against a race where the application was deleted
-              // between resolve and insert. Hard-fail rather than flip
-              // status silently.
-              return res.status(409).json({
-                error: 'Adopter information disappeared',
+          const { finalizeAdoption } = await import('./services/adoptions');
+          const result = await finalizeAdoption(req.tenant!.id, req.params.id, {
+            adoptionDate: data.adoptionDate,
+            microchipPolicy: 'skip',
+            actor: {
+              id: req.user!.id,
+              name: req.user!.fullName || req.user!.email,
+            },
+            auditNote: 'Adopted via animal edit',
+          });
+          if (!result.ok) {
+            if (result.code === 'ANIMAL_NOT_FOUND') {
+              return res.status(404).json({ error: 'Animal not found' });
+            }
+            if (result.code === 'ADOPTION_INFO_REQUIRED') {
+              const status = result.reason === 'race_no_application' ? 409 : 400;
+              return res.status(status).json({
+                error:
+                  result.reason === 'race_no_application'
+                    ? 'Adopter information disappeared'
+                    : 'Missing adopter information',
                 code: 'ADOPTION_INFO_REQUIRED',
                 message:
-                  'The application linked to this animal was modified mid-update. Please reload and try again.',
+                  result.reason === 'race_no_application'
+                    ? 'The application linked to this animal was modified mid-update. Please reload and try again.'
+                    : 'This animal has no adoption application on file — please use the Record Adoption form to capture adopter contact info before marking as adopted.',
               });
             }
-            if (result.created) {
-              console.log(
-                `[Adoption sync] Created adoptions row for animal ${req.params.id} via PATCH /api/animals/:id (Path C)`,
-              );
-            }
+            return res.status(400).json({
+              error: 'Could not record adoption',
+              code: result.code,
+            });
           }
+          // finalizeAdoption is now the only writer of adoption-owned
+          // fields (status, adoptionDate, locationType, locationName,
+          // fosterId) — strip them from `data` so the downstream
+          // updateAnimal() cannot clobber the cleared location/foster
+          // values with whatever the form happened to submit. The
+          // status-change side effects below (audit_logs row, terminal-
+          // status medication / prescription / PCR / foster cleanup, the
+          // activity-log description) are still triggered because they
+          // gate on `adoptedStatusForSideEffects` rather than `data.status`.
+          delete data.status;
+          delete data.adoptionDate;
+          delete data.locationType;
+          delete data.locationName;
+          delete data.fosterId;
         } catch (adoptionErr) {
           console.error(
-            `[Adoption sync] Failed to ensure adoptions row for animal ${req.params.id} on PATCH:`,
+            `[Adoption sync] finalizeAdoption failed for animal ${req.params.id} on PATCH:`,
             adoptionErr,
           );
           return res.status(500).json({
@@ -8015,7 +8019,7 @@ Crawl-delay: 1
       try {
         const { logActivity } = await import('./lib/activity-logger');
         const changes: string[] = [];
-        if (data.status) changes.push(`status to "${data.status}"`);
+        if (requestedStatus) changes.push(`status to "${requestedStatus}"`);
         if (data.weight) changes.push(`weight to ${data.weight}`);
         if (data.name) changes.push(`name to "${data.name}"`);
         await logActivity({
@@ -8027,14 +8031,14 @@ Crawl-delay: 1
           description: changes.length > 0 
             ? `updated "${animal.name}": ${changes.join(', ')}`
             : `updated "${animal.name}"`,
-          category: data.locationType === 'foster' || data.status === 'available' ? 'movement' : 'intake',
+          category: requestedLocationType === 'foster' || requestedStatus === 'available' ? 'movement' : 'intake',
           metadata: { changes: Object.keys(data) }
         });
       } catch (logError) {
         console.error('Failed to log animal update activity:', logError);
       }
       
-      if (data.status) {
+      if (requestedStatus) {
         try {
           const { createAuditLog } = await import('./audit');
           await createAuditLog({
@@ -8045,7 +8049,7 @@ Crawl-delay: 1
             entityId: animal.id,
             changes: {
               before: { status: existingAnimal?.status },
-              after: { status: data.status },
+              after: { status: requestedStatus },
             },
             metadata: { animalName: animal.name },
             req,
@@ -8055,10 +8059,10 @@ Crawl-delay: 1
         }
 
         const { TERMINAL_STATUSES } = await import('@shared/schema');
-        if (TERMINAL_STATUSES.includes(data.status)) {
+        if (TERMINAL_STATUSES.includes(requestedStatus)) {
           try {
             await db.update(medicationTasks)
-              .set({ status: 'skipped', skipReason: `Animal status changed to ${data.status}` })
+              .set({ status: 'skipped', skipReason: `Animal status changed to ${requestedStatus}` })
               .where(and(
                 eq(medicationTasks.tenantId, req.tenant!.id),
                 eq(medicationTasks.animalId, animal.id),
@@ -8083,7 +8087,7 @@ Crawl-delay: 1
             try {
               const { medicalDoses, medicalPrescriptions, preventativeCareRecords } = await import('@shared/schema');
               const { isNull } = await import('drizzle-orm');
-              const skipNote = `Animal status changed to ${data.status}`;
+              const skipNote = `Animal status changed to ${requestedStatus}`;
               await db.update(medicalDoses)
                 .set({ status: 'skipped', notes: skipNote })
                 .where(and(
@@ -8141,12 +8145,12 @@ Crawl-delay: 1
                 eq(fosterAnimals.status, 'active')
               ));
 
-            if (data.status === 'deceased' || data.status === 'transported') {
+            if (requestedStatus === 'deceased' || requestedStatus === 'transported') {
               const { complianceObligations } = await import('@shared/schema');
               await db.update(complianceObligations)
                 .set({
                   status: 'waived' as const,
-                  notes: `Auto-waived: animal status changed to ${data.status}`,
+                  notes: `Auto-waived: animal status changed to ${requestedStatus}`,
                   updatedAt: new Date(),
                 })
                 .where(and(
@@ -8156,30 +8160,34 @@ Crawl-delay: 1
                 ));
             }
 
-            console.log(`Terminal status "${data.status}" applied to ${animal.name}: cancelled pending medical tasks, foster assignments, and compliance obligations`);
+            console.log(`Terminal status "${requestedStatus}" applied to ${animal.name}: cancelled pending medical tasks, foster assignments, and compliance obligations`);
           } catch (terminalErr) {
             console.error('Failed to process terminal status cleanup:', terminalErr);
           }
         }
       }
 
-      try {
-        const { logAnimalAudit } = await import('./lib/animal-audit-logger');
-        await logAnimalAudit({
-          tenantId: req.tenant!.id,
-          animalId: animal.id,
-          previousStatus: existingAnimal?.status,
-          newStatus: animal.status,
-          previousLocationType: existingAnimal?.locationType,
-          newLocationType: animal.locationType,
-          previousLocationName: existingAnimal?.locationName,
-          newLocationName: animal.locationName,
-          changedBy: req.user!.id,
-          changedByName: req.user!.fullName || req.user!.email,
-          notes: 'Updated via animal edit form',
-        });
-      } catch (auditErr) {
-        console.error('Failed to log animal audit:', auditErr);
+      // Skip when finalizeAdoption already wrote the animal_audit_logs
+      // entry for this exact status flip (avoids a duplicate row).
+      if (!isAdoptedTransition) {
+        try {
+          const { logAnimalAudit } = await import('./lib/animal-audit-logger');
+          await logAnimalAudit({
+            tenantId: req.tenant!.id,
+            animalId: animal.id,
+            previousStatus: existingAnimal?.status,
+            newStatus: animal.status,
+            previousLocationType: existingAnimal?.locationType,
+            newLocationType: animal.locationType,
+            previousLocationName: existingAnimal?.locationName,
+            newLocationName: animal.locationName,
+            changedBy: req.user!.id,
+            changedByName: req.user!.fullName || req.user!.email,
+            notes: 'Updated via animal edit form',
+          });
+        } catch (auditErr) {
+          console.error('Failed to log animal audit:', auditErr);
+        }
       }
 
       res.json({ success: true, animal });
@@ -23481,117 +23489,56 @@ Submitted: ${new Date().toLocaleString()}
     }
     
     try {
-      const { adoptions, animals, applications, insertAdoptionSchema, microchipRecords } = await import('@shared/schema');
-      
+      const { animals, insertAdoptionSchema } = await import('@shared/schema');
+      const { finalizeAdoption } = await import('./services/adoptions');
+
       // Validate request body
       const validatedData = insertAdoptionSchema.parse({
         ...req.body,
         tenantId: req.tenant!.id,
       });
 
-      // Microchip compliance gate - check for pending transfers unless explicitly confirmed
       const confirmMicrochipPending = req.body.confirmMicrochipPending === true;
-      
-      if (!confirmMicrochipPending) {
-        // Check if animal has microchips pending transfer
-        const pendingMicrochips = await db
-          .select()
-          .from(microchipRecords)
-          .where(and(
-            eq(microchipRecords.animalId, validatedData.animalId),
-            eq(microchipRecords.tenantId, req.tenant!.id),
-            ne(microchipRecords.registrationStatus, 'transferred')
-          ));
 
-        if (pendingMicrochips.length > 0) {
+      const result = await finalizeAdoption(req.tenant!.id, validatedData.animalId, {
+        applicationId: validatedData.applicationId ?? undefined,
+        adoptionDate: validatedData.adoptionDate ?? undefined,
+        adopterInfo: {
+          name: validatedData.adopterName,
+          email: validatedData.adopterEmail,
+          phone: validatedData.adopterPhone,
+          adoptionFee: validatedData.adoptionFee ?? null,
+          notes: validatedData.notes ?? null,
+        },
+        microchipPolicy: 'block',
+        confirmMicrochipPending,
+        actor: {
+          id: req.user!.id,
+          name: req.user!.fullName || req.user!.email,
+        },
+        auditNote: 'Adoption finalized',
+      });
+
+      if (!result.ok) {
+        if (result.code === 'ANIMAL_NOT_FOUND') {
+          return res.status(404).json({ error: 'Animal not found' });
+        }
+        if (result.code === 'MICROCHIP_TRANSFER_PENDING') {
           return res.status(409).json({
             error: 'Microchip transfer pending',
             code: 'MICROCHIP_TRANSFER_PENDING',
-            message: `This animal has ${pendingMicrochips.length} microchip(s) with pending registration transfer. Please verify transfer or confirm to proceed.`,
-            pendingMicrochips: pendingMicrochips.map(m => ({
-              id: m.id,
-              microchipNumber: m.microchipNumber,
-              registrationStatus: m.registrationStatus,
-            })),
+            message: `This animal has ${result.pendingMicrochips.length} microchip(s) with pending registration transfer. Please verify transfer or confirm to proceed.`,
+            pendingMicrochips: result.pendingMicrochips,
             requiresConfirmation: true,
           });
         }
-      }
-
-      // Create adoption record
-      const [adoption] = await db
-        .insert(adoptions)
-        .values(validatedData)
-        .returning();
-
-      // Update animal status to 'adopted' and set adoption date
-      await db
-        .update(animals)
-        .set({ 
-          status: 'adopted',
-          adoptionDate: validatedData.adoptionDate || new Date(),
-          locationType: null,
-          locationName: null,
-          updatedAt: new Date() 
-        })
-        .where(eq(animals.id, validatedData.animalId));
-
-      try {
-        const { logAnimalAudit } = await import('./lib/animal-audit-logger');
-        const [existingAnimalForAudit] = await db.select({ status: animals.status, locationType: animals.locationType, locationName: animals.locationName })
-          .from(animals)
-          .where(eq(animals.id, validatedData.animalId))
-          .limit(1);
-        await logAnimalAudit({
-          tenantId: req.tenant!.id,
-          animalId: validatedData.animalId,
-          previousStatus: existingAnimalForAudit?.status,
-          newStatus: 'adopted',
-          previousLocationType: existingAnimalForAudit?.locationType,
-          newLocationType: null,
-          previousLocationName: existingAnimalForAudit?.locationName,
-          newLocationName: null,
-          changedBy: req.user!.id,
-          changedByName: req.user!.fullName || req.user!.email,
-          notes: 'Adoption finalized',
+        return res.status(400).json({
+          error: 'Could not record adoption',
+          code: result.code,
         });
-      } catch (auditErr) {
-        console.error('Failed to log animal audit:', auditErr);
       }
 
-      // If an application is linked, update its stage to 'adopted'
-      if (validatedData.applicationId) {
-        await db
-          .update(applications)
-          .set({
-            stage: 'adopted',
-            updatedAt: new Date()
-          })
-          .where(and(
-            eq(applications.id, validatedData.applicationId),
-            eq(applications.tenantId, req.tenant!.id)
-          ));
-      }
-      
-      // Set microchip records to 'transferred' status upon adoption (non-blocking)
-      // Only updates chips that are 'unregistered' or 'registered_rescue'; leaves 'found_unknown' intact
-      try {
-        const { microchipRecords } = await import('@shared/schema');
-        const { inArray } = await import('drizzle-orm');
-        await db.update(microchipRecords)
-          .set({
-            registrationStatus: 'transferred' as const,
-            transferredAt: new Date(),
-            updatedAt: new Date(),
-          })
-          .where(and(
-            eq(microchipRecords.animalId, validatedData.animalId),
-            eq(microchipRecords.tenantId, req.tenant!.id),
-            inArray(microchipRecords.registrationStatus, ['unregistered', 'registered_rescue'])
-          ));
-      } catch (microchipError) {
-        console.error('Failed to update microchip records for adoption:', microchipError);
-      }
+      const adoption = result.adoption;
 
       // Log activity for adoption (non-blocking - failures won't affect response)
       try {
