@@ -31856,6 +31856,18 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
           
           createdBy: req.user!.id,
         }).returning();
+        // Same supersession as POST /api/animals/:animalId/medical/vaccines
+        // so calendar-scheduled vaccines don't leak phantom date_due rows.
+        try {
+          const { supersedeOlderVaccineRecords } = await import('./services/medical-supersession');
+          await supersedeOlderVaccineRecords(animalId, req.tenant!.id, {
+            id: vaccine.id,
+            itemName: vaccine.itemName,
+            dateDue: vaccine.dateDue,
+          });
+        } catch (supersedeErr) {
+          console.error('[CalendarMedical] Vaccine supersession failed:', supersedeErr);
+        }
         result = { id: vaccine.id, type: 'vaccine' };
       } else if (type === 'exam') {
         const { medicalExams } = await import('@shared/schema');
@@ -31885,6 +31897,18 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
           notes: notes || null,
           createdBy: req.user!.id,
         }).returning();
+        try {
+          const { supersedeOlderPreventativeCareRecords } = await import('./services/medical-supersession');
+          await supersedeOlderPreventativeCareRecords(animalId, req.tenant!.id, {
+            id: record.id,
+            careCategory: record.careCategory,
+            careTypeId: record.careTypeId,
+            careName: record.careName,
+            nextDueDate: record.nextDueDate,
+          });
+        } catch (supersedeErr) {
+          console.error('[CalendarMedical] PCR supersession failed:', supersedeErr);
+        }
         result = { id: record.id, type: 'preventative_care' };
       } else {
         return res.status(400).json({ error: 'Invalid type. Must be: procedure, vaccine, exam, or preventative_care' });
@@ -33267,24 +33291,19 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
         .returning();
 
 
-      // Clear date_due on older records of the same vaccine type for this animal.
-      // When a new dose is recorded, previous booster due dates are superseded.
-      // Only runs when dateGiven is known so we can determine which records are older.
-      if (vaccine.itemName && vaccine.dateGiven) {
-        await db
-          .update(vaccineRecords)
-          .set({ dateDue: null })
-          .where(and(
-            eq(vaccineRecords.animalId, req.params.animalId),
-            eq(vaccineRecords.tenantId, req.tenant!.id),
-            eq(vaccineRecords.itemName, vaccine.itemName),
-            ne(vaccineRecords.id, vaccine.id),
-            isNotNull(vaccineRecords.dateDue),
-            or(
-              lt(vaccineRecords.dateGiven, vaccine.dateGiven),
-              isNull(vaccineRecords.dateGiven)
-            )
-          ));
+      // Supersede older same-family records (DAPPVL2 → DAPPL-9 brand swaps,
+      // Bordetella oral vs intranasal, etc.) so only the latest record in the
+      // family carries a date_due. Family-key match — not just exact itemName
+      // — is what /api/medical/preventative-care/coming-due uses at read time.
+      try {
+        const { supersedeOlderVaccineRecords } = await import('./services/medical-supersession');
+        await supersedeOlderVaccineRecords(req.params.animalId, req.tenant!.id, {
+          id: vaccine.id,
+          itemName: vaccine.itemName,
+          dateDue: vaccine.dateDue,
+        });
+      } catch (supersedeErr) {
+        console.error('[Vaccine] Supersession of older same-family records failed:', supersedeErr);
       }
       // Sync medical records to backup (non-blocking)
       try {
@@ -36698,51 +36717,10 @@ Email: ${application.applicantEmail || ''}`
           )),
       ]);
 
-      // Normalize a vaccine product name into a "family" so that brand or naming
-      // variations (DAPPVL2, DAPPL-9, DA2PP, DHPP, Dapp+L4, etc.) collapse into
-      // the same series. The most-recent record in a family supersedes older ones.
-      const vaccineFamily = (raw: string | null | undefined): string => {
-        if (!raw) return 'unknown';
-        const n = raw.trim().toLowerCase();
-        if (/rabies/.test(n)) return 'rabies';
-        if (/bordet|bordat|brachy|kennel\s*cough/.test(n)) return 'bordetella';
-        if (/dapp|dhpp|da2p|distemper|parvo/.test(n)) return 'dhpp';
-        if (/lepto/.test(n)) return 'lepto';
-        if (/canine\s*influenza|civ\b|\bflu\b/.test(n)) return 'influenza';
-        if (/lyme/.test(n)) return 'lyme';
-        if (/fvrcp|hcp|panleuk/.test(n)) return 'fvrcp';
-        if (/felv|feline\s*leukemia/.test(n)) return 'felv';
-        if (/heartworm.*test|hw.*test|antigen/.test(n)) return 'hw_test';
-        return `other:${n.replace(/\s+/g, ' ')}`;
-      };
-
-      // Series keys for a PCR record. Most categories use a single key. For
-      // parasite_prevention we use the care-type's coverage flags so that a
-      // combo product (covers heartworm + flea/tick) participates in BOTH
-      // series — a flea-only NexGard does NOT suppress a heartworm gap, and
-      // vice versa. If the care-type info is missing we fall back to a
-      // category + name key.
-      type PcrRecordShape = {
-        careCategory: string | null;
-        careTypeId: string | null;
-        careName: string | null;
-      };
-      type CareTypeShape = { coversHeartworm: boolean | null; coversFleaTick: boolean | null } | null;
-      const seriesKeysForPcr = (record: PcrRecordShape, careType: CareTypeShape): string[] => {
-        const cat = (record.careCategory || 'other').toLowerCase();
-        if (cat === 'parasite_prevention' && careType && (careType.coversHeartworm !== null || careType.coversFleaTick !== null)) {
-          const keys: string[] = [];
-          if (careType.coversHeartworm) keys.push('pp|hw');
-          if (careType.coversFleaTick) keys.push('pp|ft');
-          if (keys.length === 0) keys.push('pp|other');
-          return keys;
-        }
-        if (record.careTypeId) {
-          return [`${cat}|type:${record.careTypeId}`];
-        }
-        const name = (record.careName || '').trim().toLowerCase().replace(/\s+/g, ' ');
-        return [`${cat}|name:${name}`];
-      };
+      // Canonical helpers live in services/medical-supersession so the same
+      // family/series logic is shared with the write-time supersession used by
+      // every PCR/vaccine insert path.
+      const { vaccineFamily, seriesKeysForPcr } = await import('./services/medical-supersession');
 
       // Within each (animal, series) bucket, keep the record with the LATEST
       // next_due_date — that one defines the animal's current coverage status
@@ -36929,6 +36907,24 @@ Email: ${application.applicantEmail || ''}`
         })
         .returning();
 
+      // Supersede older same-series records for this animal so the new record
+      // becomes the sole carrier of next_due_date in its series. Combo-safe.
+      // Mirrors the read-time logic of /api/medical/preventative-care/coming-due
+      // so direct-table consumers (grant reports, transfer packets, audit
+      // history) stay consistent with the dashboard.
+      try {
+        const { supersedeOlderPreventativeCareRecords } = await import('./services/medical-supersession');
+        await supersedeOlderPreventativeCareRecords(record.animalId, req.tenant!.id, {
+          id: record.id,
+          careCategory: record.careCategory,
+          careTypeId: record.careTypeId,
+          careName: record.careName,
+          nextDueDate: record.nextDueDate,
+        });
+      } catch (supersedeErr) {
+        console.error('[PreventativeCare] Supersession of older same-series records failed:', supersedeErr);
+      }
+
       // Update animal's medicalDueDates cache if the care type covers heartworm or flea/tick
       if (careTypeInfo && effectiveNextDueDate && data.animalId && (careTypeInfo.coversHeartworm || careTypeInfo.coversFleaTick)) {
         try {
@@ -36982,7 +36978,7 @@ Email: ${application.applicantEmail || ''}`
             followUpNextDue.setDate(followUpNextDue.getDate() + intervalDays);
           }
 
-          await db
+          const [followUpRecord] = await db
             .insert(preventativeCareRecords)
             .values({
               animalId: data.animalId,
@@ -36994,7 +36990,27 @@ Email: ${application.applicantEmail || ''}`
               createdBy: req.user!.id,
               manufacturer: data.manufacturer || null,
               notes: "Auto-scheduled follow-up",
-            });
+            })
+            .returning();
+
+          // The just-given parent record was the latest until this follow-up
+          // was inserted with a later next_due_date — now the follow-up wins
+          // and the parent's next_due_date should be cleared. Same combo-safe
+          // logic as the main create path.
+          if (followUpRecord) {
+            try {
+              const { supersedeOlderPreventativeCareRecords } = await import('./services/medical-supersession');
+              await supersedeOlderPreventativeCareRecords(followUpRecord.animalId, req.tenant!.id, {
+                id: followUpRecord.id,
+                careCategory: followUpRecord.careCategory,
+                careTypeId: followUpRecord.careTypeId,
+                careName: followUpRecord.careName,
+                nextDueDate: followUpRecord.nextDueDate,
+              });
+            } catch (supersedeErr) {
+              console.error('[PreventativeCare] Follow-up supersession failed:', supersedeErr);
+            }
+          }
         } catch (followUpError) {
           console.error("[PreventativeCare] Failed to create follow-up record:", followUpError);
         }

@@ -35,47 +35,10 @@ function errMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-function vaccineFamily(raw: string | null | undefined): string {
-  if (!raw) return "unknown";
-  const n = raw.trim().toLowerCase();
-  if (/rabies/.test(n)) return "rabies";
-  if (/bordet|bordat|brachy|kennel\s*cough/.test(n)) return "bordetella";
-  if (/dapp|dhpp|da2p|distemper|parvo/.test(n)) return "dhpp";
-  if (/lepto/.test(n)) return "lepto";
-  if (/canine\s*influenza|civ\b|\bflu\b/.test(n)) return "influenza";
-  if (/lyme/.test(n)) return "lyme";
-  if (/fvrcp|hcp|panleuk/.test(n)) return "fvrcp";
-  if (/felv|feline\s*leukemia/.test(n)) return "felv";
-  if (/heartworm.*test|hw.*test|antigen/.test(n)) return "hw_test";
-  return `other:${n.replace(/\s+/g, " ")}`;
-}
-
-function seriesKeysForPcr(
-  record: {
-    careCategory: string | null;
-    careTypeId: string | null;
-    careName: string | null;
-  },
-  careType: { coversHeartworm: boolean | null; coversFleaTick: boolean | null } | null,
-): string[] {
-  const cat = (record.careCategory || "other").toLowerCase();
-  if (
-    cat === "parasite_prevention" &&
-    careType &&
-    (careType.coversHeartworm !== null || careType.coversFleaTick !== null)
-  ) {
-    const keys: string[] = [];
-    if (careType.coversHeartworm) keys.push("pp|hw");
-    if (careType.coversFleaTick) keys.push("pp|ft");
-    if (keys.length === 0) keys.push("pp|other");
-    return keys;
-  }
-  if (record.careTypeId) {
-    return [`${cat}|type:${record.careTypeId}`];
-  }
-  const name = (record.careName || "").trim().toLowerCase().replace(/\s+/g, " ");
-  return [`${cat}|name:${name}`];
-}
+// Canonical helpers shared with the /coming-due endpoint and write-time
+// supersession in services/medical-supersession.ts. Importing here keeps all
+// three sites drift-free.
+import { vaccineFamily, seriesKeysForPcr } from "../services/medical-supersession";
 
 type Candidate = { id: string; nextDueMs: number; bucketKeys: string[] };
 
