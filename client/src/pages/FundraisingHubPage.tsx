@@ -1326,14 +1326,14 @@ function SocialMediaPlaybookCard() {
           <CollapsibleTrigger asChild>
             <Button
               variant="ghost"
-              className="w-full justify-between font-medium"
+              className="w-full justify-between font-medium h-auto py-2 whitespace-normal text-left"
               data-testid="button-toggle-link-in-comments"
             >
-              <div className="flex items-center gap-2">
-                <Link2 className="h-4 w-4" />
-                Link in Comments Strategy
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                <Link2 className="h-4 w-4 shrink-0" />
+                <span className="break-words">Link in Comments Strategy</span>
               </div>
-              {linkInCommentsOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+              {linkInCommentsOpen ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
             </Button>
           </CollapsibleTrigger>
           <CollapsibleContent>
@@ -1361,14 +1361,14 @@ function SocialMediaPlaybookCard() {
           <CollapsibleTrigger asChild>
             <Button
               variant="ghost"
-              className="w-full justify-between font-medium"
+              className="w-full justify-between font-medium h-auto py-2 whitespace-normal text-left"
               data-testid="button-toggle-keyword-strategy"
             >
-              <div className="flex items-center gap-2">
-                <QrCode className="h-4 w-4" />
-                Fundraising Keyword Auto-Responders
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                <QrCode className="h-4 w-4 shrink-0" />
+                <span className="break-words">Fundraising Keyword Auto-Responders</span>
               </div>
-              {keywordOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+              {keywordOpen ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
             </Button>
           </CollapsibleTrigger>
           <CollapsibleContent>
@@ -1397,14 +1397,14 @@ function SocialMediaPlaybookCard() {
           <CollapsibleTrigger asChild>
             <Button
               variant="ghost"
-              className="w-full justify-between font-medium"
+              className="w-full justify-between font-medium h-auto py-2 whitespace-normal text-left"
               data-testid="button-toggle-quick-tips"
             >
-              <div className="flex items-center gap-2">
-                <Megaphone className="h-4 w-4" />
-                Quick Tips for Maximum Impact
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                <Megaphone className="h-4 w-4 shrink-0" />
+                <span className="break-words">Quick Tips for Maximum Impact</span>
               </div>
-              {tipsOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+              {tipsOpen ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
             </Button>
           </CollapsibleTrigger>
           <CollapsibleContent>
