@@ -7475,7 +7475,7 @@ Crawl-delay: 1
    * pulls rescue name, mission, location, social handles, and destination URLs
    * from the current tenant's settings — never hardcoded.
    */
-  app.post('/api/social-post-architect/generate', requireTenant, requireAuth, requireRole('owner', 'admin', 'staff'), async (req, res, next) => {
+  app.post('/api/social-post-architect/generate', requireTenant, requireAuth, requireRole('owner', 'admin', 'manager', 'staff'), async (req, res, next) => {
     try {
       const {
         generateSocialPost,
@@ -7542,6 +7542,7 @@ Crawl-delay: 1
             status: animal.status ?? null,
             adoptionDate: animal.adoptionDate ? new Date(animal.adoptionDate).toISOString() : null,
             storyTags: animal.storyTags ?? null,
+            photoUrl: Array.isArray(animal.photoUrls) && animal.photoUrls.length > 0 ? animal.photoUrls[0] : null,
           };
 
           // Look up an active animal-specific emergency fundraiser for the

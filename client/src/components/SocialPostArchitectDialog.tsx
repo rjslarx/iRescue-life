@@ -36,7 +36,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { TERMINAL_STATUSES } from "@shared/schema";
 import {
   Sparkles,
   ChevronsUpDown,
@@ -67,7 +66,24 @@ interface AnimalLite {
   name: string;
   species?: string | null;
   status?: string | null;
+  intakeDate?: string | null;
+  intakeSource?: string | null;
+  locationFound?: string | null;
+  bio?: string | null;
+  adoptionDate?: string | null;
+  photoUrls?: string[] | null;
 }
+
+// Statuses that should NEVER appear in the picker — animals that are no
+// longer in the rescue's care AND have no positive story to feature.
+// "adopted" and "transported" are intentionally allowed because they
+// power the Happy Tail / Adoption Announcement and partner-shoutout
+// themes.
+const HIDDEN_ANIMAL_STATUSES = new Set<string>([
+  "deceased",
+  "returned_to_owner",
+  "returned_to_field",
+]);
 
 interface AnimalsResponse {
   animals: AnimalLite[];
@@ -158,7 +174,7 @@ export default function SocialPostArchitectDialog({
   const animals = useMemo(() => {
     const list = animalsData?.animals ?? [];
     return list
-      .filter((a) => !TERMINAL_STATUSES.includes(a.status as any))
+      .filter((a) => !HIDDEN_ANIMAL_STATUSES.has((a.status ?? "") as string))
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [animalsData]);
 
@@ -238,6 +254,51 @@ export default function SocialPostArchitectDialog({
     () => animals.find((a) => a.id === animalId) ?? null,
     [animals, animalId],
   );
+
+  // Track which animal we last auto-filled for, so the user's manual edits
+  // aren't clobbered when this effect re-runs on theme switches or rerenders.
+  const autofilledAnimalIdRef = useRef<string | null>(null);
+
+  // When the user picks an animal, pre-fill the relevant theme inputs from
+  // the animal's data so they have a head start instead of a blank canvas.
+  // Only auto-fills inputs that are empty (preserves anything the user typed).
+  useEffect(() => {
+    if (!open) return;
+    if (!selectedAnimal) {
+      autofilledAnimalIdRef.current = null;
+      return;
+    }
+    if (autofilledAnimalIdRef.current === selectedAnimal.id) return;
+    autofilledAnimalIdRef.current = selectedAnimal.id;
+
+    const intakePieces: string[] = [];
+    if (selectedAnimal.intakeDate) {
+      intakePieces.push(`Came to us on ${new Date(selectedAnimal.intakeDate).toLocaleDateString()}`);
+    }
+    if (selectedAnimal.locationFound) intakePieces.push(`from ${selectedAnimal.locationFound}`);
+    if (selectedAnimal.intakeSource) intakePieces.push(`(${selectedAnimal.intakeSource})`);
+    const intakeSummary = intakePieces.length
+      ? `${selectedAnimal.name} ${intakePieces.join(" ")}.${selectedAnimal.bio ? " " + selectedAnimal.bio : ""}`.trim()
+      : selectedAnimal.bio || `Meet ${selectedAnimal.name}.`;
+
+    const adoptedSummary = selectedAnimal.adoptionDate
+      ? `${selectedAnimal.name} was adopted on ${new Date(selectedAnimal.adoptionDate).toLocaleDateString()}!`
+      : selectedAnimal.status === "adopted"
+        ? `${selectedAnimal.name} found their forever home!`
+        : `${selectedAnimal.name} is thriving and ready for what's next.`;
+
+    // Theme-targeted auto-fill (only when the field is empty so user edits stick)
+    if (theme === "transformation_tuesday") {
+      setBeforeText((cur) => (cur.trim() ? cur : intakeSummary));
+      setAfterText((cur) => (cur.trim() ? cur : adoptedSummary));
+    } else if (theme === "happy_tail") {
+      setAfterText((cur) => (cur.trim() ? cur : adoptedSummary));
+    } else if (theme === "urgent_need") {
+      setNeedDescription((cur) =>
+        cur.trim() ? cur : `${selectedAnimal.name} needs help right away. ${selectedAnimal.bio ?? ""}`.trim(),
+      );
+    }
+  }, [selectedAnimal, theme, open]);
 
   const generateMutation = useMutation({
     mutationFn: async (): Promise<GenerateResponse> => {
@@ -629,7 +690,50 @@ export default function SocialPostArchitectDialog({
                   <Alert data-testid="alert-destination-fallback">
                     <AlertTriangle className="h-4 w-4" />
                     <AlertDescription>
-                      Using a fallback link ({result.destination.label}). Configure a more specific URL in your Donate or Website Builder settings to fine-tune where supporters land.
+                      {(() => {
+                        // Targeted guidance based on which destination kind
+                        // we fell back to, with a deep link to the right
+                        // settings page.
+                        const kind = result.destination.kind;
+                        const isVip = kind?.includes("vip") || theme === "transformation_tuesday" || theme === "monthly_donor_push";
+                        const isVolunteer = kind?.includes("volunteer") || theme === "volunteer_recruitment";
+                        const isAdoption = kind?.includes("adoption") || theme === "happy_tail";
+                        const isUrgent = theme === "urgent_need";
+
+                        let label = "Donate page";
+                        let path = "/dashboard/settings/branding";
+                        let advice = "Set a custom donate URL in Branding settings so supporters land on the right page.";
+                        if (isVip) {
+                          label = "VIP Club / Monthly Donor URL";
+                          path = "/dashboard/settings/branding";
+                          advice = "Configure a Monthly Donor / VIP Club page so Transformation Tuesday and Monthly Donor posts deep-link to it.";
+                        } else if (isVolunteer) {
+                          label = "Volunteer signup URL";
+                          path = "/dashboard/settings/branding";
+                          advice = "Add your volunteer signup URL (JotForm or other) in Branding settings so volunteer posts route to the right form.";
+                        } else if (isAdoption) {
+                          label = "Adoption application URL";
+                          path = "/dashboard/settings/branding";
+                          advice = "Add your adoption application URL in Branding settings so Happy Tail posts deep-link adopters to the right form.";
+                        } else if (isUrgent) {
+                          label = "Animal-specific emergency fundraiser";
+                          path = "/dashboard/fundraising";
+                          advice = "Create an animal-specific emergency fundraiser in the Fundraising Hub so urgent posts can route donors directly to that campaign.";
+                        }
+
+                        return (
+                          <>
+                            Using a fallback link (<span className="font-medium">{result.destination.label}</span>). {advice}{" "}
+                            <a
+                              href={path}
+                              className="underline font-medium"
+                              data-testid="link-fallback-settings"
+                            >
+                              Open {label} settings →
+                            </a>
+                          </>
+                        );
+                      })()}
                     </AlertDescription>
                   </Alert>
                 )}
