@@ -7614,24 +7614,14 @@ Crawl-delay: 1
       let destination: DestinationDescriptor;
       switch (theme) {
         case 'transformation_tuesday':
-        case 'monthly_donor_push': {
-          // The vipClubUrl resolver currently has no per-tenant override and
-          // always falls back to the generic public-site /vip-club page. For
-          // the monthly-donor / Transformation Tuesday themes, the spec
-          // requires us to surface a fallback warning when the rescue has
-          // not configured a dedicated monthly-donor URL — which today is
-          // *every* tenant whose vipClubUrl source is 'public_vip_club'.
-          // Override the resolver's `isFallback` flag here so the dialog
-          // shows the targeted warning + deep link to Branding settings.
-          const isPublicVipFallback = resolved.vipClubUrl.source === 'public_vip_club';
-          destination = {
-            ...resolved.vipClubUrl,
-            label: 'VIP Club / monthly giving page',
-            kind: 'vipClub',
-            isFallback: isPublicVipFallback ? true : resolved.vipClubUrl.isFallback,
-          };
+        case 'monthly_donor_push':
+          // The public /vip-club page is the canonical, by-design landing
+          // page for monthly-giving themes — there is no per-tenant override
+          // field today, so this is intentionally NOT marked as a fallback.
+          // (If/when a per-tenant monthly-donor URL setting is added, the
+          // resolver itself should surface isFallback for that case.)
+          destination = { ...resolved.vipClubUrl, label: 'VIP Club / monthly giving page', kind: 'vipClub' };
           break;
-        }
         case 'happy_tail':
           destination = { ...resolved.adoptionUrl, label: 'Adoption application', kind: 'adoption' };
           break;

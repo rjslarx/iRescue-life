@@ -163,7 +163,14 @@ export default function SocialPostArchitectDialog({
 }: SocialPostArchitectDialogProps) {
   const { toast } = useToast();
 
-  const { data: tenantData } = useQuery<{ tenant: { name?: string | null } | null }>({ queryKey: ["/api/tenant"] });
+  const { data: tenantData } = useQuery<{
+    tenant: {
+      name?: string | null;
+      footerAddress?: string | null;
+      socialFacebook?: string | null;
+      socialInstagram?: string | null;
+    } | null;
+  }>({ queryKey: ["/api/tenant"] });
   const tenant = tenantData?.tenant;
 
   const { data: animalsData, isLoading: animalsLoading, error: animalsError } = useQuery<AnimalsResponse>({
