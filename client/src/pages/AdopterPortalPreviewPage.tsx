@@ -27,7 +27,15 @@ import {
   Pill,
   Camera,
   Check,
-  AlertCircle
+  AlertCircle,
+  AlertTriangle,
+  ClipboardCheck,
+  Bug,
+  Upload,
+  Clock,
+  CheckCircle,
+  CheckCircle2,
+  FileText
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -91,6 +99,178 @@ interface HappyTailUpdate {
   createdAt: string;
 }
 
+interface DueCareItem {
+  id: string;
+  careName: string;
+  careCategory: string;
+  nextDueDate: string;
+  dateAdministered: string;
+  isOverdue: boolean;
+}
+
+interface ComplianceConfirmation {
+  id: string;
+  careName: string;
+  careCategory: string;
+  dateAdministered: string;
+  clinicName?: string;
+  status: string;
+  createdAt: string;
+}
+
+interface ComplianceObligation {
+  id: string;
+  obligationType: string;
+  label: string;
+  contractualDueDate: string | null;
+  status: string;
+  proofDocumentUrl: string | null;
+  notes?: string | null;
+  completedAt?: string | null;
+}
+
+interface HeartwormAppointment {
+  type: 'start_doxy' | 'first_injection' | 'second_third_injection' | 'recheck' | 'proheart';
+  label: string;
+  scheduledDate: string;
+  completedDate?: string | null;
+  notes?: string | null;
+  adopterNotes?: string | null;
+  receiptObjectPath?: string | null;
+  completedByAdopter?: boolean;
+}
+
+interface HeartwormTreatmentPlan {
+  id: string;
+  appointments: HeartwormAppointment[];
+  locationName: string;
+  locationAddress: string;
+  locationPhone: string;
+  notes?: string | null;
+  contractSentAt: string | null;
+  adopterName: string;
+  createdAt: string;
+}
+
+const COMPLIANCE_OBLIGATION_LABEL_MAP: Record<string, string> = {
+  spay_neuter: 'Spay/Neuter Certificate',
+  rabies: 'Rabies Vaccination',
+  rabies_booster: 'Rabies Booster',
+  dhpp_booster: 'DHPP Booster',
+  vet_checkup: 'Vet Check-Up',
+  microchip_registration: 'Microchip Registration',
+  heartworm_test: 'Heartworm Test',
+  heartworm_prevention_proof: 'Heartworm Prevention Proof',
+  flea_tick_prevention: 'Flea & Tick Prevention',
+  fecal_test: 'Fecal Test',
+  obedience_training: 'Obedience Training',
+  ongoing_treatment: 'Ongoing Treatment',
+  custom: 'Requirement',
+};
+
+const HW_INJECTION_REST_DAYS = 30;
+
+function startOfToday(): Date {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function parseISODate(s: string | null | undefined): Date | null {
+  if (!s) return null;
+  // Parse pure YYYY-MM-DD strings as LOCAL midnight (not UTC) so day-boundary
+  // comparisons against startOfToday() are timezone-safe.
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (dateOnly) {
+    const [, y, m, d] = dateOnly;
+    const dt = new Date(Number(y), Number(m) - 1, Number(d));
+    return Number.isNaN(dt.getTime()) ? null : dt;
+  }
+  const d = new Date(s);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function addDays(date: Date, days: number): Date {
+  const d = new Date(date);
+  d.setDate(d.getDate() + days);
+  return d;
+}
+
+function obligationDisplayLabel(obl: ComplianceObligation): string {
+  if (obl.label) return obl.label;
+  if (COMPLIANCE_OBLIGATION_LABEL_MAP[obl.obligationType]) {
+    return COMPLIANCE_OBLIGATION_LABEL_MAP[obl.obligationType];
+  }
+  return (obl.obligationType || 'Requirement')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function obligationDaysOverdue(obl: ComplianceObligation): {
+  daysOverdue: number;
+  isOverdue: boolean;
+  isDueSoon: boolean;
+  dueDate: Date | null;
+} {
+  const dueDate =
+    typeof obl.contractualDueDate === 'string'
+      ? parseISODate(obl.contractualDueDate)
+      : obl.contractualDueDate
+        ? new Date(obl.contractualDueDate)
+        : null;
+  if (!dueDate) {
+    return { daysOverdue: 0, isOverdue: false, isDueSoon: false, dueDate: null };
+  }
+  const todayMidnight = startOfToday();
+  const dueMidnight = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate());
+  const daysOverdue = Math.floor(
+    (todayMidnight.getTime() - dueMidnight.getTime()) / (1000 * 60 * 60 * 24)
+  );
+  const isOverdue = daysOverdue > 0;
+  const isDueSoon = !isOverdue && daysOverdue >= -7;
+  return { daysOverdue, isOverdue, isDueSoon, dueDate };
+}
+
+type HwApptStatus = 'completed' | 'overdue' | 'today' | 'upcoming';
+
+function getHwApptStatus(appt: HeartwormAppointment): HwApptStatus {
+  if (appt.completedDate) return 'completed';
+  const today = startOfToday();
+  const scheduled = parseISODate(appt.scheduledDate);
+  if (!scheduled) return 'upcoming';
+  if (scheduled.getTime() === today.getTime()) return 'today';
+  if (scheduled.getTime() < today.getTime()) return 'overdue';
+  return 'upcoming';
+}
+
+function getExerciseRestriction(appointments: HeartwormAppointment[]): {
+  active: boolean;
+  endDate: Date | null;
+  daysRemaining: number;
+  startedFromLabel: string | null;
+} {
+  const today = startOfToday();
+  let latestEnd: Date | null = null;
+  let label: string | null = null;
+  for (const appt of appointments) {
+    if (appt.type !== 'first_injection' && appt.type !== 'second_third_injection') continue;
+    if (!appt.completedDate) continue;
+    const start = parseISODate(appt.completedDate);
+    if (!start) continue;
+    const end = addDays(start, HW_INJECTION_REST_DAYS);
+    if (start.getTime() <= today.getTime() && today.getTime() <= end.getTime()) {
+      if (!latestEnd || end.getTime() > latestEnd.getTime()) {
+        latestEnd = end;
+        label = appt.label;
+      }
+    }
+  }
+  const daysRemaining = latestEnd
+    ? Math.max(0, Math.round((latestEnd.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)) + 1)
+    : 0;
+  return { active: !!latestEnd, endDate: latestEnd, daysRemaining, startedFromLabel: label };
+}
+
 export default function AdopterPortalPreviewPage() {
   const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
@@ -152,6 +332,26 @@ export default function AdopterPortalPreviewPage() {
   const { data: happyTails } = useQuery<HappyTailUpdate[]>({
     queryKey: [`/api/adopter/admin/adopter-preview/${selectedAdopter?.id}/pets/${selectedAnimalId}/happy-tails`],
     enabled: !!selectedAdopter && !!selectedAnimalId && activeTab === "alumni",
+  });
+
+  const { data: dueCareItems } = useQuery<DueCareItem[]>({
+    queryKey: [`/api/adopter/admin/adopter-preview/${selectedAdopter?.id}/pets/${selectedAnimalId}/due-care`],
+    enabled: !!selectedAdopter && !!selectedAnimalId && activeTab === "compliance",
+  });
+
+  const { data: complianceConfirmations } = useQuery<ComplianceConfirmation[]>({
+    queryKey: [`/api/adopter/admin/adopter-preview/${selectedAdopter?.id}/pets/${selectedAnimalId}/compliance-confirmations`],
+    enabled: !!selectedAdopter && !!selectedAnimalId && activeTab === "compliance",
+  });
+
+  const { data: complianceObligations } = useQuery<ComplianceObligation[]>({
+    queryKey: [`/api/adopter/admin/adopter-preview/${selectedAdopter?.id}/pets/${selectedAnimalId}/compliance-obligations`],
+    enabled: !!selectedAdopter && !!selectedAnimalId && activeTab === "compliance",
+  });
+
+  const { data: heartwormPlan } = useQuery<HeartwormTreatmentPlan | null>({
+    queryKey: [`/api/adopter/admin/adopter-preview/${selectedAdopter?.id}/pets/${selectedAnimalId}/heartworm-treatment-plan`],
+    enabled: !!selectedAdopter && !!selectedAnimalId && activeTab === "compliance",
   });
 
   const filteredAdopters = adopters?.filter(adopter => 
@@ -249,6 +449,393 @@ export default function AdopterPortalPreviewPage() {
               </TabsList>
 
               <TabsContent value="compliance" className="space-y-4 mt-4">
+                {(() => {
+                  // Action Required card — mirrors AdopterPetDetailPage. Shows
+                  // actionable obligations (pending/overdue) + due-care items +
+                  // pending confirmations. Read-only in preview: action buttons
+                  // (Upload Proof, Confirm Given) are replaced with a disabled
+                  // affordance so staff see exactly what the adopter sees but
+                  // cannot mutate adopter state from this preview.
+                  const actionableObligations = (complianceObligations ?? []).filter(
+                    o => o.status === 'pending' || o.status === 'overdue'
+                  );
+                  const hasAnything =
+                    (dueCareItems && dueCareItems.length > 0) ||
+                    actionableObligations.length > 0 ||
+                    (complianceConfirmations && complianceConfirmations.some(c => c.status === 'pending_review'));
+                  if (pet.status === 'deceased' || !hasAnything) return null;
+                  return (
+                    <Card data-testid="card-action-required">
+                      <CardHeader>
+                        <CardTitle className="text-lg flex items-center gap-2">
+                          <AlertTriangle className="h-5 w-5" />
+                          Action Required
+                        </CardTitle>
+                        <CardDescription>
+                          These items are due or overdue. Read-only in preview mode.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        {actionableObligations.map((obl) => {
+                          const label = obligationDisplayLabel(obl);
+                          const { daysOverdue, isOverdue, isDueSoon, dueDate } = obligationDaysOverdue(obl);
+                          const isHeartwormType = obl.obligationType === 'heartworm_prevention_proof' || obl.obligationType === 'heartworm_test';
+                          const isParasiteType = isHeartwormType || obl.obligationType === 'flea_tick_prevention' || obl.obligationType === 'fecal_test';
+                          return (
+                            <div
+                              key={`obl-${obl.id}`}
+                              className={`flex items-center justify-between p-3 border rounded-lg flex-wrap gap-3 ${
+                                isOverdue
+                                  ? 'border-destructive bg-destructive/5'
+                                  : isDueSoon
+                                    ? 'border-orange-500 bg-orange-50 dark:bg-orange-950'
+                                    : ''
+                              }`}
+                              data-testid={`obligation-${obl.id}`}
+                            >
+                              <div className="flex items-center gap-3 min-w-0">
+                                {isParasiteType ? (
+                                  <Bug className="h-5 w-5 text-muted-foreground" />
+                                ) : (
+                                  <ClipboardCheck className="h-5 w-5 text-muted-foreground" />
+                                )}
+                                <div>
+                                  <p className="font-medium">{label}</p>
+                                  {dueDate && (
+                                    <p className="text-sm text-muted-foreground">
+                                      {isOverdue ? (
+                                        <span
+                                          className="text-destructive font-medium"
+                                          data-testid={`text-obligation-overdue-${obl.id}`}
+                                        >
+                                          {daysOverdue}d overdue (was due {dueDate.toLocaleDateString()})
+                                        </span>
+                                      ) : (
+                                        <>Due by {dueDate.toLocaleDateString()}</>
+                                      )}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {isOverdue && (
+                                  <Badge
+                                    variant="destructive"
+                                    className="text-xs"
+                                    data-testid={`badge-obligation-overdue-${obl.id}`}
+                                  >
+                                    {daysOverdue}d overdue
+                                  </Badge>
+                                )}
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled
+                                  title="Read-only in preview mode"
+                                  data-testid={`button-upload-proof-${obl.id}`}
+                                >
+                                  <Upload className="h-4 w-4 mr-1" />
+                                  Upload Proof
+                                </Button>
+                              </div>
+                            </div>
+                          );
+                        })}
+
+                        {dueCareItems && dueCareItems.map((item) => (
+                          <div
+                            key={item.id}
+                            className={`flex items-center justify-between p-3 border rounded-lg ${
+                              item.isOverdue
+                                ? 'border-destructive bg-destructive/5'
+                                : 'border-orange-500 bg-orange-50 dark:bg-orange-950'
+                            }`}
+                            data-testid={`due-care-item-${item.id}`}
+                          >
+                            <div className="flex items-center gap-3">
+                              {item.careCategory === 'parasite_prevention' ? (
+                                <Bug className="h-5 w-5 text-muted-foreground" />
+                              ) : (
+                                <Syringe className="h-5 w-5 text-muted-foreground" />
+                              )}
+                              <div>
+                                <p className="font-medium">{item.careName}</p>
+                                <p className="text-sm text-muted-foreground">
+                                  {item.isOverdue ? (
+                                    <span className="text-destructive font-medium">
+                                      Overdue since {new Date(item.nextDueDate).toLocaleDateString()}
+                                    </span>
+                                  ) : (
+                                    <>Due: {new Date(item.nextDueDate).toLocaleDateString()}</>
+                                  )}
+                                </p>
+                              </div>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled
+                              title="Read-only in preview mode"
+                              data-testid={`button-confirm-care-${item.id}`}
+                            >
+                              <Check className="h-4 w-4 mr-1" />
+                              Confirm Given
+                            </Button>
+                          </div>
+                        ))}
+
+                        {complianceConfirmations && complianceConfirmations.filter(c => c.status === 'pending_review').map((conf) => (
+                          <div
+                            key={conf.id}
+                            className="flex items-center justify-between p-3 border rounded-lg border-blue-300 bg-blue-50 dark:bg-blue-950"
+                            data-testid={`pending-confirmation-${conf.id}`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <Clock className="h-5 w-5 text-blue-500" />
+                              <div>
+                                <p className="font-medium">{conf.careName}</p>
+                                <p className="text-sm text-muted-foreground">
+                                  Given on {new Date(conf.dateAdministered).toLocaleDateString()}
+                                  {conf.clinicName && <> at {conf.clinicName}</>}
+                                </p>
+                              </div>
+                            </div>
+                            <Badge variant="secondary">Pending Review</Badge>
+                          </div>
+                        ))}
+
+                        {complianceConfirmations && complianceConfirmations.filter(c => c.status === 'approved').length > 0 && (
+                          <div className="pt-2 border-t">
+                            <p className="text-sm text-muted-foreground mb-2">Recently Approved</p>
+                            {complianceConfirmations.filter(c => c.status === 'approved').slice(0, 3).map((conf) => (
+                              <div key={conf.id} className="flex items-center gap-2 py-1" data-testid={`approved-confirmation-${conf.id}`}>
+                                <CheckCircle2 className="h-4 w-4 text-green-500" />
+                                <span className="text-sm">{conf.careName} - {new Date(conf.dateAdministered).toLocaleDateString()}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })()}
+
+                {(() => {
+                  // Heartworm Treatment plan card — mirrors AdopterPetDetailPage.
+                  // Renders only when a published plan exists. Read-only: the
+                  // "Mark completed" button on each appointment is disabled.
+                  if (!heartwormPlan || !Array.isArray(heartwormPlan.appointments) || heartwormPlan.appointments.length === 0) {
+                    return null;
+                  }
+                  const restriction = getExerciseRestriction(heartwormPlan.appointments);
+                  return (
+                    <Card data-testid="card-heartworm-treatment">
+                      <CardHeader>
+                        <CardTitle className="text-lg flex items-center gap-2">
+                          <Heart className="h-5 w-5 text-red-600" />
+                          Heartworm Treatment
+                        </CardTitle>
+                        <CardDescription>
+                          {pet.name}'s heartworm treatment plan. Read-only in preview mode.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div
+                          className={`rounded-md p-4 border ${
+                            restriction.active
+                              ? 'border-red-300 bg-red-50 dark:bg-red-950/30 dark:border-red-900'
+                              : 'border-border bg-muted/40'
+                          }`}
+                          data-testid="panel-exercise-restriction"
+                        >
+                          <div className="flex items-start gap-3">
+                            {restriction.active ? (
+                              <AlertTriangle className="h-5 w-5 text-red-600 mt-0.5 shrink-0" />
+                            ) : (
+                              <CheckCircle2 className="h-5 w-5 text-muted-foreground mt-0.5 shrink-0" />
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold flex flex-wrap items-center gap-2" data-testid="text-exercise-restriction-headline">
+                                <span>{restriction.active ? 'Strict rest in effect' : 'No exercise restriction in effect'}</span>
+                                {restriction.active && restriction.daysRemaining > 0 && (
+                                  <Badge variant="destructive" data-testid="badge-restriction-days-remaining">
+                                    {restriction.daysRemaining} {restriction.daysRemaining === 1 ? 'day' : 'days'} left
+                                  </Badge>
+                                )}
+                              </p>
+                              <p className="text-sm text-muted-foreground mt-1">
+                                {restriction.active && restriction.endDate ? (
+                                  <>
+                                    Keep {pet.name} crate-rested and on a leash for short potty breaks only — through{' '}
+                                    <span className="font-semibold text-foreground" data-testid="text-restriction-end-date">
+                                      {restriction.endDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+                                    </span>
+                                    {restriction.startedFromLabel ? <> (following the {restriction.startedFromLabel}).</> : '.'}{' '}
+                                    Vigorous activity can be life-threatening during this window.
+                                  </>
+                                ) : (
+                                  <>Activity restrictions begin on the day of each immiticide injection and last {HW_INJECTION_REST_DAYS} days.</>
+                                )}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          {heartwormPlan.appointments.map((appt, idx) => {
+                            const status = getHwApptStatus(appt);
+                            const scheduled = parseISODate(appt.scheduledDate);
+                            const completed = parseISODate(appt.completedDate);
+                            const statusBadge =
+                              status === 'completed' ? (
+                                <Badge variant="default" className="bg-green-600 hover:bg-green-600" data-testid={`badge-hw-status-${idx}`}>
+                                  <CheckCircle2 className="h-3 w-3 mr-1" /> Completed
+                                </Badge>
+                              ) : status === 'overdue' ? (
+                                <Badge variant="destructive" data-testid={`badge-hw-status-${idx}`}>
+                                  <AlertTriangle className="h-3 w-3 mr-1" /> Overdue
+                                </Badge>
+                              ) : status === 'today' ? (
+                                <Badge variant="default" data-testid={`badge-hw-status-${idx}`}>
+                                  <Clock className="h-3 w-3 mr-1" /> Today
+                                </Badge>
+                              ) : (
+                                <Badge variant="secondary" data-testid={`badge-hw-status-${idx}`}>
+                                  <Calendar className="h-3 w-3 mr-1" /> Upcoming
+                                </Badge>
+                              );
+
+                            return (
+                              <div
+                                key={`${appt.type}-${idx}`}
+                                className="border rounded-md p-3 flex flex-row flex-wrap items-start justify-between gap-3"
+                                data-testid={`row-hw-appt-${idx}`}
+                              >
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <p className="font-medium" data-testid={`text-hw-appt-label-${idx}`}>{appt.label}</p>
+                                    {statusBadge}
+                                  </div>
+                                  <p className="text-sm text-muted-foreground mt-1" data-testid={`text-hw-appt-scheduled-${idx}`}>
+                                    Scheduled: {scheduled ? scheduled.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) : appt.scheduledDate}
+                                  </p>
+                                  {completed && (
+                                    <p className="text-sm text-green-700 dark:text-green-400 mt-0.5" data-testid={`text-hw-appt-completed-${idx}`}>
+                                      Completed: {completed.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                                    </p>
+                                  )}
+                                  {appt.notes && (
+                                    <p className="text-sm text-muted-foreground mt-0.5">Rescue notes: {appt.notes}</p>
+                                  )}
+                                  {appt.adopterNotes && (
+                                    <p className="text-sm text-muted-foreground mt-0.5">Adopter notes: {appt.adopterNotes}</p>
+                                  )}
+                                  {appt.receiptObjectPath && (
+                                    <Button
+                                      asChild
+                                      variant="link"
+                                      size="sm"
+                                      className="px-0 h-auto mt-1"
+                                      data-testid={`link-hw-receipt-${idx}`}
+                                    >
+                                      <a href={appt.receiptObjectPath} target="_blank" rel="noopener noreferrer">
+                                        <FileText className="h-3 w-3 mr-1" /> View uploaded receipt
+                                      </a>
+                                    </Button>
+                                  )}
+                                </div>
+                                {!appt.completedDate && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    disabled
+                                    title="Read-only in preview mode"
+                                    data-testid={`button-mark-hw-completed-${idx}`}
+                                  >
+                                    <CheckCircle className="h-4 w-4 mr-1" /> Mark completed
+                                  </Button>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        <div className="rounded-md bg-muted/40 p-3" data-testid="panel-hw-location">
+                          <p className="text-sm font-medium">Treatment Location</p>
+                          <p className="text-sm text-muted-foreground">{heartwormPlan.locationName}</p>
+                          <p className="text-sm text-muted-foreground">{heartwormPlan.locationAddress}</p>
+                          <p className="text-sm text-muted-foreground">Phone: {heartwormPlan.locationPhone}</p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })()}
+
+                {(() => {
+                  // Contract Requirements history card — mirrors
+                  // AdopterPetDetailPage. Lists completed/waived/pending_review
+                  // obligations as a permanent record.
+                  const historyObligations = (complianceObligations ?? []).filter(
+                    o => o.status === 'completed' || o.status === 'waived' || o.status === 'pending_review'
+                  );
+                  if (historyObligations.length === 0) return null;
+                  return (
+                    <Card data-testid="card-contract-requirements">
+                      <CardHeader>
+                        <CardTitle className="text-lg flex items-center gap-2">
+                          <ClipboardCheck className="h-5 w-5" />
+                          Contract Requirements
+                        </CardTitle>
+                        <CardDescription>
+                          Verified or waived obligations from the adoption agreement.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-2">
+                        {historyObligations.map((obl) => {
+                          const label = obligationDisplayLabel(obl);
+                          const { dueDate } = obligationDaysOverdue(obl);
+                          return (
+                            <div
+                              key={obl.id}
+                              className="flex items-center justify-between p-3 border rounded-lg flex-wrap gap-3"
+                              data-testid={`obligation-history-${obl.id}`}
+                            >
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium">{label}</p>
+                                {dueDate && (
+                                  <p className="text-sm text-muted-foreground">
+                                    Due by {dueDate.toLocaleDateString()}
+                                    {obl.status === 'completed' && obl.completedAt && (
+                                      <> · Verified {new Date(obl.completedAt).toLocaleDateString()}</>
+                                    )}
+                                  </p>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {obl.status === 'completed' && (
+                                  <Badge className="bg-green-500/10 text-green-700 border-green-500/20">
+                                    <CheckCircle className="h-3 w-3 mr-1" />
+                                    Verified
+                                  </Badge>
+                                )}
+                                {obl.status === 'waived' && (
+                                  <Badge variant="secondary">Waived</Badge>
+                                )}
+                                {obl.status === 'pending_review' && (
+                                  <Badge variant="secondary" className="bg-blue-500/10 text-blue-700 border-blue-500/20">
+                                    <Clock className="h-3 w-3 mr-1" />
+                                    Under Review
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </CardContent>
+                    </Card>
+                  );
+                })()}
+
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">

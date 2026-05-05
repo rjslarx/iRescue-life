@@ -2082,6 +2082,218 @@ router.get('/admin/adopter-preview/:adopterId/pets/:animalId/happy-tails', async
 });
 
 /**
+ * GET /api/adopter/admin/adopter-preview/:adopterId/pets/:animalId/due-care
+ *
+ * Mirror of GET /api/adopter/pets/:animalId/due-care for the staff-only
+ * Adopter Portal Preview. Read-only — no mutations may flow from preview.
+ * Returns preventative care items (vaccines + parasite prevention) that are
+ * due or overdue for an adopted animal, filtered by the adopter's own
+ * confirmations to match exactly what the real adopter sees.
+ */
+router.get('/admin/adopter-preview/:adopterId/pets/:animalId/due-care', async (req: Request, res: Response) => {
+  try {
+    const auth = requireAdmin(req, res);
+    if (!auth) return;
+
+    const adopterEmail = decodeURIComponent(req.params.adopterId).toLowerCase();
+    const { animalId } = req.params;
+
+    // Resolve the adopter user record (if any) so we mirror the same
+    // confirmation-filter the real adopter sees. If the adopter has not
+    // claimed the portal account yet, fall back to no confirmations.
+    const [adopterUser] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(and(
+        eq(users.tenantId, auth.tenantId),
+        sql`LOWER(${users.email}) = ${adopterEmail}`
+      ))
+      .limit(1);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const threeDaysFromNow = new Date(today);
+    threeDaysFromNow.setDate(threeDaysFromNow.getDate() + 3);
+
+    const records = await db
+      .select({
+        id: preventativeCareRecords.id,
+        careName: preventativeCareRecords.careName,
+        careCategory: preventativeCareRecords.careCategory,
+        nextDueDate: preventativeCareRecords.nextDueDate,
+        dateAdministered: preventativeCareRecords.dateAdministered,
+      })
+      .from(preventativeCareRecords)
+      .where(and(
+        eq(preventativeCareRecords.tenantId, auth.tenantId),
+        eq(preventativeCareRecords.animalId, animalId),
+        sql`${preventativeCareRecords.careCategory} IN ('vaccine', 'parasite_prevention')`,
+        sql`${preventativeCareRecords.nextDueDate} IS NOT NULL`,
+        sql`${preventativeCareRecords.nextDueDate} <= ${threeDaysFromNow.toISOString()}`
+      ));
+
+    const confirmedIds = new Set<string>();
+    if (adopterUser) {
+      const existingConfirmations = await db
+        .select({
+          preventativeCareRecordId: adopterComplianceConfirmations.preventativeCareRecordId,
+        })
+        .from(adopterComplianceConfirmations)
+        .where(and(
+          eq(adopterComplianceConfirmations.tenantId, auth.tenantId),
+          eq(adopterComplianceConfirmations.animalId, animalId),
+          eq(adopterComplianceConfirmations.userId, adopterUser.id),
+          sql`${adopterComplianceConfirmations.status} IN ('pending_review', 'approved')`
+        ));
+      for (const c of existingConfirmations) {
+        if (c.preventativeCareRecordId) confirmedIds.add(c.preventativeCareRecordId);
+      }
+    }
+
+    const dueItems = records
+      .filter(r => !confirmedIds.has(r.id))
+      .map(r => ({
+        ...r,
+        isOverdue: r.nextDueDate ? new Date(r.nextDueDate) < today : false,
+      }));
+
+    res.json(dueItems);
+  } catch (error) {
+    console.error('[Adopter Portal Admin] Error fetching due care:', error);
+    res.status(500).json({ error: 'Failed to load due care items' });
+  }
+});
+
+/**
+ * GET /api/adopter/admin/adopter-preview/:adopterId/pets/:animalId/compliance-confirmations
+ *
+ * Mirror of GET /api/adopter/pets/:animalId/compliance-confirmations.
+ * Returns the adopter's submitted compliance confirmations so staff see the
+ * same Pending Review / Recently Approved entries the adopter sees.
+ */
+router.get('/admin/adopter-preview/:adopterId/pets/:animalId/compliance-confirmations', async (req: Request, res: Response) => {
+  try {
+    const auth = requireAdmin(req, res);
+    if (!auth) return;
+
+    const adopterEmail = decodeURIComponent(req.params.adopterId).toLowerCase();
+    const { animalId } = req.params;
+
+    const [adopterUser] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(and(
+        eq(users.tenantId, auth.tenantId),
+        sql`LOWER(${users.email}) = ${adopterEmail}`
+      ))
+      .limit(1);
+
+    if (!adopterUser) {
+      return res.json([]);
+    }
+
+    const confirmations = await db
+      .select()
+      .from(adopterComplianceConfirmations)
+      .where(and(
+        eq(adopterComplianceConfirmations.tenantId, auth.tenantId),
+        eq(adopterComplianceConfirmations.animalId, animalId),
+        eq(adopterComplianceConfirmations.userId, adopterUser.id)
+      ))
+      .orderBy(desc(adopterComplianceConfirmations.createdAt));
+
+    res.json(confirmations);
+  } catch (error) {
+    console.error('[Adopter Portal Admin] Error fetching compliance confirmations:', error);
+    res.status(500).json({ error: 'Failed to load confirmations' });
+  }
+});
+
+/**
+ * GET /api/adopter/admin/adopter-preview/:adopterId/pets/:animalId/compliance-obligations
+ *
+ * Mirror of GET /api/adopter/pets/:animalId/compliance-obligations.
+ * Returns post-adoption contract obligations so staff see the same Action
+ * Required and Contract Requirements history the adopter sees.
+ */
+router.get('/admin/adopter-preview/:adopterId/pets/:animalId/compliance-obligations', async (req: Request, res: Response) => {
+  try {
+    const auth = requireAdmin(req, res);
+    if (!auth) return;
+
+    const { animalId } = req.params;
+
+    const obligations = await db
+      .select({
+        id: complianceObligations.id,
+        obligationType: complianceObligations.obligationType,
+        label: complianceObligations.label,
+        contractualDueDate: complianceObligations.contractualDueDate,
+        status: complianceObligations.status,
+        notes: complianceObligations.notes,
+        proofDocumentUrl: complianceObligations.proofDocumentUrl,
+        completedAt: complianceObligations.completedAt,
+      })
+      .from(complianceObligations)
+      .where(and(
+        eq(complianceObligations.tenantId, auth.tenantId),
+        eq(complianceObligations.animalId, animalId),
+      ))
+      .orderBy(asc(complianceObligations.contractualDueDate));
+
+    res.json(obligations);
+  } catch (error) {
+    console.error('[Adopter Portal Admin] Error fetching compliance obligations:', error);
+    res.status(500).json({ error: 'Failed to load compliance obligations' });
+  }
+});
+
+/**
+ * GET /api/adopter/admin/adopter-preview/:adopterId/pets/:animalId/heartworm-treatment-plan
+ *
+ * Mirror of GET /api/adopter/pets/:animalId/heartworm-treatment-plan.
+ * Returns the most recent published heartworm treatment plan, or null when
+ * none exists, so staff see the same plan card the adopter sees.
+ */
+router.get('/admin/adopter-preview/:adopterId/pets/:animalId/heartworm-treatment-plan', async (req: Request, res: Response) => {
+  try {
+    const auth = requireAdmin(req, res);
+    if (!auth) return;
+
+    const { animalId } = req.params;
+
+    const [plan] = await db
+      .select({
+        id: heartwormTreatmentPlans.id,
+        appointments: heartwormTreatmentPlans.appointments,
+        locationName: heartwormTreatmentPlans.locationName,
+        locationAddress: heartwormTreatmentPlans.locationAddress,
+        locationPhone: heartwormTreatmentPlans.locationPhone,
+        notes: heartwormTreatmentPlans.notes,
+        contractSentAt: heartwormTreatmentPlans.contractSentAt,
+        adopterName: heartwormTreatmentPlans.adopterName,
+        createdAt: heartwormTreatmentPlans.createdAt,
+      })
+      .from(heartwormTreatmentPlans)
+      .where(and(
+        eq(heartwormTreatmentPlans.tenantId, auth.tenantId),
+        eq(heartwormTreatmentPlans.animalId, animalId),
+        sql`${heartwormTreatmentPlans.contractSentAt} IS NOT NULL`,
+      ))
+      .orderBy(desc(heartwormTreatmentPlans.createdAt))
+      .limit(1);
+
+    if (!plan) {
+      return res.json(null);
+    }
+    res.json(plan);
+  } catch (error) {
+    console.error('[Adopter Portal Admin] Error fetching heartworm treatment plan:', error);
+    res.status(500).json({ error: 'Failed to load heartworm treatment plan' });
+  }
+});
+
+/**
  * GET /api/adopter/pets/:animalId/adoption-packet
  * Downloads the full medical adoption packet PDF for an adopter's pet
  */
