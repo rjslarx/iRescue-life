@@ -14,6 +14,8 @@ import { db } from '../db';
 import {
   animals,
   adoptions,
+  applications,
+  complianceObligations,
   preventativeCareRecords,
   adopterComplianceConfirmations,
   adopterComplianceWarnings,
@@ -25,6 +27,61 @@ import {
 import { and, eq, gte, lte, sql, desc, isNotNull, inArray } from 'drizzle-orm';
 import { EmailService } from './email-service';
 import { sendSms, isTwilioEnabled } from './twilio-service';
+
+/**
+ * Build a per-animal phone fallback map: when `adoptions.adopter_phone` is
+ * NULL we fall back to the most-recent `applications.applicant_phone` for
+ * the same (tenant, animal) where the applicant email matches and the
+ * application made it to the `adopted` stage. This recovers SMS deliverability
+ * for adopters whose phone was captured on the application form but never
+ * copied onto the adoption record (a common gap when adoptions are recorded
+ * manually instead of through the checkout flow).
+ *
+ * Keyed by `${animalId}:${LOWER(adopterEmail)}` so a returned-and-re-adopted
+ * animal with two different adopters keeps its phones separate.
+ */
+async function buildApplicationPhoneFallback(
+  tenantId: string,
+  animalIds: string[],
+): Promise<Map<string, string>> {
+  if (animalIds.length === 0) return new Map();
+  const rows = await db
+    .select({
+      animalId: applications.animalId,
+      applicantEmail: applications.applicantEmail,
+      applicantPhone: applications.applicantPhone,
+      updatedAt: applications.updatedAt,
+    })
+    .from(applications)
+    .where(and(
+      eq(applications.tenantId, tenantId),
+      eq(applications.stage, 'adopted'),
+      inArray(applications.animalId, animalIds),
+      isNotNull(applications.applicantPhone),
+    ))
+    .orderBy(desc(applications.updatedAt));
+
+  const map = new Map<string, string>();
+  for (const r of rows) {
+    if (!r.applicantPhone || !r.applicantPhone.trim()) continue;
+    const key = `${r.animalId}:${(r.applicantEmail || '').toLowerCase()}`;
+    // First write wins because we ordered DESC by updatedAt.
+    if (!map.has(key)) map.set(key, r.applicantPhone.trim());
+  }
+  return map;
+}
+
+function resolveAdopterPhone(
+  adopterPhone: string | null | undefined,
+  animalId: string,
+  adopterEmail: string | null | undefined,
+  fallbackMap: Map<string, string>,
+): string | null {
+  const trimmed = (adopterPhone || '').trim();
+  if (trimmed) return trimmed;
+  const key = `${animalId}:${(adopterEmail || '').toLowerCase()}`;
+  return fallbackMap.get(key) || null;
+}
 
 export const WARNING_DEADLINE_DAYS = 7;
 export const WARNING_DEDUP_DAYS = 30;
@@ -233,7 +290,49 @@ export async function findEligibleHeartwormWarnings(
       lte(preventativeCareRecords.nextDueDate, cutoff),
     ));
 
-  if (rawRows.length === 0) return [];
+  // Pull contractual heartworm-prevention-proof obligations that are still
+  // pending and ≥14 days past their contractual due date. These never live in
+  // `preventative_care_records` — they're written by the adoption checkout/
+  // contract pipeline and represent the adopter's signed promise to keep the
+  // animal on year-round prevention. Without this scan, animals like Pogo —
+  // whose only PCR row is a flea-only product with no `next_due_date` — would
+  // never trigger the warning even though the contract obligation is months
+  // overdue with no proof.
+  const cutoffDateStr = cutoff.toISOString().split('T')[0];
+  const obligationRows = await db
+    .select({
+      obligationId: complianceObligations.id,
+      obligationType: complianceObligations.obligationType,
+      label: complianceObligations.label,
+      contractualDueDate: complianceObligations.contractualDueDate,
+      obligationAdopterName: complianceObligations.adopterName,
+      obligationAdopterEmail: complianceObligations.adopterEmail,
+      obligationAdopterPhone: complianceObligations.adopterPhone,
+      animalId: animals.id,
+      animalName: animals.name,
+      adopterName: adoptions.adopterName,
+      adopterEmail: adoptions.adopterEmail,
+      adopterPhone: adoptions.adopterPhone,
+      adoptionDate: adoptions.adoptionDate,
+    })
+    .from(complianceObligations)
+    .innerJoin(animals, and(
+      eq(animals.id, complianceObligations.animalId),
+      eq(animals.tenantId, tenantId),
+      eq(animals.status, 'adopted'),
+    ))
+    .leftJoin(adoptions, and(
+      eq(adoptions.animalId, complianceObligations.animalId),
+      eq(adoptions.tenantId, tenantId),
+    ))
+    .where(and(
+      eq(complianceObligations.tenantId, tenantId),
+      eq(complianceObligations.status, 'pending'),
+      eq(complianceObligations.obligationType, 'heartworm_prevention_proof'),
+      lte(sql`${complianceObligations.contractualDueDate}::date`, sql`${cutoffDateStr}::date`),
+    ));
+
+  if (rawRows.length === 0 && obligationRows.length === 0) return [];
 
   // Dedupe: one row per (animalId, itemId), keeping the most recent adoption
   // record so we always reach the *current* adopter (not a returned one).
@@ -248,10 +347,32 @@ export async function findEligibleHeartwormWarnings(
   }
   const rows = Array.from(dedupMap.values());
 
+  // Dedup obligation rows by obligation id (the adoption left-join can yield
+  // multiple rows when an animal was returned & re-adopted) — keep the row
+  // tied to the most recent adoption so we always reach the current adopter.
+  type ObligationRow = typeof obligationRows[number];
+  const obligationDedup = new Map<string, ObligationRow>();
+  for (const r of obligationRows) {
+    const existing = obligationDedup.get(r.obligationId);
+    if (!existing) { obligationDedup.set(r.obligationId, r); continue; }
+    const a = r.adoptionDate ? new Date(r.adoptionDate).getTime() : 0;
+    const b = existing.adoptionDate ? new Date(existing.adoptionDate).getTime() : 0;
+    if (a > b) obligationDedup.set(r.obligationId, r);
+  }
+  const obligationCandidates = Array.from(obligationDedup.values());
+
   // For each candidate row, check whether the adopter has already uploaded an
   // approved or pending-review compliance confirmation for this care item that
   // covers (or post-dates) the due date.
-  const animalIds = Array.from(new Set(rows.map(r => r.animalId)));
+  const animalIds = Array.from(new Set([
+    ...rows.map(r => r.animalId),
+    ...obligationCandidates.map(o => o.animalId),
+  ]));
+
+  // Build the application-phone fallback once (per scan) for every animal we
+  // might warn about. Used when both the adoption row and the obligation row
+  // have no phone but the adopter's application form did capture one.
+  const phoneFallback = await buildApplicationPhoneFallback(tenantId, animalIds);
   const confirmations = await db
     .select({
       animalId: adopterComplianceConfirmations.animalId,
@@ -421,7 +542,7 @@ export async function findEligibleHeartwormWarnings(
       daysOverdue,
       adopterName: row.adopterName,
       adopterEmail: row.adopterEmail,
-      adopterPhone: row.adopterPhone || null,
+      adopterPhone: resolveAdopterPhone(row.adopterPhone, row.animalId, row.adopterEmail, phoneFallback),
       lastWarningAt: recent?.sentAt || null,
       lastWarningDeadline: recent?.deadlineDate || null,
       warningsInLast30Days: recent?.count || 0,
@@ -429,7 +550,76 @@ export async function findEligibleHeartwormWarnings(
     });
   }
 
-  return candidates;
+  // Add obligation-based candidates. These are NOT keyed off PCR rows so the
+  // PCR-based dedup map and confirmations lookup don't apply. The obligation
+  // is the source of truth for satisfaction: if status='pending' (which we
+  // filtered for above), the contract obligation is unmet — there is no
+  // covering proof to consider.
+  for (const o of obligationCandidates) {
+    const dueDate = new Date(o.contractualDueDate);
+    if (Number.isNaN(dueDate.getTime())) continue;
+    const dueDateStr = o.contractualDueDate; // already YYYY-MM-DD on the column
+    const daysOverdue = Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
+
+    // Prefer the live adoption row's adopter info when present (handles
+    // re-adoptions where the obligation row may still hold the previous
+    // adopter's contact details), otherwise use the obligation's own copy.
+    const adopterEmail = o.adopterEmail || o.obligationAdopterEmail;
+    const adopterName = o.adopterName || o.obligationAdopterName;
+
+    const recent = warningsByAdopterItem.get(dedupKey(adopterEmail, o.obligationId));
+    const phone = resolveAdopterPhone(
+      o.adopterPhone || o.obligationAdopterPhone,
+      o.animalId,
+      adopterEmail,
+      phoneFallback,
+    );
+
+    candidates.push({
+      animalId: o.animalId,
+      animalName: o.animalName,
+      itemId: o.obligationId,
+      careName: o.label || 'Heartworm Prevention Proof',
+      careCategory: 'parasite_prevention',
+      dueDate: dueDateStr,
+      daysOverdue,
+      adopterName,
+      adopterEmail,
+      adopterPhone: phone,
+      lastWarningAt: recent?.sentAt || null,
+      lastWarningDeadline: recent?.deadlineDate || null,
+      warningsInLast30Days: recent?.count || 0,
+      engagement: buildEngagement(recent, null),
+      __source: 'obligation',
+    } as EligibleHeartwormWarning & { __source: 'obligation' | 'pcr' });
+  }
+
+  // Cross-path dedup: PCR + obligation paths can both produce a candidate for
+  // the same (animal, adopter) — different itemIds, so the per-itemId
+  // warningsInLast30Days check would not stop a double-send within the same
+  // run. Collapse by (animalId, lower(adopterEmail)) and prefer the obligation
+  // candidate when both exist (the obligation IS the contractual source of
+  // truth, and is also more durable across product/brand swaps). Annotate the
+  // PCR candidates pushed above with __source='pcr' purely for this collapse.
+  const collapsedKey = (c: { animalId: string; adopterEmail: string | null }) =>
+    `${c.animalId}:${(c.adopterEmail || '').trim().toLowerCase()}`;
+  const bySrc = new Map<string, EligibleHeartwormWarning & { __source?: 'obligation' | 'pcr' }>();
+  for (const c of candidates as Array<EligibleHeartwormWarning & { __source?: 'obligation' | 'pcr' }>) {
+    if (!c.adopterEmail) continue; // safety: can't warn without an email anyway
+    const key = collapsedKey(c);
+    const existing = bySrc.get(key);
+    if (!existing) {
+      bySrc.set(key, { ...c, __source: c.__source || 'pcr' });
+      continue;
+    }
+    // Obligation wins; if existing is obligation and new is pcr, keep existing.
+    if (existing.__source === 'obligation') continue;
+    if (c.__source === 'obligation') bySrc.set(key, c);
+    // Both PCR: keep the more-overdue one to surface the worst gap first.
+    else if (c.daysOverdue > existing.daysOverdue) bySrc.set(key, c);
+  }
+
+  return Array.from(bySrc.values()).map(({ __source, ...rest }) => rest);
 }
 
 export interface RecentlyWarnedItem {
@@ -527,13 +717,14 @@ export async function findRecentlyWarnedItems(
       inArray(adoptions.animalId, animalIds),
     ));
 
-  const adopterByAnimal = new Map<string, { adopterName: string; adopterPhone: string | null }>();
+  const adopterByAnimal = new Map<string, { adopterName: string; adopterPhone: string | null; adopterEmail: string | null }>();
   for (const row of adoptionRows) {
     const existing = adopterByAnimal.get(row.animalId);
     if (!existing) {
       adopterByAnimal.set(row.animalId, {
         adopterName: row.adopterName,
         adopterPhone: row.adopterPhone || null,
+        adopterEmail: row.adopterEmail || null,
       });
       continue;
     }
@@ -547,9 +738,16 @@ export async function findRecentlyWarnedItems(
       adopterByAnimal.set(row.animalId, {
         adopterName: row.adopterName,
         adopterPhone: row.adopterPhone || null,
+        adopterEmail: row.adopterEmail || null,
       });
     }
   }
+
+  // Phone fallback: use the application's `applicant_phone` when the adoption
+  // row has none. Mirrors the same logic in findEligibleHeartwormWarnings so
+  // staff see the same number on the dashboard as the SMS engine actually
+  // dialed.
+  const phoneFallback = await buildApplicationPhoneFallback(tenantId, animalIds);
 
   // Pull all confirmations for these animals in the relevant care category so
   // we can compute "Proof uploaded" status (any approved/pending confirmation
@@ -604,7 +802,12 @@ export async function findRecentlyWarnedItems(
       daysOverdue,
       adopterName: adopter?.adopterName || 'Unknown adopter',
       adopterEmail: w.adopterEmail || '',
-      adopterPhone: adopter?.adopterPhone || null,
+      adopterPhone: resolveAdopterPhone(
+        adopter?.adopterPhone,
+        w.animalId,
+        w.adopterEmail || adopter?.adopterEmail,
+        phoneFallback,
+      ),
       sentAt: w.sentAt.toISOString(),
       deadlineDate: w.deadlineDate,
       emailOpenedAt: w.emailOpenedAt ? w.emailOpenedAt.toISOString() : null,
