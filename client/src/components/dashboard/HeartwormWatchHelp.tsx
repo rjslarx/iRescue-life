@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { HelpCircle } from "lucide-react";
 
@@ -10,19 +11,20 @@ export function HeartwormWatchHelp({ align = "end", side = "bottom" }: Heartworm
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="icon"
           aria-label="How Heartworm Watch works"
           data-testid="button-heartworm-watch-help"
-          className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-transparent text-muted-foreground hover-elevate active-elevate-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         >
-          <HelpCircle className="h-4 w-4" />
-        </button>
+          <HelpCircle className="text-muted-foreground" />
+        </Button>
       </PopoverTrigger>
       <PopoverContent
         align={align}
         side={side}
-        className="w-[22rem] max-h-[28rem] overflow-y-auto p-4 space-y-3 text-sm"
+        className="w-[24rem] max-w-[calc(100vw-2rem)] max-h-[28rem] overflow-y-auto p-4 space-y-3 text-sm"
         data-testid="popover-heartworm-watch-help"
       >
         <div>
