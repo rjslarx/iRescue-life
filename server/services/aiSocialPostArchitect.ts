@@ -393,7 +393,10 @@ Return the JSON object now.`;
   // never return fewer than 3.
   const merged = dedupeHashtags([...request.preferredHashtags, ...aiHashtags]);
   const topUp = dedupeHashtags(defaultHashtagsForTheme(request.theme, request.tenant.name));
-  const filled = dedupeHashtags([...merged, ...topUp]);
+  // Universal safety net so even the `custom` theme (which has zero theme
+  // defaults) plus an under-producing AI can never return fewer than 3 tags.
+  const FLOOR_HASHTAGS = ["#Rescue", "#AdoptDontShop", "#Animals"];
+  const filled = dedupeHashtags([...merged, ...topUp, ...FLOOR_HASHTAGS]);
   const suggestedHashtags = filled.slice(0, 8);
 
   let visualCue = stripAllUrls(visualCueRaw).trim();
