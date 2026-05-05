@@ -1869,6 +1869,8 @@ router.get('/admin/adopter-preview/:adopterId/pets/:animalId', async (req: Reque
         adoptedAt: animals.adoptionDate,
         microchipNumber: animals.microchipNumber,
         weight: animals.weight,
+        status: animals.status,
+        deceasedDate: animals.deceasedDate,
       })
       .from(animals)
       .innerJoin(
@@ -2383,8 +2385,10 @@ router.get('/pets/:animalId/compliance-obligations', async (req: Request, res: R
       .select({
         id: complianceObligations.id,
         obligationType: complianceObligations.obligationType,
+        label: complianceObligations.label,
         contractualDueDate: complianceObligations.contractualDueDate,
         status: complianceObligations.status,
+        completedAt: complianceObligations.completedAt,
         notes: complianceObligations.notes,
         proofDocumentUrl: complianceObligations.proofDocumentUrl,
       })
