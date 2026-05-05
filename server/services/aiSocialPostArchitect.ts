@@ -388,7 +388,13 @@ Return the JSON object now.`;
 
   const caption = sanitizeCaption(captionRaw);
   const firstComment = sanitizeFirstComment(firstCommentRaw, request.destinationUrl);
-  const suggestedHashtags = dedupeHashtags([...request.preferredHashtags, ...aiHashtags]).slice(0, 12);
+  // Per spec: 3-8 hashtags. Cap at 8; if the AI under-delivered, top up
+  // from the theme's default hashtag list and a tenant-derived tag so we
+  // never return fewer than 3.
+  const merged = dedupeHashtags([...request.preferredHashtags, ...aiHashtags]);
+  const topUp = dedupeHashtags(defaultHashtagsForTheme(request.theme, request.tenant.name));
+  const filled = dedupeHashtags([...merged, ...topUp]);
+  const suggestedHashtags = filled.slice(0, 8);
 
   let visualCue = stripAllUrls(visualCueRaw).trim();
   if (!visualCue) {

@@ -7484,6 +7484,9 @@ Crawl-delay: 1
         SocialPostArchitectError,
         defaultHashtagsForTheme,
       } = await import('./services/aiSocialPostArchitect');
+      type SocialPostTheme = typeof SOCIAL_POST_THEMES[number];
+      type SocialPostTone = typeof SOCIAL_POST_TONES[number];
+      type SocialPostAnimalCtx = NonNullable<Parameters<typeof generateSocialPost>[0]['animal']>;
       const { resolveTenantPostUrls, resolvePublicSiteRoot } = await import('./services/aiPostOptimizer');
       const { donationLinks, animals: animalsTable } = await import('@shared/schema');
 
@@ -7518,7 +7521,7 @@ Crawl-delay: 1
       // Hydrate animal context if an animalId was supplied (tenant-scoped).
       // Reject cross-tenant IDs explicitly so the caller can't silently get a
       // generic post when they meant to feature a specific animal.
-      let animalCtx: any = undefined;
+      let animalCtx: SocialPostAnimalCtx | undefined = undefined;
       let animalEmergencyCampaignUrl: string | undefined;
       if (animalId) {
         const [animal] = await db
@@ -7611,9 +7614,24 @@ Crawl-delay: 1
       let destination: DestinationDescriptor;
       switch (theme) {
         case 'transformation_tuesday':
-        case 'monthly_donor_push':
-          destination = { ...resolved.vipClubUrl, label: 'VIP Club / monthly giving page', kind: 'vipClub' };
+        case 'monthly_donor_push': {
+          // The vipClubUrl resolver currently has no per-tenant override and
+          // always falls back to the generic public-site /vip-club page. For
+          // the monthly-donor / Transformation Tuesday themes, the spec
+          // requires us to surface a fallback warning when the rescue has
+          // not configured a dedicated monthly-donor URL — which today is
+          // *every* tenant whose vipClubUrl source is 'public_vip_club'.
+          // Override the resolver's `isFallback` flag here so the dialog
+          // shows the targeted warning + deep link to Branding settings.
+          const isPublicVipFallback = resolved.vipClubUrl.source === 'public_vip_club';
+          destination = {
+            ...resolved.vipClubUrl,
+            label: 'VIP Club / monthly giving page',
+            kind: 'vipClub',
+            isFallback: isPublicVipFallback ? true : resolved.vipClubUrl.isFallback,
+          };
           break;
+        }
         case 'happy_tail':
           destination = { ...resolved.adoptionUrl, label: 'Adoption application', kind: 'adoption' };
           break;
@@ -7638,15 +7656,15 @@ Crawl-delay: 1
 
       // Merge user's preferred hashtags with sensible defaults so the AI
       // receives a strong starting list even when the user supplied none.
-      const seedHashtags = defaultHashtagsForTheme(theme as any, tenant.name);
+      const seedHashtags = defaultHashtagsForTheme(theme as SocialPostTheme, tenant.name);
       const mergedHashtags = Array.from(
         new Set([...preferredHashtags, ...seedHashtags].map((t) => t.trim()).filter(Boolean)),
       );
 
       try {
         const result = await generateSocialPost({
-          theme: theme as any,
-          tone: tone as any,
+          theme: theme as SocialPostTheme,
+          tone: tone as SocialPostTone,
           tenant: {
             name: tenant.name,
             tagline: tenant.tagline,

@@ -163,7 +163,7 @@ export default function SocialPostArchitectDialog({
 }: SocialPostArchitectDialogProps) {
   const { toast } = useToast();
 
-  const { data: tenantData } = useQuery<{ tenant: any }>({ queryKey: ["/api/tenant"] });
+  const { data: tenantData } = useQuery<{ tenant: { name?: string | null } | null }>({ queryKey: ["/api/tenant"] });
   const tenant = tenantData?.tenant;
 
   const { data: animalsData, isLoading: animalsLoading, error: animalsError } = useQuery<AnimalsResponse>({
@@ -174,7 +174,7 @@ export default function SocialPostArchitectDialog({
   const animals = useMemo(() => {
     const list = animalsData?.animals ?? [];
     return list
-      .filter((a) => !HIDDEN_ANIMAL_STATUSES.has((a.status ?? "") as string))
+      .filter((a) => !HIDDEN_ANIMAL_STATUSES.has(a.status ?? ""))
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [animalsData]);
 
@@ -324,7 +324,7 @@ export default function SocialPostArchitectDialog({
     onSuccess: (data) => {
       setResult(data);
     },
-    onError: (err: any) => {
+    onError: (err: Error) => {
       const message = err?.message || "Failed to generate the post. Please try again.";
       toast({ title: "Generation failed", description: message, variant: "destructive" });
     },
