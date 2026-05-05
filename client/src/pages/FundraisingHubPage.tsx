@@ -78,9 +78,11 @@ import {
   Loader2,
   X,
   Palette,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import DashboardLayout from "@/components/DashboardLayout";
+import SocialPostArchitectDialog from "@/components/SocialPostArchitectDialog";
 import { getAvatarIcon, getAvatarColor, AVATAR_TYPES } from "@/lib/participant-avatars";
 import type { VotingContest, VotingContestEntrant } from "@shared/schema";
 
@@ -117,9 +119,10 @@ export default function FundraisingHubPage() {
         </TabsList>
 
         <TabsContent value="toolkit">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-6">
             <GeneralDonationsCard donationUrl={donationUrl} tenantName={tenant?.name} isLoading={tenantLoading} />
             <AnimalCampaignsCard onNavigate={setLocation} />
+            <SocialPostArchitectCard />
             <SocialMediaPlaybookCard />
           </div>
         </TabsContent>
@@ -1263,6 +1266,42 @@ function VotingContestsTab({ tenantSubdomain }: { tenantSubdomain?: string }) {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+function SocialPostArchitectCard() {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Card data-testid="card-social-post-architect" className="hover-elevate">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Megaphone className="h-5 w-5 text-primary" />
+            <CardTitle className="text-lg">Social Post Architect</CardTitle>
+            <Badge variant="secondary" className="ml-auto">AI</Badge>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Generate ready-to-paste social posts in multiple themes — Transformation Tuesday, Happy Tail, Urgent Need, Volunteer, Monthly Donor, Giving Tuesday, or fully custom.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <ul className="text-sm text-muted-foreground space-y-1.5 mb-4">
+            <li>• Auto-fills your rescue's name, mission, and links</li>
+            <li>• Suggests on-brand hashtags + the right CTA URL</li>
+            <li>• Includes a Story Boost checklist for maximum reach</li>
+          </ul>
+          <Button
+            onClick={() => setOpen(true)}
+            className="w-full"
+            data-testid="button-open-social-post-architect"
+          >
+            <Sparkles className="h-4 w-4 mr-2" />
+            Open Architect
+          </Button>
+        </CardContent>
+      </Card>
+      <SocialPostArchitectDialog open={open} onOpenChange={setOpen} />
+    </>
   );
 }
 

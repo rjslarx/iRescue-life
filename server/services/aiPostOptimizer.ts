@@ -162,7 +162,22 @@ export function stripAllUrls(text: string): string {
     // http(s)://... URLs
     .replace(/https?:\/\/[^\s)\]>,]+/gi, "")
     // bare www. URLs without a protocol
-    .replace(/\bwww\.[^\s)\]>,]+/gi, "");
+    .replace(/\bwww\.[^\s)\]>,]+/gi, "")
+    // Bare domains with a path or trailing slash (e.g. example.org/path,
+    // give.rescue.org/donate) — keeps plain prose like "the .org" untouched
+    // by requiring at least one path/query character after the TLD.
+    .replace(
+      /\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,24}(?:\/[^\s)\]>,]*|\?[^\s)\]>,]*)/gi,
+      "",
+    )
+    // Bare hostnames ending in a common public TLD (e.g. example.org,
+    // rescue.com). Skips anything preceded by '@' (emails) or '/' (already-
+    // stripped path remnants) and skips file extensions like "image.png" by
+    // requiring the TLD to be one of the common web/non-file TLDs.
+    .replace(
+      /(?<![@/\w.])\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(?:com|org|net|io|co|us|app|info|biz|tv|me|ai|dev|gov|edu|store|shop|link|page|site|donate|fund|rescue|love|life)\b/gi,
+      "",
+    );
   cleaned = cleaned
     .replace(/[ \t]+([.,!?;:])/g, "$1")
     .replace(/[ \t]{2,}/g, " ")

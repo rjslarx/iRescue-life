@@ -7469,6 +7469,229 @@ Crawl-delay: 1
   });
 
   /**
+   * POST /api/social-post-architect/generate
+   * Generate a polished social post (caption + first comment + hashtags) from
+   * structured inputs (theme, tone, animal, custom fields). Tenant-agnostic:
+   * pulls rescue name, mission, location, social handles, and destination URLs
+   * from the current tenant's settings — never hardcoded.
+   */
+  app.post('/api/social-post-architect/generate', requireTenant, requireAuth, requireRole('owner', 'admin', 'staff'), async (req, res, next) => {
+    try {
+      const {
+        generateSocialPost,
+        SOCIAL_POST_THEMES,
+        SOCIAL_POST_TONES,
+        SocialPostArchitectError,
+        defaultHashtagsForTheme,
+      } = await import('./services/aiSocialPostArchitect');
+      const { resolveTenantPostUrls, resolvePublicSiteRoot } = await import('./services/aiPostOptimizer');
+      const { donationLinks, animals: animalsTable } = await import('@shared/schema');
+
+      const themeEnum = z.enum(SOCIAL_POST_THEMES as [string, ...string[]]);
+      const toneEnum = z.enum(SOCIAL_POST_TONES as [string, ...string[]]);
+
+      const generateSchema = z.object({
+        theme: themeEnum,
+        tone: toneEnum,
+        animalId: z.string().uuid().optional(),
+        inputs: z.object({
+          beforeText: z.string().max(2000).optional(),
+          afterText: z.string().max(2000).optional(),
+          needDescription: z.string().max(2000).optional(),
+          dollarAmount: z.string().max(120).optional(),
+          deadline: z.string().max(120).optional(),
+          volunteerRole: z.string().max(200).optional(),
+          timeCommitment: z.string().max(200).optional(),
+          customInstructions: z.string().max(2000).optional(),
+        }).default({}),
+        preferredHashtags: z.array(z.string().max(60)).max(15).default([]),
+      });
+
+      const parsed = generateSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.errors[0]?.message || 'Invalid request data' });
+      }
+
+      const tenant = req.tenant!;
+      const { theme, tone, animalId, inputs, preferredHashtags } = parsed.data;
+
+      // Hydrate animal context if an animalId was supplied (tenant-scoped).
+      // Reject cross-tenant IDs explicitly so the caller can't silently get a
+      // generic post when they meant to feature a specific animal.
+      let animalCtx: any = undefined;
+      let animalEmergencyCampaignUrl: string | undefined;
+      if (animalId) {
+        const [animal] = await db
+          .select()
+          .from(animalsTable)
+          .where(and(eq(animalsTable.id, animalId), eq(animalsTable.tenantId, tenant.id)))
+          .limit(1);
+        if (!animal) {
+          return res.status(404).json({
+            error: 'Animal not found in this rescue. Pick a different animal or clear the selection.',
+          });
+        }
+        {
+          animalCtx = {
+            name: animal.name,
+            species: animal.species ?? null,
+            intakeDate: animal.intakeDate ? new Date(animal.intakeDate).toISOString() : null,
+            intakeSource: animal.intakeSource ?? null,
+            locationFound: animal.locationFound ?? null,
+            bio: animal.bio ?? null,
+            status: animal.status ?? null,
+            adoptionDate: animal.adoptionDate ? new Date(animal.adoptionDate).toISOString() : null,
+            storyTags: animal.storyTags ?? null,
+          };
+
+          // Look up an active animal-specific emergency fundraiser for the
+          // urgent_need theme (mirrors the post-optimizer's behavior).
+          const [campaign] = await db
+            .select({ id: donationLinks.id, title: donationLinks.title })
+            .from(donationLinks)
+            .where(
+              and(
+                eq(donationLinks.tenantId, tenant.id),
+                eq(donationLinks.animalId, animalId),
+                eq(donationLinks.campaignType, 'emergency_fund'),
+                eq(donationLinks.isActive, true),
+              ),
+            )
+            .orderBy(desc(donationLinks.createdAt))
+            .limit(1);
+
+          if (campaign) {
+            const root = resolvePublicSiteRoot({
+              customDomain: tenant.customDomain,
+              customDomainVerified: tenant.customDomainVerified,
+              subdomain: tenant.subdomain,
+            });
+            animalEmergencyCampaignUrl = `${root}/campaign/${campaign.id}?utm_source=social_architect&utm_medium=first_comment`;
+          }
+        }
+      }
+
+      const resolved = resolveTenantPostUrls(
+        {
+          customDomain: tenant.customDomain,
+          customDomainVerified: tenant.customDomainVerified,
+          subdomain: tenant.subdomain,
+          jotformAdoptionUrl: tenant.jotformAdoptionUrl,
+          jotformFosterUrl: tenant.jotformFosterUrl,
+          jotformVolunteerUrl: tenant.jotformVolunteerUrl,
+        },
+        animalEmergencyCampaignUrl,
+      );
+
+      const publicSiteRoot = resolvePublicSiteRoot({
+        customDomain: tenant.customDomain,
+        customDomainVerified: tenant.customDomainVerified,
+        subdomain: tenant.subdomain,
+      });
+
+      // General-donate URL for themes that don't map to a specific resolver
+      // (giving_tuesday, custom, monthly_donor_push fallback).
+      const generalDonateUrl = {
+        url: `${publicSiteRoot}/donate?utm_source=social_architect&utm_medium=first_comment`,
+        source: 'public_donate_fallback' as const,
+        isFallback: false,
+        kind: 'donate' as const,
+        label: 'General donate page',
+      };
+
+      // Pick the destination URL for this theme.
+      type DestinationDescriptor = {
+        url: string;
+        label: string;
+        kind: 'vipClub' | 'foster' | 'adoption' | 'volunteer' | 'emergencyDonate' | 'donate';
+        source: string;
+        isFallback: boolean;
+      };
+      let destination: DestinationDescriptor;
+      switch (theme) {
+        case 'transformation_tuesday':
+        case 'monthly_donor_push':
+          destination = { ...resolved.vipClubUrl, label: 'VIP Club / monthly giving page', kind: 'vipClub' };
+          break;
+        case 'happy_tail':
+          destination = { ...resolved.adoptionUrl, label: 'Adoption application', kind: 'adoption' };
+          break;
+        case 'urgent_need':
+          destination = { ...resolved.emergencyDonateUrl, label: animalEmergencyCampaignUrl ? 'Animal emergency fundraiser' : 'General donate page', kind: 'emergencyDonate' };
+          break;
+        case 'volunteer_recruitment':
+          destination = { ...resolved.volunteerUrl, label: 'Volunteer application', kind: 'volunteer' };
+          break;
+        case 'giving_tuesday':
+        case 'custom':
+        default:
+          destination = generalDonateUrl;
+          break;
+      }
+
+      // Resolve location string from the most useful tenant field.
+      const tenantLocation =
+        [tenant.orgAddressCity, tenant.orgAddressState].filter(Boolean).join(', ') ||
+        tenant.footerAddress ||
+        null;
+
+      // Merge user's preferred hashtags with sensible defaults so the AI
+      // receives a strong starting list even when the user supplied none.
+      const seedHashtags = defaultHashtagsForTheme(theme as any, tenant.name);
+      const mergedHashtags = Array.from(
+        new Set([...preferredHashtags, ...seedHashtags].map((t) => t.trim()).filter(Boolean)),
+      );
+
+      try {
+        const result = await generateSocialPost({
+          theme: theme as any,
+          tone: tone as any,
+          tenant: {
+            name: tenant.name,
+            tagline: tenant.tagline,
+            missionStatement: tenant.missionStatement,
+            location: tenantLocation,
+            socialFacebook: tenant.socialFacebook,
+            socialInstagram: tenant.socialInstagram,
+          },
+          animal: animalCtx,
+          inputs,
+          destinationUrl: destination.url,
+          preferredHashtags: mergedHashtags,
+        });
+
+        return res.json({
+          success: true,
+          caption: result.caption,
+          firstComment: result.firstComment,
+          suggestedHashtags: result.suggestedHashtags,
+          visualCue: result.visualCue,
+          destination: {
+            url: destination.url,
+            label: destination.label,
+            kind: destination.kind,
+            source: destination.source,
+            isFallback: destination.isFallback,
+          },
+          tenantContext: {
+            name: tenant.name,
+            location: tenantLocation,
+            socialFacebook: tenant.socialFacebook ?? null,
+            socialInstagram: tenant.socialInstagram ?? null,
+          },
+        });
+      } catch (err) {
+        if (err instanceof SocialPostArchitectError) {
+          return res.status(err.status).json({ error: err.message });
+        }
+        throw err;
+      }
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * GET /api/animals/:id/foster-history
    * Get foster placement history for a specific animal with foster names and duration
    */
