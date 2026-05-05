@@ -405,6 +405,10 @@ Return the JSON object now.`;
       ? `Pair this with a clear photo of ${request.animal.name}.`
       : "Pair this with a strong rescue photo that matches the tone.";
   }
+  // Append a destination pointer so the cue line ALSO reminds the poster
+  // where the call-to-action link will live (it's pinned in the first
+  // comment, never in the caption).
+  visualCue = `${visualCue} Direct viewers to the link in the first comment to take action.`;
 
   return {
     caption,
