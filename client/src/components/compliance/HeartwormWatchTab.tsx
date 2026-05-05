@@ -39,6 +39,7 @@ import {
   Stethoscope,
 } from "lucide-react";
 import { HeartwormTreatmentModal } from "@/components/HeartwormTreatmentModal";
+import { HeartwormWatchHelp } from "@/components/dashboard/HeartwormWatchHelp";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -1061,6 +1062,7 @@ function HeartwormTreatmentProgressCard() {
             <CardTitle className="flex items-center gap-2">
               <Stethoscope className="h-5 w-5 text-destructive" />
               Heartworm Treatment Progress
+              <HeartwormWatchHelp />
             </CardTitle>
             <CardDescription>
               All active immiticide treatment plans grouped by status. Click any plan to

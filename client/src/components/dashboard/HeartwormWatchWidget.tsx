@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Heart, FileText, AlertTriangle, CheckCircle2, Clock, ShieldAlert, User } from "lucide-react";
 import { format } from "date-fns";
 import { HeartwormTreatmentModal } from "@/components/HeartwormTreatmentModal";
+import { HeartwormWatchHelp } from "@/components/dashboard/HeartwormWatchHelp";
 import { apiRequest } from "@/lib/queryClient";
 
 type HwStatus = 'on_track' | 'overdue' | 'restriction_window_active' | 'completed';
@@ -236,6 +237,7 @@ export default function HeartwormWatchWidget() {
           <div className="flex items-center gap-2 min-w-0">
             <Heart className="h-5 w-5 text-red-500 flex-shrink-0" />
             <CardTitle className="text-base">Heartworm Watch</CardTitle>
+            <HeartwormWatchHelp />
             {counts && (
               <Badge variant="outline" data-testid="badge-hw-total-count">
                 {counts.total} {counts.total === 1 ? 'plan' : 'plans'}
@@ -283,7 +285,7 @@ export default function HeartwormWatchWidget() {
             </div>
           ) : !groups || (counts && counts.total === 0) ? (
             <div className="text-center py-8 text-sm text-muted-foreground" data-testid="text-hw-empty-state">
-              No heartworm treatment plans match your filters.
+              No heartworm treatment plans match your filters. Tap the help icon above to learn how this widget works.
             </div>
           ) : (
             <div className="space-y-5">
