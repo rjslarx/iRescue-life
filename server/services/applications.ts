@@ -279,11 +279,18 @@ export async function getApplicationsByTenant(tenantId: string) {
     .where(eq(applications.tenantId, tenantId))
     .orderBy(desc(applications.createdAt));
   
-  // Transform to include animal as nested object for frontend compatibility
+  // Transform to include both flat animalName (used by ApplicationsPage's
+  // active + terminal cards and KanbanBoard subtitle) AND nested
+  // animal: { id, name } (used by the dashboard PipelineManager). Stripping
+  // animalName here is what caused the "Applied for: Unknown Animal" labels
+  // on the Adopted/Denied/Trial-Failed tabs — those cards read app.animalName
+  // directly from the API response (no /api/animals lookup), so we must
+  // surface it.
   return results.map(app => ({
     id: app.id,
     tenantId: app.tenantId,
     animalId: app.animalId,
+    animalName: app.animalName ?? undefined,
     applicantName: app.applicantName,
     applicantEmail: app.applicantEmail,
     applicantPhone: app.applicantPhone,
