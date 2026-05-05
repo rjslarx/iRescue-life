@@ -5500,6 +5500,32 @@ export const insertDonationLinkSchema = createInsertSchema(donationLinks).omit({
 export type InsertDonationLink = z.infer<typeof insertDonationLinkSchema>;
 export type DonationLink = typeof donationLinks.$inferSelect;
 
+// Saved templates from the Social Post Architect. A template captures the
+// exact inputs (theme/tone/animal/structured fields/hashtags) that produced
+// a winning post, plus the generated outputs, so the rescue can re-load and
+// re-paste later without regenerating. Tenant-scoped — never shared across
+// tenants.
+export const socialPostTemplates = pgTable("social_post_templates", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  createdByUserId: uuid("created_by_user_id").references(() => users.id, { onDelete: 'set null' }),
+  name: text("name").notNull(),
+  theme: text("theme").notNull(),
+  tone: text("tone").notNull(),
+  animalId: uuid("animal_id"),
+  inputs: jsonb("inputs").notNull().default({}),
+  preferredHashtags: text("preferred_hashtags").array().notNull().default(sql`ARRAY[]::text[]`),
+  result: jsonb("result"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertSocialPostTemplateSchema = createInsertSchema(socialPostTemplates).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertSocialPostTemplate = z.infer<typeof insertSocialPostTemplateSchema>;
+export type SocialPostTemplate = typeof socialPostTemplates.$inferSelect;
+
 export const campaignContributions = pgTable("campaign_contributions", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),

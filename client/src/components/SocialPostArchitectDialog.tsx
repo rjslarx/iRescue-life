@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { queryClient } from "@/lib/queryClient";
 import {
   Dialog,
   DialogContent,
@@ -48,6 +49,9 @@ import {
   ExternalLink,
   Image as ImageIcon,
   Hash,
+  Bookmark,
+  Trash2,
+  FolderOpen,
 } from "lucide-react";
 
 type Theme =
@@ -148,6 +152,30 @@ const THEME_HASHTAGS: Record<Theme, string[]> = {
   custom: [],
 };
 
+// A saved template captures everything needed to fully restore a winning
+// post: the form inputs (theme/tone/animal/structured fields/hashtags) AND
+// the generated outputs so the user can re-paste without regenerating.
+interface SavedTemplate {
+  id: string;
+  name: string;
+  theme: Theme;
+  tone: Tone;
+  animalId: string | null;
+  inputs: {
+    beforeText?: string;
+    afterText?: string;
+    needDescription?: string;
+    dollarAmount?: string;
+    deadline?: string;
+    volunteerRole?: string;
+    timeCommitment?: string;
+    customInstructions?: string;
+  };
+  preferredHashtags: string[];
+  result: GenerateResponse | null;
+  createdAt: string;
+}
+
 interface SocialPostArchitectDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -205,9 +233,116 @@ export default function SocialPostArchitectDialog({
   // distinguish "user-added" tags from theme-default tags across theme changes,
   // so user customs are preserved while old theme defaults are dropped.
   const prevSeedRef = useRef<string[]>([]);
+  // When a saved template is loaded, we want the saved hashtag list to be
+  // respected verbatim — NOT merged with the current theme's seed defaults.
+  // This one-shot flag tells the seed-recompute effect to skip its merge pass
+  // exactly once and just record the new seed for future theme changes.
+  const skipSeedRecomputeRef = useRef(false);
 
   const [result, setResult] = useState<GenerateResponse | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  // Template save UI state — kept inline to avoid an extra dialog layer.
+  const [saveName, setSaveName] = useState("");
+  const [showSaveInput, setShowSaveInput] = useState(false);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [loadedTemplateName, setLoadedTemplateName] = useState<string | null>(null);
+
+  const { data: templates = [] } = useQuery<SavedTemplate[]>({
+    queryKey: ["/api/social-post-architect/templates"],
+    enabled: open,
+  });
+
+  const saveTemplateMutation = useMutation({
+    mutationFn: async (name: string): Promise<SavedTemplate> => {
+      const res = await apiRequest("POST", "/api/social-post-architect/templates", {
+        name: name.trim(),
+        theme,
+        tone,
+        animalId: animalId || null,
+        inputs: {
+          beforeText: beforeText.trim() || undefined,
+          afterText: afterText.trim() || undefined,
+          needDescription: needDescription.trim() || undefined,
+          dollarAmount: dollarAmount.trim() || undefined,
+          deadline: deadline.trim() || undefined,
+          volunteerRole: volunteerRole.trim() || undefined,
+          timeCommitment: timeCommitment.trim() || undefined,
+          customInstructions: customInstructions.trim() || undefined,
+        },
+        preferredHashtags: hashtags,
+        result: result ?? null,
+      });
+      return res.json();
+    },
+    onSuccess: (saved) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/social-post-architect/templates"] });
+      setSaveName("");
+      setShowSaveInput(false);
+      setLoadedTemplateName(saved.name);
+      toast({ title: "Template saved", description: `"${saved.name}" is ready to reuse.` });
+    },
+    onError: (err: Error) => {
+      toast({
+        title: "Couldn't save template",
+        description: err?.message || "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteTemplateMutation = useMutation({
+    mutationFn: async (id: string): Promise<void> => {
+      await apiRequest("DELETE", `/api/social-post-architect/templates/${id}`);
+    },
+    onSuccess: (_void, id) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/social-post-architect/templates"] });
+      setPendingDeleteId(null);
+      const removed = templates.find((t) => t.id === id);
+      if (removed && loadedTemplateName === removed.name) {
+        setLoadedTemplateName(null);
+      }
+      toast({ title: "Template deleted" });
+    },
+    onError: (err: Error) => {
+      toast({
+        title: "Couldn't delete template",
+        description: err?.message || "Please try again.",
+        variant: "destructive",
+      });
+      setPendingDeleteId(null);
+    },
+  });
+
+  // Restore a saved template into the form. Bypasses the auto-fill effect by
+  // resetting the autofill ref, and seeds the hashtag prevSeedRef so the
+  // theme-change effect treats the loaded tags as user-customs (and won't
+  // wipe them on the next theme switch within the same session).
+  const loadTemplate = (tpl: SavedTemplate) => {
+    setTheme(tpl.theme);
+    setTone(tpl.tone);
+    setAnimalId(tpl.animalId);
+    const i = tpl.inputs ?? {};
+    setBeforeText(i.beforeText ?? "");
+    setAfterText(i.afterText ?? "");
+    setNeedDescription(i.needDescription ?? "");
+    setDollarAmount(i.dollarAmount ?? "");
+    setDeadline(i.deadline ?? "");
+    setVolunteerRole(i.volunteerRole ?? "");
+    setTimeCommitment(i.timeCommitment ?? "");
+    setCustomInstructions(i.customInstructions ?? "");
+    setHashtags(tpl.preferredHashtags ?? []);
+    // Tell the seed-recompute effect to skip its merge exactly once so the
+    // saved hashtag list is honored verbatim, even when the template's theme
+    // differs from the current theme.
+    skipSeedRecomputeRef.current = true;
+    // Suppress animal auto-fill so saved inputs win.
+    autofilledAnimalIdRef.current = tpl.animalId;
+    setResult(tpl.result ?? null);
+    setLoadedTemplateName(tpl.name);
+    setShowSaveInput(false);
+    toast({ title: "Template loaded", description: `"${tpl.name}" is ready.` });
+  };
 
   // Reset form when dialog opens, applying any initial values + tenant-aware
   // hashtag defaults so the user doesn't see stale state from a prior run.
@@ -226,6 +361,10 @@ export default function SocialPostArchitectDialog({
     setCustomInstructions("");
     setResult(null);
     setCopiedKey(null);
+    setSaveName("");
+    setShowSaveInput(false);
+    setPendingDeleteId(null);
+    setLoadedTemplateName(null);
   }, [open, initialTheme, initialAnimalId]);
 
   // Recompute the seed hashtag list whenever theme or tenant changes so the
@@ -237,6 +376,14 @@ export default function SocialPostArchitectDialog({
     const tenantTag = buildDefaultHashtagFromName(tenant?.name);
     const themeTags = THEME_HASHTAGS[theme] || [];
     const seed = Array.from(new Set([tenantTag, ...themeTags].filter(Boolean) as string[]));
+    // One-shot skip: a template was just loaded and its hashtags must be
+    // honored verbatim. Record the new seed for future theme changes but
+    // leave the user's hashtag list untouched.
+    if (skipSeedRecomputeRef.current) {
+      skipSeedRecomputeRef.current = false;
+      prevSeedRef.current = seed;
+      return;
+    }
     setHashtags((prev) => {
       const prevSeed = prevSeedRef.current;
       // First apply (no prior seed): start from the seed only.
@@ -254,7 +401,10 @@ export default function SocialPostArchitectDialog({
 
   // Reset prevSeedRef whenever the dialog closes so reopening starts fresh.
   useEffect(() => {
-    if (!open) prevSeedRef.current = [];
+    if (!open) {
+      prevSeedRef.current = [];
+      skipSeedRecomputeRef.current = false;
+    }
   }, [open]);
 
   const selectedAnimal = useMemo(
@@ -386,6 +536,79 @@ export default function SocialPostArchitectDialog({
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-2">
           {/* LEFT: form (2 cols) */}
           <div className="lg:col-span-2 space-y-4">
+            {/* Saved templates — load a previous winning post in one click */}
+            {templates.length > 0 && (
+              <div className="space-y-2" data-testid="section-saved-templates">
+                <div className="flex items-center gap-2">
+                  <FolderOpen className="h-4 w-4 text-muted-foreground" />
+                  <Label className="text-sm">Saved Templates</Label>
+                  {loadedTemplateName && (
+                    <Badge variant="secondary" data-testid="badge-loaded-template">
+                      Loaded: {loadedTemplateName}
+                    </Badge>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {templates.map((tpl) => {
+                    const isPendingDelete = pendingDeleteId === tpl.id;
+                    return (
+                      <div
+                        key={tpl.id}
+                        className="inline-flex items-center gap-1 rounded-md border bg-card pl-2 pr-1 py-1"
+                        data-testid={`template-chip-${tpl.id}`}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => loadTemplate(tpl)}
+                          className="text-sm font-medium hover:underline"
+                          data-testid={`button-load-template-${tpl.id}`}
+                          disabled={isGenerating}
+                        >
+                          {tpl.name}
+                        </button>
+                        {isPendingDelete ? (
+                          <div className="flex items-center gap-1 ml-1">
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => deleteTemplateMutation.mutate(tpl.id)}
+                              disabled={deleteTemplateMutation.isPending}
+                              data-testid={`button-confirm-delete-${tpl.id}`}
+                            >
+                              {deleteTemplateMutation.isPending ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                "Delete"
+                              )}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => setPendingDeleteId(null)}
+                              data-testid={`button-cancel-delete-${tpl.id}`}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        ) : (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-6 w-6"
+                            onClick={() => setPendingDeleteId(tpl.id)}
+                            data-testid={`button-delete-template-${tpl.id}`}
+                            aria-label={`Delete template ${tpl.name}`}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Theme + Tone */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -870,7 +1093,66 @@ export default function SocialPostArchitectDialog({
                   </CardContent>
                 </Card>
 
-                <div className="flex justify-end gap-2">
+                <div className="flex flex-wrap justify-end gap-2 items-center">
+                  {showSaveInput ? (
+                    <div className="flex flex-wrap items-center gap-2 flex-1">
+                      <Input
+                        value={saveName}
+                        onChange={(e) => setSaveName(e.target.value)}
+                        placeholder='Template name (e.g. "Weekly Volunteer Push")'
+                        maxLength={120}
+                        className="flex-1 min-w-[16rem]"
+                        data-testid="input-template-name"
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && saveName.trim() && !saveTemplateMutation.isPending) {
+                            saveTemplateMutation.mutate(saveName);
+                          }
+                          if (e.key === "Escape") {
+                            setShowSaveInput(false);
+                            setSaveName("");
+                          }
+                        }}
+                      />
+                      <Button
+                        onClick={() => saveTemplateMutation.mutate(saveName)}
+                        disabled={!saveName.trim() || saveTemplateMutation.isPending}
+                        data-testid="button-confirm-save-template"
+                      >
+                        {saveTemplateMutation.isPending ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-1 animate-spin" /> Saving…
+                          </>
+                        ) : (
+                          <>
+                            <Bookmark className="h-4 w-4 mr-1" /> Save
+                          </>
+                        )}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        onClick={() => {
+                          setShowSaveInput(false);
+                          setSaveName("");
+                        }}
+                        data-testid="button-cancel-save-template"
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setSaveName(loadedTemplateName ?? "");
+                        setShowSaveInput(true);
+                      }}
+                      disabled={isGenerating}
+                      data-testid="button-save-as-template"
+                    >
+                      <Bookmark className="h-4 w-4 mr-1" /> Save as template
+                    </Button>
+                  )}
                   <Button
                     variant="outline"
                     onClick={() =>

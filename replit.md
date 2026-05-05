@@ -67,6 +67,7 @@ Core functionalities include:
 - **Terminal-Status Animal Filtering for Daily Briefing & Medical Cleanup:** Excludes animals with terminal statuses from medical queries and cleans up associated medical tasks and prescriptions.
 - **Aligned Adoption Guardrails Across All Three Entry Points:** Enforces mandatory checks and provides consistent warning/override mechanisms across all adoption finalization paths.
 - **Adopter Heartworm Compliance Warning System:** Automates sending warning notices for overdue parasite prevention to adopters, with smart deduping and phone number fallback.
+- **Social Post Templates:** Save Social Post Architect generations as named, tenant-scoped templates that staff can one-click re-load (form inputs, hashtags, and previously generated outputs all restored) and delete from inside the architect dialog.
 
 ## External Dependencies
 - **Stripe:** Payment processing and financial management.
