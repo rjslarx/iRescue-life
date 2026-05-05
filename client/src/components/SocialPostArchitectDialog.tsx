@@ -657,11 +657,11 @@ export default function SocialPostArchitectDialog({
                         ) : (
                           <CommandEmpty>No animals found.</CommandEmpty>
                         )}
-                        <CommandGroup className="max-h-[260px] overflow-y-auto">
+                        <CommandGroup>
                           {animals.map((a) => (
                             <CommandItem
                               key={a.id}
-                              value={`${a.name} ${a.species ?? ""}`.trim()}
+                              value={`${a.name} ${a.species ?? ""} ${a.id}`.trim()}
                               onSelect={() => {
                                 setAnimalId(a.id);
                                 setAnimalPopoverOpen(false);
