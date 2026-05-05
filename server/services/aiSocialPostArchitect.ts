@@ -47,6 +47,7 @@ export interface SocialPostAnimalContext {
   status?: string | null;
   adoptionDate?: string | null; // ISO
   storyTags?: string[] | null;
+  photoUrl?: string | null;
 }
 
 export interface SocialPostInputs {
@@ -204,6 +205,7 @@ function buildAnimalContextBlock(animal?: SocialPostAnimalContext): string {
   if (adoptionDate) lines.push(`- Adopted: ${adoptionDate}`);
   if (animal.bio && animal.bio.trim()) lines.push(`- Bio: ${animal.bio.trim()}`);
   if (animal.storyTags && animal.storyTags.length) lines.push(`- Story tags: ${animal.storyTags.join(", ")}`);
+  if (animal.photoUrl) lines.push(`- Featured photo URL (do NOT include in caption — for context only): ${animal.photoUrl}`);
   return lines.join("\n");
 }
 
