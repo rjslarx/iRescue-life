@@ -7701,166 +7701,87 @@ Crawl-delay: 1
   });
 
   /**
-   * Social Post Architect — Saved Templates (Task #182)
-   *
-   * Lets staff save the inputs + generated outputs from a winning post as a
-   * named, reusable template. Templates are tenant-scoped (the tenantId is
-   * always taken from `req.tenant`, never trusted from the body) and listed
-   * inside the architect dialog so a one-click load re-fills the form.
+   * Social Post Architect — saved templates
+   * ----------------------------------------
+   * Lets staff persist a generation result (inputs + outputs) under a name
+   * and reload it later without re-burning an AI call. Tenant-scoped via the
+   * tenant FK on `socialPostTemplates`; the route also re-asserts tenantId
+   * on every read/write so cross-tenant access is structurally impossible.
    */
-  app.get(
-    '/api/social-post-architect/templates',
-    requireTenant,
-    requireAuth,
-    requireRole('owner', 'admin', 'manager', 'staff'),
-    async (req, res, next) => {
-      try {
-        const { socialPostTemplates } = await import('@shared/schema');
-        const tenant = req.tenant!;
-        const rows = await db
-          .select()
-          .from(socialPostTemplates)
-          .where(eq(socialPostTemplates.tenantId, tenant.id))
-          .orderBy(desc(socialPostTemplates.createdAt));
-        res.json(rows);
-      } catch (error) {
-        next(error);
+  app.get('/api/social-post-architect/templates', requireTenant, requireAuth, requireRole('owner', 'admin', 'manager', 'staff'), async (req, res, next) => {
+    try {
+      const { socialPostTemplates } = await import('@shared/schema');
+      const tenantId = req.tenant!.id;
+      const rows = await db
+        .select()
+        .from(socialPostTemplates)
+        .where(eq(socialPostTemplates.tenantId, tenantId))
+        .orderBy(desc(socialPostTemplates.createdAt));
+      res.json({ templates: rows });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/api/social-post-architect/templates', requireTenant, requireAuth, requireRole('owner', 'admin', 'manager', 'staff'), async (req, res, next) => {
+    try {
+      const { socialPostTemplates, insertSocialPostTemplateSchema } = await import('@shared/schema');
+      const tenantId = req.tenant!.id;
+      const userId = req.user!.id;
+
+      // Trim the name and require it; the rest of the payload mirrors the
+      // generate response so the dialog can save its current state with one
+      // click. The Zod insert schema (omitting id/tenantId/createdBy/createdAt)
+      // already validates the rest of the shape, but we tighten `name`
+      // here so we get a clear 400 instead of an opaque DB error.
+      const bodySchema = insertSocialPostTemplateSchema.extend({
+        name: z.string().trim().min(1, 'Name is required').max(120, 'Name must be 120 characters or less'),
+      });
+      const parsed = bodySchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.errors[0]?.message || 'Invalid template payload' });
       }
-    },
-  );
 
-  app.post(
-    '/api/social-post-architect/templates',
-    requireTenant,
-    requireAuth,
-    requireRole('owner', 'admin', 'manager', 'staff'),
-    async (req, res, next) => {
       try {
-        const {
-          socialPostTemplates,
-          animals: animalsTable,
-        } = await import('@shared/schema');
-        const { SOCIAL_POST_THEMES, SOCIAL_POST_TONES } = await import(
-          './services/aiSocialPostArchitect'
-        );
-
-        const themeEnum = z.enum(SOCIAL_POST_THEMES as [string, ...string[]]);
-        const toneEnum = z.enum(SOCIAL_POST_TONES as [string, ...string[]]);
-
-        const inputsSchema = z
-          .object({
-            beforeText: z.string().max(2000).optional(),
-            afterText: z.string().max(2000).optional(),
-            needDescription: z.string().max(2000).optional(),
-            dollarAmount: z.string().max(120).optional(),
-            deadline: z.string().max(120).optional(),
-            volunteerRole: z.string().max(200).optional(),
-            timeCommitment: z.string().max(200).optional(),
-            customInstructions: z.string().max(2000).optional(),
-          })
-          .default({});
-
-        // Result is the architect's generated payload — stored opaquely so
-        // future schema additions don't require a migration. We only enforce
-        // it's a JSON object (not an array/string) and bound the size to
-        // prevent abuse.
-        const resultSchema = z
-          .record(z.any())
-          .refine((v) => JSON.stringify(v).length <= 20000, {
-            message: 'Result payload too large',
-          })
-          .nullable()
-          .optional();
-
-        const bodySchema = z.object({
-          name: z.string().trim().min(1, 'Template name is required').max(120),
-          theme: themeEnum,
-          tone: toneEnum,
-          animalId: z.string().uuid().nullable().optional(),
-          inputs: inputsSchema,
-          preferredHashtags: z.array(z.string().max(60)).max(15).default([]),
-          result: resultSchema,
-        });
-
-        const parsed = bodySchema.safeParse(req.body);
-        if (!parsed.success) {
-          return res
-            .status(400)
-            .json({ error: parsed.error.errors[0]?.message || 'Invalid request data' });
-        }
-
-        const tenant = req.tenant!;
-        const data = parsed.data;
-
-        // If an animalId is provided, verify it belongs to this tenant — never
-        // trust foreign IDs from the client.
-        if (data.animalId) {
-          const [animal] = await db
-            .select({ id: animalsTable.id })
-            .from(animalsTable)
-            .where(and(eq(animalsTable.id, data.animalId), eq(animalsTable.tenantId, tenant.id)))
-            .limit(1);
-          if (!animal) {
-            return res.status(404).json({
-              error: 'Animal not found in this rescue.',
-            });
-          }
-        }
-
-        const [created] = await db
+        const [row] = await db
           .insert(socialPostTemplates)
-          .values({
-            tenantId: tenant.id,
-            createdByUserId: req.user?.id ?? null,
-            name: data.name,
-            theme: data.theme,
-            tone: data.tone,
-            animalId: data.animalId ?? null,
-            inputs: data.inputs,
-            preferredHashtags: data.preferredHashtags,
-            result: data.result ?? null,
-          })
+          .values({ ...parsed.data, tenantId, createdBy: userId })
           .returning();
-
-        res.status(201).json(created);
-      } catch (error) {
-        next(error);
-      }
-    },
-  );
-
-  app.delete(
-    '/api/social-post-architect/templates/:id',
-    requireTenant,
-    requireAuth,
-    requireRole('owner', 'admin', 'manager', 'staff'),
-    async (req, res, next) => {
-      try {
-        const { socialPostTemplates } = await import('@shared/schema');
-        const tenant = req.tenant!;
-        const { id } = req.params;
-
-        // Tenant-scoped delete: WHERE tenant_id = current tenant ensures we
-        // can't delete another tenant's template even with a guessed UUID.
-        const result = await db
-          .delete(socialPostTemplates)
-          .where(
-            and(
-              eq(socialPostTemplates.id, id),
-              eq(socialPostTemplates.tenantId, tenant.id),
-            ),
-          )
-          .returning({ id: socialPostTemplates.id });
-
-        if (result.length === 0) {
-          return res.status(404).json({ error: 'Template not found.' });
+        return res.status(201).json({ template: row });
+      } catch (err: any) {
+        // Surface the unique-name-per-tenant collision as a friendly 409 so
+        // the client can prompt the user to pick a different name.
+        if (err?.code === '23505') {
+          return res.status(409).json({ error: 'A template with that name already exists. Pick a different name.' });
         }
-        res.json({ success: true });
-      } catch (error) {
-        next(error);
+        throw err;
       }
-    },
-  );
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.delete('/api/social-post-architect/templates/:id', requireTenant, requireAuth, requireRole('owner', 'admin', 'manager', 'staff'), async (req, res, next) => {
+    try {
+      const { socialPostTemplates } = await import('@shared/schema');
+      const tenantId = req.tenant!.id;
+      const idSchema = z.string().uuid();
+      const parsed = idSchema.safeParse(req.params.id);
+      if (!parsed.success) {
+        return res.status(400).json({ error: 'Invalid template id' });
+      }
+      const result = await db
+        .delete(socialPostTemplates)
+        .where(and(eq(socialPostTemplates.id, parsed.data), eq(socialPostTemplates.tenantId, tenantId)))
+        .returning({ id: socialPostTemplates.id });
+      if (result.length === 0) {
+        return res.status(404).json({ error: 'Template not found' });
+      }
+      return res.json({ success: true });
+    } catch (error) {
+      next(error);
+    }
+  });
 
   /**
    * GET /api/animals/:id/foster-history

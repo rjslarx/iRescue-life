@@ -5500,32 +5500,6 @@ export const insertDonationLinkSchema = createInsertSchema(donationLinks).omit({
 export type InsertDonationLink = z.infer<typeof insertDonationLinkSchema>;
 export type DonationLink = typeof donationLinks.$inferSelect;
 
-// Saved templates from the Social Post Architect. A template captures the
-// exact inputs (theme/tone/animal/structured fields/hashtags) that produced
-// a winning post, plus the generated outputs, so the rescue can re-load and
-// re-paste later without regenerating. Tenant-scoped — never shared across
-// tenants.
-export const socialPostTemplates = pgTable("social_post_templates", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
-  createdByUserId: uuid("created_by_user_id").references(() => users.id, { onDelete: 'set null' }),
-  name: text("name").notNull(),
-  theme: text("theme").notNull(),
-  tone: text("tone").notNull(),
-  animalId: uuid("animal_id"),
-  inputs: jsonb("inputs").notNull().default({}),
-  preferredHashtags: text("preferred_hashtags").array().notNull().default(sql`ARRAY[]::text[]`),
-  result: jsonb("result"),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
-
-export const insertSocialPostTemplateSchema = createInsertSchema(socialPostTemplates).omit({
-  id: true,
-  createdAt: true,
-});
-export type InsertSocialPostTemplate = z.infer<typeof insertSocialPostTemplateSchema>;
-export type SocialPostTemplate = typeof socialPostTemplates.$inferSelect;
-
 export const campaignContributions = pgTable("campaign_contributions", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
@@ -6522,3 +6496,58 @@ export const adopterComplianceWarnings = pgTable("adopter_compliance_warnings", 
 });
 
 export type AdopterComplianceWarning = typeof adopterComplianceWarnings.$inferSelect;
+
+// ===== SOCIAL POST ARCHITECT TEMPLATES =====
+// Saved Social Post Architect generations that staff can reuse later. We
+// capture both the form inputs that produced the post AND the rendered
+// outputs so that loading a template instantly restores the working state of
+// the dialog (form fields + result cards) without having to re-run the AI.
+// Tenant-scoped via FK so cross-tenant leakage is structurally impossible.
+export const socialPostTemplates = pgTable("social_post_templates", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  // Soft-null on user delete so a template authored by a now-deleted staffer
+  // remains usable by the rest of the team.
+  createdBy: uuid("created_by").references(() => users.id, { onDelete: 'set null' }),
+  name: text("name").notNull(),
+  // Inputs that drive the generation:
+  theme: text("theme").notNull(),
+  tone: text("tone").notNull(),
+  // Soft reference (not a FK): animals come and go, but a "Weekly Volunteer
+  // Push" template should still load even if the original featured animal
+  // was archived. The dialog will silently drop the selection if the animal
+  // is no longer available in this tenant.
+  animalId: uuid("animal_id"),
+  inputs: jsonb("inputs").$type<{
+    beforeText?: string;
+    afterText?: string;
+    needDescription?: string;
+    dollarAmount?: string;
+    deadline?: string;
+    volunteerRole?: string;
+    timeCommitment?: string;
+    customInstructions?: string;
+  }>().notNull().default({}),
+  preferredHashtags: text("preferred_hashtags").array().notNull().default(sql`ARRAY[]::text[]`),
+  // Rendered outputs from the original generation (so loading is instant and
+  // doesn't burn an AI call):
+  caption: text("caption").notNull(),
+  firstComment: text("first_comment").notNull(),
+  suggestedHashtags: text("suggested_hashtags").array().notNull().default(sql`ARRAY[]::text[]`),
+  visualCue: text("visual_cue").notNull(),
+  destinationUrl: text("destination_url"),
+  destinationLabel: text("destination_label"),
+  destinationKind: text("destination_kind"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  tenantIdx: uniqueIndex("social_post_templates_tenant_name_idx").on(table.tenantId, table.name),
+}));
+
+export const insertSocialPostTemplateSchema = createInsertSchema(socialPostTemplates).omit({
+  id: true,
+  tenantId: true,
+  createdBy: true,
+  createdAt: true,
+});
+export type InsertSocialPostTemplate = z.infer<typeof insertSocialPostTemplateSchema>;
+export type SocialPostTemplate = typeof socialPostTemplates.$inferSelect;
