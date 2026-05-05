@@ -2082,6 +2082,41 @@ router.get('/admin/adopter-preview/:adopterId/pets/:animalId/happy-tails', async
 });
 
 /**
+ * Shared ownership guard for admin-preview compliance endpoints. Verifies
+ * that the animal identified by `animalId` was actually adopted by the
+ * adopter identified by `adopterEmail` within the same tenant, by joining
+ * `applications` (stage='adopted') with `animals`. Returns true on match.
+ *
+ * This mirrors the join used by `/admin/adopter-preview/:adopterId/pets/:animalId`
+ * (line 1854) so the preview cannot leak data for an animal that does not
+ * belong to the adopter context the staff member chose.
+ */
+async function verifyAdopterPreviewOwnership(
+  tenantId: string,
+  adopterEmail: string,
+  animalId: string
+): Promise<boolean> {
+  const [match] = await db
+    .select({ id: animals.id })
+    .from(animals)
+    .innerJoin(
+      applications,
+      and(
+        eq(applications.animalId, animals.id),
+        eq(applications.tenantId, tenantId),
+        eq(applications.stage, 'adopted'),
+        sql`LOWER(${applications.applicantEmail}) = ${adopterEmail}`
+      )
+    )
+    .where(and(
+      eq(animals.id, animalId),
+      eq(animals.tenantId, tenantId)
+    ))
+    .limit(1);
+  return !!match;
+}
+
+/**
  * GET /api/adopter/admin/adopter-preview/:adopterId/pets/:animalId/due-care
  *
  * Mirror of GET /api/adopter/pets/:animalId/due-care for the staff-only
@@ -2097,6 +2132,9 @@ router.get('/admin/adopter-preview/:adopterId/pets/:animalId/due-care', async (r
 
     const adopterEmail = decodeURIComponent(req.params.adopterId).toLowerCase();
     const { animalId } = req.params;
+
+    const owns = await verifyAdopterPreviewOwnership(auth.tenantId, adopterEmail, animalId);
+    if (!owns) return res.status(404).json({ error: 'Pet not found for this adopter' });
 
     // Resolve the adopter user record (if any) so we mirror the same
     // confirmation-filter the real adopter sees. If the adopter has not
@@ -2179,6 +2217,9 @@ router.get('/admin/adopter-preview/:adopterId/pets/:animalId/compliance-confirma
     const adopterEmail = decodeURIComponent(req.params.adopterId).toLowerCase();
     const { animalId } = req.params;
 
+    const owns = await verifyAdopterPreviewOwnership(auth.tenantId, adopterEmail, animalId);
+    if (!owns) return res.status(404).json({ error: 'Pet not found for this adopter' });
+
     const [adopterUser] = await db
       .select({ id: users.id })
       .from(users)
@@ -2221,7 +2262,11 @@ router.get('/admin/adopter-preview/:adopterId/pets/:animalId/compliance-obligati
     const auth = requireAdmin(req, res);
     if (!auth) return;
 
+    const adopterEmail = decodeURIComponent(req.params.adopterId).toLowerCase();
     const { animalId } = req.params;
+
+    const owns = await verifyAdopterPreviewOwnership(auth.tenantId, adopterEmail, animalId);
+    if (!owns) return res.status(404).json({ error: 'Pet not found for this adopter' });
 
     const obligations = await db
       .select({
@@ -2260,7 +2305,11 @@ router.get('/admin/adopter-preview/:adopterId/pets/:animalId/heartworm-treatment
     const auth = requireAdmin(req, res);
     if (!auth) return;
 
+    const adopterEmail = decodeURIComponent(req.params.adopterId).toLowerCase();
     const { animalId } = req.params;
+
+    const owns = await verifyAdopterPreviewOwnership(auth.tenantId, adopterEmail, animalId);
+    if (!owns) return res.status(404).json({ error: 'Pet not found for this adopter' });
 
     const [plan] = await db
       .select({
