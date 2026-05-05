@@ -38,6 +38,19 @@ import {
   FileText
 } from "lucide-react";
 import { format } from "date-fns";
+import {
+  type DueCareItem,
+  type ComplianceConfirmation,
+  type ComplianceObligation,
+  type HeartwormAppointment,
+  type HeartwormTreatmentPlan,
+  HW_INJECTION_REST_DAYS,
+  parseISODate,
+  obligationDisplayLabel,
+  obligationDaysOverdue,
+  getHwApptStatus,
+  getExerciseRestriction,
+} from "@/lib/compliance";
 
 interface Adopter {
   id: string;
@@ -97,178 +110,6 @@ interface HappyTailUpdate {
   message?: string;
   isApproved: boolean;
   createdAt: string;
-}
-
-interface DueCareItem {
-  id: string;
-  careName: string;
-  careCategory: string;
-  nextDueDate: string;
-  dateAdministered: string;
-  isOverdue: boolean;
-}
-
-interface ComplianceConfirmation {
-  id: string;
-  careName: string;
-  careCategory: string;
-  dateAdministered: string;
-  clinicName?: string;
-  status: string;
-  createdAt: string;
-}
-
-interface ComplianceObligation {
-  id: string;
-  obligationType: string;
-  label: string;
-  contractualDueDate: string | null;
-  status: string;
-  proofDocumentUrl: string | null;
-  notes?: string | null;
-  completedAt?: string | null;
-}
-
-interface HeartwormAppointment {
-  type: 'start_doxy' | 'first_injection' | 'second_third_injection' | 'recheck' | 'proheart';
-  label: string;
-  scheduledDate: string;
-  completedDate?: string | null;
-  notes?: string | null;
-  adopterNotes?: string | null;
-  receiptObjectPath?: string | null;
-  completedByAdopter?: boolean;
-}
-
-interface HeartwormTreatmentPlan {
-  id: string;
-  appointments: HeartwormAppointment[];
-  locationName: string;
-  locationAddress: string;
-  locationPhone: string;
-  notes?: string | null;
-  contractSentAt: string | null;
-  adopterName: string;
-  createdAt: string;
-}
-
-const COMPLIANCE_OBLIGATION_LABEL_MAP: Record<string, string> = {
-  spay_neuter: 'Spay/Neuter Certificate',
-  rabies: 'Rabies Vaccination',
-  rabies_booster: 'Rabies Booster',
-  dhpp_booster: 'DHPP Booster',
-  vet_checkup: 'Vet Check-Up',
-  microchip_registration: 'Microchip Registration',
-  heartworm_test: 'Heartworm Test',
-  heartworm_prevention_proof: 'Heartworm Prevention Proof',
-  flea_tick_prevention: 'Flea & Tick Prevention',
-  fecal_test: 'Fecal Test',
-  obedience_training: 'Obedience Training',
-  ongoing_treatment: 'Ongoing Treatment',
-  custom: 'Requirement',
-};
-
-const HW_INJECTION_REST_DAYS = 30;
-
-function startOfToday(): Date {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-function parseISODate(s: string | null | undefined): Date | null {
-  if (!s) return null;
-  // Parse pure YYYY-MM-DD strings as LOCAL midnight (not UTC) so day-boundary
-  // comparisons against startOfToday() are timezone-safe.
-  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
-  if (dateOnly) {
-    const [, y, m, d] = dateOnly;
-    const dt = new Date(Number(y), Number(m) - 1, Number(d));
-    return Number.isNaN(dt.getTime()) ? null : dt;
-  }
-  const d = new Date(s);
-  return Number.isNaN(d.getTime()) ? null : d;
-}
-
-function addDays(date: Date, days: number): Date {
-  const d = new Date(date);
-  d.setDate(d.getDate() + days);
-  return d;
-}
-
-function obligationDisplayLabel(obl: ComplianceObligation): string {
-  if (obl.label) return obl.label;
-  if (COMPLIANCE_OBLIGATION_LABEL_MAP[obl.obligationType]) {
-    return COMPLIANCE_OBLIGATION_LABEL_MAP[obl.obligationType];
-  }
-  return (obl.obligationType || 'Requirement')
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, c => c.toUpperCase());
-}
-
-function obligationDaysOverdue(obl: ComplianceObligation): {
-  daysOverdue: number;
-  isOverdue: boolean;
-  isDueSoon: boolean;
-  dueDate: Date | null;
-} {
-  const dueDate =
-    typeof obl.contractualDueDate === 'string'
-      ? parseISODate(obl.contractualDueDate)
-      : obl.contractualDueDate
-        ? new Date(obl.contractualDueDate)
-        : null;
-  if (!dueDate) {
-    return { daysOverdue: 0, isOverdue: false, isDueSoon: false, dueDate: null };
-  }
-  const todayMidnight = startOfToday();
-  const dueMidnight = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate());
-  const daysOverdue = Math.floor(
-    (todayMidnight.getTime() - dueMidnight.getTime()) / (1000 * 60 * 60 * 24)
-  );
-  const isOverdue = daysOverdue > 0;
-  const isDueSoon = !isOverdue && daysOverdue >= -7;
-  return { daysOverdue, isOverdue, isDueSoon, dueDate };
-}
-
-type HwApptStatus = 'completed' | 'overdue' | 'today' | 'upcoming';
-
-function getHwApptStatus(appt: HeartwormAppointment): HwApptStatus {
-  if (appt.completedDate) return 'completed';
-  const today = startOfToday();
-  const scheduled = parseISODate(appt.scheduledDate);
-  if (!scheduled) return 'upcoming';
-  if (scheduled.getTime() === today.getTime()) return 'today';
-  if (scheduled.getTime() < today.getTime()) return 'overdue';
-  return 'upcoming';
-}
-
-function getExerciseRestriction(appointments: HeartwormAppointment[]): {
-  active: boolean;
-  endDate: Date | null;
-  daysRemaining: number;
-  startedFromLabel: string | null;
-} {
-  const today = startOfToday();
-  let latestEnd: Date | null = null;
-  let label: string | null = null;
-  for (const appt of appointments) {
-    if (appt.type !== 'first_injection' && appt.type !== 'second_third_injection') continue;
-    if (!appt.completedDate) continue;
-    const start = parseISODate(appt.completedDate);
-    if (!start) continue;
-    const end = addDays(start, HW_INJECTION_REST_DAYS);
-    if (start.getTime() <= today.getTime() && today.getTime() <= end.getTime()) {
-      if (!latestEnd || end.getTime() > latestEnd.getTime()) {
-        latestEnd = end;
-        label = appt.label;
-      }
-    }
-  }
-  const daysRemaining = latestEnd
-    ? Math.max(0, Math.round((latestEnd.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)) + 1)
-    : 0;
-  return { active: !!latestEnd, endDate: latestEnd, daysRemaining, startedFromLabel: label };
 }
 
 export default function AdopterPortalPreviewPage() {
