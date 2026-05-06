@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -32,8 +32,25 @@ export function MoveAndSendVolunteerWaiverDialog({
   const [moveAction, setMoveAction] = useState<"move_and_send" | "move_only">("move_and_send");
   const [sendMethod, setSendMethod] = useState<"email" | "sms" | "both">("email");
 
-  const hasPhone = !!application?.applicantPhone;
+  const { data: tenantData } = useQuery<{ tenant: { twilioEnabled?: boolean } }>({
+    queryKey: ['/api/tenant'],
+  });
+  const smsEnabled = !!tenantData?.tenant?.twilioEnabled;
+
+  const hasPhone = !!application?.applicantPhone && smsEnabled;
   const hasEmail = !!application?.applicantEmail;
+
+  useEffect(() => {
+    if (open) {
+      setSendMethod("email");
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (!smsEnabled && (sendMethod === "sms" || sendMethod === "both")) {
+      setSendMethod("email");
+    }
+  }, [smsEnabled, sendMethod]);
 
   const moveMutation = useMutation({
     mutationFn: async ({ applicationId, skipAutomation, sendMethod }: { applicationId: string; skipAutomation: boolean; sendMethod: string }) => {
@@ -76,10 +93,13 @@ export function MoveAndSendVolunteerWaiverDialog({
 
   const handleSubmit = () => {
     if (!application) return;
+    const safeSendMethod = !smsEnabled && (sendMethod === "sms" || sendMethod === "both")
+      ? "email"
+      : sendMethod;
     moveMutation.mutate({
       applicationId: application.id,
       skipAutomation: moveAction === "move_only",
-      sendMethod,
+      sendMethod: safeSendMethod,
     });
   };
 
@@ -179,6 +199,15 @@ export function MoveAndSendVolunteerWaiverDialog({
                 )}
               </RadioGroup>
 
+              {!smsEnabled && (
+                <p
+                  className="text-xs text-muted-foreground"
+                  data-testid="text-sms-not-configured-hint"
+                >
+                  SMS delivery requires Twilio. Configure Twilio in Integrations Settings to enable text delivery.
+                </p>
+              )}
+
               <Card className="bg-purple-50 dark:bg-purple-950 border-purple-200 dark:border-purple-800">
                 <CardContent className="pt-4">
                   <div className="flex gap-3">
@@ -187,7 +216,7 @@ export function MoveAndSendVolunteerWaiverDialog({
                       <p className="font-medium">What happens next:</p>
                       <ol className="list-decimal list-inside mt-1 space-y-1 text-purple-600 dark:text-purple-400">
                         <li>Application moves to Waiver Needed stage</li>
-                        <li>Hold harmless waiver link sent via {sendMethod === 'both' ? 'email & SMS' : sendMethod}</li>
+                        <li>Hold harmless waiver link sent via {!smsEnabled ? 'email' : sendMethod === 'both' ? 'email & SMS' : sendMethod}</li>
                         <li>After signing, volunteer is moved to Active Pool</li>
                       </ol>
                     </div>

@@ -131,7 +131,12 @@ export function ApproveAndSendAgreementDialog({
 }: ApproveAndSendAgreementDialogProps) {
   const { toast } = useToast();
   const [spayNeuterNotApplicable, setSpayNeuterNotApplicable] = useState(false);
-  const [sendMethod, setSendMethod] = useState<'sms' | 'email'>('sms');
+  const [sendMethod, setSendMethod] = useState<'sms' | 'email'>('email');
+
+  const { data: tenantData } = useQuery<{ tenant: { twilioEnabled?: boolean } }>({
+    queryKey: ['/api/tenant'],
+  });
+  const smsEnabled = !!tenantData?.tenant?.twilioEnabled;
   const [staffConfirmValues, setStaffConfirmValues] = useState<Record<string, string>>({});
   const [medicalDueDates, setMedicalDueDates] = useState<MedicalDueDates>({
     rabiesDueDate: "",
@@ -213,7 +218,7 @@ export function ApproveAndSendAgreementDialog({
     }
     if (open) {
       setSpayNeuterNotApplicable(false);
-      setSendMethod(application?.applicantPhone ? 'sms' : 'email');
+      setSendMethod(smsEnabled && application?.applicantPhone ? 'sms' : 'email');
       setStaffConfirmValues({});
       setMedicalDatesLoaded(false);
       setMedicalDueDates({
@@ -225,7 +230,7 @@ export function ApproveAndSendAgreementDialog({
       setShowAddCustom(false);
       setNewCustom({ obligationType: "", label: "", contractualDueDate: "", notes: "" });
     }
-  }, [open, animal, form]);
+  }, [open, animal, form, smsEnabled, application?.applicantPhone]);
 
   useEffect(() => {
     if (open && !medicalDatesLoaded) {
@@ -942,17 +947,19 @@ export function ApproveAndSendAgreementDialog({
                       <Label className="text-sm font-medium">Contract Delivery Method</Label>
                     </div>
                     <div className="flex gap-2">
-                      <Button
-                        type="button"
-                        variant={sendMethod === 'sms' ? 'default' : 'outline'}
-                        size="sm"
-                        onClick={() => setSendMethod('sms')}
-                        disabled={!adopterPhone}
-                        data-testid="button-send-method-sms"
-                      >
-                        <MessageSquare className="h-4 w-4 mr-1" />
-                        SMS
-                      </Button>
+                      {smsEnabled && (
+                        <Button
+                          type="button"
+                          variant={sendMethod === 'sms' ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setSendMethod('sms')}
+                          disabled={!adopterPhone}
+                          data-testid="button-send-method-sms"
+                        >
+                          <MessageSquare className="h-4 w-4 mr-1" />
+                          SMS
+                        </Button>
+                      )}
                       <Button
                         type="button"
                         variant={sendMethod === 'email' ? 'default' : 'outline'}
@@ -971,6 +978,14 @@ export function ApproveAndSendAgreementDialog({
                           ? "No phone number on file — using email instead"
                           : `Contract link will be sent via email to ${application?.applicantEmail}`}
                     </p>
+                    {!smsEnabled && (
+                      <p
+                        className="text-xs text-muted-foreground mt-1"
+                        data-testid="text-sms-not-configured-hint"
+                      >
+                        SMS delivery requires Twilio. Configure Twilio in Integrations Settings to enable text delivery.
+                      </p>
+                    )}
                   </CardContent>
                 </Card>
 
@@ -982,7 +997,7 @@ export function ApproveAndSendAgreementDialog({
                         <p className="font-medium">What happens next:</p>
                         <ol className="list-decimal list-inside mt-1 space-y-1 text-blue-600 dark:text-blue-400">
                           <li>Application is marked as approved</li>
-                          <li>Contract link sent via {sendMethod === 'sms' && adopterPhone ? 'SMS' : 'email'} for e-signature</li>
+                          <li>Contract link sent via {sendMethod === 'sms' && adopterPhone && smsEnabled ? 'SMS' : 'email'} for e-signature</li>
                           {isFeeWaived ? (
                             <li>After signing, adoption is finalized automatically (fee waived)</li>
                           ) : (
