@@ -3539,6 +3539,10 @@ export const complianceReminders = pgTable("compliance_reminders", {
   callListResolvedAt: timestamp("call_list_resolved_at"),
   callListResolvedByUserId: uuid("call_list_resolved_by_user_id").references(() => users.id, { onDelete: 'set null' }),
   callListNotes: text("call_list_notes"),
+  // FK to the most recent send through the unified Communications Switchboard.
+  // Nullable; updated by foster-compliance-reminders.ts when a reminder
+  // notification is dispatched via server/lib/unified-comms.ts.
+  messageQueueId: uuid("message_queue_id").references(() => messageQueue.id, { onDelete: 'set null' }),
   // Timestamps
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -3573,7 +3577,7 @@ export const complianceReminderNotifications = pgTable("compliance_reminder_noti
   // FK into the unified message_queue audit table (Communications Switchboard).
   // Nullable for back-compat; populated for all sends routed through
   // server/lib/unified-comms.ts (sendCommunication helper).
-  messageQueueId: uuid("message_queue_id").references((): any => messageQueue.id, { onDelete: 'set null' }),
+  messageQueueId: uuid("message_queue_id").references(() => messageQueue.id, { onDelete: 'set null' }),
 });
 
 export const insertComplianceReminderNotificationSchema = createInsertSchema(complianceReminderNotifications).omit({
@@ -5803,7 +5807,7 @@ export const adopterNotificationLogs = pgTable("adopter_notification_logs", {
   // FK into the unified message_queue audit table (Communications Switchboard).
   // Nullable for back-compat; populated for all sends routed through
   // server/lib/unified-comms.ts (sendCommunication helper).
-  messageQueueId: uuid("message_queue_id").references((): any => messageQueue.id, { onDelete: 'set null' }),
+  messageQueueId: uuid("message_queue_id").references(() => messageQueue.id, { onDelete: 'set null' }),
 });
 
 export type AdopterNotificationLog = typeof adopterNotificationLogs.$inferSelect;

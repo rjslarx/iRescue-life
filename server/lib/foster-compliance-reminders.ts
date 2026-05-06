@@ -308,7 +308,7 @@ export async function send3DayWarningEmails(tenantId: string): Promise<{ sent: n
 
           await db
             .update(complianceReminders)
-            .set({ state: 'notified_3day', updatedAt: new Date() })
+            .set({ state: 'notified_3day', messageQueueId: result.messageQueueId, updatedAt: new Date() })
             .where(eq(complianceReminders.id, reminder.id));
 
           sent++;
@@ -413,7 +413,7 @@ export async function sendMorningOfSmsReminders(tenantId: string): Promise<{ sen
 
           await db
             .update(complianceReminders)
-            .set({ state: 'notified_due', updatedAt: new Date() })
+            .set({ state: 'notified_due', messageQueueId: result.messageQueueId, updatedAt: new Date() })
             .where(eq(complianceReminders.id, reminder.id));
 
           sent++;
@@ -988,7 +988,7 @@ export async function sendBioPhotoSmsToFosters(tenantId: string): Promise<{ sent
         if (result.status === 'delivered') {
           await db
             .update(complianceReminders)
-            .set({ state: 'notified_due', updatedAt: new Date() })
+            .set({ state: 'notified_due', messageQueueId: result.messageQueueId, updatedAt: new Date() })
             .where(eq(complianceReminders.id, reminder.id));
           sent++;
         } else {
