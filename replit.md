@@ -68,7 +68,7 @@ Core functionalities include:
 - **Aligned Adoption Guardrails Across All Three Entry Points:** Enforces mandatory checks and provides consistent warning/override mechanisms across all adoption finalization paths.
 - **Adopter Heartworm Compliance Warning System:** Automates sending warning notices for overdue parasite prevention to adopters, with smart deduping and phone number fallback.
 - **Social Post Templates:** Save Social Post Architect generations as named, tenant-scoped templates that staff can one-click re-load (form inputs, hashtags, and previously generated outputs all restored) and delete from inside the architect dialog.
-- **Unified Communications Helper (`server/lib/unified-comms.ts`):** All adopter & foster automated SMS/email is routed through `sendCommunication()`, which writes a `message_queue` row (status `processing` → `delivered`/`failed`), then dispatches via `sendSms` or `EmailService`. Audit tables (`adopter_notification_logs`, `compliance_reminder_notifications`, `adopter_compliance_warnings`) carry a nullable `message_queue_id` FK so the Communications Switchboard becomes a single source of truth.
+- **Unified Communications Helper (`server/lib/unified-comms.ts`):** All adopter & foster automated SMS/email is routed through `sendCommunication()`, which writes a `message_queue` row (status `processing` → `delivered`/`failed`), then dispatches via `sendSms` or `EmailService`. Audit tables (`adopter_notification_logs`, `compliance_reminder_notifications`, `adopter_compliance_warnings`, `compliance_reminders`) carry a nullable `message_queue_id` FK so the Communications Switchboard becomes a single source of truth.
 
 ## External Dependencies
 - **Stripe:** Payment processing and financial management.

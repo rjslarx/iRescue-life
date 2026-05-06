@@ -54,6 +54,12 @@ export interface SendCommunicationResult {
 export async function sendCommunication(
   input: SendCommunicationInput,
 ): Promise<SendCommunicationResult> {
+  if (!input.tenantId) {
+    throw new Error('sendCommunication: tenantId is required');
+  }
+  if (!input.recipientAddress) {
+    throw new Error('sendCommunication: recipientAddress is required');
+  }
   const mode = input.mode ?? 'immediate';
   const scheduledFor = input.scheduledFor ?? new Date();
 
