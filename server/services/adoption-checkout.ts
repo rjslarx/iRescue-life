@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import bcrypt from 'bcrypt';
 import { db } from '../db';
-import { sendSms } from '../lib/twilio-service';
+import { sendCommunication } from '../lib/unified-comms';
 import {
   adoptionCheckoutSessions,
   adoptionContracts,
@@ -596,6 +596,7 @@ export async function sendCheckoutLink(
   }
 
   if (method === 'email') {
+    // Verify email service is configured for this organization before sending
     const emailService = await EmailService.forTenant(session.tenantId);
     if (!emailService) {
       throw new Error('Email service not configured for this organization');
@@ -626,10 +627,15 @@ export async function sendCheckoutLink(
       <p>If you have any questions, please don't hesitate to contact us.</p>
     `;
 
-    await emailService.send({
-      to: email,
+    await sendCommunication({
+      tenantId: session.tenantId,
+      channel: 'email',
+      sourceType: 'manual',
+      recipientAddress: email,
+      recipientName: name,
+      relatedAnimalId: animal.id,
       subject: `Complete Your Adoption of ${animal.name}`,
-      html,
+      messageBody: html,
     });
   } else if (method === 'sms') {
     // Get adopter phone number
@@ -657,8 +663,6 @@ export async function sendCheckoutLink(
       throw new Error('No phone number on file for this adopter. Please use email instead.');
     }
 
-    const { sendSms } = await import('../lib/twilio-service');
-
     const baseUrl = tenant.customDomain
       ? `https://${tenant.customDomain}`
       : `https://${tenant.subdomain}.irescue.life`;
@@ -666,13 +670,15 @@ export async function sendCheckoutLink(
 
     const smsMessage = `Your adoption of ${animal.name} has been approved! Complete your adoption here: ${checkoutUrl}`;
 
-    const result = await sendSms(
-      session.tenantId,
-      phone,
-      smsMessage,
-      'notification',
-      { relatedAnimalId: animal.id }
-    );
+    const result = await sendCommunication({
+      tenantId: session.tenantId,
+      channel: 'sms',
+      sourceType: 'manual',
+      recipientAddress: phone,
+      recipientName: name,
+      relatedAnimalId: animal.id,
+      messageBody: smsMessage,
+    });
 
     if (result.status === 'failed') {
       const isQuietHours = result.error?.includes('quiet hours');
@@ -812,10 +818,15 @@ export async function sendPaymentLinkEmail(
   `;
 
   try {
-    await emailService.send({
-      to: email,
+    await sendCommunication({
+      tenantId: session.tenantId,
+      channel: 'email',
+      sourceType: 'manual',
+      recipientAddress: email,
+      recipientName: name,
+      relatedAnimalId: animal.id,
       subject: `Complete Payment for ${animal.name}'s Adoption`,
-      html,
+      messageBody: html,
     });
     console.log(`Payment link email sent to ${email} for session ${sessionId}`);
   } catch (error) {
@@ -1588,10 +1599,16 @@ export async function finalizeAdoption(sessionId: string): Promise<void> {
       const emailService = await EmailService.forTenant(session.tenantId);
       if (emailService) {
         const totalAmount = session.totals?.total || session.baseFee || '0';
-        await emailService.send({
-          to: staffUser.email,
+        await sendCommunication({
+          tenantId: session.tenantId,
+          channel: 'email',
+          sourceType: 'other',
+          recipientAddress: staffUser.email,
+          recipientName: staffUser.fullName ?? null,
+          recipientUserId: staffUser.id,
+          relatedAnimalId: session.animalId,
           subject: `Adoption Complete: ${animalName} has been adopted!`,
-          html: `
+          messageBody: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
               <h2 style="color: #10b981;">Adoption Complete!</h2>
               <p>Great news! The adoption for <strong>${animalName}</strong> has been successfully completed.</p>
@@ -1617,6 +1634,7 @@ export async function finalizeAdoption(sessionId: string): Promise<void> {
           `,
         });
         console.log(`[Adoption] Sent staff notification email to ${staffUser.email}`);
+
       }
     }
   } catch (error) {
@@ -1730,10 +1748,16 @@ export async function finalizeAdoption(sessionId: string): Promise<void> {
         
         const welcomeEmailService = await EmailService.forTenant(session.tenantId);
         if (welcomeEmailService) {
-          await welcomeEmailService.send({
-            to: adopterEmail,
+          await sendCommunication({
+            tenantId: session.tenantId,
+            channel: 'email',
+            sourceType: 'other',
+            recipientUserId: adopterUserId,
+            recipientAddress: adopterEmail,
+            recipientName: adopterName,
+            relatedAnimalId: session.animalId,
             subject: `Your Pet Portal is Ready - ${tenantInfo.name}`,
-            html: `
+            messageBody: `
               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                 <h2 style="color: #2563eb;">Welcome to Your Pet Portal!</h2>
                 <p>Hi ${adopterName || 'there'},</p>
@@ -1781,8 +1805,15 @@ export async function finalizeAdoption(sessionId: string): Promise<void> {
             if (adopterContact?.phone) {
               const firstName = (adopterName || 'there').split(' ')[0];
               const smsMessage = `Congratulations, ${firstName}! ${animalName}'s adoption is complete. Tap here to access your Adopter Portal for their vaccine records, microchip info, and adoption packet: ${loginUrl}`;
-              await sendSms(session.tenantId, adopterContact.phone, smsMessage, 'notification', {
+              await sendCommunication({
+                tenantId: session.tenantId,
+                channel: 'sms',
+                sourceType: 'other',
                 recipientUserId: adopterUserId,
+                recipientAddress: adopterContact.phone,
+                recipientName: adopterName,
+                relatedAnimalId: session.animalId,
+                messageBody: smsMessage,
               });
               console.log(`[Adoption] Sent welcome SMS to ${adopterContact.phone}`);
             }
@@ -2062,10 +2093,16 @@ export async function finalizeAdoption(sessionId: string): Promise<void> {
 
       console.log(`[Adoption] Sending confirmation email with ${attachments.length} attachments for session ${session.id}`);
 
-      await emailService.send({
-        to: recipientEmail,
+      await sendCommunication({
+        tenantId: session.tenantId,
+        channel: 'email',
+        sourceType: 'other',
+        recipientAddress: recipientEmail,
+        recipientName: recipientName,
+        relatedAnimalId: session.animalId,
         subject: `Congratulations on Adopting ${animal.name}!`,
-        html: `
+        emailAttachments: attachments.length > 0 ? attachments : undefined,
+        messageBody: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
             <h2 style="color: #2563eb;">Welcome to the Family!</h2>
             <p>Dear ${recipientName},</p>
@@ -2095,15 +2132,19 @@ export async function finalizeAdoption(sessionId: string): Promise<void> {
             </p>
           </div>
         `,
-        attachments: attachments.length > 0 ? attachments : undefined,
       });
     } catch (error) {
       console.error('Failed to send confirmation email with attachments:', error);
       try {
-        await emailService.send({
-          to: recipientEmail,
+        await sendCommunication({
+          tenantId: session.tenantId,
+          channel: 'email',
+          sourceType: 'other',
+          recipientAddress: recipientEmail,
+          recipientName: recipientName,
+          relatedAnimalId: session.animalId,
           subject: `Congratulations on Adopting ${animal.name}!`,
-          html: `
+          messageBody: `
             <h2>Welcome to the Family!</h2>
             <p>Dear ${recipientName},</p>
             <p>Congratulations on completing the adoption of <strong>${animal.name}</strong>!</p>

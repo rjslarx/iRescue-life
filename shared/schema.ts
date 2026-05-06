@@ -3570,6 +3570,10 @@ export const complianceReminderNotifications = pgTable("compliance_reminder_noti
   deliveryStatus: text("delivery_status").notNull().default("sent").$type<"sent" | "delivered" | "failed">(),
   externalMessageId: text("external_message_id"), // Twilio SID or Resend message ID
   errorMessage: text("error_message"),
+  // FK into the unified message_queue audit table (Communications Switchboard).
+  // Nullable for back-compat; populated for all sends routed through
+  // server/lib/unified-comms.ts (sendCommunication helper).
+  messageQueueId: uuid("message_queue_id"),
 });
 
 export const insertComplianceReminderNotificationSchema = createInsertSchema(complianceReminderNotifications).omit({
@@ -5796,6 +5800,10 @@ export const adopterNotificationLogs = pgTable("adopter_notification_logs", {
   message: text("message").notNull(),
   sentAt: timestamp("sent_at").notNull().defaultNow(),
   itemId: text("item_id"),
+  // FK into the unified message_queue audit table (Communications Switchboard).
+  // Nullable for back-compat; populated for all sends routed through
+  // server/lib/unified-comms.ts (sendCommunication helper).
+  messageQueueId: uuid("message_queue_id"),
 });
 
 export type AdopterNotificationLog = typeof adopterNotificationLogs.$inferSelect;
@@ -6493,6 +6501,12 @@ export const adopterComplianceWarnings = pgTable("adopter_compliance_warnings", 
   trackingToken: text("tracking_token").unique(),
   emailOpenedAt: timestamp("email_opened_at"),
   linkClickedAt: timestamp("link_clicked_at"),
+  // FK into the unified message_queue audit table (Communications Switchboard).
+  // Nullable for back-compat; populated for sends routed through
+  // server/lib/unified-comms.ts (sendCommunication helper). Stores the email
+  // queue id; the SMS queue id (when both channels are sent) is captured in
+  // the parallel adopter_notification_logs row.
+  messageQueueId: uuid("message_queue_id"),
 });
 
 export type AdopterComplianceWarning = typeof adopterComplianceWarnings.$inferSelect;

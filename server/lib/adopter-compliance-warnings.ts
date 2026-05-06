@@ -25,8 +25,8 @@ import {
   users,
 } from '@shared/schema';
 import { and, eq, gte, lte, sql, desc, isNotNull, inArray } from 'drizzle-orm';
-import { EmailService } from './email-service';
-import { sendSms, isTwilioEnabled } from './twilio-service';
+import { isTwilioEnabled } from './twilio-service';
+import { sendCommunication } from './unified-comms';
 
 /**
  * Build a per-animal phone fallback map: when `adoptions.adopter_phone` is
@@ -1051,6 +1051,12 @@ export async function sendComplianceWarning(input: SendWarningInput): Promise<Se
     deadlineDate: deadlineStr,
   };
 
+  // Track message_queue ids returned by the unified helper so we can stamp
+  // them onto adopterComplianceWarnings (email path) and onto the
+  // adopterNotificationLogs rows we write below for the Switchboard FK.
+  let emailMessageQueueId: string | null = null;
+  let smsMessageQueueId: string | null = null;
+
   // Insert the audit row BEFORE sending so the tracking pixel and tracked
   // upload-link URLs in the email reference a row that already exists. This
   // closes a race where an extremely fast image prefetch / click (some
@@ -1076,34 +1082,35 @@ export async function sendComplianceWarning(input: SendWarningInput): Promise<Se
   });
 
   if (wantEmail) {
-    const emailService = await EmailService.forTenant(input.tenantId);
-    if (!emailService) {
-      result.email = { ok: false, error: 'Email service is not configured for this organization' };
-    } else {
-      try {
-        const html = buildEmailHtml({
-          tenantName: tenant.name,
-          subject: emailSubject,
-          bodyText: emailBodyText,
-          portalLink: tokens.portalLink,
-          deadlineDisplay,
-          trackedClickUrl: buildTrackedClickUrl(warningId),
-          trackingPixelUrl: buildTrackingPixelUrl(warningId),
-        });
-        const sendRes = await emailService.send({
-          to: input.adopterEmail,
-          subject: emailSubject,
-          html,
-        });
-        if (sendRes.success) {
-          result.email = { ok: true };
-          result.channelsSent.push('email');
-        } else {
-          result.email = { ok: false, error: sendRes.error || 'Email send failed' };
-        }
-      } catch (err: any) {
-        result.email = { ok: false, error: err?.message || 'Email send threw' };
+    try {
+      const html = buildEmailHtml({
+        tenantName: tenant.name,
+        subject: emailSubject,
+        bodyText: emailBodyText,
+        portalLink: tokens.portalLink,
+        deadlineDisplay,
+        trackedClickUrl: buildTrackedClickUrl(warningId),
+        trackingPixelUrl: buildTrackingPixelUrl(warningId),
+      });
+      const sendRes = await sendCommunication({
+        tenantId: input.tenantId,
+        channel: 'email',
+        sourceType: 'compliance',
+        recipientAddress: input.adopterEmail,
+        recipientName: input.adopterName,
+        relatedAnimalId: input.animalId,
+        subject: emailSubject,
+        messageBody: html,
+      });
+      emailMessageQueueId = sendRes.messageQueueId;
+      if (sendRes.status === 'delivered') {
+        result.email = { ok: true };
+        result.channelsSent.push('email');
+      } else {
+        result.email = { ok: false, error: sendRes.error || 'Email send failed' };
       }
+    } catch (err: any) {
+      result.email = { ok: false, error: err?.message || 'Email send threw' };
     }
   }
 
@@ -1113,20 +1120,23 @@ export async function sendComplianceWarning(input: SendWarningInput): Promise<Se
       result.sms = { ok: false, error: 'SMS is not configured for this organization' };
     } else {
       try {
-        const smsRes = await sendSms(
-          input.tenantId,
-          input.adopterPhone!,
-          smsBody,
-          'notification',
-          {
-            relatedAnimalId: input.animalId,
+        const smsRes = await sendCommunication({
+          tenantId: input.tenantId,
+          channel: 'sms',
+          sourceType: 'compliance',
+          recipientAddress: input.adopterPhone!,
+          recipientName: input.adopterName,
+          relatedAnimalId: input.animalId,
+          messageBody: smsBody,
+          smsContext: {
             // Contract-enforcement notice: bypass quiet hours and skip the
             // duplicate org prefix (the rendered SMS body already includes the
             // rescue name from the {{rescueName}} merge token).
             bypassQuietHours: true,
             skipOrgPrefix: true,
           },
-        );
+        });
+        smsMessageQueueId = smsRes.messageQueueId;
         if (smsRes.status === 'failed') {
           result.sms = { ok: false, error: smsRes.error || 'SMS send failed' };
         } else {
@@ -1161,6 +1171,7 @@ export async function sendComplianceWarning(input: SendWarningInput): Promise<Se
         // fetch doesn't get attributed to anything (pixel still 200s with
         // a transparent GIF — see tracking endpoint).
         trackingToken: result.email?.ok ? trackingToken : null,
+        messageQueueId: result.email?.ok ? emailMessageQueueId : smsMessageQueueId,
       })
       .where(eq(adopterComplianceWarnings.id, pendingWarningId));
     result.warningId = pendingWarningId;
@@ -1187,6 +1198,7 @@ export async function sendComplianceWarning(input: SendWarningInput): Promise<Se
       emailBody: result.email?.ok ? emailBodyText : null,
       smsBody: result.sms?.ok ? smsBody : null,
       trackingToken: null,
+      messageQueueId: smsMessageQueueId,
     }).returning({ id: adopterComplianceWarnings.id });
     result.warningId = inserted?.id;
   }
@@ -1225,6 +1237,7 @@ export async function sendComplianceWarning(input: SendWarningInput): Promise<Se
             channel: 'email',
             subject: emailSubject,
             message: emailBodyText,
+            messageQueueId: emailMessageQueueId,
           });
         }
         if (result.sms?.ok) {
@@ -1232,6 +1245,7 @@ export async function sendComplianceWarning(input: SendWarningInput): Promise<Se
             ...baseLog,
             channel: 'sms',
             message: smsBody,
+            messageQueueId: smsMessageQueueId,
           });
         }
       }

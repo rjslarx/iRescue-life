@@ -2,7 +2,7 @@ import { db } from '../db';
 import { scheduledCommunications, animals, tenants, adoptionCheckoutSessions, contacts, microchipRecords } from '@shared/schema';
 import { eq, and, lte, ne } from 'drizzle-orm';
 import { EmailService } from './email-service';
-import { sendSms } from './twilio-service';
+import { sendCommunication } from './unified-comms';
 
 interface RetentionEmailResult {
   tenantsProcessed: number;
@@ -284,7 +284,7 @@ export async function runRetentionEmailsJob(): Promise<RetentionEmailResult> {
           continue;
         }
 
-        // Get email service for tenant
+        // Verify email service is configured for tenant before attempting sends
         const emailService = await EmailService.forTenant(comm.tenantId);
         if (!emailService) {
           result.errors.push(`No email service for tenant ${tenant.name}`);
@@ -322,10 +322,15 @@ export async function runRetentionEmailsJob(): Promise<RetentionEmailResult> {
             chipRecord.manufacturer
           );
 
-          await emailService.send({
-            to: comm.adopterEmail,
+          await sendCommunication({
+            tenantId: comm.tenantId,
+            channel: 'email',
+            sourceType: 'reminder',
+            recipientAddress: comm.adopterEmail,
+            recipientName: comm.adopterName,
+            relatedAnimalId: comm.animalId,
             subject: chipTemplate.subject,
-            html: chipTemplate.html,
+            messageBody: chipTemplate.html,
           });
         } else {
           const template = emailTemplates[comm.messageType as keyof typeof emailTemplates];
@@ -334,10 +339,15 @@ export async function runRetentionEmailsJob(): Promise<RetentionEmailResult> {
             continue;
           }
 
-          await emailService.send({
-            to: comm.adopterEmail,
+          await sendCommunication({
+            tenantId: comm.tenantId,
+            channel: 'email',
+            sourceType: 'reminder',
+            recipientAddress: comm.adopterEmail,
+            recipientName: comm.adopterName,
+            relatedAnimalId: comm.animalId,
             subject: template.subject(comm.animalName),
-            html: template.html(comm.adopterName, comm.animalName, tenant.name),
+            messageBody: template.html(comm.adopterName, comm.animalName, tenant.name),
           });
         }
 
@@ -393,7 +403,15 @@ export async function runRetentionEmailsJob(): Promise<RetentionEmailResult> {
               };
               const smsBody = smsTemplates[comm.messageType];
               if (smsBody) {
-                await sendSms(comm.tenantId, adopterContact.phone, smsBody, 'notification');
+                await sendCommunication({
+                  tenantId: comm.tenantId,
+                  channel: 'sms',
+                  sourceType: 'reminder',
+                  recipientAddress: adopterContact.phone,
+                  recipientName: comm.adopterName,
+                  relatedAnimalId: comm.animalId,
+                  messageBody: smsBody,
+                });
                 console.log(`[Retention] Sent ${comm.messageType} SMS to ${adopterContact.phone} for ${comm.animalName}`);
               }
             }

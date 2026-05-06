@@ -14,8 +14,8 @@ import {
   type ComplianceReminder,
 } from '@shared/schema';
 import { eq, and, gte, lte, lt, or, isNull, inArray, sql } from 'drizzle-orm';
-import { EmailService } from './email-service';
-import { sendSms, isTwilioEnabled } from './twilio-service';
+import { isTwilioEnabled } from './twilio-service';
+import { sendCommunication } from './unified-comms';
 import { randomBytes } from 'crypto';
 
 interface JobResult {
@@ -238,8 +238,6 @@ export async function send3DayWarningEmails(tenantId: string): Promise<{ sent: n
       return { sent: 0, errors: ['Email not configured for tenant'] };
     }
 
-    const emailService = new EmailService(tenant.resendApiKey, tenant.defaultFromEmail);
-
     for (const reminder of reminders) {
       if (!reminder.fosterId) continue;
 
@@ -282,13 +280,19 @@ export async function send3DayWarningEmails(tenantId: string): Promise<{ sent: n
       `;
 
       try {
-        const result = await emailService.send({
-          to: foster.email,
+        const result = await sendCommunication({
+          tenantId,
+          channel: 'email',
+          sourceType: 'reminder',
+          recipientUserId: reminder.fosterId,
+          recipientAddress: foster.email,
+          recipientName: foster.fullName,
+          relatedAnimalId: reminder.animalId,
           subject,
-          html,
+          messageBody: html,
         });
 
-        if (result.success) {
+        if (result.status === 'delivered') {
           await db.insert(complianceReminderNotifications).values({
             tenantId,
             complianceReminderId: reminder.id,
@@ -298,7 +302,8 @@ export async function send3DayWarningEmails(tenantId: string): Promise<{ sent: n
             recipientName: foster.fullName,
             messageBody: subject,
             deliveryStatus: 'sent',
-            externalMessageId: result.messageId,
+            externalMessageId: result.providerSid ?? null,
+            messageQueueId: result.messageQueueId,
           });
 
           await db
@@ -381,12 +386,18 @@ export async function sendMorningOfSmsReminders(tenantId: string): Promise<{ sen
       const message = `ACTION: Please give ${animal.name} their ${reminder.careName} today. Reply 'DONE' or click link to confirm: ${magicLink}`;
 
       try {
-        const result = await sendSms(tenantId, foster.phone, message, 'reminder', {
+        const result = await sendCommunication({
+          tenantId,
+          channel: 'sms',
+          sourceType: 'reminder',
           recipientUserId: reminder.fosterId,
+          recipientAddress: foster.phone,
+          recipientName: foster.fullName,
           relatedAnimalId: reminder.animalId,
+          messageBody: message,
         });
 
-        if (result.status === 'sent') {
+        if (result.status === 'delivered') {
           await db.insert(complianceReminderNotifications).values({
             tenantId,
             complianceReminderId: reminder.id,
@@ -396,7 +407,8 @@ export async function sendMorningOfSmsReminders(tenantId: string): Promise<{ sen
             recipientName: foster.fullName,
             messageBody: message,
             deliveryStatus: 'sent',
-            externalMessageId: result.sid,
+            externalMessageId: result.providerSid ?? null,
+            messageQueueId: result.messageQueueId,
           });
 
           await db
@@ -748,9 +760,15 @@ export async function sendMedicationTaskSmsReminders(tenantId: string): Promise<
       const message = `Hi ${fosterFirstName}! ${animal.name} needs their ${drugNames} ${roundLabel} today. Log it in the Foster Portal when given.`.substring(0, 160);
 
       try {
-        await sendSms(tenantId, foster.phone, message, 'reminder', {
+        await sendCommunication({
+          tenantId,
+          channel: 'sms',
+          sourceType: 'reminder',
           recipientUserId: fosterId,
+          recipientAddress: foster.phone,
+          recipientName: foster.fullName,
           relatedAnimalId: animalId,
+          messageBody: message,
         });
         sent++;
       } catch (err) {
@@ -956,12 +974,18 @@ export async function sendBioPhotoSmsToFosters(tenantId: string): Promise<{ sent
         const fosterFirstName = foster.fullName?.split(' ')[0] || 'Foster';
         const message = `Hi ${fosterFirstName}! ${animal.name} has been with you for ${weeks} week${weeks !== 1 ? 's' : ''}! Please reply with a quick update on their personality and attach a cute new photo so we can update their adoption profile!`.substring(0, 320);
 
-        const result = await sendSms(tenantId, foster.phone, message, 'reminder', {
+        const result = await sendCommunication({
+          tenantId,
+          channel: 'sms',
+          sourceType: 'reminder',
           recipientUserId: reminder.fosterId,
+          recipientAddress: foster.phone,
+          recipientName: foster.fullName,
           relatedAnimalId: reminder.animalId,
+          messageBody: message,
         });
 
-        if (result.status === 'sent') {
+        if (result.status === 'delivered') {
           await db
             .update(complianceReminders)
             .set({ state: 'notified_due', updatedAt: new Date() })
@@ -1056,12 +1080,18 @@ export async function sendAppointmentRemindersForTenant(tenantId: string): Promi
         const examTypeLabel = exam.examType.charAt(0).toUpperCase() + exam.examType.slice(1);
         const message = `Reminder: ${animal.name} has a ${examTypeLabel} appointment scheduled for tomorrow at ${timeStr}. Please ensure they have no food after midnight tonight!`.substring(0, 320);
 
-        const result = await sendSms(tenantId, foster.phone, message, 'reminder', {
+        const result = await sendCommunication({
+          tenantId,
+          channel: 'sms',
+          sourceType: 'reminder',
           recipientUserId: placement.fosterId,
+          recipientAddress: foster.phone,
+          recipientName: foster.fullName,
           relatedAnimalId: exam.animalId,
+          messageBody: message,
         });
 
-        if (result.status === 'sent') {
+        if (result.status === 'delivered') {
           sent++;
         } else {
           errors.push(`Failed to SMS ${foster.phone} for exam reminder: ${result.error}`);

@@ -14,8 +14,7 @@ import {
   smsMessageLogs,
 } from '@shared/schema';
 import { eq, and, lte, sql, desc, isNull, gte, lt, isNotNull, like } from 'drizzle-orm';
-import { EmailService } from './email-service';
-import { sendSms } from './twilio-service';
+import { sendCommunication } from './unified-comms';
 
 interface NotificationResult {
   tenantId: string;
@@ -363,35 +362,39 @@ export async function runAdopterComplianceNotifications(tenantId: string): Promi
 
         if (emailEnabled) {
           try {
-            const emailService = await EmailService.forTenant(tenantId);
-            if (emailService) {
-              const petPortalUrl = adopter.pets.length === 1
-                ? buildPortalUrl(tenant, `/my-pets/${adopter.pets[0].animalId}`)
-                : portalUrl;
+            const petPortalUrl = adopter.pets.length === 1
+              ? buildPortalUrl(tenant, `/my-pets/${adopter.pets[0].animalId}`)
+              : portalUrl;
 
-              const emailResult = await emailService.send({
-                to: adopter.email,
-                subject: `Pet Care Reminder: ${newItems.length} item${newItems.length > 1 ? 's' : ''} need attention`,
-                html: buildComplianceEmailHtml(adopter.name, tenant.name, newItems, petPortalUrl),
-              });
+            const emailResult = await sendCommunication({
+              tenantId,
+              channel: 'email',
+              sourceType: 'compliance',
+              recipientUserId: userId,
+              recipientAddress: adopter.email,
+              recipientName: adopter.name,
+              relatedAnimalId: newItems.length === 1 ? newItems[0].animalId : null,
+              subject: `Pet Care Reminder: ${newItems.length} item${newItems.length > 1 ? 's' : ''} need attention`,
+              messageBody: buildComplianceEmailHtml(adopter.name, tenant.name, newItems, petPortalUrl),
+            });
 
-              if (emailResult.success) {
-                result.emailsSent++;
-                for (const item of newItems) {
-                  await db.insert(adopterNotificationLogs).values({
-                    tenantId,
-                    userId,
-                    animalId: item.animalId,
-                    notificationType: item.type,
-                    channel: 'email',
-                    subject: `Pet Care Reminder: ${item.itemName}`,
-                    message: `${item.animalName} - ${item.itemName} ${item.type.includes('overdue') ? 'is overdue' : 'is due soon'} (${item.dueDate})`,
-                    itemId: item.itemId,
-                  });
-                }
-              } else {
-                result.errors.push(`Email failed for ${adopter.email}: ${emailResult.error}`);
+            if (emailResult.status === 'delivered') {
+              result.emailsSent++;
+              for (const item of newItems) {
+                await db.insert(adopterNotificationLogs).values({
+                  tenantId,
+                  userId,
+                  animalId: item.animalId,
+                  notificationType: item.type,
+                  channel: 'email',
+                  subject: `Pet Care Reminder: ${item.itemName}`,
+                  message: `${item.animalName} - ${item.itemName} ${item.type.includes('overdue') ? 'is overdue' : 'is due soon'} (${item.dueDate})`,
+                  itemId: item.itemId,
+                  messageQueueId: emailResult.messageQueueId,
+                });
               }
+            } else {
+              result.errors.push(`Email failed for ${adopter.email}: ${emailResult.error}`);
             }
           } catch (emailErr) {
             result.errors.push(`Email error for ${adopter.email}: ${emailErr instanceof Error ? emailErr.message : 'Unknown'}`);
@@ -405,12 +408,18 @@ export async function runAdopterComplianceNotifications(tenantId: string): Promi
               : portalUrl;
 
             const smsMessage = buildComplianceSmsMessage(newItems, petPortalUrl);
-            const smsResult = await sendSms(tenantId, smsPhone, smsMessage, 'reminder', {
+            const smsResult = await sendCommunication({
+              tenantId,
+              channel: 'sms',
+              sourceType: 'reminder',
               recipientUserId: userId,
-              relatedAnimalId: newItems.length === 1 ? newItems[0].animalId : undefined,
+              recipientAddress: smsPhone,
+              recipientName: adopter.name,
+              relatedAnimalId: newItems.length === 1 ? newItems[0].animalId : null,
+              messageBody: smsMessage,
             });
 
-            if (smsResult.status === 'sent') {
+            if (smsResult.status === 'delivered') {
               result.smsSent++;
               for (const item of newItems) {
                 await db.insert(adopterNotificationLogs).values({
@@ -421,6 +430,7 @@ export async function runAdopterComplianceNotifications(tenantId: string): Promi
                   channel: 'sms',
                   message: smsMessage,
                   itemId: item.itemId,
+                  messageQueueId: smsResult.messageQueueId,
                 });
               }
             } else {
@@ -551,8 +561,14 @@ export async function sendSpayNeuterWarnings(tenantId: string): Promise<{ sent: 
 
         const message = `Hi ${firstName}! A reminder from the rescue that ${obligation.animalName}'s spay/neuter procedure is required by ${formattedDate}. Please upload a photo of your vet receipt in your Adopter Portal: ${portalUrl}`;
 
-        await sendSms(tenantId, obligation.adopterPhone, message, 'reminder', {
+        await sendCommunication({
+          tenantId,
+          channel: 'sms',
+          sourceType: 'compliance',
+          recipientAddress: obligation.adopterPhone,
+          recipientName: obligation.adopterName,
           relatedAnimalId: obligation.animalId,
+          messageBody: message,
         });
 
         result.sent++;
@@ -657,8 +673,14 @@ export async function sendAnnualVaccineReminders(tenantId: string): Promise<{ se
         const firstName = vaccine.adopterName.split(' ')[0];
         const message = `Hi ${firstName}! It's been almost a year since ${vaccine.animalName} was adopted. This is a friendly reminder that they'll be due for their annual vet checkup and vaccines next month! Please schedule an appointment with your vet soon.`;
 
-        await sendSms(tenantId, vaccine.adopterPhone, message, 'reminder', {
+        await sendCommunication({
+          tenantId,
+          channel: 'sms',
+          sourceType: 'reminder',
+          recipientAddress: vaccine.adopterPhone,
+          recipientName: vaccine.adopterName,
           relatedAnimalId: vaccine.animalId,
+          messageBody: message,
         });
 
         result.sent++;
@@ -763,8 +785,14 @@ export async function escalateOverdueSpayNeuter(tenantId: string): Promise<{ esc
 
         if (obligation.adopterPhone && !skipSms) {
           try {
-            await sendSms(tenantId, obligation.adopterPhone, breachMessage, 'reminder', {
+            await sendCommunication({
+              tenantId,
+              channel: 'sms',
+              sourceType: 'compliance',
+              recipientAddress: obligation.adopterPhone,
+              recipientName: obligation.adopterName,
               relatedAnimalId: obligation.animalId,
+              messageBody: breachMessage,
             });
             result.notified++;
           } catch (smsErr) {
@@ -774,12 +802,7 @@ export async function escalateOverdueSpayNeuter(tenantId: string): Promise<{ esc
 
         if (obligation.adopterEmail && !skipEmail) {
           try {
-            const emailService = await EmailService.forTenant(tenantId);
-            if (emailService) {
-              await emailService.send({
-                to: obligation.adopterEmail,
-                subject: `Action Required: ${obligation.animalName}'s Spay/Neuter is Overdue`,
-                html: `
+            const breachEmailHtml = `
                   <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #374151;">
                     <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
                       <h2 style="color: #dc2626; margin: 0 0 12px 0;">Spay/Neuter Compliance Overdue</h2>
@@ -798,9 +821,20 @@ export async function escalateOverdueSpayNeuter(tenantId: string): Promise<{ esc
                     </div>
                     <p style="font-size: 13px; color: #6b7280;">If you need help scheduling or have questions, please contact us at ${tenantRecord?.name || 'the rescue'}. We're here to help!</p>
                   </div>
-                `,
-              });
+                `;
 
+            const emailRes = await sendCommunication({
+              tenantId,
+              channel: 'email',
+              sourceType: 'compliance',
+              recipientAddress: obligation.adopterEmail,
+              recipientName: obligation.adopterName,
+              relatedAnimalId: obligation.animalId,
+              subject: `Spay/Neuter Compliance Overdue: ${obligation.animalName}`,
+              messageBody: breachEmailHtml,
+            });
+
+            if (emailRes.status === 'delivered') {
               await db.insert(adopterNotificationLogs).values({
                 tenantId,
                 userId: '',
@@ -810,8 +844,11 @@ export async function escalateOverdueSpayNeuter(tenantId: string): Promise<{ esc
                 subject: `Spay/Neuter Compliance Overdue: ${obligation.animalName}`,
                 message: breachMessage,
                 itemId: obligation.id,
+                messageQueueId: emailRes.messageQueueId,
               });
               result.notified++;
+            } else {
+              result.errors.push(`Email breach notification failed for ${obligation.adopterEmail}: ${emailRes.error}`);
             }
           } catch (emailErr) {
             result.errors.push(`Email breach notification failed for ${obligation.adopterEmail}: ${emailErr instanceof Error ? emailErr.message : 'Unknown'}`);

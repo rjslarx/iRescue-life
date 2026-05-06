@@ -194,6 +194,10 @@ export async function sendSms(
     relatedAnimalId?: string;
     skipOrgPrefix?: boolean;
     bypassQuietHours?: boolean;
+    /** Medication-task UUIDs grouped into this digest send (for DONE-reply routing). */
+    relatedTaskIds?: string[];
+    /** Optional FK back to the unified message_queue audit row (Communications Switchboard). */
+    messageQueueId?: string;
   }
 ): Promise<SendResult> {
   const [tenantRow] = await db
@@ -269,6 +273,7 @@ export async function sendSms(
       sentByName: context?.sentBy?.name,
       recipientUserId: context?.recipientUserId,
       relatedAnimalId: context?.relatedAnimalId,
+      relatedTaskIds: context?.relatedTaskIds,
     });
 
     return { number: toNumber, status: 'sent', sid: twilioMessage.sid };
@@ -288,6 +293,7 @@ export async function sendSms(
       sentByName: context?.sentBy?.name,
       recipientUserId: context?.recipientUserId,
       relatedAnimalId: context?.relatedAnimalId,
+      relatedTaskIds: context?.relatedTaskIds,
     });
 
     return { number: toNumber, status: 'failed', error: error.message };

@@ -9,7 +9,8 @@ import {
   smsMessageLogs,
 } from '@shared/schema';
 import { eq, and, inArray, sql } from 'drizzle-orm';
-import { sendSms, isTwilioEnabled } from '../lib/twilio-service';
+import { isTwilioEnabled } from '../lib/twilio-service';
+import { sendCommunication } from '../lib/unified-comms';
 
 interface AnimalBatch {
   name: string;
@@ -155,31 +156,19 @@ export async function sendMedicationDigestForTenant(tenantId: string): Promise<{
       const allTaskIds = Array.from(fosterBatch.animals.values()).flatMap(b => b.taskIds);
 
       try {
-        const [tenant] = await db
-          .select({ twilioPhoneNumber: tenants.twilioPhoneNumber })
-          .from(tenants)
-          .where(eq(tenants.id, tenantId))
-          .limit(1);
-
-        const result = await sendSms(tenantId, fosterBatch.fosterPhone, message, 'reminder', {
+        const result = await sendCommunication({
+          tenantId,
+          channel: 'sms',
+          sourceType: 'reminder',
           recipientUserId: fosterId,
+          recipientAddress: fosterBatch.fosterPhone,
+          recipientName: fosterBatch.fosterFirstName,
           relatedAnimalId: fosterBatch.primaryAnimalId,
+          messageBody: message,
+          smsContext: { relatedTaskIds: allTaskIds },
         });
 
-        if (result.status === 'sent') {
-          await db.insert(smsMessageLogs).values({
-            tenantId,
-            twilioMessageSid: result.sid || null,
-            direction: 'outbound',
-            fromNumber: tenant?.twilioPhoneNumber || '',
-            toNumber: fosterBatch.fosterPhone,
-            body: message,
-            messageType: 'reminder',
-            status: 'sent',
-            recipientUserId: fosterId,
-            relatedAnimalId: fosterBatch.primaryAnimalId,
-            relatedTaskIds: allTaskIds,
-          });
+        if (result.status === 'delivered') {
           sent++;
         } else {
           errors.push(`Failed to SMS ${fosterBatch.fosterPhone}: ${result.error}`);
@@ -329,31 +318,19 @@ export async function sendFosterNudgeForTenant(tenantId: string): Promise<{ sent
       const allTaskIds = Array.from(fosterBatch.animals.values()).flatMap(b => b.taskIds);
 
       try {
-        const [tenant] = await db
-          .select({ twilioPhoneNumber: tenants.twilioPhoneNumber })
-          .from(tenants)
-          .where(eq(tenants.id, tenantId))
-          .limit(1);
-
-        const result = await sendSms(tenantId, fosterBatch.fosterPhone, message, 'foster_nudge', {
+        const result = await sendCommunication({
+          tenantId,
+          channel: 'sms',
+          sourceType: 'reminder',
           recipientUserId: fosterId,
+          recipientAddress: fosterBatch.fosterPhone,
+          recipientName: fosterBatch.fosterFirstName,
           relatedAnimalId: fosterBatch.primaryAnimalId,
+          messageBody: message,
+          smsContext: { relatedTaskIds: allTaskIds },
         });
 
-        if (result.status === 'sent') {
-          await db.insert(smsMessageLogs).values({
-            tenantId,
-            twilioMessageSid: result.sid || null,
-            direction: 'outbound',
-            fromNumber: tenant?.twilioPhoneNumber || '',
-            toNumber: fosterBatch.fosterPhone,
-            body: message,
-            messageType: 'foster_nudge',
-            status: 'sent',
-            recipientUserId: fosterId,
-            relatedAnimalId: fosterBatch.primaryAnimalId,
-            relatedTaskIds: allTaskIds,
-          });
+        if (result.status === 'delivered') {
           sent++;
         } else {
           errors.push(`Failed nudge SMS to ${fosterBatch.fosterPhone}: ${result.error}`);
