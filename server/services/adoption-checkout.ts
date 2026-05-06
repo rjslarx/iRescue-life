@@ -2091,9 +2091,35 @@ export async function finalizeAdoption(sessionId: string): Promise<void> {
               </p>
             </div>` : '';
 
-      console.log(`[Adoption] Sending confirmation email with ${attachments.length} attachments for session ${session.id}`);
+      // Resend rejects payloads above ~40MB (base64-encoded grows ~33%).
+      // Guard at ~24MB raw to leave headroom for HTML body + base64 expansion.
+      const ATTACHMENT_BYTE_LIMIT = 24 * 1024 * 1024;
+      const totalAttachmentBytes = attachments.reduce((sum, a) => sum + (a.content?.length || 0), 0);
+      let attachmentsToSend = attachments;
+      let oversizedAttachments = false;
+      if (totalAttachmentBytes > ATTACHMENT_BYTE_LIMIT) {
+        oversizedAttachments = true;
+        console.warn(
+          `[Adoption] Confirmation email attachments total ${totalAttachmentBytes} bytes ` +
+          `exceeds ${ATTACHMENT_BYTE_LIMIT}; sending email without attachments for session ${session.id}`
+        );
+        attachmentsToSend = [];
+      }
 
-      await sendCommunication({
+      console.log(
+        `[Adoption] Sending confirmation email with ${attachmentsToSend.length} attachments ` +
+        `(${totalAttachmentBytes} bytes total) for session ${session.id}`
+      );
+
+      const primaryAttachmentsSection = attachmentsToSend.length > 0 ? attachmentsSection : '';
+      const oversizedNotice = oversizedAttachments ? `
+            <div style="background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; margin: 20px 0;">
+              <p style="margin: 0; font-size: 14px; color: #92400e;">
+                Your adoption documents are available in your portal — they were too large to attach to this email.
+              </p>
+            </div>` : '';
+
+      const primaryResult = await sendCommunication({
         tenantId: session.tenantId,
         channel: 'email',
         sourceType: 'other',
@@ -2101,13 +2127,14 @@ export async function finalizeAdoption(sessionId: string): Promise<void> {
         recipientName: recipientName,
         relatedAnimalId: session.animalId,
         subject: `Congratulations on Adopting ${animal.name}!`,
-        emailAttachments: attachments.length > 0 ? attachments : undefined,
+        emailAttachments: attachmentsToSend.length > 0 ? attachmentsToSend : undefined,
         messageBody: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
             <h2 style="color: #2563eb;">Welcome to the Family!</h2>
             <p>Dear ${recipientName},</p>
             <p>Congratulations on completing the adoption of <strong>${animal.name}</strong>!</p>
-            ${attachmentsSection}
+            ${primaryAttachmentsSection}
+            ${oversizedNotice}
 
             <div style="background-color: #f8fafc; padding: 15px; margin: 20px 0; border-radius: 8px;">
               <h3 style="color: #2563eb; margin-top: 0;">The 3-3-3 Rule</h3>
@@ -2133,6 +2160,53 @@ export async function finalizeAdoption(sessionId: string): Promise<void> {
           </div>
         `,
       });
+
+      // sendCommunication() never throws on a Resend rejection — it returns
+      // status: 'failed'. If the rich (with-attachments) send was rejected
+      // (e.g. Resend 422 when total payload is too large or contains an
+      // attachment Resend didn't like), fall back to a plain congratulations
+      // email so the adopter still gets confirmation.
+      const primaryFailed = primaryResult.status === 'failed';
+      const hadAttachments = attachmentsToSend.length > 0;
+      if (primaryFailed && hadAttachments) {
+        console.warn(
+          `[Adoption] Primary confirmation email failed (${primaryResult.error || 'unknown error'}); ` +
+          `retrying without attachments for session ${session.id}`
+        );
+        try {
+          const fallbackResult = await sendCommunication({
+            tenantId: session.tenantId,
+            channel: 'email',
+            sourceType: 'other',
+            recipientAddress: recipientEmail,
+            recipientName: recipientName,
+            relatedAnimalId: session.animalId,
+            subject: `Congratulations on Adopting ${animal.name}!`,
+            messageBody: `
+              <h2>Welcome to the Family!</h2>
+              <p>Dear ${recipientName},</p>
+              <p>Congratulations on completing the adoption of <strong>${animal.name}</strong>!</p>
+              <p>Your adoption documents are available in your portal — they were too large to attach to this email.</p>
+              <p>We'll be in touch with follow-up information in the coming days.</p>
+              <p>Thank you for giving ${animal.name} a loving home!</p>
+            `,
+          });
+          if (fallbackResult.status === 'failed') {
+            console.error(
+              `[Adoption] Fallback (no-attachment) confirmation email also failed for ` +
+              `session ${session.id}, tenant ${session.tenantId}: ${fallbackResult.error || 'unknown error'} ` +
+              `(primary error: ${primaryResult.error || 'unknown'})`
+            );
+          }
+        } catch (fallbackError) {
+          console.error('Failed to send fallback confirmation email:', fallbackError);
+        }
+      } else if (primaryFailed) {
+        console.error(
+          `[Adoption] Confirmation email failed and no attachments to retry without ` +
+          `for session ${session.id}: ${primaryResult.error || 'unknown error'}`
+        );
+      }
     } catch (error) {
       console.error('Failed to send confirmation email with attachments:', error);
       try {

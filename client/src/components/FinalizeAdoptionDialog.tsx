@@ -245,7 +245,14 @@ export function FinalizeAdoptionDialog({ open, onOpenChange, animal }: FinalizeA
     },
   });
 
-  const [sendMethod, setSendMethod] = useState<'sms' | 'email'>('sms');
+  const smsEnabled = !!tenantData?.tenant?.twilioEnabled;
+  const [sendMethod, setSendMethod] = useState<'sms' | 'email'>(smsEnabled ? 'sms' : 'email');
+
+  useEffect(() => {
+    if (!smsEnabled && sendMethod === 'sms') {
+      setSendMethod('email');
+    }
+  }, [smsEnabled, sendMethod]);
 
   const sendLinkMutation = useMutation({
     mutationFn: async ({ sessionId, method }: { sessionId: string; method: 'email' | 'sms' }) => {
@@ -302,7 +309,10 @@ export function FinalizeAdoptionDialog({ open, onOpenChange, animal }: FinalizeA
 
   const handleSendLink = (method?: 'sms' | 'email') => {
     if (sessionId) {
-      const m = method || sendMethod;
+      let m = method || sendMethod;
+      if (m === 'sms' && !smsEnabled) {
+        m = 'email';
+      }
       setSendMethod(m);
       sendLinkMutation.mutate({ sessionId, method: m });
     }
@@ -880,27 +890,29 @@ export function FinalizeAdoptionDialog({ open, onOpenChange, animal }: FinalizeA
               <CardContent className="pt-4 pb-3">
                 <h4 className="text-sm font-medium mb-3">Send Checkout Link</h4>
                 <div className="flex flex-wrap items-center gap-2">
+                  {smsEnabled && (
+                    <Button
+                      type="button"
+                      onClick={() => handleSendLink('sms')}
+                      disabled={sendLinkMutation.isPending || !adopterPhone}
+                      data-testid="button-send-sms"
+                    >
+                      {sendLinkMutation.isPending && sendMethod === 'sms' ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Sending...
+                        </>
+                      ) : (
+                        <>
+                          <MessageSquare className="mr-2 h-4 w-4" />
+                          Send via SMS
+                        </>
+                      )}
+                    </Button>
+                  )}
                   <Button
                     type="button"
-                    onClick={() => handleSendLink('sms')}
-                    disabled={sendLinkMutation.isPending || !adopterPhone}
-                    data-testid="button-send-sms"
-                  >
-                    {sendLinkMutation.isPending && sendMethod === 'sms' ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Sending...
-                      </>
-                    ) : (
-                      <>
-                        <MessageSquare className="mr-2 h-4 w-4" />
-                        Send via SMS
-                      </>
-                    )}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
+                    variant={smsEnabled ? "outline" : "default"}
                     onClick={() => handleSendLink('email')}
                     disabled={sendLinkMutation.isPending}
                     data-testid="button-send-email"
@@ -918,7 +930,11 @@ export function FinalizeAdoptionDialog({ open, onOpenChange, animal }: FinalizeA
                     )}
                   </Button>
                 </div>
-                {adopterPhone ? (
+                {!smsEnabled ? (
+                  <p className="text-xs text-muted-foreground mt-2" data-testid="text-sms-not-configured-hint">
+                    SMS delivery requires Twilio. Configure Twilio in Integrations Settings to enable text delivery.
+                  </p>
+                ) : adopterPhone ? (
                   <p className="text-xs text-muted-foreground mt-2" data-testid="text-adopter-phone">
                     SMS will be sent to {adopterPhone}
                   </p>
