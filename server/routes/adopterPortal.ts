@@ -406,7 +406,7 @@ router.get('/my-pets', async (req: Request, res: Response) => {
         weight: animals.weight,
         status: animals.status,
         deceasedDate: animals.deceasedDate,
-        heartwormStatus: animals.heartwormStatus,
+        heartwormPositive: animals.heartwormPositive,
       })
       .from(animals)
       .innerJoin(
@@ -559,7 +559,7 @@ router.get('/pets/:animalId', async (req: Request, res: Response) => {
         weight: animals.weight,
         status: animals.status,
         deceasedDate: animals.deceasedDate,
-        heartwormStatus: animals.heartwormStatus,
+        heartwormPositive: animals.heartwormPositive,
       })
       .from(animals)
       .innerJoin(
