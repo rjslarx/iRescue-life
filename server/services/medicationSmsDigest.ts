@@ -165,6 +165,7 @@ export async function sendMedicationDigestForTenant(tenantId: string): Promise<{
           recipientName: fosterBatch.fosterFirstName,
           relatedAnimalId: fosterBatch.primaryAnimalId,
           messageBody: message,
+          smsMessageType: 'reminder',
           smsContext: { relatedTaskIds: allTaskIds },
         });
 
@@ -327,6 +328,7 @@ export async function sendFosterNudgeForTenant(tenantId: string): Promise<{ sent
           recipientName: fosterBatch.fosterFirstName,
           relatedAnimalId: fosterBatch.primaryAnimalId,
           messageBody: message,
+          smsMessageType: 'foster_nudge',
           smsContext: { relatedTaskIds: allTaskIds },
         });
 

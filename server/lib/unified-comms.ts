@@ -30,6 +30,14 @@ export interface SendCommunicationInput {
    */
   mode?: 'immediate' | 'scheduled';
   scheduledFor?: Date;
+  /**
+   * Override the SMS message_type written to sms_message_logs. Defaults are
+   * derived from sourceType: 'reminder' → 'reminder', 'broadcast' → 'broadcast',
+   * everything else → 'notification'. Pass an explicit value when downstream
+   * routing (e.g. DONE-reply task completion) keys off a more specific type
+   * such as 'foster_nudge'.
+   */
+  smsMessageType?: 'transport_alert' | 'proxy_message' | 'broadcast' | 'reminder' | 'foster_nudge' | 'other' | 'notification';
   smsContext?: {
     skipOrgPrefix?: boolean;
     bypassQuietHours?: boolean;
@@ -90,11 +98,15 @@ export async function sendCommunication(
 
   try {
     if (input.channel === 'sms') {
+      const smsMessageType = input.smsMessageType
+        ?? (input.sourceType === 'reminder' ? 'reminder'
+          : input.sourceType === 'broadcast' ? 'broadcast'
+          : 'notification');
       const result = await sendSms(
         input.tenantId,
         input.recipientAddress,
         input.messageBody,
-        'notification',
+        smsMessageType,
         {
           recipientUserId: input.recipientUserId ?? undefined,
           relatedAnimalId: input.relatedAnimalId ?? undefined,
