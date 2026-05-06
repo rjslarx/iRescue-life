@@ -1,0 +1,144 @@
+2026-05-05 09:44:19.69
+937d5db7
+User
+at PgSelectBase._prepare (file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:683:19)
+2026-05-05 09:44:19.69
+937d5db7
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:684:26
+2026-05-05 09:44:19.69
+937d5db7
+User
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:17)
+2026-05-05 09:44:19.69
+937d5db7
+User
+at Array.reduce (<anonymous>)
+2026-05-05 09:44:19.69
+937d5db7
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:63:22
+2026-05-05 09:46:05.58
+937d5db7
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:684:26
+2026-05-05 09:46:05.58
+937d5db7
+User
+[Adopter Portal] Error fetching adopted animals: TypeError: Cannot convert undefined or null to object
+2026-05-05 09:46:05.58
+937d5db7
+User
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:33)
+2026-05-05 09:46:05.58
+937d5db7
+User
+at Function.entries (<anonymous>)
+2026-05-05 09:46:05.58
+937d5db7
+User
+at PgSelectBase._prepare (file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:683:19)
+2026-05-05 09:46:05.58
+937d5db7
+User
+at Object.startActiveSpan (file:///home/runner/workspace/node_modules/drizzle-orm/tracing.js:8:14)
+2026-05-05 09:46:05.58
+937d5db7
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/select.js:708:19
+2026-05-05 09:46:05.58
+937d5db7
+User
+at Array.reduce (<anonymous>)
+2026-05-05 09:46:05.58
+937d5db7
+User
+at Object.startActiveSpan (file:///home/runner/workspace/node_modules/drizzle-orm/tracing.js:8:14)
+2026-05-05 09:46:05.58
+937d5db7
+User
+at orderSelectedFields (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:53:17)
+2026-05-05 09:46:05.58
+937d5db7
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:63:22
+2026-05-05 09:46:08.64
+937d5db7
+User
+[Adopter Portal] Error fetching pet detail: TypeError: Cannot convert undefined or null to object
+2026-05-05 23:31:01.61
+937d5db7
+User
+at async StorageBackupService.runBackupForTenant (file:///home/runner/workspace/dist/index.js:31077:11)
+2026-05-05 23:31:01.61
+937d5db7
+User
+at async StorageBackupService.backupAnimalDocuments (file:///home/runner/workspace/dist/index.js:31152:11)
+2026-05-05 23:31:01.61
+937d5db7
+User
+password: '',
+2026-05-05 23:31:01.61
+937d5db7
+User
+username: '',
+2026-05-05 23:31:01.61
+937d5db7
+User
+port: '',
+2026-05-05 23:31:01.61
+937d5db7
+User
+origin: 'https://www.googleapis.com',
+2026-05-05 23:31:01.61
+937d5db7
+User
+host: 'www.googleapis.com',
+2026-05-05 23:31:01.61
+937d5db7
+User
+at async StorageBackupService.runBackupForAllTenants (file:///home/runner/workspace/dist/index.js:31016:36) {
+2026-05-05 23:31:01.61
+937d5db7
+User
+search: '?fields=id%2C%20webViewLink%2C%20size&supportsAllDrives=true&uploadType=multipart',
+2026-05-05 23:31:01.61
+937d5db7
+User
+at async StorageBackupService.scanAndBackupObjectStorageFolder (file:///home/runner/workspace/dist/index.js:31311:15)
+2026-05-05 23:31:01.61
+937d5db7
+User
+href: 'https://www.googleapis.com/upload/drive/v3/files?fields=id%2C%20webViewLink%2C%20size&supportsAllDrives=true&uploadType=multipart',
+2026-05-05 23:31:01.61
+937d5db7
+User
+config: {
+2026-05-05 23:31:01.61
+937d5db7
+User
+searchParams: URLSearchParams {
+2026-05-05 23:31:01.61
+937d5db7
+User
+hostname: 'www.googleapis.com',
+2026-05-05 23:31:01.61
+937d5db7
+User
+at async StorageBackupService.uploadGCSFileToDrive (file:///home/runner/workspace/dist/index.js:31426:26)
+2026-05-05 23:31:01.61
+937d5db7
+User
+url: URL {
+2026-05-05 23:31:01.61
+937d5db7
+User
+pathname: '/upload/drive/v3/files',
+2026-05-05 23:31:01.61
+937d5db7
+User
+protocol: 'https:',
+2026-05-05 23:31:01.61
+937d5db7
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
