@@ -1057,29 +1057,9 @@ export async function sendComplianceWarning(input: SendWarningInput): Promise<Se
   let emailMessageQueueId: string | null = null;
   let smsMessageQueueId: string | null = null;
 
-  // Insert the audit row BEFORE sending so the tracking pixel and tracked
-  // upload-link URLs in the email reference a row that already exists. This
-  // closes a race where an extremely fast image prefetch / click (some
-  // mailbox providers prefetch within milliseconds) would arrive at the
-  // tracking endpoints before the row was persisted, silently missing the
-  // first-write stamp. We mark channelsUsed=[] for now and update the row
-  // after the actual send completes; if every channel fails we delete the
-  // row so the 30-day dedup doesn't suppress a legitimate retry later.
-  const warningId = crypto.randomUUID();
-  await db.insert(adopterComplianceWarnings).values({
-    id: warningId,
-    tenantId: input.tenantId,
-    animalId: input.animalId,
-    itemId: input.itemId,
-    itemKey: input.itemKey || `parasite_prevention:${input.careName}`,
-    careName: input.careName,
-    dueDate: input.dueDate,
-    deadlineDate: deadlineStr,
-    channelsUsed: [],
-    trigger: input.trigger,
-    triggeredBy: input.triggeredBy,
-    adopterEmail: input.adopterEmail || null,
-  });
+  // The audit row reservation happens above via `pendingWarningId` (when
+  // wantEmail is true). The SMS-only path inserts its row after a successful
+  // send below, in the `result.success && !pendingWarningId` branch.
 
   if (wantEmail) {
     try {
@@ -1089,8 +1069,10 @@ export async function sendComplianceWarning(input: SendWarningInput): Promise<Se
         bodyText: emailBodyText,
         portalLink: tokens.portalLink,
         deadlineDisplay,
-        trackedClickUrl: buildTrackedClickUrl(warningId),
-        trackingPixelUrl: buildTrackingPixelUrl(warningId),
+        // Reuse the placeholder row id for tracking URLs so the tracking
+        // endpoints resolve to a real row that already exists.
+        trackedClickUrl: buildTrackedClickUrl(pendingWarningId!),
+        trackingPixelUrl: buildTrackingPixelUrl(pendingWarningId!),
       });
       const sendRes = await sendCommunication({
         tenantId: input.tenantId,
@@ -1180,7 +1162,6 @@ export async function sendComplianceWarning(input: SendWarningInput): Promise<Se
       .where(eq(adopterComplianceWarnings.id, pendingWarningId));
   } else if (result.success && !pendingWarningId) {
     const [inserted] = await db.insert(adopterComplianceWarnings).values({
-      id: warningId,
       tenantId: input.tenantId,
       animalId: input.animalId,
       itemId: input.itemId,
@@ -1252,18 +1233,10 @@ export async function sendComplianceWarning(input: SendWarningInput): Promise<Se
     } catch (logErr) {
       console.error('[ComplianceWarning] Failed to write adopter_notification_logs row:', logErr);
     }
-  } else {
-    // Every channel failed — remove the placeholder row so a retry isn't
-    // suppressed by the 30-day dedup logic. Tracking pixel hits arriving
-    // after this delete are silently no-ops, which is the correct behavior
-    // (the email never actually went out).
-    try {
-      await db
-        .delete(adopterComplianceWarnings)
-        .where(eq(adopterComplianceWarnings.id, warningId));
-    } catch (delErr) {
-      console.error('[ComplianceWarning] Failed to clean up placeholder warning row:', delErr);
-    }
+  } else if (!result.success) {
+    // Every channel failed. The email-path placeholder (`pendingWarningId`)
+    // was already deleted above. The SMS-only path never pre-inserted, so
+    // there is nothing to clean up here. Just record the reason.
     result.reason = [
       result.email?.error && `Email: ${result.email.error}`,
       result.sms?.error && `SMS: ${result.sms.error}`,
