@@ -3573,7 +3573,7 @@ export const complianceReminderNotifications = pgTable("compliance_reminder_noti
   // FK into the unified message_queue audit table (Communications Switchboard).
   // Nullable for back-compat; populated for all sends routed through
   // server/lib/unified-comms.ts (sendCommunication helper).
-  messageQueueId: uuid("message_queue_id"),
+  messageQueueId: uuid("message_queue_id").references((): any => messageQueue.id, { onDelete: 'set null' }),
 });
 
 export const insertComplianceReminderNotificationSchema = createInsertSchema(complianceReminderNotifications).omit({
@@ -5803,7 +5803,7 @@ export const adopterNotificationLogs = pgTable("adopter_notification_logs", {
   // FK into the unified message_queue audit table (Communications Switchboard).
   // Nullable for back-compat; populated for all sends routed through
   // server/lib/unified-comms.ts (sendCommunication helper).
-  messageQueueId: uuid("message_queue_id"),
+  messageQueueId: uuid("message_queue_id").references((): any => messageQueue.id, { onDelete: 'set null' }),
 });
 
 export type AdopterNotificationLog = typeof adopterNotificationLogs.$inferSelect;
@@ -6506,7 +6506,7 @@ export const adopterComplianceWarnings = pgTable("adopter_compliance_warnings", 
   // server/lib/unified-comms.ts (sendCommunication helper). Stores the email
   // queue id; the SMS queue id (when both channels are sent) is captured in
   // the parallel adopter_notification_logs row.
-  messageQueueId: uuid("message_queue_id"),
+  messageQueueId: uuid("message_queue_id").references(() => messageQueue.id, { onDelete: 'set null' }),
 });
 
 export type AdopterComplianceWarning = typeof adopterComplianceWarnings.$inferSelect;
