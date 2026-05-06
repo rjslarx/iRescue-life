@@ -15,7 +15,7 @@ import {
   type MedicalReminder,
 } from "@shared/schema";
 import { eq, and, lte, lt, isNull, isNotNull, or, inArray, desc } from "drizzle-orm";
-import { EmailService } from "./email-service";
+import { sendCommunication } from "./unified-comms";
 
 interface MedicalItem {
   id: string;
@@ -524,12 +524,6 @@ export async function sendMedicalReminders(tenantId: string): Promise<{
     // Compute today's UTC date for atomic deduplication (YYYY-MM-DD)
     const todaySentDate = new Date().toISOString().slice(0, 10);
 
-    // Get email service
-    const emailService = await EmailService.forTenant(tenantId);
-    if (!emailService) {
-      return { success: false, emailsSent: 0, errors: ["Email service not configured"] };
-    }
-
     // Get recipients based on settings
     const recipients: { email: string; name: string; role: "admin" | "staff" | "foster" }[] = [];
 
@@ -597,13 +591,21 @@ export async function sendMedicalReminders(tenantId: string): Promise<{
           }
 
           const { subject, html } = await generateMedicalReminderEmail(tenantId, digest, recipient.name);
-          const result = await emailService.send({ to: recipient.email, subject, html });
+          const result = await sendCommunication({
+            tenantId,
+            channel: 'email',
+            sourceType: 'reminder',
+            recipientAddress: recipient.email,
+            recipientName: recipient.name,
+            subject,
+            messageBody: html,
+          });
 
-          if (result.success) {
+          if (result.status === 'delivered') {
             emailsSent++;
             await db
               .update(medicalReminderLogs)
-              .set({ status: "sent", subject, messageId: result.messageId, sentAt: new Date() })
+              .set({ status: "sent", subject, messageId: result.providerSid ?? null, sentAt: new Date(), messageQueueId: result.messageQueueId })
               .where(and(
                 eq(medicalReminderLogs.tenantId, tenantId),
                 eq(medicalReminderLogs.recipientEmail, recipient.email),
@@ -614,7 +616,7 @@ export async function sendMedicalReminders(tenantId: string): Promise<{
             errors.push(`Failed to send to ${recipient.email}: ${result.error}`);
             await db
               .update(medicalReminderLogs)
-              .set({ status: "failed", errorMessage: result.error })
+              .set({ status: "failed", errorMessage: result.error, messageQueueId: result.messageQueueId })
               .where(and(
                 eq(medicalReminderLogs.tenantId, tenantId),
                 eq(medicalReminderLogs.recipientEmail, recipient.email),
@@ -669,13 +671,21 @@ export async function sendMedicalReminders(tenantId: string): Promise<{
           }
 
           const { subject, html } = await generateFosterReminderEmail(tenantId, fosterData.items, fosterData.name);
-          const result = await emailService.send({ to: fosterData.email, subject, html });
+          const result = await sendCommunication({
+            tenantId,
+            channel: 'email',
+            sourceType: 'reminder',
+            recipientAddress: fosterData.email,
+            recipientName: fosterData.name,
+            subject,
+            messageBody: html,
+          });
 
-          if (result.success) {
+          if (result.status === 'delivered') {
             emailsSent++;
             await db
               .update(medicalReminderLogs)
-              .set({ status: "sent", subject, messageId: result.messageId, sentAt: new Date() })
+              .set({ status: "sent", subject, messageId: result.providerSid ?? null, sentAt: new Date(), messageQueueId: result.messageQueueId })
               .where(and(
                 eq(medicalReminderLogs.tenantId, tenantId),
                 eq(medicalReminderLogs.recipientEmail, fosterData.email),
@@ -686,7 +696,7 @@ export async function sendMedicalReminders(tenantId: string): Promise<{
             errors.push(`Failed to send to foster ${fosterData.email}: ${result.error}`);
             await db
               .update(medicalReminderLogs)
-              .set({ status: "failed", errorMessage: result.error })
+              .set({ status: "failed", errorMessage: result.error, messageQueueId: result.messageQueueId })
               .where(and(
                 eq(medicalReminderLogs.tenantId, tenantId),
                 eq(medicalReminderLogs.recipientEmail, fosterData.email),

@@ -3495,6 +3495,9 @@ export const medicalReminderLogs = pgTable("medical_reminder_logs", {
   status: text("status").notNull().default("sent").$type<"pending" | "sent" | "delivered" | "failed">(),
   errorMessage: text("error_message"),
   sentDate: date("sent_date"),
+  // FK to message_queue so the Communications Switchboard is the single
+  // source of truth for outbound deliveries. Nullable for legacy rows.
+  messageQueueId: uuid("message_queue_id").references(() => messageQueue.id, { onDelete: 'set null' }),
 }, (t) => ({
   dedupIdx: uniqueIndex("medical_reminder_logs_dedup_idx").on(t.tenantId, t.recipientEmail, t.emailType, t.sentDate),
 }));
@@ -4629,6 +4632,8 @@ export const reviewRequests = pgTable("review_requests", {
   sentAt: timestamp("sent_at"),
   failureReason: text("failure_reason"),
   emailId: text("email_id"), // Resend email ID for tracking
+  // FK to message_queue so the Communications Switchboard surfaces the send.
+  messageQueueId: uuid("message_queue_id").references(() => messageQueue.id, { onDelete: 'set null' }),
   // Audit
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });

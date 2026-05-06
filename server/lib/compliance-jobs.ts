@@ -7,7 +7,7 @@ import {
   applications,
 } from '@shared/schema';
 import { eq, and, gte, lt, lte, desc, sql } from 'drizzle-orm';
-import { EmailService } from './email-service';
+import { sendCommunication } from './unified-comms';
 
 interface JobResult {
   tenantsProcessed: number;
@@ -259,12 +259,6 @@ export async function runReviewRequestEmails(): Promise<JobResult> {
           ))
           .limit(50);
 
-        const emailService = await EmailService.forTenant(tenant.id);
-        if (!emailService) {
-          result.errors.push(`Tenant ${tenant.name}: No email service available`);
-          continue;
-        }
-
         const emailSubject = settings.emailSubject || 'Share your adoption experience!';
 
         for (const request of requestsToSend) {
@@ -285,18 +279,25 @@ export async function runReviewRequestEmails(): Promise<JobResult> {
               </div>
             `;
 
-            const sendResult = await emailService.send({
-              to: request.adopterEmail,
+            const sendResult = await sendCommunication({
+              tenantId: tenant.id,
+              channel: 'email',
+              sourceType: 'compliance',
+              recipientAddress: request.adopterEmail,
+              recipientName: request.adopterName,
+              relatedAnimalId: request.animalId,
               subject: emailSubject,
-              html: emailHtml,
+              messageBody: emailHtml,
             });
 
-            if (sendResult.success) {
+            if (sendResult.status === 'delivered') {
               await db
                 .update(reviewRequests)
                 .set({
                   status: 'sent',
                   sentAt: new Date(),
+                  emailId: sendResult.providerSid ?? null,
+                  messageQueueId: sendResult.messageQueueId,
                 })
                 .where(eq(reviewRequests.id, request.id));
               result.successCount++;
@@ -305,7 +306,8 @@ export async function runReviewRequestEmails(): Promise<JobResult> {
                 .update(reviewRequests)
                 .set({
                   status: 'failed',
-                  errorMessage: sendResult.error,
+                  failureReason: sendResult.error,
+                  messageQueueId: sendResult.messageQueueId,
                 })
                 .where(eq(reviewRequests.id, request.id));
               result.errors.push(`Failed to send to ${request.adopterEmail}: ${sendResult.error}`);
