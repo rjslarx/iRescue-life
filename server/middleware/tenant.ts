@@ -34,6 +34,7 @@ export interface TenantContext {
   resendFromEmail?: string | null;
   resendFromName?: string | null;
   constantContactEnabled?: boolean;
+  twilioEnabled?: boolean;
   actionCircle?: {
     enabled?: boolean;
     rotationSpeed?: number;
@@ -390,6 +391,7 @@ export async function resolveTenant(req: Request, res: Response, next: NextFunct
           resendFromEmail: tenants.resendFromEmail,
           resendFromName: tenants.resendFromName,
           constantContactEnabled: tenants.constantContactEnabled,
+          twilioEnabled: tenants.twilioEnabled,
           actionCircle: tenants.actionCircle,
           mascot: tenants.mascot,
           announcementBar: tenants.announcementBar,
@@ -485,6 +487,7 @@ export async function resolveTenant(req: Request, res: Response, next: NextFunct
         resendFromEmail: tenant.resendFromEmail,
         resendFromName: tenant.resendFromName,
         constantContactEnabled: tenant.constantContactEnabled,
+        twilioEnabled: tenant.twilioEnabled,
         actionCircle: tenant.actionCircle as TenantContext['actionCircle'],
         mascot: tenant.mascot as TenantContext['mascot'],
         announcementBar: tenant.announcementBar as TenantContext['announcementBar'],
