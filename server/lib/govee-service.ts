@@ -148,12 +148,28 @@ export class GoveeService {
   }
 
   async getDeviceState(device: string, model: string): Promise<GoveeDeviceState | null> {
+    // BLE temperature/humidity sensors (H5179, H5100-series, etc.) only report
+    // state through Govee's new API — the legacy /devices/state endpoint
+    // returns 400 "This device model does not support query device state" for
+    // them, so don't bother falling back for those models.
+    const isSensor = isTemperatureSensorModel(model);
+
     try {
       const newState = await this.getDeviceStateNewApi(device, model);
       if (newState) return newState;
     } catch (error) {
-      console.error(`Govee new API state failed for ${device}, trying legacy:`, error);
+      const msg = error instanceof Error ? error.message : String(error);
+      if (isSensor) {
+        // Transient new-API failure on a sensor — common and self-healing on
+        // the next 10-minute poll. Log a single concise line, no stack trace,
+        // and skip the legacy fallback (guaranteed 400 for these models).
+        console.warn(`[Govee] new API state unavailable for ${device} (${model}); will retry next poll: ${msg}`);
+        return null;
+      }
+      console.warn(`[Govee] new API state failed for ${device} (${model}), trying legacy: ${msg}`);
     }
+
+    if (isSensor) return null;
 
     try {
       const data = await this.fetchJson(
@@ -162,7 +178,8 @@ export class GoveeService {
       );
       return data?.data as GoveeDeviceState;
     } catch (error) {
-      console.error(`Failed to get state for device ${device}:`, error);
+      const msg = error instanceof Error ? error.message : String(error);
+      console.warn(`[Govee] legacy state failed for ${device} (${model}): ${msg}`);
       return null;
     }
   }
