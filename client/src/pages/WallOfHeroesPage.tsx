@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Card } from "@/components/ui/card";
@@ -450,12 +450,10 @@ function FeatheredAvatar({
   name: string;
   sizePx?: number;
 }) {
-  // Stable mask id per render so multiple avatars on the same page don't
-  // collide. React.useId can't be used at module top-level, but inline here.
-  const maskId = useMemo(
-    () => `feather-mask-${Math.random().toString(36).slice(2, 10)}`,
-    [],
-  );
+  // Stable, hydration-safe mask id per instance so multiple avatars on the
+  // same page don't collide.
+  const rawId = useId();
+  const maskId = `feather-mask-${rawId.replace(/:/g, "")}`;
 
   if (!photoUrl) {
     return (
