@@ -79,7 +79,7 @@ export default function WallOfHeroesPage() {
 
   const filteredHonorRoll = useMemo(() => {
     const q = search.trim().toLowerCase();
-    // Honor Roll respects search filter only (tier filter is donor-tier specific).
+    // Tribute Wall respects search filter only (tier filter is donor-tier specific).
     if (!q) return honorRoll;
     return honorRoll.filter((h) => h.tributeName.toLowerCase().includes(q));
   }, [honorRoll, search]);
@@ -232,7 +232,7 @@ export default function WallOfHeroesPage() {
           </section>
         )}
 
-        {/* Honor Roll — Task #198. Tribute gifts from the last 12 months. */}
+        {/* Tribute Wall — Task #198. Tribute gifts from the last 12 months. */}
         {filteredHonorRoll.length > 0 && (
           <section
             className="container max-w-6xl mx-auto px-4 sm:px-6 pt-8 sm:pt-12"
@@ -240,7 +240,7 @@ export default function WallOfHeroesPage() {
           >
             <div className="flex items-center gap-2 mb-4">
               <Heart className="h-4 w-4 text-rose-500" fill="currentColor" />
-              <h2 className="font-display text-xl sm:text-2xl font-semibold">Honor Roll</h2>
+              <h2 className="font-display text-xl sm:text-2xl font-semibold">Tribute Wall</h2>
               <Badge variant="outline" className="text-xs">{filteredHonorRoll.length}</Badge>
             </div>
             <p className="text-sm text-muted-foreground mb-5 max-w-2xl">

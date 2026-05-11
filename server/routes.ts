@@ -16464,7 +16464,7 @@ ${renderedHtml}
           isMemorial,
         };
       });
-      // Honor Roll — Task #198. Aggregate one-time tribute donations from the
+      // Tribute Wall — Task #198. Aggregate one-time tribute donations from the
       // last 12 months that opted in to public display. Multiple gifts to the
       // same honoree (case-insensitive trim match) collapse into one tile
       // showing "Honored by N donors". Hidden when empty.

@@ -294,7 +294,7 @@ export default function TributeSection({ value, onChange, errors }: TributeSecti
               data-testid="checkbox-tribute-wall"
             />
             <div className="flex-1">
-              <p className="text-sm font-medium">Display on our public Honor Roll</p>
+              <p className="text-sm font-medium">Display on our public Tribute Wall</p>
               <p className="text-xs text-muted-foreground">
                 A tile honoring this name will appear on our Wall of Heroes for 12 months.
               </p>
