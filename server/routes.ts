@@ -16365,13 +16365,22 @@ ${renderedHtml}
           tierName: subs.vipTierNameSnapshot,
           amount: subs.amount,
           since: subs.createdAt,
+          memorialPhotoUrl: subs.memorialPhotoUrl,
+          memorialFrameStyle: subs.memorialFrameStyle,
+          foreverHero: subs.foreverHero,
+          canceledAt: subs.canceledAt,
         })
         .from(subs)
         .innerJoin(donors, eq(subs.donorId, donors.id))
         .where(and(
           eq(subs.tenantId, req.tenant!.id),
-          inArray(subs.status, ['active', 'incomplete', 'trialing']),
           eq(subs.displayOnWallOfHeroes, true),
+          // Active subs OR Forever Heroes (canceled tribute subs that hit 12+
+          // months — Task #196). Forever Heroes keep their tile permanently.
+          or(
+            inArray(subs.status, ['active', 'incomplete', 'trialing']),
+            eq(subs.foreverHero, true),
+          ),
         ))
         .orderBy(desc(subs.amount), asc(subs.createdAt));
 
@@ -16391,12 +16400,27 @@ ${renderedHtml}
         const display = (h.displayName && h.displayName.trim())
           || firstAndLastInitial(h.donorName)
           || 'Anonymous';
+        const memorialFrameStyle = (h.memorialFrameStyle === 'paw' || h.memorialFrameStyle === 'heart')
+          ? h.memorialFrameStyle
+          : null;
+        // A tile is treated as "in memory" when it has a memorial photo set,
+        // OR when its recognition name starts with "in memory of"/"in honor
+        // of" (case-insensitive). The latter auto-folds legacy text-only
+        // tribute donors into the new In Memory section without any data
+        // migration. Tribute kind drives the heart vs paw default in the
+        // public Wall when no explicit photo frame style is stored.
+        const isMemorial = !!h.memorialPhotoUrl
+          || /^\s*in\s+(loving\s+)?(memory|honor)\s+of\b/i.test(display);
         return {
           displayName: display,
           // Kept for backward compat with any cached/old client that still reads `firstName`.
           firstName: display,
           tierName: h.tierName,
           since: h.since,
+          memorialPhotoUrl: h.memorialPhotoUrl,
+          memorialFrameStyle,
+          foreverHero: !!h.foreverHero,
+          isMemorial,
         };
       });
       // Honor Roll — Task #198. Aggregate one-time tribute donations from the
@@ -16505,6 +16529,9 @@ ${renderedHtml}
           currentPeriodEnd: subs.currentPeriodEnd,
           displayOnWallOfHeroes: subs.displayOnWallOfHeroes,
           displayName: subs.displayName,
+          memorialPhotoUrl: subs.memorialPhotoUrl,
+          memorialFrameStyle: subs.memorialFrameStyle,
+          foreverHero: subs.foreverHero,
           donorId: donors.id,
           donorName: donors.name,
           donorEmail: donors.email,
@@ -17055,6 +17082,124 @@ ${renderedHtml}
       if (error instanceof z.ZodError) return res.status(400).json({ error: 'Invalid request', details: error.errors });
       console.error('[VIP Wall Edit Error]', { message: error?.message });
       res.status(500).json({ error: error?.message || 'Unable to update Wall of Heroes' });
+    }
+  });
+
+  /**
+   * POST /api/vip-club/members/:subscriptionId/memorial-photo (staff)
+   * Upload a memorial photo on behalf of a donor (e.g. via phone request).
+   * Multipart: field `file` (image), optional `frameStyle`. Task #196.
+   */
+  app.post('/api/vip-club/members/:subscriptionId/memorial-photo', requireTenant, requireAuth, requireRoleOrPageAccess('donors', 'admin', 'owner'), async (req, res) => {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(req.params.subscriptionId)) {
+      return res.status(404).json({ error: 'Subscription not found' });
+    }
+    const multer = (await import('multer')).default;
+    const upload = multer({
+      storage: multer.memoryStorage(),
+      limits: { fileSize: 5 * 1024 * 1024 },
+      fileFilter: async (_req, file, cb) => {
+        const { isValidMemorialMime } = await import('./lib/memorial-photo');
+        if (isValidMemorialMime(file.mimetype)) cb(null, true);
+        else cb(new Error('Only PNG, JPG, WebP, or HEIC images are allowed'));
+      },
+    }).single('file');
+
+    upload(req, res, async (err) => {
+      if (err) return res.status(400).json({ error: err.message });
+      const file = (req as any).file as Express.Multer.File | undefined;
+      if (!file) return res.status(400).json({ error: 'No file uploaded' });
+      try {
+        const [existing] = await db
+          .select({ id: subscriptions.id, memorialFrameStyle: subscriptions.memorialFrameStyle })
+          .from(subscriptions)
+          .where(and(
+            eq(subscriptions.id, req.params.subscriptionId),
+            eq(subscriptions.tenantId, req.tenant!.id),
+          ))
+          .limit(1);
+        if (!existing) return res.status(404).json({ error: 'Subscription not found' });
+
+        const requestedFrame = (req.body?.frameStyle as string | undefined)?.toLowerCase();
+        const frameStyle: 'heart' | 'paw' =
+          requestedFrame === 'paw' || requestedFrame === 'heart'
+            ? requestedFrame
+            : (existing.memorialFrameStyle === 'paw' ? 'paw' : 'heart');
+
+        const { processAndStoreMemorialPhoto } = await import('./lib/memorial-photo');
+        const fileUrl = await processAndStoreMemorialPhoto(req.tenant!.id, file.buffer, file.mimetype);
+
+        const [updated] = await db
+          .update(subscriptions)
+          .set({ memorialPhotoUrl: fileUrl, memorialFrameStyle: frameStyle })
+          .where(eq(subscriptions.id, existing.id))
+          .returning({
+            id: subscriptions.id,
+            memorialPhotoUrl: subscriptions.memorialPhotoUrl,
+            memorialFrameStyle: subscriptions.memorialFrameStyle,
+          });
+        res.json({ success: true, subscription: updated });
+      } catch (error: any) {
+        console.error('[Staff Memorial Photo Upload Error]', error);
+        res.status(500).json({ error: error?.message || 'Failed to upload memorial photo' });
+      }
+    });
+  });
+
+  /**
+   * DELETE /api/vip-club/members/:subscriptionId/memorial-photo (staff)
+   */
+  app.delete('/api/vip-club/members/:subscriptionId/memorial-photo', requireTenant, requireAuth, requireRoleOrPageAccess('donors', 'admin', 'owner'), async (req, res) => {
+    try {
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(req.params.subscriptionId)) {
+        return res.status(404).json({ error: 'Subscription not found' });
+      }
+      const result = await db
+        .update(subscriptions)
+        .set({ memorialPhotoUrl: null })
+        .where(and(
+          eq(subscriptions.id, req.params.subscriptionId),
+          eq(subscriptions.tenantId, req.tenant!.id),
+        ))
+        .returning({ id: subscriptions.id });
+      if (result.length === 0) return res.status(404).json({ error: 'Subscription not found' });
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error?.message || 'Failed to remove memorial photo' });
+    }
+  });
+
+  /**
+   * PATCH /api/vip-club/members/:subscriptionId/memorial-frame (staff)
+   * Body: { frameStyle: 'heart' | 'paw' }
+   */
+  app.patch('/api/vip-club/members/:subscriptionId/memorial-frame', requireTenant, requireAuth, requireRoleOrPageAccess('donors', 'admin', 'owner'), async (req, res) => {
+    try {
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(req.params.subscriptionId)) {
+        return res.status(404).json({ error: 'Subscription not found' });
+      }
+      const bodySchema = z.object({ frameStyle: z.enum(['heart', 'paw']) });
+      const parsed = bodySchema.parse(req.body || {});
+      const [updated] = await db
+        .update(subscriptions)
+        .set({ memorialFrameStyle: parsed.frameStyle })
+        .where(and(
+          eq(subscriptions.id, req.params.subscriptionId),
+          eq(subscriptions.tenantId, req.tenant!.id),
+        ))
+        .returning({
+          id: subscriptions.id,
+          memorialPhotoUrl: subscriptions.memorialPhotoUrl,
+          memorialFrameStyle: subscriptions.memorialFrameStyle,
+        });
+      if (!updated) return res.status(404).json({ error: 'Subscription not found' });
+      res.json({ success: true, subscription: updated });
+    } catch (error: any) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: 'Invalid frame style' });
+      res.status(500).json({ error: error?.message || 'Failed to update frame style' });
     }
   });
 
@@ -29283,6 +29428,85 @@ Submitted: ${new Date().toLocaleString()}
                 eq(subscriptions.stripeSubscriptionId, subscription.id)
               )
             );
+
+          // Forever Hero — Task #196. On final cancellation of a tribute
+          // subscription that has been actively billing for 12+ months, freeze
+          // the In-Memory tile on the public Wall permanently. A "tribute" is
+          // any sub with a memorial photo set OR whose recognition name starts
+          // with "in memory of"/"in honor of" (case-insensitive). Non-tribute
+          // subs follow the normal "active required" wall rule.
+          if (event.type === 'customer.subscription.deleted') {
+            try {
+              const [dbSubForForever] = await db
+                .select({
+                  id: subscriptions.id,
+                  createdAt: subscriptions.createdAt,
+                  memorialPhotoUrl: subscriptions.memorialPhotoUrl,
+                  displayName: subscriptions.displayName,
+                  foreverHero: subscriptions.foreverHero,
+                })
+                .from(subscriptions)
+                .where(and(
+                  eq(subscriptions.tenantId, tenant.id),
+                  eq(subscriptions.stripeSubscriptionId, subscription.id),
+                ))
+                .limit(1);
+              if (dbSubForForever && !dbSubForForever.foreverHero) {
+                const isTribute = !!dbSubForForever.memorialPhotoUrl
+                  || /^\s*in\s+(loving\s+)?(memory|honor)\s+of\b/i.test(
+                    (dbSubForForever.displayName || '').trim(),
+                  );
+                if (isTribute) {
+                  // Count distinct paid months from Stripe invoice history so
+                  // unpaid/incomplete periods don't count toward the 12-month
+                  // tribute pin. Falls back to elapsed wall time if Stripe is
+                  // unreachable so an outage never silently denies a pin.
+                  let paidMonths = 0;
+                  try {
+                    const { stripeService } = await import('./lib/stripe-service');
+                    const stripe = stripeService.getStripeClient(tenant);
+                    const months = new Set<string>();
+                    let starting_after: string | undefined = undefined;
+                    for (let page = 0; page < 10; page++) {
+                      const invList: any = await stripe.invoices.list({
+                        subscription: subscription.id,
+                        status: 'paid',
+                        limit: 100,
+                        ...(starting_after ? { starting_after } : {}),
+                      });
+                      for (const inv of invList.data || []) {
+                        if (!inv.amount_paid || inv.amount_paid <= 0) continue;
+                        const ts = (inv.status_transitions?.paid_at ?? inv.created) * 1000;
+                        const d = new Date(ts);
+                        months.add(`${d.getUTCFullYear()}-${d.getUTCMonth()}`);
+                      }
+                      if (!invList.has_more || !invList.data?.length) break;
+                      starting_after = invList.data[invList.data.length - 1].id;
+                    }
+                    paidMonths = months.size;
+                  } catch (stripeErr) {
+                    console.error('[ForeverHero] Stripe invoice lookup failed; falling back to elapsed-time check:', stripeErr);
+                    if (dbSubForForever.createdAt) {
+                      const canceledAtMs = subscription.canceled_at
+                        ? subscription.canceled_at * 1000
+                        : Date.now();
+                      const startMs = new Date(dbSubForForever.createdAt).getTime();
+                      paidMonths = Math.floor((canceledAtMs - startMs) / (1000 * 60 * 60 * 24 * 30.4375));
+                    }
+                  }
+                  if (paidMonths >= 12) {
+                    await db
+                      .update(subscriptions)
+                      .set({ foreverHero: true })
+                      .where(eq(subscriptions.id, dbSubForForever.id));
+                    console.log(`[ForeverHero] Tribute sub ${dbSubForForever.id} pinned to Wall (${paidMonths} paid months)`);
+                  }
+                }
+              }
+            } catch (foreverErr) {
+              console.error('[ForeverHero] Could not evaluate tribute pin on cancellation:', foreverErr);
+            }
+          }
 
           // Refresh cached card-on-file (brand/last4) so the giving history view
           // can confirm to the donor that a card update from the billing portal

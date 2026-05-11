@@ -223,6 +223,9 @@ router.get('/history', async (req: Request, res: Response) => {
         cardUpdatedAt: subscriptions.cardUpdatedAt,
         displayOnWallOfHeroes: subscriptions.displayOnWallOfHeroes,
         displayName: subscriptions.displayName,
+        memorialPhotoUrl: subscriptions.memorialPhotoUrl,
+        memorialFrameStyle: subscriptions.memorialFrameStyle,
+        foreverHero: subscriptions.foreverHero,
       })
       .from(subscriptions)
       .where(and(
@@ -767,6 +770,152 @@ router.patch('/subscriptions/:id/wall-of-heroes', async (req: Request, res: Resp
   } catch (error) {
     console.error('[VIP Portal] Error updating wall opt-in:', error);
     res.status(500).json({ error: 'Failed to update Wall of Heroes preference' });
+  }
+});
+
+/**
+ * POST /api/vip-portal/subscriptions/:id/memorial-photo
+ * Multipart upload of a memorial tribute photo for one of this donor's
+ * subscriptions. Body fields:
+ *   - file: image (PNG/JPG/WebP/HEIC), <= 5MB
+ *   - frameStyle: 'heart' | 'paw' (optional, defaults to existing or 'heart')
+ * The image is EXIF-stripped, resized to a 512x512 JPEG, and stored in the
+ * tenant's public object-storage bucket. Returns the updated subscription
+ * memorial fields.
+ */
+router.post('/subscriptions/:id/memorial-photo', async (req: Request, res: Response) => {
+  const auth = await authVipDonor(req, res);
+  if (!auth) return;
+  const { donorId, tenantId } = auth;
+
+  const multer = (await import('multer')).default;
+  const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter: async (_req, file, cb) => {
+      const { isValidMemorialMime } = await import('../lib/memorial-photo');
+      if (isValidMemorialMime(file.mimetype)) cb(null, true);
+      else cb(new Error('Only PNG, JPG, WebP, or HEIC images are allowed'));
+    },
+  }).single('file');
+
+  upload(req, res, async (err) => {
+    if (err) return res.status(400).json({ error: err.message });
+    const file = (req as any).file as Express.Multer.File | undefined;
+    if (!file) return res.status(400).json({ error: 'No file uploaded' });
+
+    try {
+      const [existing] = await db
+        .select({
+          id: subscriptions.id,
+          memorialFrameStyle: subscriptions.memorialFrameStyle,
+        })
+        .from(subscriptions)
+        .where(and(
+          eq(subscriptions.id, req.params.id),
+          eq(subscriptions.tenantId, tenantId),
+          eq(subscriptions.donorId, donorId),
+        ))
+        .limit(1);
+      if (!existing) return res.status(404).json({ error: 'Subscription not found' });
+
+      const requestedFrame = (req.body?.frameStyle as string | undefined)?.toLowerCase();
+      const frameStyle: 'heart' | 'paw' =
+        requestedFrame === 'paw' || requestedFrame === 'heart'
+          ? requestedFrame
+          : (existing.memorialFrameStyle === 'paw' ? 'paw' : 'heart');
+
+      const { processAndStoreMemorialPhoto } = await import('../lib/memorial-photo');
+      const fileUrl = await processAndStoreMemorialPhoto(tenantId, file.buffer, file.mimetype);
+
+      const [updated] = await db
+        .update(subscriptions)
+        .set({ memorialPhotoUrl: fileUrl, memorialFrameStyle: frameStyle })
+        .where(eq(subscriptions.id, existing.id))
+        .returning({
+          id: subscriptions.id,
+          memorialPhotoUrl: subscriptions.memorialPhotoUrl,
+          memorialFrameStyle: subscriptions.memorialFrameStyle,
+        });
+
+      res.json({ success: true, subscription: updated });
+    } catch (error: any) {
+      console.error('[VIP Portal] Memorial photo upload failed:', error);
+      res.status(500).json({ error: error?.message || 'Failed to upload memorial photo' });
+    }
+  });
+});
+
+/**
+ * DELETE /api/vip-portal/subscriptions/:id/memorial-photo
+ * Clears the donor's memorial photo (frame style is preserved so a re-upload
+ * remembers their choice).
+ */
+router.delete('/subscriptions/:id/memorial-photo', async (req: Request, res: Response) => {
+  const auth = await authVipDonor(req, res);
+  if (!auth) return;
+  const { donorId, tenantId } = auth;
+
+  try {
+    const [existing] = await db
+      .select({ id: subscriptions.id })
+      .from(subscriptions)
+      .where(and(
+        eq(subscriptions.id, req.params.id),
+        eq(subscriptions.tenantId, tenantId),
+        eq(subscriptions.donorId, donorId),
+      ))
+      .limit(1);
+    if (!existing) return res.status(404).json({ error: 'Subscription not found' });
+
+    await db
+      .update(subscriptions)
+      .set({ memorialPhotoUrl: null })
+      .where(eq(subscriptions.id, existing.id));
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('[VIP Portal] Memorial photo delete failed:', error);
+    res.status(500).json({ error: 'Failed to remove memorial photo' });
+  }
+});
+
+/**
+ * PATCH /api/vip-portal/subscriptions/:id/memorial-frame
+ * Body: { frameStyle: 'heart' | 'paw' } — change the decorative frame style
+ * without re-uploading the photo.
+ */
+router.patch('/subscriptions/:id/memorial-frame', async (req: Request, res: Response) => {
+  const auth = await authVipDonor(req, res);
+  if (!auth) return;
+  const { donorId, tenantId } = auth;
+
+  const bodySchema = z.object({ frameStyle: z.enum(['heart', 'paw']) });
+  let parsed: z.infer<typeof bodySchema>;
+  try {
+    parsed = bodySchema.parse(req.body || {});
+  } catch {
+    return res.status(400).json({ error: 'Invalid frame style' });
+  }
+
+  try {
+    const [updated] = await db
+      .update(subscriptions)
+      .set({ memorialFrameStyle: parsed.frameStyle })
+      .where(and(
+        eq(subscriptions.id, req.params.id),
+        eq(subscriptions.tenantId, tenantId),
+        eq(subscriptions.donorId, donorId),
+      ))
+      .returning({
+        id: subscriptions.id,
+        memorialPhotoUrl: subscriptions.memorialPhotoUrl,
+        memorialFrameStyle: subscriptions.memorialFrameStyle,
+      });
+    if (!updated) return res.status(404).json({ error: 'Subscription not found' });
+    res.json({ success: true, subscription: updated });
+  } catch (error: any) {
+    console.error('[VIP Portal] Memorial frame update failed:', error);
+    res.status(500).json({ error: 'Failed to update frame style' });
   }
 });
 

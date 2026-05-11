@@ -44,6 +44,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import DashboardLayout from "@/components/DashboardLayout";
+import { MemorialPhotoEditor } from "@/components/vip/MemorialPhotoEditor";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -59,6 +60,9 @@ interface Member {
   currentPeriodEnd: string | null;
   displayOnWallOfHeroes: boolean;
   displayName: string | null;
+  memorialPhotoUrl?: string | null;
+  memorialFrameStyle?: 'heart' | 'paw' | null;
+  foreverHero?: boolean;
   donorId: string;
   donorName: string;
   donorEmail: string;
@@ -774,6 +778,33 @@ export default function VipMembersPage() {
                 Use a first name, family name, business name, or memorial — for example, "The Smith Family" or "In memory of Jojo". Leave blank to fall back to the donor's first name and last initial (e.g., "Sarah J.").
               </p>
             </div>
+            {wallEditTarget && wallEditOptIn && (
+              <div className="border-t pt-4 space-y-2">
+                <Label className="text-sm">Memorial photo (optional)</Label>
+                <p className="text-xs text-muted-foreground">
+                  If this gift honors someone, add their photo. It will appear in the
+                  In Memory section of the public Wall of Heroes.
+                </p>
+                <MemorialPhotoEditor
+                  subscriptionId={wallEditTarget.subscriptionId}
+                  donorName={wallEditTarget.donorName}
+                  displayName={wallEditTarget.displayName}
+                  memorialPhotoUrl={wallEditTarget.memorialPhotoUrl ?? null}
+                  memorialFrameStyle={(wallEditTarget.memorialFrameStyle === 'paw' || wallEditTarget.memorialFrameStyle === 'heart') ? wallEditTarget.memorialFrameStyle : null}
+                  endpointBase={`/api/vip-club/members/${wallEditTarget.subscriptionId}`}
+                  onChanged={() => {
+                    queryClient.invalidateQueries({ queryKey: ['/api/vip-club/members'] });
+                    queryClient.invalidateQueries({ queryKey: ['/api/vip-club/wall-of-heroes'] });
+                  }}
+                />
+                {wallEditTarget.foreverHero && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                    This is a Forever Hero tile — it will remain on the Wall even after the
+                    subscription ends.
+                  </p>
+                )}
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => { setWallEditTarget(null); setWallEditName(""); }} data-testid="button-cancel-edit-wall">

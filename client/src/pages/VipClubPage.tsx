@@ -18,6 +18,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useSEO } from "@/hooks/useSEO";
 import { getTierIcon } from "@/pages/VipTiersSettingsPage";
 import { DonationHistoryRow } from "@/components/DonationHistoryRow";
+import { MemorialPhotoEditor } from "@/components/vip/MemorialPhotoEditor";
 
 interface PublicTier {
   id: string;
@@ -77,6 +78,9 @@ interface VipHistorySubscription {
   cardUpdatedAt: string | null;
   displayOnWallOfHeroes: boolean;
   displayName: string | null;
+  memorialPhotoUrl?: string | null;
+  memorialFrameStyle?: 'heart' | 'paw' | null;
+  foreverHero?: boolean;
 }
 
 interface VipHistoryPendingPayment {
@@ -111,11 +115,15 @@ function WallOfHeroesToggle({
   donorName,
   isPending,
   onChange,
+  vipToken,
+  onMemorialChanged,
 }: {
   sub: VipHistorySubscription;
   donorName: string;
   isPending: boolean;
   onChange: (displayOnWallOfHeroes: boolean, displayName: string | null) => void;
+  vipToken: string | null;
+  onMemorialChanged: () => void;
 }) {
   const fallbackName = donorName?.split(' ')[0] || '';
   const [draftName, setDraftName] = useState<string>(sub.displayName || '');
@@ -161,7 +169,7 @@ function WallOfHeroesToggle({
         {isPending && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
       </div>
       {sub.displayOnWallOfHeroes && (
-        <div className="pl-6 text-xs text-muted-foreground space-y-2">
+        <div className="pl-6 text-xs text-muted-foreground space-y-3">
           {editing ? (
             <div className="flex flex-wrap items-center gap-2">
               <Input
@@ -204,6 +212,27 @@ function WallOfHeroesToggle({
             </div>
           )}
           <p>Only the name you choose and your tier appear publicly. You can opt out anytime.</p>
+          <div className="border-t pt-3 mt-1">
+            <p className="text-xs font-medium text-foreground mb-2">
+              Memorial photo (optional)
+            </p>
+            <p className="text-xs text-muted-foreground mb-2">
+              If this gift honors someone, add their photo. It will appear in our
+              "In Memory" section of the Wall.
+            </p>
+            <MemorialPhotoEditor
+              subscriptionId={sub.id}
+              donorName={donorName}
+              displayName={sub.displayName}
+              memorialPhotoUrl={sub.memorialPhotoUrl ?? null}
+              memorialFrameStyle={(sub.memorialFrameStyle === 'paw' || sub.memorialFrameStyle === 'heart') ? sub.memorialFrameStyle : null}
+              endpointBase={buildTenantUrl(`/api/vip-portal/subscriptions/${sub.id}`)}
+              querySuffix={vipToken ? `?token=${encodeURIComponent(vipToken)}` : ''}
+              buildHeaders={() => getTenantHeaders()}
+              onChanged={onMemorialChanged}
+              compact
+            />
+          </div>
         </div>
       )}
     </div>
@@ -879,6 +908,11 @@ export default function VipClubPage() {
                               onChange={(displayOnWallOfHeroes, displayName) =>
                                 wallOptInMutation.mutate({ subscriptionId: sub.id, displayOnWallOfHeroes, displayName })
                               }
+                              vipToken={historyToken}
+                              onMemorialChanged={() => {
+                                queryClient.invalidateQueries({ queryKey: ['/api/vip-portal/history', historyToken] });
+                                queryClient.invalidateQueries({ queryKey: ['/api/vip-club/wall-of-heroes'] });
+                              }}
                             />
                           )}
                         </div>

@@ -1071,6 +1071,15 @@ export const subscriptions = pgTable("subscriptions", {
   // Heroes" email is delivered. Used as a sent-flag so the script can never
   // double-send to the same grandfathered donor (Task #73).
   recognitionNameRequestSentAt: timestamp("recognition_name_request_sent_at"),
+  // Wall of Heroes memorial tribute photo (Task #196). Optional photo of the
+  // person/pet being honored. Stored in the tenant's public object-storage
+  // bucket. Frame style picks the decorative SVG ring on the public Wall.
+  memorialPhotoUrl: text("memorial_photo_url"),
+  memorialFrameStyle: text("memorial_frame_style").$type<"heart" | "paw">(),
+  // Forever Hero flag (Task #196). Set to true when a tribute subscription is
+  // canceled after >= 12 months of active billing — the In-Memory tile is
+  // then preserved on the public Wall of Heroes permanently.
+  foreverHero: boolean("forever_hero").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (table) => ({
   uniqueStripeSubscription: unique().on(table.tenantId, table.stripeSubscriptionId),

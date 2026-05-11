@@ -19,6 +19,21 @@ interface Hero {
   firstName?: string;
   tierName: string | null;
   since: string;
+  memorialPhotoUrl?: string | null;
+  memorialFrameStyle?: "heart" | "paw" | null;
+  foreverHero?: boolean;
+  // Server-side flag combining "has memorial photo" with "name starts with In
+  // Memory/Honor of" — drives the In-Memory section. Older cached payloads
+  // won't have this; we fall back to the regex check below.
+  isMemorial?: boolean;
+}
+
+const MEMORIAL_PHRASE_RE = /^\s*in\s+(loving\s+)?(memory|honor)\s+of\b/i;
+function isMemorialHero(h: Hero): boolean {
+  if (h.isMemorial) return true;
+  if (h.memorialPhotoUrl) return true;
+  const name = h.displayName ?? h.firstName ?? "";
+  return MEMORIAL_PHRASE_RE.test(name);
 }
 
 interface HonorRollEntry {
@@ -76,9 +91,24 @@ export default function WallOfHeroesPage() {
     return Array.from(set).sort();
   }, [heroes]);
 
+  // Memorial heroes are pulled out of the regular grid and shown as their own
+  // "In Memory" section above. Search + tier filters apply to both lists, but
+  // we never want a tribute tile to also appear in the standard grid.
+  const memorialHeroes = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return heroes.filter((h) => {
+      if (!isMemorialHero(h)) return false;
+      if (activeTier !== ALL_TIERS_KEY && h.tierName !== activeTier) return false;
+      const name = h.displayName ?? h.firstName ?? "";
+      if (q && !name.toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [heroes, search, activeTier]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return heroes.filter((h) => {
+      if (isMemorialHero(h)) return false;
       if (activeTier !== ALL_TIERS_KEY && h.tierName !== activeTier) return false;
       const name = h.displayName ?? h.firstName ?? "";
       if (q && !name.toLowerCase().includes(q)) return false;
@@ -173,6 +203,33 @@ export default function WallOfHeroesPage() {
             </div>
           </div>
         </section>
+
+        {/* In Memory — Task #196. Memorial-tribute hero tiles (any sub with a
+            memorial photo OR a recognition name starting with "In memory of"
+            / "In honor of"). Sits above the regular grid; hidden when empty. */}
+        {memorialHeroes.length > 0 && (
+          <section
+            className="container max-w-6xl mx-auto px-4 sm:px-6 pt-8 sm:pt-12"
+            data-testid="section-in-memory"
+          >
+            <div className="flex items-center gap-2 mb-4">
+              <Heart className="h-4 w-4 text-rose-500" fill="currentColor" />
+              <h2 className="font-display text-xl sm:text-2xl font-semibold">In Memory</h2>
+              <Badge variant="outline" className="text-xs">{memorialHeroes.length}</Badge>
+            </div>
+            <p className="text-sm text-muted-foreground mb-5 max-w-2xl">
+              Sustaining gifts given in memory or honor of someone special.
+            </p>
+            <div
+              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
+              data-testid="grid-in-memory"
+            >
+              {memorialHeroes.map((h, i) => (
+                <MemorialHeroCard key={`${h.displayName ?? h.firstName}-${h.since}-${i}`} hero={h} index={i} />
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* Honor Roll — Task #198. Tribute gifts from the last 12 months. */}
         {filteredHonorRoll.length > 0 && (
@@ -330,6 +387,51 @@ function HonorRollCard({ entry, index }: { entry: HonorRollEntry; index: number 
             year: "numeric",
           })}
         </p>
+      </div>
+    </Card>
+  );
+}
+
+function MemorialHeroCard({ hero, index }: { hero: Hero; index: number }) {
+  const sinceLabel = new Date(hero.since).toLocaleDateString("en-US", {
+    month: "short",
+    year: "numeric",
+  });
+  const frameStyle: "heart" | "paw" =
+    hero.memorialFrameStyle === "paw" ? "paw" : "heart";
+  const name = hero.displayName || hero.firstName || "Anonymous";
+  return (
+    <Card
+      className="p-4 flex items-start gap-3 hover-elevate ring-1 ring-rose-300/40 dark:ring-rose-800/40"
+      data-testid={`card-in-memory-${index}`}
+    >
+      <MemorialFrame
+        photoUrl={hero.memorialPhotoUrl ?? null}
+        name={name}
+        frameStyle={frameStyle}
+        size="md"
+      />
+      <div className="min-w-0 flex-1">
+        <p
+          className="font-semibold text-base truncate"
+          data-testid={`text-in-memory-name-${index}`}
+        >
+          {name}
+        </p>
+        {hero.tierName ? (
+          <p className="text-xs text-primary/80 font-medium truncate">{hero.tierName}</p>
+        ) : null}
+        <p className="text-xs text-muted-foreground mt-0.5">Since {sinceLabel}</p>
+        {hero.foreverHero && (
+          <Badge
+            variant="outline"
+            className="mt-2 text-[10px] border-amber-400/60 text-amber-700 dark:text-amber-300"
+            data-testid={`badge-forever-hero-${index}`}
+          >
+            <Sparkles className="h-3 w-3" />
+            Forever Hero
+          </Badge>
+        )}
       </div>
     </Card>
   );
