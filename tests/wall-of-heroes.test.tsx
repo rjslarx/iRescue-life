@@ -422,3 +422,22 @@ test('buildTributeTiles propagates donorDisplayName from a memorial-subscription
   assert.equal(tiles.length, 1);
   assert.equal(tiles[0].donorDisplayName, 'Alex K.');
 });
+
+test('buildTributeTiles leaves donorDisplayName null for a memorial hero who did NOT opt in', () => {
+  // Server omits donorDisplayName whenever memorialShowDonorName is false, so
+  // the hero arrives with no donorDisplayName field. The tile must respect
+  // that silence and never invent attribution.
+  const hero: Hero = {
+    displayName: 'In memory of Otis',
+    tierName: 'Pack Leader',
+    since: '2024-03-01',
+    // donorDisplayName intentionally omitted (consent OFF)
+  };
+  const tiles = buildTributeTiles([hero], []);
+  assert.equal(tiles.length, 1);
+  assert.equal(tiles[0].donorDisplayName, null);
+
+  // And the rendered tile must NOT contain the "From …" line.
+  const html = renderToStaticMarkup(createElement(UnifiedTile, { tile: tiles[0] }));
+  assert.doesNotMatch(html, /text-tribute-from/);
+});
