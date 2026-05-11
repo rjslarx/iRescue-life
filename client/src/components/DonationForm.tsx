@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DollarSign, ExternalLink, Loader2, Lock, Shield, Heart, Star, Users, Home, HandHeart, PawPrint, HeartHandshake, Building2 } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Link } from "wouter";
 import type { Tenant } from "@shared/schema";
 import { isAchEligible, achNudgeCopy } from "@shared/ach-eligibility";
 import TributeSection, { emptyTribute, type TributeFormValue } from "@/components/donations/TributeSection";
@@ -391,6 +392,20 @@ export default function DonationForm({ sponsoredAnimalName, tenant }: DonationFo
             <p className="text-xs text-muted-foreground text-center">
               {sponsoredAnimalName || !isRecurring ? "Secure one-time payment" : "Secure monthly recurring payment"}
             </p>
+            <div className="flex justify-center pt-1">
+              <Link href="/wall-of-heroes">
+                <Button
+                  type="button"
+                  variant="link"
+                  size="sm"
+                  className="text-muted-foreground hover:text-primary gap-1.5"
+                  data-testid="link-wall-of-heroes"
+                >
+                  <Heart className="h-3.5 w-3.5" />
+                  See our Wall of Heroes
+                </Button>
+              </Link>
+            </div>
           </div>
         )}
 
