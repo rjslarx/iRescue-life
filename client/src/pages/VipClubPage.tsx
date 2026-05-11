@@ -633,6 +633,9 @@ export default function VipClubPage() {
       } else {
         queryClient.invalidateQueries({ queryKey });
       }
+      // Refresh the public Wall query so the new "From {donor}" attribution
+      // (or its removal) shows up immediately in any embedded preview.
+      queryClient.invalidateQueries({ queryKey: ['/api/vip-club/wall-of-heroes'] });
     },
     onMutate: async (vars) => {
       const queryKey = ['/api/vip-portal/history', historyToken];
@@ -662,9 +665,6 @@ export default function VipClubPage() {
         queryClient.setQueryData(['/api/vip-portal/history', historyToken], ctx.previous);
       }
       toast({ title: 'Could not update Wall of Heroes', description: err?.message, variant: 'destructive' });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/vip-club/wall-of-heroes'] });
     },
   });
 
