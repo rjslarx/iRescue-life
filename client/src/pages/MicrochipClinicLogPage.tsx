@@ -67,6 +67,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import DashboardLayout from "@/components/DashboardLayout";
 import NotFound from "@/pages/not-found";
 import type { MicrochipClinicRecord } from "@shared/schema";
 
@@ -413,15 +414,20 @@ export default function MicrochipClinicLogPage() {
 
   // Direct-URL guard: when the feature is disabled for this tenant, render 404.
   if (tenantLoading) {
-    return <div className="p-8 text-sm text-muted-foreground">Loading...</div>;
+    return (
+      <DashboardLayout>
+        <div className="p-8 text-sm text-muted-foreground">Loading...</div>
+      </DashboardLayout>
+    );
   }
   if (!featureEnabled) {
     return <NotFound />;
   }
 
   return (
-    <TooltipProvider>
-      <div className="container mx-auto p-4 md:p-6 space-y-6">
+    <DashboardLayout>
+      <TooltipProvider>
+        <div className="container mx-auto p-4 md:p-6 space-y-6">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3">
             <ScanLine className="h-7 w-7 text-primary" />
@@ -951,7 +957,8 @@ export default function MicrochipClinicLogPage() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-      </div>
-    </TooltipProvider>
+        </div>
+      </TooltipProvider>
+    </DashboardLayout>
   );
 }
