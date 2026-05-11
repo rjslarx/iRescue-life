@@ -89,7 +89,6 @@ export default function DonationForm({ sponsoredAnimalName, tenant }: DonationFo
       if (t && t.enabled && t.kind && t.name.trim()) {
         tributeMeta['tribute.kind'] = t.kind;
         tributeMeta['tribute.name'] = t.name.trim().slice(0, 120);
-        tributeMeta['tribute.frameStyle'] = t.frameStyle;
         tributeMeta['tribute.wallOptIn'] = t.wallOptIn ? 'true' : 'false';
         if (t.recipientName.trim()) tributeMeta['tribute.recipientName'] = t.recipientName.trim().slice(0, 120);
         if (t.recipientEmail.trim()) tributeMeta['tribute.recipientEmail'] = t.recipientEmail.trim().slice(0, 200);

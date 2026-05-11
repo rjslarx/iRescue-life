@@ -1,15 +1,14 @@
 import { useState } from "react";
-import { ChevronDown, ChevronUp, Heart, PawPrint, Loader2, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Heart, Loader2, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Button } from "@/components/ui/button";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useToast } from "@/hooks/use-toast";
 import { buildTenantUrl, getTenantHeaders } from "@/lib/tenantApi";
-import { MemorialFrame, type FrameStyle } from "@/components/vip/MemorialFrame";
+import { FeatheredAvatar } from "@/components/vip/FeatheredAvatar";
 
 export interface TributeFormValue {
   enabled: boolean;
@@ -19,7 +18,6 @@ export interface TributeFormValue {
   recipientEmail: string;
   message: string;
   photoUrl: string;
-  frameStyle: FrameStyle;
   wallOptIn: boolean;
 }
 
@@ -31,7 +29,6 @@ export const emptyTribute: TributeFormValue = {
   recipientEmail: "",
   message: "",
   photoUrl: "",
-  frameStyle: "heart",
   wallOptIn: true,
 };
 
@@ -156,11 +153,10 @@ export default function TributeSection({ value, onChange, errors }: TributeSecti
           <div className="space-y-2">
             <Label className="text-sm">Memorial photo (optional)</Label>
             <div className="flex items-start gap-3">
-              <MemorialFrame
+              <FeatheredAvatar
                 photoUrl={value.photoUrl || null}
-                name={value.name}
-                frameStyle={value.frameStyle}
-                size="md"
+                name={value.name || "tribute"}
+                sizePx={64}
               />
               <div className="flex-1 space-y-2">
                 <div className="flex flex-wrap items-center gap-2">
@@ -204,22 +200,6 @@ export default function TributeSection({ value, onChange, errors }: TributeSecti
                     </Button>
                   )}
                 </div>
-                <ToggleGroup
-                  type="single"
-                  value={value.frameStyle}
-                  onValueChange={(v) => v && update({ frameStyle: v as FrameStyle })}
-                  size="sm"
-                  className="justify-start"
-                >
-                  <ToggleGroupItem value="heart" className="gap-1" data-testid="toggle-frame-heart">
-                    <Heart className="h-3 w-3" fill="currentColor" />
-                    Heart
-                  </ToggleGroupItem>
-                  <ToggleGroupItem value="paw" className="gap-1" data-testid="toggle-frame-paw">
-                    <PawPrint className="h-3 w-3" />
-                    Paw
-                  </ToggleGroupItem>
-                </ToggleGroup>
               </div>
             </div>
           </div>

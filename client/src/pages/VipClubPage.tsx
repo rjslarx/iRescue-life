@@ -232,7 +232,6 @@ function WallOfHeroesToggle({
               donorName={donorName}
               displayName={sub.displayName}
               memorialPhotoUrl={sub.memorialPhotoUrl ?? null}
-              memorialFrameStyle={(sub.memorialFrameStyle === 'paw' || sub.memorialFrameStyle === 'heart') ? sub.memorialFrameStyle : null}
               endpointBase={buildTenantUrl(`/api/vip-portal/subscriptions/${sub.id}`)}
               querySuffix={vipToken ? `?token=${encodeURIComponent(vipToken)}` : ''}
               buildHeaders={() => getTenantHeaders()}

@@ -817,7 +817,6 @@ export default function VipMembersPage() {
                   donorName={wallEditTarget.donorName}
                   displayName={wallEditTarget.displayName}
                   memorialPhotoUrl={wallEditTarget.memorialPhotoUrl ?? null}
-                  memorialFrameStyle={(wallEditTarget.memorialFrameStyle === 'paw' || wallEditTarget.memorialFrameStyle === 'heart') ? wallEditTarget.memorialFrameStyle : null}
                   endpointBase={`/api/vip-club/members/${wallEditTarget.subscriptionId}`}
                   onChanged={() => {
                     queryClient.invalidateQueries({ queryKey: ['/api/vip-club/members'] });

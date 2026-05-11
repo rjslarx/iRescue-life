@@ -1,4 +1,4 @@
-import { useId, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Card } from "@/components/ui/card";
@@ -10,7 +10,12 @@ import { Search, Sparkles, Heart, ArrowLeft } from "lucide-react";
 import PublicHeader from "@/components/PublicHeader";
 import { useSEO } from "@/hooks/useSEO";
 import { TenureBadge, calcTenure } from "@/components/vip/TenureBadge";
+import { FeatheredAvatar } from "@/components/vip/FeatheredAvatar";
 import type { Tenant } from "@shared/schema";
+
+// Re-export so existing imports (e.g. tests) keep working after the
+// component was extracted into its own shared module.
+export { FeatheredAvatar };
 
 export interface Hero {
   displayName: string;
@@ -505,85 +510,6 @@ function FilterPill({
         {count}
       </Badge>
     </Button>
-  );
-}
-
-/**
- * Soft, feathered round avatar for tribute tiles.
- *
- * Uses an SVG <radialGradient> alpha mask so the photo's edges fade gently
- * into the card background instead of being clipped to a hard heart/paw
- * silhouette. Falls back to a Heart icon on a rose-tinted disc when no
- * photo is provided.
- */
-export function FeatheredAvatar({
-  photoUrl,
-  name,
-  sizePx = 56,
-}: {
-  photoUrl: string | null | undefined;
-  name: string;
-  sizePx?: number;
-}) {
-  // Stable, hydration-safe mask id per instance so multiple avatars on the
-  // same page don't collide.
-  const rawId = useId();
-  const maskId = `feather-mask-${rawId.replace(/:/g, "")}`;
-
-  if (!photoUrl) {
-    return (
-      <div
-        className="shrink-0 rounded-full flex items-center justify-center bg-rose-100 dark:bg-rose-950/40 ring-1 ring-rose-300/60 dark:ring-rose-800/60"
-        style={{ width: sizePx, height: sizePx }}
-        aria-label={`Tribute for ${name}`}
-        role="img"
-        data-testid="feathered-avatar-fallback"
-      >
-        <Heart
-          className="text-rose-500 dark:text-rose-400"
-          style={{ width: sizePx * 0.4, height: sizePx * 0.4 }}
-          fill="currentColor"
-        />
-      </div>
-    );
-  }
-
-  return (
-    <div
-      className="relative shrink-0 rounded-full ring-1 ring-rose-300/60 dark:ring-rose-800/60"
-      style={{ width: sizePx, height: sizePx }}
-      aria-label={`Tribute photo for ${name}`}
-      role="img"
-      data-testid="feathered-avatar"
-    >
-      <svg
-        viewBox="0 0 100 100"
-        width={sizePx}
-        height={sizePx}
-        xmlns="http://www.w3.org/2000/svg"
-        className="block rounded-full"
-      >
-        <defs>
-          <radialGradient id={maskId} cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="white" stopOpacity="1" />
-            <stop offset="70%" stopColor="white" stopOpacity="1" />
-            <stop offset="100%" stopColor="white" stopOpacity="0" />
-          </radialGradient>
-          <mask id={`${maskId}-mask`}>
-            <rect x="0" y="0" width="100" height="100" fill={`url(#${maskId})`} />
-          </mask>
-        </defs>
-        <image
-          href={photoUrl}
-          x="0"
-          y="0"
-          width="100"
-          height="100"
-          preserveAspectRatio="xMidYMid slice"
-          mask={`url(#${maskId}-mask)`}
-        />
-      </svg>
-    </div>
   );
 }
 

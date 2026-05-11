@@ -2,9 +2,8 @@ import { useRef, useState } from "react";
 import { Loader2, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
-import { MemorialFrame, type FrameStyle } from "./MemorialFrame";
+import { FeatheredAvatar } from "./FeatheredAvatar";
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const ACCEPTED = "image/png,image/jpeg,image/webp,image/heic,image/heif";
@@ -14,10 +13,8 @@ export interface MemorialPhotoEditorProps {
   donorName?: string | null;
   displayName?: string | null;
   memorialPhotoUrl: string | null;
-  memorialFrameStyle: FrameStyle | null;
   /** Endpoint base, e.g. `/api/vip-portal/subscriptions/${id}` or
-   *  `/api/vip-club/members/${id}`. Append `/memorial-photo` /
-   *  `/memorial-frame` to it. */
+   *  `/api/vip-club/members/${id}`. Append `/memorial-photo` to it. */
   endpointBase: string;
   /** Optional query string (e.g. `?token=xxx`) appended after suffix. */
   querySuffix?: string;
@@ -32,7 +29,6 @@ export function MemorialPhotoEditor({
   donorName,
   displayName,
   memorialPhotoUrl,
-  memorialFrameStyle,
   endpointBase,
   querySuffix = "",
   buildHeaders,
@@ -42,11 +38,6 @@ export function MemorialPhotoEditor({
   const { toast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
-  // Local optimistic frame style so the radio reflects user choice immediately
-  // even before a successful round-trip.
-  const [frameDraft, setFrameDraft] = useState<FrameStyle>(
-    memorialFrameStyle === "paw" ? "paw" : "heart",
-  );
 
   const heroName = displayName?.trim() || donorName?.trim() || "Anonymous";
 
@@ -86,7 +77,6 @@ export function MemorialPhotoEditor({
     try {
       const form = new FormData();
       form.append("file", file);
-      form.append("frameStyle", frameDraft);
       const res = await apiCall("POST", "/memorial-photo", form);
       if (!res.ok) {
         const text = await res.text();
@@ -123,60 +113,18 @@ export function MemorialPhotoEditor({
     }
   };
 
-  const onFrameChange = async (next: FrameStyle) => {
-    setFrameDraft(next);
-    if (!memorialPhotoUrl) return; // nothing persisted yet
-    setBusy(true);
-    try {
-      const res = await apiCall(
-        "PATCH",
-        "/memorial-frame",
-        JSON.stringify({ frameStyle: next }),
-        { "Content-Type": "application/json" },
-      );
-      if (!res.ok) throw new Error(await res.text());
-      onChanged?.();
-    } catch (err: any) {
-      toast({
-        title: "Could not update frame",
-        description: err?.message || "Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setBusy(false);
-    }
-  };
-
   return (
     <div
       className={`flex ${compact ? "items-center gap-3" : "flex-col sm:flex-row gap-4"} items-start`}
       data-testid="memorial-photo-editor"
     >
-      <MemorialFrame
+      <FeatheredAvatar
         photoUrl={memorialPhotoUrl}
         name={heroName}
-        frameStyle={frameDraft}
-        size={compact ? "sm" : "md"}
+        sizePx={compact ? 48 : 64}
       />
       <div className="flex-1 min-w-0 space-y-2">
-        <div className="space-y-1">
-          <Label className="text-xs">Frame style</Label>
-          <RadioGroup
-            value={frameDraft}
-            onValueChange={(v) => onFrameChange(v as FrameStyle)}
-            className="flex gap-3"
-            data-testid="radio-memorial-frame"
-          >
-            <label className="flex items-center gap-1.5 cursor-pointer text-sm">
-              <RadioGroupItem value="heart" id="frame-heart" />
-              Heart
-            </label>
-            <label className="flex items-center gap-1.5 cursor-pointer text-sm">
-              <RadioGroupItem value="paw" id="frame-paw" />
-              Paw
-            </label>
-          </RadioGroup>
-        </div>
+        <Label className="text-xs sr-only">Memorial photo</Label>
         <div className="flex flex-wrap gap-2">
           <input
             ref={fileRef}
@@ -217,8 +165,7 @@ export function MemorialPhotoEditor({
         </div>
         <p className="text-xs text-muted-foreground">
           Optional. PNG, JPG, WebP, or HEIC up to 5 MB. Your photo will appear
-          framed with a {frameDraft === "paw" ? "paw print" : "heart"} on our
-          public Wall of Heroes.
+          on our public Wall of Heroes.
         </p>
       </div>
     </div>
