@@ -36,6 +36,7 @@ export const tenants = pgTable("tenants", {
   stripeWebhookSecretEncrypted: text("stripe_webhook_secret_encrypted"), // Encrypted webhook secret
   stripeEnabled: boolean("stripe_enabled").notNull().default(false), // Whether Stripe is configured
   tnrEnabled: boolean("tnr_enabled").notNull().default(false), // Whether the TNR Log module is enabled for this tenant
+  microchipClinicEnabled: boolean("microchip_clinic_enabled").notNull().default(false), // Whether the Microchip Clinic Log module is enabled for this tenant
   shopEnabled: boolean("shop_enabled").notNull().default(false), // Whether the public shop page is enabled for this tenant
   stripeConnectedAccountId: text("stripe_connected_account_id"), // Stripe Connect account ID (Standard Connect - tenant owns account)
   stripeConnectedAt: timestamp("stripe_connected_at"), // When Stripe was connected via OAuth
@@ -6574,3 +6575,43 @@ export const insertSocialPostTemplateSchema = createInsertSchema(socialPostTempl
 });
 export type InsertSocialPostTemplate = z.infer<typeof insertSocialPostTemplateSchema>;
 export type SocialPostTemplate = typeof socialPostTemplates.$inferSelect;
+
+// ============================================================================
+// Microchip Clinic Log
+// ============================================================================
+export const microchipClinicRecords = pgTable("microchip_clinic_records", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  clinicDate: date("clinic_date").notNull(),
+  ownerName: text("owner_name"),
+  ownerAddress: text("owner_address"),
+  ownerEmail: text("owner_email"),
+  ownerPhone1: text("owner_phone1"),
+  ownerPhone2: text("owner_phone2"),
+  dogName: text("dog_name"),
+  dogAge: text("dog_age"),
+  dogGender: text("dog_gender"),
+  dogColor: text("dog_color"),
+  dogLitters: integer("dog_litters"),
+  microchipNumber: text("microchip_number"),
+  invoiceOrNotes: text("invoice_or_notes"),
+  dhppGiven: boolean("dhpp_given").notNull().default(false),
+  bordetellaGiven: boolean("bordetella_given").notNull().default(false),
+  rabiesGiven: boolean("rabies_given").notNull().default(false),
+  painMedsGiven: boolean("pain_meds_given").notNull().default(false),
+  nailTrimDone: boolean("nail_trim_done").notNull().default(false),
+  fleaMedsGiven: boolean("flea_meds_given").notNull().default(false),
+  createdByUserId: uuid("created_by_user_id").references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertMicrochipClinicRecordSchema = createInsertSchema(microchipClinicRecords).omit({
+  id: true,
+  tenantId: true,
+  createdByUserId: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertMicrochipClinicRecord = z.infer<typeof insertMicrochipClinicRecordSchema>;
+export type MicrochipClinicRecord = typeof microchipClinicRecords.$inferSelect;

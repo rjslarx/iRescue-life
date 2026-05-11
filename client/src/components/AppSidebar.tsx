@@ -33,7 +33,7 @@ import { useQuickActions } from "@/hooks/useQuickActions";
 import { RecordOfflineDonationDialog } from "@/components/RecordOfflineDonationDialog";
 import { AddMedicalOrderDialog } from "@/components/AddMedicalOrderDialog";
 import { SendHoldHarmlessDialog } from "@/components/SendHoldHarmlessDialog";
-import { Zap, FileUp } from "lucide-react";
+import { Zap, FileUp, ScanLine } from "lucide-react";
 import {
   LayoutDashboard,
   Heart,
@@ -167,10 +167,11 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
   const [holdHarmlessOpen, setHoldHarmlessOpen] = useState(false);
   const { canAccessPage, getAccessiblePages } = usePagePermissions();
   
-  const { data: tenantData } = useQuery<{ tenant: { subscriptionTier: string; tnrEnabled?: boolean } }>({
+  const { data: tenantData } = useQuery<{ tenant: { subscriptionTier: string; tnrEnabled?: boolean; microchipClinicEnabled?: boolean } }>({
     queryKey: ['/api/tenant'],
   });
   const tnrEnabled = tenantData?.tenant?.tnrEnabled === true;
+  const microchipClinicEnabled = tenantData?.tenant?.microchipClinicEnabled === true;
   const { actions: allFavoriteActions, handleAction: handleFavoriteAction } = useQuickActions({
     onRecordDonation: () => setShowDonationDialog(true),
     onAddMedicalOrder: () => setCpoeOpen(true),
@@ -278,6 +279,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
         { title: "Daily Roster", url: "/dashboard/daily-roster", icon: ClipboardList },
         { title: "Medical Imports", url: "/dashboard/medical-imports", icon: FileUp },
         ...(tnrEnabled ? [{ title: "TNR Log", url: "/dashboard/tnr-log", icon: Cat }] : []),
+        ...(microchipClinicEnabled ? [{ title: "Microchip Clinic Log", url: "/dashboard/microchip-clinic-log", icon: ScanLine }] : []),
         { title: "Adoption Applications", url: "/dashboard/applications", icon: FileText, notificationKey: "applications" },
         { title: "Intake Manager", url: "/dashboard/intake", icon: Inbox },
         { title: "Surgery Day Requests", url: "/dashboard/surgery-day-requests", icon: Stethoscope },
@@ -394,6 +396,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
         { title: "Daily Roster", url: "/dashboard/daily-roster", icon: ClipboardList },
         { title: "Medical Imports", url: "/dashboard/medical-imports", icon: FileUp },
         ...(tnrEnabled ? [{ title: "TNR Log", url: "/dashboard/tnr-log", icon: Cat }] : []),
+        ...(microchipClinicEnabled ? [{ title: "Microchip Clinic Log", url: "/dashboard/microchip-clinic-log", icon: ScanLine }] : []),
         { title: "Adoption Applications", url: "/dashboard/applications", icon: FileText, notificationKey: "applications" },
         { title: "Intake Manager", url: "/dashboard/intake", icon: Inbox },
         { title: "Surgery Day Requests", url: "/dashboard/surgery-day-requests", icon: Stethoscope },
@@ -601,6 +604,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
     '/dashboard/volunteer-pipeline': 'volunteer-pipeline',
     '/dashboard/foster-pipeline': 'foster-pipeline',
     '/dashboard/tnr-log': 'tnr-log',
+    '/dashboard/microchip-clinic-log': 'microchip-clinic-log',
     '/dashboard/shop': 'shop',
     '/dashboard/animal-roster': 'animal-roster',
     '/dashboard/temperature': 'temperature',
@@ -655,6 +659,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
     'foster-pipeline': { title: "Foster Pipeline", url: "/dashboard/foster-pipeline", icon: Kanban },
     'event-ticket-sales': { title: "Event Ticket Sales", url: "/dashboard/event-ticket-sales", icon: Ticket },
     'tnr-log': { title: "TNR Log", url: "/dashboard/tnr-log", icon: Cat },
+    'microchip-clinic-log': { title: "Microchip Clinic Log", url: "/dashboard/microchip-clinic-log", icon: ScanLine },
     'post-optimizer': { title: "Post Optimizer", url: "/dashboard/post-optimizer", icon: Sparkles },
   };
 

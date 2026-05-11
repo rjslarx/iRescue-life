@@ -267,6 +267,24 @@ export default function IntegrationsSettingsPage() {
     },
   });
 
+  const updateMicrochipClinicEnabledMutation = useMutation({
+    mutationFn: async (microchipClinicEnabled: boolean) => {
+      const response = await apiRequest('PATCH', '/api/tenant/settings/microchip-clinic', { microchipClinicEnabled });
+      return response.json();
+    },
+    onSuccess: (_, microchipClinicEnabled) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/tenant/settings'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/tenant'] });
+      toast({
+        title: microchipClinicEnabled ? "Microchip Clinic Log enabled" : "Microchip Clinic Log disabled",
+        description: microchipClinicEnabled ? "The Microchip Clinic Log is now available in the Operations sidebar." : "The Microchip Clinic Log has been hidden from the sidebar.",
+      });
+    },
+    onError: (error: any) => {
+      toast({ title: "Failed to update Microchip Clinic settings", description: error.message || "Please try again later.", variant: "destructive" });
+    },
+  });
+
   const updateTwilioMutation = useMutation({
     mutationFn: async (settings: TwilioSettingsData) => {
       const response = await apiRequest('PATCH', '/api/tenant/settings/twilio', settings);
@@ -681,6 +699,26 @@ export default function IntegrationsSettingsPage() {
                   disabled={updateTnrEnabledMutation.isPending || !canEdit}
                   onCheckedChange={(checked) => updateTnrEnabledMutation.mutate(checked)}
                   data-testid="switch-tnr-enabled"
+                />
+              </div>
+
+              <Separator />
+
+              <div className="flex items-center justify-between gap-4">
+                <div className="space-y-0.5">
+                  <Label htmlFor="microchip-clinic-enabled-toggle" className="text-base font-medium">
+                    Microchip Clinic Log
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    Enable a spreadsheet-style log for community microchip clinics. Adds a Microchip Clinic Log page to the Operations sidebar. Records dogs and owners served at clinics without taking the animals into rescue care.
+                  </p>
+                </div>
+                <Switch
+                  id="microchip-clinic-enabled-toggle"
+                  checked={(data?.tenant as any)?.microchipClinicEnabled || false}
+                  disabled={updateMicrochipClinicEnabledMutation.isPending || !canEdit}
+                  onCheckedChange={(checked) => updateMicrochipClinicEnabledMutation.mutate(checked)}
+                  data-testid="switch-microchip-clinic-enabled"
                 />
               </div>
 

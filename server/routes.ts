@@ -50430,5 +50430,96 @@ ${section('Metadata', metaRows)}
     } catch (error) { next(error); }
   });
 
+  // ============================================================================
+  // Microchip Clinic Log Routes
+  // ============================================================================
+
+  app.get('/api/tenant/settings/microchip-clinic', requireTenant, requireAuth, requireRole('admin', 'owner'), async (req, res, next) => {
+    try {
+      const { tenants } = await import('@shared/schema');
+      const [tenant] = await db.select({ microchipClinicEnabled: tenants.microchipClinicEnabled }).from(tenants).where(eq(tenants.id, req.tenant!.id)).limit(1);
+      res.json({ microchipClinicEnabled: tenant?.microchipClinicEnabled ?? false });
+    } catch (error) { next(error); }
+  });
+
+  app.patch('/api/tenant/settings/microchip-clinic', requireTenant, requireAuth, requireRole('admin', 'owner'), async (req, res, next) => {
+    try {
+      const { tenants } = await import('@shared/schema');
+      const { microchipClinicEnabled } = req.body;
+      if (typeof microchipClinicEnabled !== 'boolean') return res.status(400).json({ error: 'microchipClinicEnabled must be a boolean' });
+      const [updated] = await db.update(tenants).set({ microchipClinicEnabled }).where(eq(tenants.id, req.tenant!.id)).returning({ microchipClinicEnabled: tenants.microchipClinicEnabled });
+      res.json({ microchipClinicEnabled: updated.microchipClinicEnabled });
+    } catch (error) { next(error); }
+  });
+
+  async function ensureMicrochipClinicEnabled(req: any, res: any): Promise<boolean> {
+    const { tenants } = await import('@shared/schema');
+    const [tenant] = await db.select({ enabled: tenants.microchipClinicEnabled }).from(tenants).where(eq(tenants.id, req.tenant!.id)).limit(1);
+    if (!tenant?.enabled) {
+      res.status(403).json({ error: 'Microchip Clinic Log module is not enabled for this tenant' });
+      return false;
+    }
+    return true;
+  }
+
+  app.get('/api/microchip-clinic-records', requireTenant, requireAuth, requireRole('admin', 'staff', 'owner'), async (req, res, next) => {
+    try {
+      const { microchipClinicRecords } = await import('@shared/schema');
+      if (!(await ensureMicrochipClinicEnabled(req, res))) return;
+      const monthParam = req.query.month as string | undefined;
+      let conditions: any[] = [eq(microchipClinicRecords.tenantId, req.tenant!.id)];
+      if (monthParam && /^\d{4}-\d{2}$/.test(monthParam)) {
+        const [y, m] = monthParam.split('-').map(Number);
+        const monthStart = `${y}-${String(m).padStart(2, '0')}-01`;
+        const monthEnd = `${y}-${String(m).padStart(2, '0')}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`;
+        conditions.push(gte(microchipClinicRecords.clinicDate, monthStart), lte(microchipClinicRecords.clinicDate, monthEnd));
+      }
+      const records = await db.select().from(microchipClinicRecords).where(and(...conditions)).orderBy(desc(microchipClinicRecords.clinicDate), desc(microchipClinicRecords.createdAt));
+      res.json({ records });
+    } catch (error) { next(error); }
+  });
+
+  app.post('/api/microchip-clinic-records', requireTenant, requireAuth, requireRole('admin', 'staff', 'owner'), async (req, res, next) => {
+    try {
+      const { microchipClinicRecords, insertMicrochipClinicRecordSchema } = await import('@shared/schema');
+      if (!(await ensureMicrochipClinicEnabled(req, res))) return;
+      const parsed = insertMicrochipClinicRecordSchema.parse(req.body);
+      const [created] = await db.insert(microchipClinicRecords).values({
+        ...parsed,
+        tenantId: req.tenant!.id,
+        createdByUserId: (req as any).user?.id ?? null,
+      }).returning();
+      res.json({ record: created });
+    } catch (error) { next(error); }
+  });
+
+  app.patch('/api/microchip-clinic-records/:id', requireTenant, requireAuth, requireRole('admin', 'staff', 'owner'), async (req, res, next) => {
+    try {
+      const { microchipClinicRecords, insertMicrochipClinicRecordSchema } = await import('@shared/schema');
+      if (!(await ensureMicrochipClinicEnabled(req, res))) return;
+      const { id } = req.params;
+      const parsed = insertMicrochipClinicRecordSchema.partial().parse(req.body);
+      const [updated] = await db.update(microchipClinicRecords)
+        .set({ ...parsed, updatedAt: new Date() })
+        .where(and(eq(microchipClinicRecords.id, id), eq(microchipClinicRecords.tenantId, req.tenant!.id)))
+        .returning();
+      if (!updated) return res.status(404).json({ error: 'Record not found' });
+      res.json({ record: updated });
+    } catch (error) { next(error); }
+  });
+
+  app.delete('/api/microchip-clinic-records/:id', requireTenant, requireAuth, requireRole('admin', 'owner'), async (req, res, next) => {
+    try {
+      const { microchipClinicRecords } = await import('@shared/schema');
+      if (!(await ensureMicrochipClinicEnabled(req, res))) return;
+      const { id } = req.params;
+      const [deleted] = await db.delete(microchipClinicRecords)
+        .where(and(eq(microchipClinicRecords.id, id), eq(microchipClinicRecords.tenantId, req.tenant!.id)))
+        .returning({ id: microchipClinicRecords.id });
+      if (!deleted) return res.status(404).json({ error: 'Record not found' });
+      res.json({ success: true });
+    } catch (error) { next(error); }
+  });
+
     return httpServer;
 }
