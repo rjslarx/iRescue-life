@@ -264,6 +264,9 @@ export default function VipClubPage() {
   const [giftHonoreeEmail, setGiftHonoreeEmail] = useState("");
   const [giftMessage, setGiftMessage] = useState("");
   const [giftAnnouncementDate, setGiftAnnouncementDate] = useState("");
+  // Gifters can choose whether the honoree appears on the public Wall of
+  // Heroes as "In honor of {Honoree}". Defaults ON per Task #197.
+  const [giftDisplayOnWall, setGiftDisplayOnWall] = useState(true);
   // Edit-existing-gift dialog state (donor portal section).
   const [editGift, setEditGift] = useState<VipHistorySubscription | null>(null);
   const [editGiftHonoree, setEditGiftHonoree] = useState("");
@@ -626,13 +629,13 @@ export default function VipClubPage() {
             honoreeEmail: giftHonoreeEmail.trim() || undefined,
             message: giftMessage.trim() || undefined,
             announcementDate: giftAnnouncementDate || undefined,
-            displayOnWallOfHeroes: true,
+            displayOnWall: giftDisplayOnWall,
           }
         : undefined;
       const res = await apiRequest('POST', `/api/monthly-tiers/${selected.id}/checkout`, {
         customerEmail: email || undefined,
         displayName: !giftMode && optInWall ? (displayName || undefined) : undefined,
-        displayOnWallOfHeroes: giftMode ? true : optInWall,
+        displayOnWallOfHeroes: giftMode ? giftDisplayOnWall : optInWall,
         ...(giftPayload ? { gift: giftPayload } : {}),
       });
       const json = await res.json();
@@ -1442,6 +1445,17 @@ export default function VipClubPage() {
                     data-testid="input-gift-announcement-date"
                   />
                   <p className="text-xs text-muted-foreground">Leave blank to send right away. Pick a future date for birthdays, anniversaries, or holidays.</p>
+                </div>
+                <div className="flex items-start gap-2 pt-1 border-t">
+                  <Checkbox
+                    id="gift-wall-optin"
+                    checked={giftDisplayOnWall}
+                    onCheckedChange={(v) => setGiftDisplayOnWall(!!v)}
+                    data-testid="checkbox-gift-wall-optin"
+                  />
+                  <Label htmlFor="gift-wall-optin" className="text-sm leading-snug font-normal cursor-pointer">
+                    Show "In honor of {giftHonoreeName.trim() || '[Name]'}" on the public Wall of Heroes
+                  </Label>
                 </div>
               </div>
             ) : (
