@@ -1,0 +1,1 @@
+ALTER TABLE peer_campaigns ADD COLUMN IF NOT EXISTS starts_at TIMESTAMP;
