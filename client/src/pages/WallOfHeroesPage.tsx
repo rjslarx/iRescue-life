@@ -99,9 +99,17 @@ function splitMemorialDisplayName(displayName: string): {
 } {
   const m = displayName.match(MEMORIAL_PREFIX_RE);
   if (!m) return { eyebrow: null, honoreeName: displayName };
-  // Title-case the matched phrase so "in memory of" reads as "In memory of".
-  const phrase = m[1].replace(/\s+/g, " ").trim();
-  const eyebrow = phrase.charAt(0).toUpperCase() + phrase.slice(1).toLowerCase();
+  const matched = m[1].replace(/\s+/g, " ").trim().toLowerCase();
+  // Memorial-subscription heroes whose saved name starts with the bare
+  // "In memory of …" get a tighter "In memory" eyebrow (per task spec).
+  // The longer "In loving memory of" and "In honor of" phrases are kept
+  // intact, title-cased.
+  let eyebrow: string;
+  if (matched === "in memory of") {
+    eyebrow = "In memory";
+  } else {
+    eyebrow = matched.charAt(0).toUpperCase() + matched.slice(1);
+  }
   return { eyebrow, honoreeName: m[2].trim() };
 }
 export type Tile = HeroTile | TributeTile;
