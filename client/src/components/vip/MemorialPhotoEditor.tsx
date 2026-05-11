@@ -121,7 +121,7 @@ export function MemorialPhotoEditor({
       <FeatheredAvatar
         photoUrl={memorialPhotoUrl}
         name={heroName}
-        sizePx={compact ? 48 : 64}
+        sizePx={compact ? 40 : 56}
       />
       <div className="flex-1 min-w-0 space-y-2">
         <Label className="text-xs sr-only">Memorial photo</Label>
