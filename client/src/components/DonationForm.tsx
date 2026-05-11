@@ -150,6 +150,10 @@ export default function DonationForm({ sponsoredAnimalName, tenant }: DonationFo
         setTributeError("Please enter the honoree's name.");
         return;
       }
+      if (tribute.recipientName.trim() && !tribute.recipientEmail.trim()) {
+        setTributeError("Please add the recipient's email address so we can send the acknowledgment, or clear the recipient name.");
+        return;
+      }
       if (tribute.recipientEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(tribute.recipientEmail.trim())) {
         setTributeError("Please enter a valid recipient email address.");
         return;

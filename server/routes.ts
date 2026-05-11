@@ -16447,7 +16447,7 @@ ${renderedHtml}
             tributeKind: row.tributeKind,
             frameStyle: (row.tributeFrameStyle as 'heart' | 'paw') || 'heart',
             photoUrl: row.tributePhotoUrl,
-            latestDonationDate: (row.date instanceof Date ? row.date : new Date(row.date as any)).toISOString(),
+            latestDonationDate: (row.date instanceof Date ? row.date : new Date(row.date)).toISOString(),
             donorCount: 1,
           });
         }
@@ -27983,8 +27983,8 @@ Submitted: ${new Date().toLocaleString()}
         // thresholds the donor only sees card.
         surface: 'donation',
         successUrl: (() => {
-          const tributeKind = (data.metadata as any)?.['tribute.kind'];
-          const tributeName = (data.metadata as any)?.['tribute.name'];
+          const tributeKind = data.metadata?.['tribute.kind'];
+          const tributeName = data.metadata?.['tribute.name'];
           const extra = tributeKind && tributeName
             ? `&tributeKind=${encodeURIComponent(tributeKind)}&tributeName=${encodeURIComponent(tributeName)}`
             : '';

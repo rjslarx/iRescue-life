@@ -321,6 +321,15 @@ function HonorRollCard({ entry, index }: { entry: HonorRollEntry; index: number 
             Honored by {entry.donorCount} donors
           </p>
         )}
+        <p
+          className="text-xs text-muted-foreground mt-0.5"
+          data-testid={`text-honor-month-${index}`}
+        >
+          {new Date(entry.latestDonationDate).toLocaleDateString(undefined, {
+            month: "long",
+            year: "numeric",
+          })}
+        </p>
       </div>
     </Card>
   );

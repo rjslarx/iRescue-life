@@ -48,10 +48,20 @@ export default function PublicWishlist() {
     const donationStatus = urlParams.get('donation');
     
     if (donationStatus === 'success') {
-      toast({
-        title: 'Thank you for your donation!',
-        description: 'Your generous support helps us care for animals in need.',
-      });
+      const tributeKind = urlParams.get('tributeKind');
+      const tributeName = urlParams.get('tributeName');
+      if ((tributeKind === 'memory' || tributeKind === 'honor') && tributeName) {
+        const phrase = tributeKind === 'memory' ? 'in loving memory of' : 'in honor of';
+        toast({
+          title: 'Thank you for your tribute gift',
+          description: `Your gift was made ${phrase} ${tributeName}. We will share a tasteful note with the family if you provided their contact info.`,
+        });
+      } else {
+        toast({
+          title: 'Thank you for your donation!',
+          description: 'Your generous support helps us care for animals in need.',
+        });
+      }
       // Clear the URL params
       window.history.replaceState({}, '', window.location.pathname);
     } else if (donationStatus === 'cancelled') {
