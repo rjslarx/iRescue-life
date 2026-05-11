@@ -76,6 +76,33 @@ export interface TributeTile extends TileBase {
   foreverHero: boolean;
   foreverHeroTenureMonths: number | null;
   showTenure: boolean;
+  // Pre-split display fields. The `name` field above remains the full
+  // searchable string ("In loving memory of Bella"); the tile renders these
+  // two so the bold honoree line gets the full row width without being
+  // crowded by the eyebrow phrase next to a 56px avatar.
+  eyebrow: string | null;
+  honoreeName: string;
+}
+
+/**
+ * Pull a leading "In loving memory of" / "In memory of" / "In honor of"
+ * phrase off a memorial-subscription hero's saved display name so the tile
+ * can render that phrase as a small eyebrow above the bold honoree name.
+ * Returns `eyebrow = null` when the saved name doesn't start with one of
+ * those phrases — those tiles fall through with no eyebrow.
+ */
+const MEMORIAL_PREFIX_RE =
+  /^\s*(in\s+loving\s+memory\s+of|in\s+memory\s+of|in\s+honor\s+of)\s+(.+?)\s*$/i;
+function splitMemorialDisplayName(displayName: string): {
+  eyebrow: string | null;
+  honoreeName: string;
+} {
+  const m = displayName.match(MEMORIAL_PREFIX_RE);
+  if (!m) return { eyebrow: null, honoreeName: displayName };
+  // Title-case the matched phrase so "in memory of" reads as "In memory of".
+  const phrase = m[1].replace(/\s+/g, " ").trim();
+  const eyebrow = phrase.charAt(0).toUpperCase() + phrase.slice(1).toLowerCase();
+  return { eyebrow, honoreeName: m[2].trim() };
 }
 export type Tile = HeroTile | TributeTile;
 
@@ -87,19 +114,25 @@ export function buildTributeTiles(
 ): TributeTile[] {
   const fromMemorialHeroes: TributeTile[] = heroes
     .filter(isMemorialHero)
-    .map((h, i) => ({
-      kind: "tribute",
-      key: `mem-${h.displayName ?? h.firstName ?? "anon"}-${h.since}-${i}`,
-      name: h.displayName || h.firstName || "Anonymous",
-      since: h.since,
-      photoUrl: h.memorialPhotoUrl ?? null,
-      donorCount: 1,
-      tierName: h.tierName,
-      foreverHero: !!h.foreverHero,
-      foreverHeroTenureMonths: h.foreverHeroTenureMonths ?? null,
-      showTenure: true,
-      index: i,
-    }));
+    .map((h, i) => {
+      const fullName = h.displayName || h.firstName || "Anonymous";
+      const { eyebrow, honoreeName } = splitMemorialDisplayName(fullName);
+      return {
+        kind: "tribute",
+        key: `mem-${h.displayName ?? h.firstName ?? "anon"}-${h.since}-${i}`,
+        name: fullName,
+        eyebrow,
+        honoreeName,
+        since: h.since,
+        photoUrl: h.memorialPhotoUrl ?? null,
+        donorCount: 1,
+        tierName: h.tierName,
+        foreverHero: !!h.foreverHero,
+        foreverHeroTenureMonths: h.foreverHeroTenureMonths ?? null,
+        showTenure: true,
+        index: i,
+      };
+    });
 
   const fromHonorRoll: TributeTile[] = honorRoll.map((entry, i) => {
     const phrase = entry.tributeKind === "memory" ? "In loving memory of" : "In honor of";
@@ -107,6 +140,8 @@ export function buildTributeTiles(
       kind: "tribute",
       key: `hr-${entry.tributeName}-${i}`,
       name: `${phrase} ${entry.tributeName}`,
+      eyebrow: phrase,
+      honoreeName: entry.tributeName,
       since: entry.latestDonationDate,
       photoUrl: entry.photoUrl,
       donorCount: entry.donorCount,
@@ -618,11 +653,19 @@ export function UnifiedTile({ tile }: { tile: Tile }) {
       <div className="flex items-start gap-3">
         <FeatheredAvatar photoUrl={tile.photoUrl} name={tile.name} sizePx={56} />
         <div className="min-w-0 flex-1">
+          {tile.eyebrow ? (
+            <p
+              className="text-[10px] uppercase tracking-wide text-muted-foreground leading-tight"
+              data-testid={`text-tribute-eyebrow-${tile.index}`}
+            >
+              {tile.eyebrow}
+            </p>
+          ) : null}
           <p
-            className="font-semibold text-base truncate"
+            className="font-semibold text-base leading-snug break-words line-clamp-2"
             data-testid={`text-tribute-name-${tile.index}`}
           >
-            {tile.name}
+            {tile.honoreeName}
           </p>
           {tile.tierName ? (
             <p className="text-xs text-primary/80 font-medium truncate">{tile.tierName}</p>
