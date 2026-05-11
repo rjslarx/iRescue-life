@@ -397,10 +397,11 @@ export default function DonationForm({ sponsoredAnimalName, tenant }: DonationFo
                 asChild
                 variant="ghost"
                 size="sm"
-                className="w-full sm:w-auto text-muted-foreground gap-1.5"
+                style={{ backgroundColor: "#fef3c7" }}
+                className="w-full sm:w-auto text-foreground gap-1.5 border border-amber-200"
               >
                 <Link href="/wall-of-heroes" data-testid="link-wall-of-heroes">
-                  <Heart className="h-3.5 w-3.5" />
+                  <Heart className="h-3.5 w-3.5 text-red-600" fill="currentColor" />
                   See our Wall of Heroes
                 </Link>
               </Button>
