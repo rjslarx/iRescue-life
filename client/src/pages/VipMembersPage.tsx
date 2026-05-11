@@ -61,6 +61,7 @@ interface Member {
   currentPeriodEnd: string | null;
   displayOnWallOfHeroes: boolean;
   displayName: string | null;
+  memorialShowDonorName?: boolean;
   memorialPhotoUrl?: string | null;
   memorialFrameStyle?: 'heart' | 'paw' | null;
   foreverHero?: boolean;
@@ -135,6 +136,7 @@ export default function VipMembersPage() {
   const [wallEditTarget, setWallEditTarget] = useState<Member | null>(null);
   const [wallEditOptIn, setWallEditOptIn] = useState(false);
   const [wallEditName, setWallEditName] = useState("");
+  const [wallEditShowDonor, setWallEditShowDonor] = useState(false);
   const { toast } = useToast();
 
   const { data, isLoading } = useQuery<{ members: Member[] }>({
@@ -206,14 +208,15 @@ export default function VipMembersPage() {
   });
 
   const wallEditMutation = useMutation({
-    mutationFn: async ({ subscriptionId, displayOnWallOfHeroes, displayName }: { subscriptionId: string; displayOnWallOfHeroes: boolean; displayName: string | null }) => {
-      const res = await apiRequest("PATCH", `/api/vip-club/members/${subscriptionId}/wall`, { displayOnWallOfHeroes, displayName });
-      return res.json() as Promise<{ subscription: { id: string; displayOnWallOfHeroes: boolean; displayName: string | null } }>;
+    mutationFn: async ({ subscriptionId, displayOnWallOfHeroes, displayName, memorialShowDonorName }: { subscriptionId: string; displayOnWallOfHeroes: boolean; displayName: string | null; memorialShowDonorName?: boolean }) => {
+      const res = await apiRequest("PATCH", `/api/vip-club/members/${subscriptionId}/wall`, { displayOnWallOfHeroes, displayName, memorialShowDonorName });
+      return res.json() as Promise<{ subscription: { id: string; displayOnWallOfHeroes: boolean; displayName: string | null; memorialShowDonorName: boolean } }>;
     },
     onSuccess: () => {
       toast({ title: "Wall of Heroes updated", description: "The donor's recognition will reflect on the public Wall." });
       setWallEditTarget(null);
       setWallEditName("");
+      setWallEditShowDonor(false);
       queryClient.invalidateQueries({ queryKey: ["/api/vip-club/members"] });
       queryClient.invalidateQueries({ queryKey: ["/api/vip-club/wall-of-heroes"] });
     },
@@ -564,6 +567,7 @@ export default function VipMembersPage() {
                                         setWallEditTarget(m);
                                         setWallEditOptIn(m.displayOnWallOfHeroes);
                                         setWallEditName(m.displayName || "");
+                                        setWallEditShowDonor(!!m.memorialShowDonorName);
                                       }}
                                       data-testid={`button-edit-wall-${m.subscriptionId}`}
                                       aria-label="Edit Wall of Heroes name"
@@ -765,7 +769,7 @@ export default function VipMembersPage() {
       </div>
 
       {/* Cancel dialog */}
-      <Dialog open={!!wallEditTarget} onOpenChange={(open) => { if (!open) { setWallEditTarget(null); setWallEditName(""); } }}>
+      <Dialog open={!!wallEditTarget} onOpenChange={(open) => { if (!open) { setWallEditTarget(null); setWallEditName(""); setWallEditShowDonor(false); } }}>
         <DialogContent data-testid="dialog-edit-wall">
           <DialogHeader>
             <DialogTitle>Edit Wall of Heroes recognition</DialogTitle>
@@ -829,11 +833,27 @@ export default function VipMembersPage() {
                     subscription ends.
                   </p>
                 )}
+                <div className="flex items-start justify-between gap-3 pt-3 border-t">
+                  <div className="space-y-0.5 min-w-0">
+                    <Label htmlFor="wall-edit-show-donor" className="text-sm">
+                      Show "From {wallEditTarget.donorName.split(/\s+/)[0] || 'donor'}" on the public tile
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Adds a small "From {`{first name + last initial}`}" line beneath the honoree's name. Off by default.
+                    </p>
+                  </div>
+                  <Switch
+                    id="wall-edit-show-donor"
+                    checked={wallEditShowDonor}
+                    onCheckedChange={setWallEditShowDonor}
+                    data-testid="switch-edit-wall-show-donor"
+                  />
+                </div>
               </div>
             )}
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => { setWallEditTarget(null); setWallEditName(""); }} data-testid="button-cancel-edit-wall">
+            <Button variant="ghost" onClick={() => { setWallEditTarget(null); setWallEditName(""); setWallEditShowDonor(false); }} data-testid="button-cancel-edit-wall">
               Cancel
             </Button>
             <Button
@@ -843,6 +863,7 @@ export default function VipMembersPage() {
                   subscriptionId: wallEditTarget.subscriptionId,
                   displayOnWallOfHeroes: wallEditOptIn,
                   displayName: wallEditOptIn ? (wallEditName.trim() || null) : null,
+                  memorialShowDonorName: wallEditOptIn ? wallEditShowDonor : false,
                 });
               }}
               disabled={wallEditMutation.isPending}

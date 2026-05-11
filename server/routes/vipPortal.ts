@@ -228,6 +228,7 @@ router.get('/history', async (req: Request, res: Response) => {
         displayName: subscriptions.displayName,
         memorialPhotoUrl: subscriptions.memorialPhotoUrl,
         memorialFrameStyle: subscriptions.memorialFrameStyle,
+        memorialShowDonorName: subscriptions.memorialShowDonorName,
         foreverHero: subscriptions.foreverHero,
         giftId: subscriptionGifts.id,
         giftHonoreeName: subscriptionGifts.honoreeName,
@@ -702,6 +703,9 @@ router.patch('/subscriptions/:id/wall-of-heroes', async (req: Request, res: Resp
       .nullable()
       .optional()
       .transform((v) => (v === undefined ? undefined : (v === null || v.length === 0 ? null : v))),
+    // Task #210 — donor opt-in for "From {first name + last initial}" on
+    // their memorial-subscription tile. Only honored while opted in.
+    memorialShowDonorName: z.boolean().optional(),
   });
 
   let parsed: z.infer<typeof bodySchema>;
@@ -717,6 +721,7 @@ router.patch('/subscriptions/:id/wall-of-heroes', async (req: Request, res: Resp
         id: subscriptions.id,
         displayOnWallOfHeroes: subscriptions.displayOnWallOfHeroes,
         displayName: subscriptions.displayName,
+        memorialShowDonorName: subscriptions.memorialShowDonorName,
         giftHonoreeName: subscriptionGifts.honoreeName,
       })
       .from(subscriptions)
@@ -747,12 +752,21 @@ router.patch('/subscriptions/:id/wall-of-heroes', async (req: Request, res: Resp
       nextDisplayName = `In honor of ${existing.giftHonoreeName}`;
     }
 
+    const setPatch: Record<string, unknown> = {
+      displayOnWallOfHeroes: parsed.displayOnWallOfHeroes,
+      displayName: nextDisplayName,
+    };
+    if (parsed.memorialShowDonorName !== undefined) {
+      setPatch.memorialShowDonorName = parsed.displayOnWallOfHeroes
+        ? parsed.memorialShowDonorName
+        : false;
+    } else if (!parsed.displayOnWallOfHeroes) {
+      setPatch.memorialShowDonorName = false;
+    }
+
     await db
       .update(subscriptions)
-      .set({
-        displayOnWallOfHeroes: parsed.displayOnWallOfHeroes,
-        displayName: nextDisplayName,
-      })
+      .set(setPatch)
       .where(and(
         eq(subscriptions.id, existing.id),
         eq(subscriptions.tenantId, tenantId),
@@ -778,12 +792,23 @@ router.patch('/subscriptions/:id/wall-of-heroes', async (req: Request, res: Resp
       ipAddress: (req.get('x-forwarded-for') || '').split(',')[0].trim() || req.socket.remoteAddress,
     });
 
+    // Compute the authoritative next state for memorialShowDonorName so the
+    // client can hydrate the toggle without a follow-up history fetch. Mirrors
+    // the setPatch logic above: forced false when the donor opts out, otherwise
+    // either the explicit value or the previous value when omitted.
+    const nextMemorialShowDonorName = parsed.displayOnWallOfHeroes
+      ? (parsed.memorialShowDonorName !== undefined
+          ? parsed.memorialShowDonorName
+          : !!existing.memorialShowDonorName)
+      : false;
+
     res.json({
       success: true,
       subscription: {
         id: existing.id,
         displayOnWallOfHeroes: parsed.displayOnWallOfHeroes,
         displayName: nextDisplayName,
+        memorialShowDonorName: nextMemorialShowDonorName,
       },
     });
   } catch (error) {

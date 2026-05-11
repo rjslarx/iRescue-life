@@ -277,6 +277,9 @@ function makeTributeTile(overrides: Partial<TributeTile> = {}): TributeTile {
     foreverHeroTenureMonths: null,
     showTenure: false,
     index: 0,
+    eyebrow: 'In loving memory of',
+    honoreeName: 'Bella',
+    donorDisplayName: null,
     ...overrides,
   };
 }
@@ -347,4 +350,75 @@ test('UnifiedTile tribute omits the donor-count subline when donorCount = 1', ()
   const tile = makeTributeTile({ donorCount: 1, index: 4 });
   const html = renderToStaticMarkup(createElement(UnifiedTile, { tile }));
   assert.doesNotMatch(html, /Honored by/);
+});
+
+// --- Task #210: opt-in "From {donor}" attribution ------------------------
+
+test('UnifiedTile tribute renders "From X" when donor opted in (donorCount = 1)', () => {
+  const tile = makeTributeTile({
+    donorCount: 1,
+    donorDisplayName: 'Sarah J.',
+    index: 9,
+  });
+  const html = renderToStaticMarkup(createElement(UnifiedTile, { tile }));
+  assert.match(html, /data-testid="text-tribute-from-9"/);
+  assert.match(html, /From Sarah J\./);
+});
+
+test('UnifiedTile tribute hides "From X" when donor did NOT opt in', () => {
+  const tile = makeTributeTile({ donorCount: 1, donorDisplayName: null, index: 10 });
+  const html = renderToStaticMarkup(createElement(UnifiedTile, { tile }));
+  assert.doesNotMatch(html, /text-tribute-from/);
+  assert.doesNotMatch(html, />From /);
+});
+
+test('UnifiedTile tribute hides "From X" when donorCount > 1 even if name present', () => {
+  const tile = makeTributeTile({
+    donorCount: 3,
+    donorDisplayName: 'Sarah J.',
+    index: 11,
+  });
+  const html = renderToStaticMarkup(createElement(UnifiedTile, { tile }));
+  assert.doesNotMatch(html, /text-tribute-from/);
+  assert.match(html, /Honored by 3 donors/);
+});
+
+test('buildTributeTiles propagates donorDisplayName from honor-roll only when donorCount = 1', () => {
+  const honorRoll: HonorRollEntry[] = [
+    {
+      tributeName: 'Bella',
+      tributeKind: 'memory',
+      frameStyle: 'paw',
+      photoUrl: null,
+      latestDonationDate: '2025-09-01',
+      donorCount: 3,
+      donorDisplayName: 'Sarah J.', // multiple donors → must be suppressed
+    },
+    {
+      tributeName: 'Maya',
+      tributeKind: 'honor',
+      frameStyle: 'heart',
+      photoUrl: null,
+      latestDonationDate: '2025-10-15',
+      donorCount: 1,
+      donorDisplayName: 'Pat M.',
+    },
+  ];
+  const tiles = buildTributeTiles([], honorRoll);
+  const bella = tiles.find((t) => t.honoreeName === 'Bella')!;
+  const maya = tiles.find((t) => t.honoreeName === 'Maya')!;
+  assert.equal(bella.donorDisplayName, null);
+  assert.equal(maya.donorDisplayName, 'Pat M.');
+});
+
+test('buildTributeTiles propagates donorDisplayName from a memorial-subscription hero', () => {
+  const hero: Hero = {
+    displayName: 'In memory of Buddy',
+    tierName: 'Pack Leader',
+    since: '2024-03-01',
+    donorDisplayName: 'Alex K.',
+  };
+  const tiles = buildTributeTiles([hero], []);
+  assert.equal(tiles.length, 1);
+  assert.equal(tiles[0].donorDisplayName, 'Alex K.');
 });

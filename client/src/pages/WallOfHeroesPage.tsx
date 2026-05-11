@@ -31,6 +31,9 @@ export interface Hero {
   // Memory/Honor of". Older cached payloads won't have this; we fall back to
   // the regex check below.
   isMemorial?: boolean;
+  // Task #210 — opt-in "From {first name + last initial}" attribution. Only
+  // present when the donor explicitly enabled it; null/undefined otherwise.
+  donorDisplayName?: string | null;
 }
 
 const MEMORIAL_PHRASE_RE = /^\s*in\s+(loving\s+)?(memory|honor)\s+of\b/i;
@@ -48,6 +51,9 @@ export interface HonorRollEntry {
   photoUrl: string | null;
   latestDonationDate: string;
   donorCount: number;
+  // Task #210 — only set when exactly one donor contributed AND that donor
+  // opted in. Null otherwise (no consent or multiple donors).
+  donorDisplayName?: string | null;
 }
 
 interface WallResponse {
@@ -87,6 +93,9 @@ export interface TributeTile extends TileBase {
   // crowded by the eyebrow phrase next to a 56px avatar.
   eyebrow: string | null;
   honoreeName: string;
+  // Task #210 — opt-in "From {first name + last initial}" line. Null when
+  // the donor declined consent or when multiple donors contributed.
+  donorDisplayName: string | null;
 }
 
 /**
@@ -144,6 +153,7 @@ export function buildTributeTiles(
         foreverHeroTenureMonths: h.foreverHeroTenureMonths ?? null,
         showTenure: true,
         index: i,
+        donorDisplayName: h.donorDisplayName ?? null,
       };
     });
 
@@ -163,6 +173,10 @@ export function buildTributeTiles(
       foreverHeroTenureMonths: null,
       showTenure: false,
       index: fromMemorialHeroes.length + i,
+      // Only render attribution when exactly one donor contributed AND
+      // they opted in. Server already enforces this; the extra guard here
+      // is belt-and-suspenders against stale clients.
+      donorDisplayName: entry.donorCount === 1 ? (entry.donorDisplayName ?? null) : null,
     };
   });
 
@@ -603,6 +617,14 @@ export function UnifiedTile({ tile }: { tile: Tile }) {
           </p>
           {tile.tierName ? (
             <p className="text-xs text-primary/80 font-medium truncate">{tile.tierName}</p>
+          ) : null}
+          {tile.donorDisplayName && tile.donorCount === 1 ? (
+            <p
+              className="text-[10px] uppercase tracking-wide text-primary/80 truncate mt-0.5"
+              data-testid={`text-tribute-from-${tile.index}`}
+            >
+              From {tile.donorDisplayName}
+            </p>
           ) : null}
           {tile.donorCount > 1 && (
             <p className="text-xs text-muted-foreground mt-0.5">

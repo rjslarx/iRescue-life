@@ -16406,6 +16406,7 @@ ${renderedHtml}
           since: subs.createdAt,
           memorialPhotoUrl: subs.memorialPhotoUrl,
           memorialFrameStyle: subs.memorialFrameStyle,
+          memorialShowDonorName: subs.memorialShowDonorName,
           foreverHero: subs.foreverHero,
           foreverHeroTenureMonths: subs.foreverHeroTenureMonths,
           canceledAt: subs.canceledAt,
@@ -16440,6 +16441,16 @@ ${renderedHtml}
         const display = (h.displayName && h.displayName.trim())
           || firstAndLastInitial(h.donorName)
           || 'Anonymous';
+        // Task #210 — surface "From {first name + last initial}" only when the
+        // donor explicitly opted in. Skip when the resolved display name is
+        // already the donor's own name (display === firstAndLastInitial),
+        // which would render a redundant "From X" under "X".
+        const donorShortName = firstAndLastInitial(h.donorName);
+        const donorDisplayName = (
+          h.memorialShowDonorName
+          && donorShortName
+          && donorShortName.toLowerCase() !== display.toLowerCase()
+        ) ? donorShortName : null;
         const memorialFrameStyle = (h.memorialFrameStyle === 'paw' || h.memorialFrameStyle === 'heart')
           ? h.memorialFrameStyle
           : null;
@@ -16462,6 +16473,7 @@ ${renderedHtml}
           foreverHero: !!h.foreverHero,
           foreverHeroTenureMonths: h.foreverHeroTenureMonths ?? null,
           isMemorial,
+          donorDisplayName,
         };
       });
       // Tribute Wall — Task #198. Aggregate one-time tribute donations from the
@@ -16477,6 +16489,7 @@ ${renderedHtml}
           tributePhotoUrl: donationsTable.tributePhotoUrl,
           donorEmail: donationsTable.donorEmail,
           donorName: donationsTable.donorName,
+          tributeShowDonorName: donationsTable.tributeShowDonorName,
           date: donationsTable.date,
           expiresAt: donationsTable.tributeWallExpiresAt,
         })
@@ -16495,6 +16508,11 @@ ${renderedHtml}
         photoUrl: string | null;
         latestDonationDate: string;
         donorIdentities: Set<string>;
+        // Track the consenting donor's name only when EVERY contributing
+        // gift to this honoree opted in. We surface "From X" only when
+        // donorIdentities.size === 1 AND consentedDonorName is set.
+        consentedDonorName: string | null;
+        anyDeclinedConsent: boolean;
       }>();
       for (const row of tributeRows) {
         if (!row.tributeName || !row.tributeKind) continue;
@@ -16508,9 +16526,15 @@ ${renderedHtml}
           (row.donorEmail && row.donorEmail.trim().toLowerCase()) ||
           (row.donorName && `name:${row.donorName.trim().toLowerCase()}`) ||
           `anon:${row.date instanceof Date ? row.date.toISOString() : String(row.date)}`;
+        const consented = row.tributeShowDonorName === true;
+        const consentedShortName = consented ? firstAndLastInitial(row.donorName) : null;
         const existing = honorRollMap.get(key);
         if (existing) {
           existing.donorIdentities.add(donorIdentity);
+          if (!consented) existing.anyDeclinedConsent = true;
+          if (consented && consentedShortName && !existing.consentedDonorName) {
+            existing.consentedDonorName = consentedShortName;
+          }
           // Keep first non-empty photo + frame.
           if (!existing.photoUrl && row.tributePhotoUrl) {
             existing.photoUrl = row.tributePhotoUrl;
@@ -16524,17 +16548,29 @@ ${renderedHtml}
             photoUrl: row.tributePhotoUrl,
             latestDonationDate: (row.date instanceof Date ? row.date : new Date(row.date)).toISOString(),
             donorIdentities: new Set([donorIdentity]),
+            consentedDonorName: consentedShortName,
+            anyDeclinedConsent: !consented,
           });
         }
       }
-      const honorRoll = Array.from(honorRollMap.values()).map((entry) => ({
-        tributeName: entry.tributeName,
-        tributeKind: entry.tributeKind,
-        frameStyle: entry.frameStyle,
-        photoUrl: entry.photoUrl,
-        latestDonationDate: entry.latestDonationDate,
-        donorCount: entry.donorIdentities.size,
-      })).sort(
+      const honorRoll = Array.from(honorRollMap.values()).map((entry) => {
+        // Only emit the "From X" line when: exactly one donor contributed,
+        // every gift from that donor opted in, and we have a usable name.
+        const donorDisplayName = (
+          entry.donorIdentities.size === 1
+          && !entry.anyDeclinedConsent
+          && entry.consentedDonorName
+        ) ? entry.consentedDonorName : null;
+        return {
+          tributeName: entry.tributeName,
+          tributeKind: entry.tributeKind,
+          frameStyle: entry.frameStyle,
+          photoUrl: entry.photoUrl,
+          latestDonationDate: entry.latestDonationDate,
+          donorCount: entry.donorIdentities.size,
+          donorDisplayName,
+        };
+      }).sort(
         (a, b) => new Date(b.latestDonationDate).getTime() - new Date(a.latestDonationDate).getTime(),
       );
 
@@ -16573,6 +16609,7 @@ ${renderedHtml}
           displayName: subs.displayName,
           memorialPhotoUrl: subs.memorialPhotoUrl,
           memorialFrameStyle: subs.memorialFrameStyle,
+          memorialShowDonorName: subs.memorialShowDonorName,
           foreverHero: subs.foreverHero,
           donorId: donors.id,
           donorName: donors.name,
@@ -17091,6 +17128,10 @@ ${renderedHtml}
         displayOnWallOfHeroes: z.boolean(),
         displayName: z.string().trim().max(60).nullable().optional(),
         firstNameDisplay: z.string().trim().max(60).nullable().optional(),
+        // Task #210 — optional toggle to surface "From {first name + last
+        // initial}" on the public Wall tribute tile. Only meaningful while
+        // opted in to the Wall.
+        memorialShowDonorName: z.boolean().optional(),
       });
       const parsed = bodySchema.parse(req.body || {});
       const rawName = parsed.displayName !== undefined ? parsed.displayName : parsed.firstNameDisplay;
@@ -17108,22 +17149,33 @@ ${renderedHtml}
         .limit(1);
       if (!sub) return res.status(404).json({ error: 'Subscription not found' });
 
+      const setPatch: Record<string, unknown> = {
+        displayOnWallOfHeroes: parsed.displayOnWallOfHeroes,
+        displayName: normalizedName,
+      };
+      if (parsed.memorialShowDonorName !== undefined) {
+        // Force off when opting out so silence stays private.
+        setPatch.memorialShowDonorName = parsed.displayOnWallOfHeroes
+          ? parsed.memorialShowDonorName
+          : false;
+      } else if (!parsed.displayOnWallOfHeroes) {
+        setPatch.memorialShowDonorName = false;
+      }
+
       const [updated] = await db
         .update(subscriptions)
-        .set({
-          displayOnWallOfHeroes: parsed.displayOnWallOfHeroes,
-          displayName: normalizedName,
-        })
+        .set(setPatch)
         .where(eq(subscriptions.id, sub.id))
         .returning();
 
       const actorId = (req.user as { id?: string } | undefined)?.id || 'unknown';
-      console.log(`[VIP Wall Edit] tenant=${req.tenant!.id} sub=${sub.id} optIn=${parsed.displayOnWallOfHeroes} name="${normalizedName ?? ''}" actor=${actorId}`);
+      console.log(`[VIP Wall Edit] tenant=${req.tenant!.id} sub=${sub.id} optIn=${parsed.displayOnWallOfHeroes} name="${normalizedName ?? ''}" showDonor=${updated.memorialShowDonorName} actor=${actorId}`);
       res.json({
         subscription: {
           id: updated.id,
           displayOnWallOfHeroes: updated.displayOnWallOfHeroes,
           displayName: updated.displayName,
+          memorialShowDonorName: updated.memorialShowDonorName,
         },
       });
     } catch (error: any) {
@@ -28808,6 +28860,7 @@ Submitted: ${new Date().toLocaleString()}
             const tributeFrameRaw = sessionMetadata['tribute.frameStyle'];
             const tributeFrameStyle = tributeKind && (tributeFrameRaw === 'paw' ? 'paw' : 'heart');
             const tributeWallOptIn = tributeKind && sessionMetadata['tribute.wallOptIn'] !== 'false';
+            const tributeShowDonorName = !!(tributeKind && tributeWallOptIn && sessionMetadata['tribute.showDonorName'] === 'true');
             // Wall expiry — 12 months from donation date.
             const nowDate = new Date();
             const tributeWallExpiresAt = tributeKind && tributeWallOptIn
@@ -28851,6 +28904,7 @@ Submitted: ${new Date().toLocaleString()}
               tributeFrameStyle: isOneTimeGift ? (tributeFrameStyle as 'heart' | 'paw' | null) : null,
               tributeWallOptIn: isOneTimeGift ? !!tributeWallOptIn : false,
               tributeWallExpiresAt: isOneTimeGift ? tributeWallExpiresAt : null,
+              tributeShowDonorName: isOneTimeGift ? tributeShowDonorName : false,
             }).returning();
 
             // Tasteful tribute acknowledgment email — never reveals the amount.

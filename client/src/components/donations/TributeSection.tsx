@@ -19,6 +19,9 @@ export interface TributeFormValue {
   message: string;
   photoUrl: string;
   wallOptIn: boolean;
+  // Task #210 — opt-in to surface "From {first name + last initial}" on
+  // the public Wall of Heroes tribute tile. Default OFF for privacy.
+  showDonorName: boolean;
 }
 
 export const emptyTribute: TributeFormValue = {
@@ -30,6 +33,7 @@ export const emptyTribute: TributeFormValue = {
   message: "",
   photoUrl: "",
   wallOptIn: true,
+  showDonorName: false,
 };
 
 interface TributeSectionProps {
@@ -280,6 +284,27 @@ export default function TributeSection({ value, onChange, errors }: TributeSecti
               </p>
             </div>
           </div>
+
+          {value.wallOptIn && (
+            <div
+              className="flex items-start gap-3 p-3 rounded-md border bg-muted/30 cursor-pointer hover-elevate"
+              onClick={() => update({ showDonorName: !value.showDonorName })}
+              data-testid="checkbox-tribute-show-donor-container"
+            >
+              <Checkbox
+                checked={value.showDonorName}
+                onCheckedChange={(c) => update({ showDonorName: c === true })}
+                className="mt-0.5"
+                data-testid="checkbox-tribute-show-donor"
+              />
+              <div className="flex-1">
+                <p className="text-sm font-medium">Show my name as the gifter on the public Wall</p>
+                <p className="text-xs text-muted-foreground">
+                  The tribute tile will read "From {`{first name + last initial}`}" — never your full name, email, or amount.
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

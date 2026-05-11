@@ -968,6 +968,10 @@ export const donations = pgTable("donations", {
   tributeWallOptIn: boolean("tribute_wall_opt_in").notNull().default(false),
   tributeWallExpiresAt: timestamp("tribute_wall_expires_at"),
   tributeAcknowledgmentSentAt: timestamp("tribute_acknowledgment_sent_at"),
+  // When true, the public Wall of Heroes tribute tile shows a small
+  // "From {first name + last initial}" line under the honoree (Task #210).
+  // Default OFF so silence stays private; donor opts in on the Donate page.
+  tributeShowDonorName: boolean("tribute_show_donor_name").notNull().default(false),
   date: timestamp("date").notNull().defaultNow(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
@@ -1076,6 +1080,10 @@ export const subscriptions = pgTable("subscriptions", {
   // bucket. Frame style picks the decorative SVG ring on the public Wall.
   memorialPhotoUrl: text("memorial_photo_url"),
   memorialFrameStyle: text("memorial_frame_style").$type<"heart" | "paw">(),
+  // When true, the public Wall of Heroes memorial-subscription tile shows a
+  // small "From {first name + last initial}" line under the honoree
+  // (Task #210). Default OFF so silence stays private.
+  memorialShowDonorName: boolean("memorial_show_donor_name").notNull().default(false),
   // Forever Hero flag (Task #196). Set to true when a tribute subscription is
   // canceled after >= 12 months of active billing — the In-Memory tile is
   // then preserved on the public Wall of Heroes permanently.

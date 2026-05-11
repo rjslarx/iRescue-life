@@ -78,6 +78,7 @@ interface VipHistorySubscription {
   cardUpdatedAt: string | null;
   displayOnWallOfHeroes: boolean;
   displayName: string | null;
+  memorialShowDonorName?: boolean;
   memorialPhotoUrl?: string | null;
   memorialFrameStyle?: 'heart' | 'paw' | null;
   foreverHero?: boolean;
@@ -128,7 +129,11 @@ function WallOfHeroesToggle({
   sub: VipHistorySubscription;
   donorName: string;
   isPending: boolean;
-  onChange: (displayOnWallOfHeroes: boolean, displayName: string | null) => void;
+  onChange: (
+    displayOnWallOfHeroes: boolean,
+    displayName: string | null,
+    opts?: { memorialShowDonorName?: boolean },
+  ) => void;
   vipToken: string | null;
   onMemorialChanged: () => void;
 }) {
@@ -219,6 +224,24 @@ function WallOfHeroesToggle({
             </div>
           )}
           <p>Only the name you choose and your tier appear publicly. You can opt out anytime.</p>
+          <div className="flex items-start gap-2 pt-1">
+            <Checkbox
+              id={`wall-show-donor-${sub.id}`}
+              checked={!!sub.memorialShowDonorName}
+              disabled={isPending}
+              onCheckedChange={(v) => {
+                onChange(true, sub.displayName || null, { memorialShowDonorName: !!v });
+              }}
+              data-testid={`checkbox-wall-show-donor-${sub.id}`}
+            />
+            <Label
+              htmlFor={`wall-show-donor-${sub.id}`}
+              className="text-xs leading-snug font-normal cursor-pointer text-muted-foreground"
+            >
+              Also show "From {(donorName?.split(/\s+/)[0]) || 'me'}" on the public tile.
+              We'll only show your first name and last initial — never your full name, email, or amount.
+            </Label>
+          </div>
           <div className="border-t pt-3 mt-1">
             <p className="text-xs font-medium text-foreground mb-2">
               Memorial photo (optional)
@@ -563,7 +586,7 @@ export default function VipClubPage() {
   });
 
   const wallOptInMutation = useMutation({
-    mutationFn: async (vars: { subscriptionId: string; displayOnWallOfHeroes: boolean; displayName: string | null }) => {
+    mutationFn: async (vars: { subscriptionId: string; displayOnWallOfHeroes: boolean; displayName: string | null; memorialShowDonorName?: boolean }) => {
       const url = buildTenantUrl(`/api/vip-portal/subscriptions/${vars.subscriptionId}/wall-of-heroes?token=${encodeURIComponent(historyToken!)}`);
       const res = await fetch(url, {
         method: 'PATCH',
@@ -572,6 +595,7 @@ export default function VipClubPage() {
         body: JSON.stringify({
           displayOnWallOfHeroes: vars.displayOnWallOfHeroes,
           displayName: vars.displayName,
+          ...(vars.memorialShowDonorName !== undefined ? { memorialShowDonorName: vars.memorialShowDonorName } : {}),
         }),
       });
       if (!res.ok) {
@@ -580,7 +604,35 @@ export default function VipClubPage() {
         try { const j = JSON.parse(text); if (j.error) msg = j.error; } catch {}
         throw new Error(msg);
       }
-      return res.json() as Promise<{ subscription: { id: string; displayOnWallOfHeroes: boolean; displayName: string | null } }>;
+      return res.json() as Promise<{ subscription: { id: string; displayOnWallOfHeroes: boolean; displayName: string | null; memorialShowDonorName?: boolean } }>;
+    },
+    onSuccess: (data) => {
+      // Reconcile the optimistic cache with the authoritative server state for
+      // memorialShowDonorName so the donor portal toggle never drifts. Falls
+      // back to a full history refetch if the server didn't echo the field.
+      const queryKey = ['/api/vip-portal/history', historyToken];
+      const cached = queryClient.getQueryData<VipHistoryResponse>(queryKey);
+      const echoed = data?.subscription;
+      if (cached && echoed && echoed.id) {
+        queryClient.setQueryData<VipHistoryResponse>(queryKey, {
+          ...cached,
+          subscriptions: cached.subscriptions.map((s) =>
+            s.id === echoed.id
+              ? {
+                  ...s,
+                  displayOnWallOfHeroes: echoed.displayOnWallOfHeroes,
+                  displayName: echoed.displayName,
+                  memorialShowDonorName:
+                    echoed.memorialShowDonorName !== undefined
+                      ? echoed.memorialShowDonorName
+                      : s.memorialShowDonorName,
+                }
+              : s,
+          ),
+        });
+      } else {
+        queryClient.invalidateQueries({ queryKey });
+      }
     },
     onMutate: async (vars) => {
       const queryKey = ['/api/vip-portal/history', historyToken];
@@ -591,7 +643,14 @@ export default function VipClubPage() {
           ...previous,
           subscriptions: previous.subscriptions.map((s) =>
             s.id === vars.subscriptionId
-              ? { ...s, displayOnWallOfHeroes: vars.displayOnWallOfHeroes, displayName: vars.displayOnWallOfHeroes ? vars.displayName : null }
+              ? {
+                  ...s,
+                  displayOnWallOfHeroes: vars.displayOnWallOfHeroes,
+                  displayName: vars.displayOnWallOfHeroes ? vars.displayName : null,
+                  memorialShowDonorName: vars.displayOnWallOfHeroes
+                    ? (vars.memorialShowDonorName ?? s.memorialShowDonorName ?? false)
+                    : false,
+                }
               : s,
           ),
         });
@@ -1059,8 +1118,8 @@ export default function VipClubPage() {
                               sub={sub}
                               donorName={historyData.donor.name}
                               isPending={wallOptInMutation.isPending && wallOptInMutation.variables?.subscriptionId === sub.id}
-                              onChange={(displayOnWallOfHeroes, displayName) =>
-                                wallOptInMutation.mutate({ subscriptionId: sub.id, displayOnWallOfHeroes, displayName })
+                              onChange={(displayOnWallOfHeroes, displayName, opts) =>
+                                wallOptInMutation.mutate({ subscriptionId: sub.id, displayOnWallOfHeroes, displayName, memorialShowDonorName: opts?.memorialShowDonorName })
                               }
                               vipToken={historyToken}
                               onMemorialChanged={() => {
