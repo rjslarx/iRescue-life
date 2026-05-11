@@ -393,12 +393,12 @@ export default function DonationForm({ sponsoredAnimalName, tenant }: DonationFo
               {sponsoredAnimalName || !isRecurring ? "Secure one-time payment" : "Secure monthly recurring payment"}
             </p>
             <div className="flex justify-center pt-1">
-              <Link href="/wall-of-heroes">
+              <Link href="/wall-of-heroes" className="w-full sm:w-auto">
                 <Button
                   type="button"
                   variant="link"
                   size="sm"
-                  className="text-muted-foreground hover:text-primary gap-1.5"
+                  className="w-full sm:w-auto text-muted-foreground hover:text-primary gap-1.5"
                   data-testid="link-wall-of-heroes"
                 >
                   <Heart className="h-3.5 w-3.5" />
