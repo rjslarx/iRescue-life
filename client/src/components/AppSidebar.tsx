@@ -677,7 +677,12 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
   // Inject additional granted pages not already in the role's nav list
   const existingUrls = new Set(filteredGroups.flatMap(g => g.items.map(i => i.url)));
   const accessiblePages = getAccessiblePages();
+  const featureFlaggedPageIds: Record<string, boolean> = {
+    'tnr-log': tnrEnabled,
+    'microchip-clinic-log': microchipClinicEnabled,
+  };
   const additionalItems: NavItem[] = accessiblePages
+    .filter(pageId => !(pageId in featureFlaggedPageIds) || featureFlaggedPageIds[pageId])
     .map(pageId => pageIdToNavItem[pageId])
     .filter((item): item is NavItem => !!item && !existingUrls.has(item.url));
 
