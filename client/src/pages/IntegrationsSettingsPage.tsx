@@ -715,7 +715,7 @@ export default function IntegrationsSettingsPage() {
                 </div>
                 <Switch
                   id="microchip-clinic-enabled-toggle"
-                  checked={(data?.tenant as any)?.microchipClinicEnabled || false}
+                  checked={data?.tenant?.microchipClinicEnabled || false}
                   disabled={updateMicrochipClinicEnabledMutation.isPending || !canEdit}
                   onCheckedChange={(checked) => updateMicrochipClinicEnabledMutation.mutate(checked)}
                   data-testid="switch-microchip-clinic-enabled"

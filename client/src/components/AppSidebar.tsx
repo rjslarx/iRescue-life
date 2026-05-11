@@ -493,6 +493,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
         { title: "Daily Roster", url: "/dashboard/daily-roster", icon: ClipboardList },
         { title: "Medical Imports", url: "/dashboard/medical-imports", icon: FileUp },
         ...(tnrEnabled ? [{ title: "TNR Log", url: "/dashboard/tnr-log", icon: Cat }] : []),
+        ...(microchipClinicEnabled ? [{ title: "Microchip Clinic Log", url: "/dashboard/microchip-clinic-log", icon: ScanLine }] : []),
         { title: "Adoption Applications", url: "/dashboard/applications", icon: FileText, notificationKey: "applications" },
         { title: "Intake Manager", url: "/dashboard/intake", icon: Inbox },
         { title: "Supply Registry", url: "/dashboard/supplies", icon: ShoppingCart },

@@ -28,8 +28,8 @@ const ALWAYS_ACCESSIBLE_PAGES = new Set<string>([
 const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
   volunteer: ['calendar', 'volunteers', 'animals', 'animal-roster', 'tutorials', 'my-account', 'temperature'],
   foster: ['my-fosters', 'animals', 'animal-roster', 'tutorials', 'kennels', 'my-account', 'temperature'],
-  staff: ['dashboard', 'animals', 'applications', 'foster-management', 'volunteers', 'calendar', 'kennels', 'medical-tasks', 'daily-roster', 'tutorials', 'my-account', 'temperature'],
-  board_member: ['dashboard', 'animals', 'applications', 'foster-management', 'volunteers', 'calendar', 'finance', 'grants', 'donors', 'analytics', 'reports', 'kennels', 'medical-tasks', 'daily-roster', 'tutorials', 'my-account', 'temperature'],
+  staff: ['dashboard', 'animals', 'applications', 'foster-management', 'volunteers', 'calendar', 'kennels', 'medical-tasks', 'daily-roster', 'tutorials', 'my-account', 'temperature', 'microchip-clinic-log'],
+  board_member: ['dashboard', 'animals', 'applications', 'foster-management', 'volunteers', 'calendar', 'finance', 'grants', 'donors', 'analytics', 'reports', 'kennels', 'medical-tasks', 'daily-roster', 'tutorials', 'my-account', 'temperature', 'microchip-clinic-log'],
 };
 
 /**
