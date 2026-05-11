@@ -10,5 +10,5 @@ cd "$(dirname "$0")/.."
 if [ "$#" -gt 0 ]; then
   exec npx tsx --tsconfig tests/tsconfig.json --test "$@"
 else
-  exec npx tsx --tsconfig tests/tsconfig.json --test tests/*.test.ts
+  exec npx tsx --tsconfig tests/tsconfig.json --test tests/*.test.ts tests/*.test.tsx
 fi

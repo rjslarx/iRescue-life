@@ -12,7 +12,7 @@ import { useSEO } from "@/hooks/useSEO";
 import { TenureBadge, calcTenure } from "@/components/vip/TenureBadge";
 import type { Tenant } from "@shared/schema";
 
-interface Hero {
+export interface Hero {
   displayName: string;
   // Legacy alias for older cached responses; prefer `displayName`.
   firstName?: string;
@@ -29,14 +29,14 @@ interface Hero {
 }
 
 const MEMORIAL_PHRASE_RE = /^\s*in\s+(loving\s+)?(memory|honor)\s+of\b/i;
-function isMemorialHero(h: Hero): boolean {
+export function isMemorialHero(h: Hero): boolean {
   if (h.isMemorial) return true;
   if (h.memorialPhotoUrl) return true;
   const name = h.displayName ?? h.firstName ?? "";
   return MEMORIAL_PHRASE_RE.test(name);
 }
 
-interface HonorRollEntry {
+export interface HonorRollEntry {
   tributeName: string;
   tributeKind: "memory" | "honor";
   frameStyle: "heart" | "paw";
@@ -51,7 +51,7 @@ interface WallResponse {
   honorRoll?: HonorRollEntry[];
 }
 
-const ALL_TIERS_KEY = "__all__";
+export const ALL_TIERS_KEY = "__all__";
 
 // Unified tile model — every card on the page is rendered from one of these.
 interface TileBase {
@@ -60,13 +60,13 @@ interface TileBase {
   since: string;
   index: number;
 }
-interface HeroTile extends TileBase {
+export interface HeroTile extends TileBase {
   kind: "hero";
   tierName: string | null;
   foreverHero: boolean;
   foreverHeroTenureMonths: number | null;
 }
-interface TributeTile extends TileBase {
+export interface TributeTile extends TileBase {
   kind: "tribute";
   photoUrl: string | null;
   donorCount: number;
@@ -77,7 +77,96 @@ interface TributeTile extends TileBase {
   foreverHeroTenureMonths: number | null;
   showTenure: boolean;
 }
-type Tile = HeroTile | TributeTile;
+export type Tile = HeroTile | TributeTile;
+
+// --- Pure helpers (exported for testing) ----------------------------------
+
+export function buildTributeTiles(
+  heroes: Hero[],
+  honorRoll: HonorRollEntry[],
+): TributeTile[] {
+  const fromMemorialHeroes: TributeTile[] = heroes
+    .filter(isMemorialHero)
+    .map((h, i) => ({
+      kind: "tribute",
+      key: `mem-${h.displayName ?? h.firstName ?? "anon"}-${h.since}-${i}`,
+      name: h.displayName || h.firstName || "Anonymous",
+      since: h.since,
+      photoUrl: h.memorialPhotoUrl ?? null,
+      donorCount: 1,
+      tierName: h.tierName,
+      foreverHero: !!h.foreverHero,
+      foreverHeroTenureMonths: h.foreverHeroTenureMonths ?? null,
+      showTenure: true,
+      index: i,
+    }));
+
+  const fromHonorRoll: TributeTile[] = honorRoll.map((entry, i) => {
+    const phrase = entry.tributeKind === "memory" ? "In loving memory of" : "In honor of";
+    return {
+      kind: "tribute",
+      key: `hr-${entry.tributeName}-${i}`,
+      name: `${phrase} ${entry.tributeName}`,
+      since: entry.latestDonationDate,
+      photoUrl: entry.photoUrl,
+      donorCount: entry.donorCount,
+      tierName: null,
+      foreverHero: false,
+      foreverHeroTenureMonths: null,
+      showTenure: false,
+      index: fromMemorialHeroes.length + i,
+    };
+  });
+
+  return [...fromMemorialHeroes, ...fromHonorRoll];
+}
+
+export function buildHeroTiles(heroes: Hero[]): HeroTile[] {
+  return heroes
+    .filter((h) => !isMemorialHero(h))
+    .map((h, i) => ({
+      kind: "hero",
+      key: `hero-${h.displayName ?? h.firstName ?? "anon"}-${h.since}-${i}`,
+      name: h.displayName || h.firstName || "Anonymous",
+      since: h.since,
+      tierName: h.tierName,
+      foreverHero: !!h.foreverHero,
+      foreverHeroTenureMonths: h.foreverHeroTenureMonths ?? null,
+      index: i,
+    }));
+}
+
+/**
+ * Tribute tiles obey the search box on every render. The tier-filter pills,
+ * however, are conceptually about donor tiers — tributes don't have one — so
+ * selecting any specific tier hides the whole tribute section. With the
+ * "All Heroes" pill active the section stays visible (subject to search).
+ */
+export function filterTributeTiles(
+  tiles: TributeTile[],
+  search: string,
+  activeTier: string,
+): TributeTile[] {
+  if (activeTier !== ALL_TIERS_KEY) return [];
+  const q = search.trim().toLowerCase();
+  return tiles.filter((t) => {
+    if (q && !t.name.toLowerCase().includes(q)) return false;
+    return true;
+  });
+}
+
+export function filterHeroTiles(
+  tiles: HeroTile[],
+  search: string,
+  activeTier: string,
+): HeroTile[] {
+  const q = search.trim().toLowerCase();
+  return tiles.filter((t) => {
+    if (q && !t.name.toLowerCase().includes(q)) return false;
+    if (activeTier !== ALL_TIERS_KEY && t.tierName !== activeTier) return false;
+    return true;
+  });
+}
 
 export default function WallOfHeroesPage() {
   const { data: tenantData } = useQuery<{ tenant: Tenant }>({
@@ -112,81 +201,24 @@ export default function WallOfHeroesPage() {
 
   // --- Tile assembly --------------------------------------------------------
 
-  // Tribute tiles: memorial-subscription heroes + one-time honor-roll entries.
-  const tributeTiles = useMemo<TributeTile[]>(() => {
-    const fromMemorialHeroes: TributeTile[] = heroes
-      .filter(isMemorialHero)
-      .map((h, i) => ({
-        kind: "tribute",
-        key: `mem-${h.displayName ?? h.firstName ?? "anon"}-${h.since}-${i}`,
-        name: h.displayName || h.firstName || "Anonymous",
-        since: h.since,
-        photoUrl: h.memorialPhotoUrl ?? null,
-        donorCount: 1,
-        tierName: h.tierName,
-        foreverHero: !!h.foreverHero,
-        foreverHeroTenureMonths: h.foreverHeroTenureMonths ?? null,
-        showTenure: true,
-        index: i,
-      }));
+  const tributeTiles = useMemo<TributeTile[]>(
+    () => buildTributeTiles(heroes, honorRoll),
+    [heroes, honorRoll],
+  );
 
-    const fromHonorRoll: TributeTile[] = honorRoll.map((entry, i) => {
-      const phrase = entry.tributeKind === "memory" ? "In loving memory of" : "In honor of";
-      return {
-        kind: "tribute",
-        key: `hr-${entry.tributeName}-${i}`,
-        name: `${phrase} ${entry.tributeName}`,
-        since: entry.latestDonationDate,
-        photoUrl: entry.photoUrl,
-        donorCount: entry.donorCount,
-        tierName: null,
-        foreverHero: false,
-        foreverHeroTenureMonths: null,
-        showTenure: false,
-        index: fromMemorialHeroes.length + i,
-      };
-    });
-
-    return [...fromMemorialHeroes, ...fromHonorRoll];
-  }, [heroes, honorRoll]);
-
-  // Hero tiles: monthly donors that aren't classified as memorial.
-  const heroTiles = useMemo<HeroTile[]>(() => {
-    return heroes
-      .filter((h) => !isMemorialHero(h))
-      .map((h, i) => ({
-        kind: "hero",
-        key: `hero-${h.displayName ?? h.firstName ?? "anon"}-${h.since}-${i}`,
-        name: h.displayName || h.firstName || "Anonymous",
-        since: h.since,
-        tierName: h.tierName,
-        foreverHero: !!h.foreverHero,
-        foreverHeroTenureMonths: h.foreverHeroTenureMonths ?? null,
-        index: i,
-      }));
-  }, [heroes]);
+  const heroTiles = useMemo<HeroTile[]>(() => buildHeroTiles(heroes), [heroes]);
 
   // --- Filtering ------------------------------------------------------------
 
-  const q = search.trim().toLowerCase();
+  const filteredTributes = useMemo(
+    () => filterTributeTiles(tributeTiles, search, activeTier),
+    [tributeTiles, search, activeTier],
+  );
 
-  const filteredTributes = useMemo(() => {
-    // Tribute tiles have no donor tier, so the tier-filter pills don't apply
-    // to them — only the search box does. They stay visible regardless of
-    // which tier pill is active.
-    return tributeTiles.filter((t) => {
-      if (q && !t.name.toLowerCase().includes(q)) return false;
-      return true;
-    });
-  }, [tributeTiles, q]);
-
-  const filteredHeroes = useMemo(() => {
-    return heroTiles.filter((t) => {
-      if (q && !t.name.toLowerCase().includes(q)) return false;
-      if (activeTier !== ALL_TIERS_KEY && t.tierName !== activeTier) return false;
-      return true;
-    });
-  }, [heroTiles, q, activeTier]);
+  const filteredHeroes = useMemo(
+    () => filterHeroTiles(heroTiles, search, activeTier),
+    [heroTiles, search, activeTier],
+  );
 
   // Stats for the hero summary (unchanged — based on the full heroes list).
   const totalCount = heroes.length;
@@ -441,7 +473,7 @@ function FilterPill({
  * silhouette. Falls back to a Heart icon on a rose-tinted disc when no
  * photo is provided.
  */
-function FeatheredAvatar({
+export function FeatheredAvatar({
   photoUrl,
   name,
   sizePx = 56,
@@ -518,7 +550,7 @@ function FeatheredAvatar({
  *  - "tribute":  Feathered photo (or Heart fallback) in a rose-tinted disc,
  *                no tenure badge by default.
  */
-function UnifiedTile({ tile }: { tile: Tile }) {
+export function UnifiedTile({ tile }: { tile: Tile }) {
   const sinceLabel = new Date(tile.since).toLocaleDateString("en-US", {
     month: "short",
     year: "numeric",
