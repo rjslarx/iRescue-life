@@ -10,6 +10,7 @@ import { Search, Sparkles, Heart, ArrowLeft } from "lucide-react";
 import PublicHeader from "@/components/PublicHeader";
 import { useSEO } from "@/hooks/useSEO";
 import { TenureBadge, calcTenure } from "@/components/vip/TenureBadge";
+import { MemorialFrame } from "@/components/vip/MemorialFrame";
 import type { Tenant } from "@shared/schema";
 
 interface Hero {
@@ -20,9 +21,19 @@ interface Hero {
   since: string;
 }
 
+interface HonorRollEntry {
+  tributeName: string;
+  tributeKind: "memory" | "honor";
+  frameStyle: "heart" | "paw";
+  photoUrl: string | null;
+  latestDonationDate: string;
+  donorCount: number;
+}
+
 interface WallResponse {
   heroes: Hero[];
   count: number;
+  honorRoll?: HonorRollEntry[];
 }
 
 const ALL_TIERS_KEY = "__all__";
@@ -48,6 +59,14 @@ export default function WallOfHeroesPage() {
   });
 
   const heroes = data?.heroes ?? [];
+  const honorRoll = data?.honorRoll ?? [];
+
+  const filteredHonorRoll = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    // Honor Roll respects search filter only (tier filter is donor-tier specific).
+    if (!q) return honorRoll;
+    return honorRoll.filter((h) => h.tributeName.toLowerCase().includes(q));
+  }, [honorRoll, search]);
 
   const tierOptions = useMemo(() => {
     const set = new Set<string>();
@@ -155,6 +174,31 @@ export default function WallOfHeroesPage() {
           </div>
         </section>
 
+        {/* Honor Roll — Task #198. Tribute gifts from the last 12 months. */}
+        {filteredHonorRoll.length > 0 && (
+          <section
+            className="container max-w-6xl mx-auto px-4 sm:px-6 pt-8 sm:pt-12"
+            data-testid="section-honor-roll"
+          >
+            <div className="flex items-center gap-2 mb-4">
+              <Heart className="h-4 w-4 text-rose-500" fill="currentColor" />
+              <h2 className="font-display text-xl sm:text-2xl font-semibold">Honor Roll</h2>
+              <Badge variant="outline" className="text-xs">{filteredHonorRoll.length}</Badge>
+            </div>
+            <p className="text-sm text-muted-foreground mb-5 max-w-2xl">
+              Names lifted up by gifts made in their memory or honor over the past year.
+            </p>
+            <div
+              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
+              data-testid="grid-honor-roll"
+            >
+              {filteredHonorRoll.map((entry, i) => (
+                <HonorRollCard key={`${entry.tributeName}-${i}`} entry={entry} index={i} />
+              ))}
+            </div>
+          </section>
+        )}
+
         {/* Grid */}
         <section className="container max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
           {isLoading ? (
@@ -248,6 +292,37 @@ function FilterPill({
         {count}
       </Badge>
     </Button>
+  );
+}
+
+function HonorRollCard({ entry, index }: { entry: HonorRollEntry; index: number }) {
+  const phrase = entry.tributeKind === "memory" ? "In loving memory of" : "In honor of";
+  return (
+    <Card
+      className="p-4 flex items-start gap-3 hover-elevate"
+      data-testid={`card-honor-roll-${index}`}
+    >
+      <MemorialFrame
+        photoUrl={entry.photoUrl}
+        name={entry.tributeName}
+        frameStyle={entry.frameStyle}
+        size="md"
+      />
+      <div className="min-w-0 flex-1">
+        <p className="text-xs uppercase tracking-wide text-muted-foreground">{phrase}</p>
+        <p
+          className="font-semibold text-base truncate mt-0.5"
+          data-testid={`text-honor-name-${index}`}
+        >
+          {entry.tributeName}
+        </p>
+        {entry.donorCount > 1 && (
+          <p className="text-xs text-muted-foreground mt-1">
+            Honored by {entry.donorCount} donors
+          </p>
+        )}
+      </div>
+    </Card>
   );
 }
 

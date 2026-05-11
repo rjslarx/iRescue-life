@@ -956,6 +956,18 @@ export const donations = pgTable("donations", {
   feesCovered: boolean("fees_covered").notNull().default(false),
   grossAmount: integer("gross_amount"),
   netAmount: integer("net_amount"),
+  // Optional one-time tribute / "in memory or honor of" metadata (Task #198).
+  // Tribute is only meaningful for one-time gifts on the public donate page.
+  tributeKind: text("tribute_kind").$type<"memory" | "honor">(),
+  tributeName: text("tribute_name"),
+  tributeRecipientName: text("tribute_recipient_name"),
+  tributeRecipientEmail: text("tribute_recipient_email"),
+  tributeMessage: text("tribute_message"),
+  tributePhotoUrl: text("tribute_photo_url"),
+  tributeFrameStyle: text("tribute_frame_style").$type<"heart" | "paw">(),
+  tributeWallOptIn: boolean("tribute_wall_opt_in").notNull().default(false),
+  tributeWallExpiresAt: timestamp("tribute_wall_expires_at"),
+  tributeAcknowledgmentSentAt: timestamp("tribute_acknowledgment_sent_at"),
   date: timestamp("date").notNull().defaultNow(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });

@@ -16399,7 +16399,64 @@ ${renderedHtml}
           since: h.since,
         };
       });
-      res.json({ heroes: sanitized, count: sanitized.length });
+      // Honor Roll — Task #198. Aggregate one-time tribute donations from the
+      // last 12 months that opted in to public display. Multiple gifts to the
+      // same honoree (case-insensitive trim match) collapse into one tile
+      // showing "Honored by N donors". Hidden when empty.
+      const { donations: donationsTable } = await import('@shared/schema');
+      const tributeRows = await db
+        .select({
+          tributeName: donationsTable.tributeName,
+          tributeKind: donationsTable.tributeKind,
+          tributeFrameStyle: donationsTable.tributeFrameStyle,
+          tributePhotoUrl: donationsTable.tributePhotoUrl,
+          date: donationsTable.date,
+          expiresAt: donationsTable.tributeWallExpiresAt,
+        })
+        .from(donationsTable)
+        .where(and(
+          eq(donationsTable.tenantId, req.tenant!.id),
+          eq(donationsTable.tributeWallOptIn, true),
+          gte(donationsTable.tributeWallExpiresAt, new Date()),
+        ))
+        .orderBy(desc(donationsTable.date));
+
+      const honorRollMap = new Map<string, {
+        tributeName: string;
+        tributeKind: 'memory' | 'honor';
+        frameStyle: 'heart' | 'paw';
+        photoUrl: string | null;
+        latestDonationDate: string;
+        donorCount: number;
+      }>();
+      for (const row of tributeRows) {
+        if (!row.tributeName || !row.tributeKind) continue;
+        const key = row.tributeName.trim().toLowerCase();
+        if (!key) continue;
+        const existing = honorRollMap.get(key);
+        if (existing) {
+          existing.donorCount += 1;
+          // Keep first non-empty photo + frame.
+          if (!existing.photoUrl && row.tributePhotoUrl) {
+            existing.photoUrl = row.tributePhotoUrl;
+            existing.frameStyle = (row.tributeFrameStyle as 'heart' | 'paw') || existing.frameStyle;
+          }
+        } else {
+          honorRollMap.set(key, {
+            tributeName: row.tributeName.trim(),
+            tributeKind: row.tributeKind,
+            frameStyle: (row.tributeFrameStyle as 'heart' | 'paw') || 'heart',
+            photoUrl: row.tributePhotoUrl,
+            latestDonationDate: (row.date instanceof Date ? row.date : new Date(row.date as any)).toISOString(),
+            donorCount: 1,
+          });
+        }
+      }
+      const honorRoll = Array.from(honorRollMap.values()).sort(
+        (a, b) => new Date(b.latestDonationDate).getTime() - new Date(a.latestDonationDate).getTime(),
+      );
+
+      res.json({ heroes: sanitized, count: sanitized.length, honorRoll });
     } catch (error) {
       next(error);
     }
@@ -27925,7 +27982,14 @@ Submitted: ${new Date().toLocaleString()}
         // monthly subs >= $50 (per shared/ach-eligibility.ts). Below those
         // thresholds the donor only sees card.
         surface: 'donation',
-        successUrl: `${baseUrl}${tenantPath}/?donation=success&session_id={CHECKOUT_SESSION_ID}`,
+        successUrl: (() => {
+          const tributeKind = (data.metadata as any)?.['tribute.kind'];
+          const tributeName = (data.metadata as any)?.['tribute.name'];
+          const extra = tributeKind && tributeName
+            ? `&tributeKind=${encodeURIComponent(tributeKind)}&tributeName=${encodeURIComponent(tributeName)}`
+            : '';
+          return `${baseUrl}${tenantPath}/?donation=success&session_id={CHECKOUT_SESSION_ID}${extra}`;
+        })(),
         cancelUrl: `${baseUrl}${tenantPath}/donate`,
         platformFeeAmount: platformFeeAmount,
         connectedAccountId: tenant.stripeConnectedAccountId || undefined,
@@ -28527,6 +28591,20 @@ Submitted: ${new Date().toLocaleString()}
             const grossAmountCents = donorCoveredFees ? (session.amount_total || 0) : baseAmountCents;
             const netAmountCents = baseAmountCents;
 
+            // Pull optional tribute metadata (Task #198 — one-time tributes only).
+            const tributeKindRaw = sessionMetadata['tribute.kind'];
+            const tributeKind = (tributeKindRaw === 'memory' || tributeKindRaw === 'honor') ? tributeKindRaw : null;
+            const tributeName = tributeKind ? (sessionMetadata['tribute.name'] || null) : null;
+            const tributeFrameRaw = sessionMetadata['tribute.frameStyle'];
+            const tributeFrameStyle = tributeKind && (tributeFrameRaw === 'paw' ? 'paw' : 'heart');
+            const tributeWallOptIn = tributeKind && sessionMetadata['tribute.wallOptIn'] !== 'false';
+            // Wall expiry — 12 months from donation date.
+            const nowDate = new Date();
+            const tributeWallExpiresAt = tributeKind && tributeWallOptIn
+              ? new Date(nowDate.getFullYear() + 1, nowDate.getMonth(), nowDate.getDate())
+              : null;
+            const isOneTimeGift = session.mode !== 'subscription';
+
             const [donationRecord] = await db.insert(donations).values({
               tenantId: tenant.id,
               donorId: donor.id,
@@ -28552,7 +28630,41 @@ Submitted: ${new Date().toLocaleString()}
               feesCovered: donorCoveredFees,
               grossAmount: grossAmountCents,
               netAmount: netAmountCents,
+              // Tribute fields (one-time gifts only). When tributeKind is null all
+              // these stay null/false — schema defaults keep wall opt-in false.
+              tributeKind: isOneTimeGift ? tributeKind : null,
+              tributeName: isOneTimeGift ? tributeName : null,
+              tributeRecipientName: isOneTimeGift && tributeKind ? (sessionMetadata['tribute.recipientName'] || null) : null,
+              tributeRecipientEmail: isOneTimeGift && tributeKind ? (sessionMetadata['tribute.recipientEmail'] || null) : null,
+              tributeMessage: isOneTimeGift && tributeKind ? (sessionMetadata['tribute.message'] || null) : null,
+              tributePhotoUrl: isOneTimeGift && tributeKind ? (sessionMetadata['tribute.photoUrl'] || null) : null,
+              tributeFrameStyle: isOneTimeGift ? (tributeFrameStyle as 'heart' | 'paw' | null) : null,
+              tributeWallOptIn: isOneTimeGift ? !!tributeWallOptIn : false,
+              tributeWallExpiresAt: isOneTimeGift ? tributeWallExpiresAt : null,
             }).returning();
+
+            // Tasteful tribute acknowledgment email — never reveals the amount.
+            // Skip for ACH-pending until the bank actually clears (handled in async_payment_succeeded).
+            if (donationRecord && donationRecord.tributeKind && donationRecord.tributeRecipientEmail && !isAchPending && !donationRecord.tributeAcknowledgmentSentAt) {
+              try {
+                const { sendDonationTributeAcknowledgmentEmail } = await import('./services/vip-emails');
+                await sendDonationTributeAcknowledgmentEmail({
+                  tenant,
+                  donationId: donationRecord.id,
+                  recipientEmail: donationRecord.tributeRecipientEmail,
+                  recipientName: donationRecord.tributeRecipientName || undefined,
+                  donorName: customerName,
+                  honoreeName: donationRecord.tributeName || '',
+                  kind: donationRecord.tributeKind,
+                  personalMessage: donationRecord.tributeMessage || undefined,
+                });
+                await db.update(donations)
+                  .set({ tributeAcknowledgmentSentAt: new Date() })
+                  .where(eq(donations.id, donationRecord.id));
+              } catch (ackErr) {
+                console.error('[STRIPE-WEBHOOK] Tribute acknowledgment email failed:', ackErr);
+              }
+            }
             
             console.log(`[STRIPE-WEBHOOK] Created donation record ${donationRecord.id} for Finance page, donor: ${customerName} (${donor.id}), amount: $${session.amount_total / 100}${feeNote}`);
 
@@ -29325,6 +29437,39 @@ Submitted: ${new Date().toLocaleString()}
           const donor = updatedPayment.donorId
             ? await db.select().from(donors).where(eq(donors.id, updatedPayment.donorId)).limit(1).then(r => r[0])
             : null;
+
+          // Tribute acknowledgment for ACH gifts (deferred from completed
+          // until the bank actually clears). Look up the donation row by
+          // session id and dispatch if a tribute was attached and not yet sent.
+          try {
+            const { donations: donationsTable } = await import('@shared/schema');
+            const [achTributeDonation] = await db
+              .select()
+              .from(donationsTable)
+              .where(and(
+                eq(donationsTable.tenantId, tenant.id),
+                eq(donationsTable.stripeCheckoutSessionId, session.id),
+              ))
+              .limit(1);
+            if (achTributeDonation && achTributeDonation.tributeKind && achTributeDonation.tributeRecipientEmail && !achTributeDonation.tributeAcknowledgmentSentAt) {
+              const { sendDonationTributeAcknowledgmentEmail } = await import('./services/vip-emails');
+              await sendDonationTributeAcknowledgmentEmail({
+                tenant,
+                donationId: achTributeDonation.id,
+                recipientEmail: achTributeDonation.tributeRecipientEmail,
+                recipientName: achTributeDonation.tributeRecipientName || undefined,
+                donorName: achTributeDonation.donorName,
+                honoreeName: achTributeDonation.tributeName || '',
+                kind: achTributeDonation.tributeKind,
+                personalMessage: achTributeDonation.tributeMessage || undefined,
+              });
+              await db.update(donationsTable)
+                .set({ tributeAcknowledgmentSentAt: new Date() })
+                .where(eq(donationsTable.id, achTributeDonation.id));
+            }
+          } catch (tributeAckErr) {
+            console.error('[Webhook] ACH tribute acknowledgment send failed:', tributeAckErr);
+          }
 
           if (donor?.email) {
             try {

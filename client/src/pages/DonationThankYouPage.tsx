@@ -27,6 +27,8 @@ export default function DonationThankYouPage() {
   const donorName = params.get('name') || undefined;
   const amountStr = params.get('amount');
   const amount = amountStr ? parseFloat(amountStr) : undefined;
+  const tributeKind = params.get('tributeKind') as 'memory' | 'honor' | null;
+  const tributeName = params.get('tributeName') || undefined;
 
   const { data: tenantData } = useQuery<{ tenant: Tenant }>({
     queryKey: ['/api/tenant'],
@@ -79,6 +81,18 @@ export default function DonationThankYouPage() {
                     alt={animal.name}
                     className="w-full h-full object-cover"
                   />
+                </div>
+              )}
+
+              {tributeKind && tributeName && (
+                <div
+                  className="mb-6 mx-auto max-w-md text-center px-5 py-4 rounded-md border bg-muted/30"
+                  data-testid="text-tribute-confirmation"
+                >
+                  <Heart className="h-4 w-4 text-rose-500 inline-block mr-1.5 -mt-0.5" fill="currentColor" />
+                  <span className="text-sm">
+                    Your gift was made <strong>{tributeKind === 'memory' ? 'in loving memory of' : 'in honor of'} {tributeName}</strong>.
+                  </span>
                 </div>
               )}
 

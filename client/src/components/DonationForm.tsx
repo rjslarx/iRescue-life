@@ -12,6 +12,7 @@ import { DollarSign, ExternalLink, Loader2, Lock, Shield, Heart, Star, Users, Ho
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { Tenant } from "@shared/schema";
 import { isAchEligible, achNudgeCopy } from "@shared/ach-eligibility";
+import TributeSection, { emptyTribute, type TributeFormValue } from "@/components/donations/TributeSection";
 
 interface DonationFormProps {
   sponsoredAnimalName?: string;
@@ -49,6 +50,8 @@ export default function DonationForm({ sponsoredAnimalName, tenant }: DonationFo
   const [amount, setAmount] = useState<number | null>(sponsoredAnimalName ? 25 : 30);
   const [customAmount, setCustomAmount] = useState("");
   const [donorCoversFees, setDonorCoversFees] = useState(true); // Default checked
+  const [tribute, setTribute] = useState<TributeFormValue>(emptyTribute);
+  const [tributeError, setTributeError] = useState<string | null>(null);
 
   // Calculate current donation amount in cents
   const currentAmountCents = Math.round((amount || parseFloat(customAmount) || 0) * 100);
@@ -79,7 +82,19 @@ export default function DonationForm({ sponsoredAnimalName, tenant }: DonationFo
   );
 
   const stripeCheckoutMutation = useMutation({
-    mutationFn: async (params: { amount: number; email?: string; isRecurring?: boolean; donorCoversFees?: boolean }) => {
+    mutationFn: async (params: { amount: number; email?: string; isRecurring?: boolean; donorCoversFees?: boolean; tribute?: TributeFormValue }) => {
+      const tributeMeta: Record<string, string> = {};
+      const t = params.tribute;
+      if (t && t.enabled && t.kind && t.name.trim()) {
+        tributeMeta['tribute.kind'] = t.kind;
+        tributeMeta['tribute.name'] = t.name.trim().slice(0, 120);
+        tributeMeta['tribute.frameStyle'] = t.frameStyle;
+        tributeMeta['tribute.wallOptIn'] = t.wallOptIn ? 'true' : 'false';
+        if (t.recipientName.trim()) tributeMeta['tribute.recipientName'] = t.recipientName.trim().slice(0, 120);
+        if (t.recipientEmail.trim()) tributeMeta['tribute.recipientEmail'] = t.recipientEmail.trim().slice(0, 200);
+        if (t.message.trim()) tributeMeta['tribute.message'] = t.message.trim().slice(0, 500);
+        if (t.photoUrl) tributeMeta['tribute.photoUrl'] = t.photoUrl.slice(0, 480);
+      }
       const response = await apiRequest('POST', '/api/stripe/create-checkout-session', {
         amount: Math.round(params.amount * 100),
         currency: 'usd',
@@ -88,6 +103,7 @@ export default function DonationForm({ sponsoredAnimalName, tenant }: DonationFo
         donorCoversFees: params.donorCoversFees || false,
         metadata: {
           sponsoredAnimalName: sponsoredAnimalName || '',
+          ...tributeMeta,
         },
       });
 
@@ -123,10 +139,28 @@ export default function DonationForm({ sponsoredAnimalName, tenant }: DonationFo
       return;
     }
 
+    setTributeError(null);
+    const oneTime = sponsoredAnimalName || !isRecurring;
+    if (oneTime && tribute.enabled) {
+      if (!tribute.kind) {
+        setTributeError("Please choose 'In memory of' or 'In honor of'.");
+        return;
+      }
+      if (!tribute.name.trim()) {
+        setTributeError("Please enter the honoree's name.");
+        return;
+      }
+      if (tribute.recipientEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(tribute.recipientEmail.trim())) {
+        setTributeError("Please enter a valid recipient email address.");
+        return;
+      }
+    }
+
     stripeCheckoutMutation.mutate({
       amount: donationAmount,
       isRecurring: sponsoredAnimalName ? false : isRecurring,
       donorCoversFees,
+      tribute: oneTime ? tribute : undefined,
     });
   };
 
@@ -283,6 +317,16 @@ export default function DonationForm({ sponsoredAnimalName, tenant }: DonationFo
                   {achNudgeCopy('donation', !sponsoredAnimalName && isRecurring)}
                 </p>
               </div>
+            )}
+
+            {/* Tribute / In-Memory section — one-time gifts only */}
+            {(sponsoredAnimalName || !isRecurring) && (
+              <>
+                <TributeSection value={tribute} onChange={setTribute} />
+                {tributeError && (
+                  <p className="text-xs text-destructive" data-testid="text-tribute-error">{tributeError}</p>
+                )}
+              </>
             )}
 
             {/* Cover the Fees Checkbox */}

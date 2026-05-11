@@ -394,6 +394,21 @@ export async function generateDonationReceipt(
         color: textColor,
       });
       y -= 25;
+
+      // Tribute / "in memory or honor of" line — Task #198. Appears between
+      // amount and disclosure block so it shows up on both the donor copy and
+      // any printed receipt the family might receive.
+      if ((donation as any).tributeKind && (donation as any).tributeName) {
+        const phrase = (donation as any).tributeKind === 'memory' ? 'In loving memory of' : 'In honor of';
+        page.drawText(`${phrase}: ${(donation as any).tributeName}`, {
+          x: leftMargin,
+          y,
+          size: 11,
+          font: helveticaBold,
+          color: textColor,
+        });
+        y -= 22;
+      }
     } else {
       // In-Kind donation: Show description only, NO dollar value (IRS requirement)
       const inKindLabels: Record<string, string> = {

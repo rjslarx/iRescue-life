@@ -612,3 +612,74 @@ export async function sendVipPaymentFailedEmail(params: VipPaymentFailedEmailPar
     console.error('[VIP PaymentFailed] Failed to send card-failure email:', err);
   }
 }
+
+/**
+ * Tasteful "in memory of / in honor of" acknowledgment email — Task #198.
+ * Notifies a family member or friend that a donation was made in their loved
+ * one's name. NEVER reveals the donation amount.
+ */
+export async function sendDonationTributeAcknowledgmentEmail(params: {
+  tenant: VipEmailTenant;
+  donationId: string;
+  recipientEmail: string;
+  recipientName?: string;
+  donorName?: string | null;
+  honoreeName: string;
+  kind: 'memory' | 'honor';
+  personalMessage?: string;
+}): Promise<void> {
+  const { tenant, recipientEmail, recipientName, donorName, honoreeName, kind, personalMessage } = params;
+  if (!recipientEmail || !honoreeName) return;
+
+  const emailService = await EmailService.forTenant(tenant.id);
+  if (!emailService) {
+    console.warn(`[Tribute Ack] No EmailService configured for tenant ${tenant.id}`);
+    return;
+  }
+
+  const safeRecipient = escapeHtml(recipientName || 'Friend');
+  const safeDonor = escapeHtml(donorName || 'A friend');
+  const safeHonoree = escapeHtml(honoreeName);
+  const safeTenant = escapeHtml(tenant.name);
+  const safeMessage = escapeHtml(personalMessage || '');
+  const phrase = kind === 'memory' ? 'in loving memory of' : 'in honor of';
+  const subject = kind === 'memory'
+    ? `A gift was made in loving memory of ${honoreeName}`
+    : `A gift was made in honor of ${honoreeName}`;
+
+  const html = `
+<div style="font-family: Georgia, 'Times New Roman', serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #1f2937;">
+  <p style="font-size: 16px;">Dear ${safeRecipient},</p>
+  <p style="font-size: 15px; line-height: 1.7;">
+    We wanted you to know that <strong>${safeDonor}</strong> recently made a donation to ${safeTenant}
+    ${phrase} <strong>${safeHonoree}</strong>.
+  </p>
+  ${safeMessage ? `
+  <div style="margin: 20px 0; padding: 16px 20px; border-left: 3px solid #d1d5db; background: #f9fafb; font-style: italic; line-height: 1.6;">
+    &ldquo;${safeMessage}&rdquo;
+  </div>` : ''}
+  <p style="font-size: 15px; line-height: 1.7;">
+    Their thoughtful gift will help care for animals in need &mdash; a quiet, lasting tribute to ${safeHonoree}.
+  </p>
+  <p style="font-size: 15px; line-height: 1.7;">
+    With gratitude,<br/>
+    <strong>The ${safeTenant} family</strong>
+  </p>
+  <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
+  <p style="font-size: 11px; color: #9ca3af; line-height: 1.5;">
+    This message was sent because someone designated you as a person to notify of a tribute gift. We never share donation amounts.
+  </p>
+</div>`.trim();
+
+  try {
+    const result = await emailService.send({ to: recipientEmail, subject, html });
+    if (result.success) {
+      console.log(`[Tribute Ack] Sent acknowledgment to ${recipientEmail} for donation ${params.donationId}`);
+    } else {
+      console.warn(`[Tribute Ack] Email send returned failure: ${result.error}`);
+    }
+  } catch (err) {
+    console.error('[Tribute Ack] Failed to send acknowledgment email:', err);
+    throw err;
+  }
+}
