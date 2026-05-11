@@ -22,6 +22,7 @@ interface Hero {
   memorialPhotoUrl?: string | null;
   memorialFrameStyle?: "heart" | "paw" | null;
   foreverHero?: boolean;
+  foreverHeroTenureMonths?: number | null;
   // Server-side flag combining "has memorial photo" with "name starts with In
   // Memory/Honor of" — drives the In-Memory section. Older cached payloads
   // won't have this; we fall back to the regex check below.
@@ -421,7 +422,14 @@ function MemorialHeroCard({ hero, index }: { hero: Hero; index: number }) {
         {hero.tierName ? (
           <p className="text-xs text-primary/80 font-medium truncate">{hero.tierName}</p>
         ) : null}
-        <p className="text-xs text-muted-foreground mt-0.5">Since {sinceLabel}</p>
+        <div className="mt-1">
+          <TenureBadge
+            since={hero.since}
+            size="sm"
+            frozenMonths={hero.foreverHero ? hero.foreverHeroTenureMonths ?? null : null}
+          />
+        </div>
+        <p className="text-xs text-muted-foreground mt-1">Since {sinceLabel}</p>
         {hero.foreverHero && (
           <Badge
             variant="outline"

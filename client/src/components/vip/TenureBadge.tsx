@@ -34,10 +34,24 @@ interface TenureBadgeProps {
   size?: "sm" | "md";
   showMonths?: boolean;
   className?: string;
+  /**
+   * If provided, freezes the tenure at this paid-month count instead of
+   * computing it from `since`. Used for Forever Hero memorial tiles so the
+   * badge donors earned at cancellation never silently advances.
+   */
+  frozenMonths?: number | null;
 }
 
-export function TenureBadge({ since, size = "md", showMonths = true, className }: TenureBadgeProps) {
-  const { tier, label, monthsActive } = calcTenure(since);
+export function TenureBadge({ since, size = "md", showMonths = true, className, frozenMonths }: TenureBadgeProps) {
+  const live = calcTenure(since);
+  let monthsActive = live.monthsActive;
+  let tier = live.tier;
+  let label = live.label;
+  if (typeof frozenMonths === "number" && Number.isFinite(frozenMonths) && frozenMonths >= 0) {
+    monthsActive = Math.floor(frozenMonths);
+    tier = monthsActive >= 24 ? "diamond" : monthsActive >= 12 ? "gold" : monthsActive >= 6 ? "silver" : "bronze";
+    label = ({ bronze: "Bronze Paw", silver: "Silver Paw", gold: "Gold Paw", diamond: "Diamond Paw" } as const)[tier];
+  }
 
   const Icon = tier === "diamond" ? Gem : tier === "gold" ? Trophy : tier === "silver" ? Medal : Award;
 

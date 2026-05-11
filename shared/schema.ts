@@ -1080,6 +1080,10 @@ export const subscriptions = pgTable("subscriptions", {
   // canceled after >= 12 months of active billing — the In-Memory tile is
   // then preserved on the public Wall of Heroes permanently.
   foreverHero: boolean("forever_hero").notNull().default(false),
+  // Frozen tenure (paid months) snapshotted when foreverHero flips on. Lets
+  // the public Wall keep showing the badge the donor earned at cancellation
+  // instead of advancing it forever from `since`.
+  foreverHeroTenureMonths: integer("forever_hero_tenure_months"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (table) => ({
   uniqueStripeSubscription: unique().on(table.tenantId, table.stripeSubscriptionId),

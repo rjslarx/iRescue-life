@@ -16368,6 +16368,7 @@ ${renderedHtml}
           memorialPhotoUrl: subs.memorialPhotoUrl,
           memorialFrameStyle: subs.memorialFrameStyle,
           foreverHero: subs.foreverHero,
+          foreverHeroTenureMonths: subs.foreverHeroTenureMonths,
           canceledAt: subs.canceledAt,
         })
         .from(subs)
@@ -16420,6 +16421,7 @@ ${renderedHtml}
           memorialPhotoUrl: h.memorialPhotoUrl,
           memorialFrameStyle,
           foreverHero: !!h.foreverHero,
+          foreverHeroTenureMonths: h.foreverHeroTenureMonths ?? null,
           isMemorial,
         };
       });
@@ -29452,7 +29454,15 @@ Submitted: ${new Date().toLocaleString()}
                 ))
                 .limit(1);
               if (dbSubForForever && !dbSubForForever.foreverHero) {
+                // Tribute eligibility: memorial photo set, OR recognition name
+                // starts with "in (loving) memory|honor of", OR Stripe metadata
+                // marks it as a gifted subscription. Gifted subs are
+                // tribute-by-nature even if the donor never set a frame.
+                const meta = (subscription.metadata || {}) as Record<string, string>;
+                const isGifted =
+                  String(meta.is_gift || meta.gift || meta.gifted || '').toLowerCase() === 'true';
                 const isTribute = !!dbSubForForever.memorialPhotoUrl
+                  || isGifted
                   || /^\s*in\s+(loving\s+)?(memory|honor)\s+of\b/i.test(
                     (dbSubForForever.displayName || '').trim(),
                   );
@@ -29495,9 +29505,12 @@ Submitted: ${new Date().toLocaleString()}
                     }
                   }
                   if (paidMonths >= 12) {
+                    // Snapshot the final paid-month tenure so the public Wall
+                    // keeps showing the badge the donor earned at cancellation
+                    // (otherwise TenureBadge would keep advancing from `since`).
                     await db
                       .update(subscriptions)
-                      .set({ foreverHero: true })
+                      .set({ foreverHero: true, foreverHeroTenureMonths: paidMonths })
                       .where(eq(subscriptions.id, dbSubForForever.id));
                     console.log(`[ForeverHero] Tribute sub ${dbSubForForever.id} pinned to Wall (${paidMonths} paid months)`);
                   }
