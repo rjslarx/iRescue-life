@@ -16410,6 +16410,8 @@ ${renderedHtml}
           tributeKind: donationsTable.tributeKind,
           tributeFrameStyle: donationsTable.tributeFrameStyle,
           tributePhotoUrl: donationsTable.tributePhotoUrl,
+          donorEmail: donationsTable.donorEmail,
+          donorName: donationsTable.donorName,
           date: donationsTable.date,
           expiresAt: donationsTable.tributeWallExpiresAt,
         })
@@ -16427,15 +16429,23 @@ ${renderedHtml}
         frameStyle: 'heart' | 'paw';
         photoUrl: string | null;
         latestDonationDate: string;
-        donorCount: number;
+        donorIdentities: Set<string>;
       }>();
       for (const row of tributeRows) {
         if (!row.tributeName || !row.tributeKind) continue;
         const key = row.tributeName.trim().toLowerCase();
         if (!key) continue;
+        // Build a stable per-donor identity to dedupe repeat gifts from the
+        // same donor to the same honoree. Prefer email, fall back to name,
+        // and finally to a synthetic per-row token so an unidentified donor
+        // still counts once.
+        const donorIdentity =
+          (row.donorEmail && row.donorEmail.trim().toLowerCase()) ||
+          (row.donorName && `name:${row.donorName.trim().toLowerCase()}`) ||
+          `anon:${row.date instanceof Date ? row.date.toISOString() : String(row.date)}`;
         const existing = honorRollMap.get(key);
         if (existing) {
-          existing.donorCount += 1;
+          existing.donorIdentities.add(donorIdentity);
           // Keep first non-empty photo + frame.
           if (!existing.photoUrl && row.tributePhotoUrl) {
             existing.photoUrl = row.tributePhotoUrl;
@@ -16448,11 +16458,18 @@ ${renderedHtml}
             frameStyle: (row.tributeFrameStyle as 'heart' | 'paw') || 'heart',
             photoUrl: row.tributePhotoUrl,
             latestDonationDate: (row.date instanceof Date ? row.date : new Date(row.date)).toISOString(),
-            donorCount: 1,
+            donorIdentities: new Set([donorIdentity]),
           });
         }
       }
-      const honorRoll = Array.from(honorRollMap.values()).sort(
+      const honorRoll = Array.from(honorRollMap.values()).map((entry) => ({
+        tributeName: entry.tributeName,
+        tributeKind: entry.tributeKind,
+        frameStyle: entry.frameStyle,
+        photoUrl: entry.photoUrl,
+        latestDonationDate: entry.latestDonationDate,
+        donorCount: entry.donorIdentities.size,
+      })).sort(
         (a, b) => new Date(b.latestDonationDate).getTime() - new Date(a.latestDonationDate).getTime(),
       );
 
@@ -28657,6 +28674,7 @@ Submitted: ${new Date().toLocaleString()}
                   honoreeName: donationRecord.tributeName || '',
                   kind: donationRecord.tributeKind,
                   personalMessage: donationRecord.tributeMessage || undefined,
+                  fallbackOrigin: `${req.protocol}://${req.get('host')}`,
                 });
                 await db.update(donations)
                   .set({ tributeAcknowledgmentSentAt: new Date() })
@@ -29462,6 +29480,7 @@ Submitted: ${new Date().toLocaleString()}
                 honoreeName: achTributeDonation.tributeName || '',
                 kind: achTributeDonation.tributeKind,
                 personalMessage: achTributeDonation.tributeMessage || undefined,
+                fallbackOrigin: `${req.protocol}://${req.get('host')}`,
               });
               await db.update(donationsTable)
                 .set({ tributeAcknowledgmentSentAt: new Date() })

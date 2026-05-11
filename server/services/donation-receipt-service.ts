@@ -695,6 +695,9 @@ export async function generateAndEmailReceipt(
       ? `<p style="margin: 5px 0;"><strong>Amount:</strong> ${formatCurrency(donation.amount)}</p>` 
       : `<p style="margin: 5px 0;"><strong>Items:</strong> ${donation.description || 'In-kind donation'}</p>
          ${(donation as any).donorStatedValue ? `<p style="margin: 5px 0;"><strong>Donor-Stated Value:</strong> ${formatCurrency((donation as any).donorStatedValue)}</p>` : ''}`}
+    ${donation.tributeKind && donation.tributeName
+      ? `<p style="margin: 5px 0;"><strong>${donation.tributeKind === 'memory' ? 'In loving memory of' : 'In honor of'}:</strong> ${donation.tributeName}</p>`
+      : ''}
   </div>
   
   <p>Your support makes a real difference in the lives of the animals we rescue and care for. Thank you for being part of our mission!</p>

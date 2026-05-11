@@ -627,6 +627,7 @@ export async function sendDonationTributeAcknowledgmentEmail(params: {
   honoreeName: string;
   kind: 'memory' | 'honor';
   personalMessage?: string;
+  fallbackOrigin: string;
 }): Promise<void> {
   const { tenant, recipientEmail, recipientName, donorName, honoreeName, kind, personalMessage } = params;
   if (!recipientEmail || !honoreeName) return;
@@ -646,12 +647,15 @@ export async function sendDonationTributeAcknowledgmentEmail(params: {
   const subject = kind === 'memory'
     ? `A gift was made in loving memory of ${honoreeName}`
     : `A gift was made in honor of ${honoreeName}`;
+  const rescueUrl = buildBaseUrl(tenant, params.fallbackOrigin);
+  const safeRescueUrl = escapeHtml(rescueUrl);
 
   const html = `
 <div style="font-family: Georgia, 'Times New Roman', serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #1f2937;">
   <p style="font-size: 16px;">Dear ${safeRecipient},</p>
   <p style="font-size: 15px; line-height: 1.7;">
-    We wanted you to know that <strong>${safeDonor}</strong> recently made a donation to ${safeTenant}
+    We wanted you to know that <strong>${safeDonor}</strong> recently made a donation to
+    <a href="${safeRescueUrl}" style="color: #2563eb; text-decoration: underline;">${safeTenant}</a>
     ${phrase} <strong>${safeHonoree}</strong>.
   </p>
   ${safeMessage ? `
@@ -660,6 +664,9 @@ export async function sendDonationTributeAcknowledgmentEmail(params: {
   </div>` : ''}
   <p style="font-size: 15px; line-height: 1.7;">
     Their thoughtful gift will help care for animals in need &mdash; a quiet, lasting tribute to ${safeHonoree}.
+  </p>
+  <p style="text-align: center; margin: 24px 0;">
+    <a href="${safeRescueUrl}" style="display: inline-block; background: #2563eb; color: #ffffff; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-weight: 600; font-family: Arial, sans-serif; font-size: 14px;">Visit ${safeTenant}</a>
   </p>
   <p style="font-size: 15px; line-height: 1.7;">
     With gratitude,<br/>
