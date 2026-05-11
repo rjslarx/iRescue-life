@@ -1096,6 +1096,37 @@ export const insertSubscriptionSchema = createInsertSchema(subscriptions).omit({
 export type InsertSubscription = z.infer<typeof insertSubscriptionSchema>;
 export type Subscription = typeof subscriptions.$inferSelect;
 
+// VIP gift subscriptions (Task #197). Each row records that a subscription
+// was paid for as a gift in honor of someone else. The gifter's identity is
+// the donor on `subscriptions`; the honoree fields live here. The daily
+// scheduler sends a tasteful "you've been honored" email on
+// `announcementDate` (never reveals the dollar amount) and stamps
+// `announcementSentAt` to dedupe. `displayOnWallOfHeroes` and
+// `displayName` on the parent subscription are flipped at webhook time
+// based on the gifter's wall-opt-in choice.
+export const subscriptionGifts = pgTable("subscription_gifts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  subscriptionId: uuid("subscription_id").notNull().references(() => subscriptions.id, { onDelete: 'cascade' }),
+  honoreeName: text("honoree_name").notNull(),
+  honoreeEmail: text("honoree_email"),
+  giftMessage: text("gift_message"),
+  // Date on which the announcement email should be sent. Stored as a date
+  // (no time component); scheduler runs once daily.
+  announcementDate: timestamp("announcement_date").notNull(),
+  announcementSentAt: timestamp("announcement_sent_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  uniqueSubscriptionGift: unique().on(table.subscriptionId),
+}));
+
+export const insertSubscriptionGiftSchema = createInsertSchema(subscriptionGifts).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertSubscriptionGift = z.infer<typeof insertSubscriptionGiftSchema>;
+export type SubscriptionGift = typeof subscriptionGifts.$inferSelect;
+
 // Monthly Giving Tiers - "VIP Donor Club" tier definitions per tenant
 export const monthlyGivingTiers = pgTable("monthly_giving_tiers", {
   id: uuid("id").primaryKey().defaultRandom(),

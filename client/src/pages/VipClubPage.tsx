@@ -9,7 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Loader2, Sparkles, CheckCircle2, Download, FileText, Mail, History, CreditCard, AlertCircle, Building2 } from "lucide-react";
+import { Loader2, Sparkles, CheckCircle2, Download, FileText, Mail, History, CreditCard, AlertCircle, Building2, Gift, Send, Pencil } from "lucide-react";
 import { isAchEligible, achNudgeCopy } from "@shared/ach-eligibility";
 import PublicHeader from "@/components/PublicHeader";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -81,6 +81,13 @@ interface VipHistorySubscription {
   memorialPhotoUrl?: string | null;
   memorialFrameStyle?: 'heart' | 'paw' | null;
   foreverHero?: boolean;
+  // Task #197 — present when this subscription was paid as a gift.
+  giftId?: string | null;
+  giftHonoreeName?: string | null;
+  giftHonoreeEmail?: string | null;
+  giftMessage?: string | null;
+  giftAnnouncementDate?: string | null;
+  giftAnnouncementSentAt?: string | null;
 }
 
 interface VipHistoryPendingPayment {
@@ -248,6 +255,21 @@ export default function VipClubPage() {
   const [displayName, setDisplayName] = useState("");
   const [optInWall, setOptInWall] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  // Task #197 — gift-this-membership flow. When `giftMode` is true the
+  // checkout dialog collects honoree details and forwards them to the server
+  // checkout endpoint, which forces Wall opt-in default=true and writes the
+  // gift metadata Stripe will hand back via the webhook.
+  const [giftMode, setGiftMode] = useState(false);
+  const [giftHonoreeName, setGiftHonoreeName] = useState("");
+  const [giftHonoreeEmail, setGiftHonoreeEmail] = useState("");
+  const [giftMessage, setGiftMessage] = useState("");
+  const [giftAnnouncementDate, setGiftAnnouncementDate] = useState("");
+  // Edit-existing-gift dialog state (donor portal section).
+  const [editGift, setEditGift] = useState<VipHistorySubscription | null>(null);
+  const [editGiftHonoree, setEditGiftHonoree] = useState("");
+  const [editGiftEmail, setEditGiftEmail] = useState("");
+  const [editGiftMessage, setEditGiftMessage] = useState("");
+  const [editGiftDate, setEditGiftDate] = useState("");
   const [welcomeOpen, setWelcomeOpen] = useState(false);
   const [historyToken, setHistoryToken] = useState<string | null>(null);
   const [historyEmail, setHistoryEmail] = useState("");
@@ -490,6 +512,54 @@ export default function VipClubPage() {
     },
   });
 
+  // Task #197 — donor-portal mutations to edit honoree details on an
+  // existing gift sub and to re-queue the announcement email after a typo.
+  const giftEditMutation = useMutation({
+    mutationFn: async (vars: { subscriptionId: string; honoreeName: string; honoreeEmail: string; message: string; announcementDate: string }) => {
+      const url = buildTenantUrl(`/api/vip-portal/subscriptions/${vars.subscriptionId}/gift?token=${encodeURIComponent(historyToken!)}`);
+      const res = await fetch(url, {
+        method: 'PATCH',
+        headers: { ...getTenantHeaders(), 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          honoreeName: vars.honoreeName,
+          honoreeEmail: vars.honoreeEmail || null,
+          message: vars.message || null,
+          announcementDate: vars.announcementDate || undefined,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || `Update failed (${res.status})`);
+      return json;
+    },
+    onSuccess: () => {
+      toast({ title: 'Gift updated', description: 'The honoree details have been saved.' });
+      queryClient.invalidateQueries({ queryKey: ['/api/vip-portal/history', historyToken] });
+      queryClient.invalidateQueries({ queryKey: ['/api/vip-club/wall-of-heroes'] });
+      setEditGift(null);
+    },
+    onError: (err: any) => toast({ title: 'Could not update gift', description: err?.message, variant: 'destructive' }),
+  });
+
+  const giftResendMutation = useMutation({
+    mutationFn: async (subscriptionId: string) => {
+      const url = buildTenantUrl(`/api/vip-portal/subscriptions/${subscriptionId}/gift/resend?token=${encodeURIComponent(historyToken!)}`);
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { ...getTenantHeaders(), 'Content-Type': 'application/json' },
+        credentials: 'include',
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || `Resend failed (${res.status})`);
+      return json;
+    },
+    onSuccess: () => {
+      toast({ title: 'Announcement re-queued', description: "We'll send the honoree another note within a day." });
+      queryClient.invalidateQueries({ queryKey: ['/api/vip-portal/history', historyToken] });
+    },
+    onError: (err: any) => toast({ title: 'Could not re-send', description: err?.message, variant: 'destructive' }),
+  });
+
   const wallOptInMutation = useMutation({
     mutationFn: async (vars: { subscriptionId: string; displayOnWallOfHeroes: boolean; displayName: string | null }) => {
       const url = buildTenantUrl(`/api/vip-portal/subscriptions/${vars.subscriptionId}/wall-of-heroes?token=${encodeURIComponent(historyToken!)}`);
@@ -544,12 +614,26 @@ export default function VipClubPage() {
 
   const startCheckout = async () => {
     if (!selected) return;
+    if (giftMode && !giftHonoreeName.trim()) {
+      toast({ title: 'Honoree name required', description: 'Tell us who this gift is for.', variant: 'destructive' });
+      return;
+    }
     setSubmitting(true);
     try {
+      const giftPayload = giftMode
+        ? {
+            honoreeName: giftHonoreeName.trim(),
+            honoreeEmail: giftHonoreeEmail.trim() || undefined,
+            message: giftMessage.trim() || undefined,
+            announcementDate: giftAnnouncementDate || undefined,
+            displayOnWallOfHeroes: true,
+          }
+        : undefined;
       const res = await apiRequest('POST', `/api/monthly-tiers/${selected.id}/checkout`, {
         customerEmail: email || undefined,
-        displayName: optInWall ? (displayName || undefined) : undefined,
-        displayOnWallOfHeroes: optInWall,
+        displayName: !giftMode && optInWall ? (displayName || undefined) : undefined,
+        displayOnWallOfHeroes: giftMode ? true : optInWall,
+        ...(giftPayload ? { gift: giftPayload } : {}),
       });
       const json = await res.json();
       if (json.url) {
@@ -630,10 +714,36 @@ export default function VipClubPage() {
                   <Button
                     className="mt-6 w-full"
                     variant={isFeatured ? "default" : "outline"}
-                    onClick={() => { setSelected(tier); setOptInWall(true); }}
+                    onClick={() => {
+                      setSelected(tier);
+                      setOptInWall(true);
+                      setGiftMode(false);
+                      setGiftHonoreeName("");
+                      setGiftHonoreeEmail("");
+                      setGiftMessage("");
+                      setGiftAnnouncementDate("");
+                    }}
                     data-testid={`button-join-tier-${tier.id}`}
                   >
                     Become a {tier.tierName}
+                  </Button>
+                  <Button
+                    className="mt-2 w-full"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setSelected(tier);
+                      setOptInWall(true);
+                      setGiftMode(true);
+                      setGiftHonoreeName("");
+                      setGiftHonoreeEmail("");
+                      setGiftMessage("");
+                      setGiftAnnouncementDate("");
+                    }}
+                    data-testid={`button-gift-tier-${tier.id}`}
+                  >
+                    <Gift className="h-4 w-4 mr-2" />
+                    Gift this membership
                   </Button>
                 </Card>
               );
@@ -870,6 +980,48 @@ export default function VipClubPage() {
                             <span className="font-medium">{sub.tierName || 'Monthly Donor'}</span>
                             <span className="text-muted-foreground"> · {formatMoney(sub.amount)}/{sub.interval}</span>
                             <span className="text-muted-foreground"> · since {formatDateShort(sub.memberSince)}</span>
+                            {sub.giftHonoreeName && (
+                              <div className="mt-1 flex items-center gap-2 flex-wrap" data-testid={`gift-label-${sub.id}`}>
+                                <Badge variant="outline" className="gap-1">
+                                  <Gift className="h-3 w-3" />
+                                  Gift in honor of {sub.giftHonoreeName}
+                                </Badge>
+                                {sub.giftAnnouncementSentAt ? (
+                                  <span className="text-xs text-muted-foreground">Announced {formatDateShort(sub.giftAnnouncementSentAt)}</span>
+                                ) : sub.giftAnnouncementDate ? (
+                                  <span className="text-xs text-muted-foreground">Announces {formatDateShort(sub.giftAnnouncementDate)}</span>
+                                ) : null}
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    setEditGift(sub);
+                                    setEditGiftHonoree(sub.giftHonoreeName || '');
+                                    setEditGiftEmail(sub.giftHonoreeEmail || '');
+                                    setEditGiftMessage(sub.giftMessage || '');
+                                    setEditGiftDate(sub.giftAnnouncementDate ? new Date(sub.giftAnnouncementDate).toISOString().slice(0, 10) : '');
+                                  }}
+                                  data-testid={`button-edit-gift-${sub.id}`}
+                                >
+                                  <Pencil className="h-3 w-3 mr-1" />
+                                  Edit
+                                </Button>
+                                {sub.giftHonoreeEmail && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    disabled={giftResendMutation.isPending && giftResendMutation.variables === sub.id}
+                                    onClick={() => giftResendMutation.mutate(sub.id)}
+                                    data-testid={`button-resend-gift-${sub.id}`}
+                                  >
+                                    {giftResendMutation.isPending && giftResendMutation.variables === sub.id
+                                      ? <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                      : <Send className="h-3 w-3 mr-1" />}
+                                    Re-send announcement
+                                  </Button>
+                                )}
+                              </div>
+                            )}
                           </div>
                           <div className="flex items-center gap-2 flex-wrap">
                             <Badge
@@ -1192,12 +1344,16 @@ export default function VipClubPage() {
       )}
 
       {/* Checkout Dialog */}
-      <Dialog open={!!selected} onOpenChange={(o) => { if (!o) { setSelected(null); setSubmitting(false); } }}>
+      <Dialog open={!!selected} onOpenChange={(o) => { if (!o) { setSelected(null); setSubmitting(false); setGiftMode(false); } }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Join the {selected?.tierName} Tier</DialogTitle>
+            <DialogTitle>
+              {giftMode ? <>Gift the {selected?.tierName} Tier</> : <>Join the {selected?.tierName} Tier</>}
+            </DialogTitle>
             <DialogDescription>
-              You'll be charged ${selected ? (selected.amount / 100).toFixed(0) : ''}/month and can cancel anytime.
+              {giftMode
+                ? <>You'll be charged ${selected ? (selected.amount / 100).toFixed(0) : ''}/month in honor of someone special. Cancel anytime.</>
+                : <>You'll be charged ${selected ? (selected.amount / 100).toFixed(0) : ''}/month and can cancel anytime.</>}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -1233,37 +1389,94 @@ export default function VipClubPage() {
               />
               <p className="text-xs text-muted-foreground">We'll pre-fill this on the secure Stripe checkout page.</p>
             </div>
-            <div className="space-y-2 rounded-md border p-3 bg-muted/30">
-              <div className="flex items-start gap-2">
-                <Checkbox
-                  id="vip-wall-optin"
-                  checked={optInWall}
-                  onCheckedChange={(v) => setOptInWall(!!v)}
-                  data-testid="checkbox-wall-optin"
-                />
-                <Label htmlFor="vip-wall-optin" className="text-sm leading-snug font-normal cursor-pointer">
-                  Show my name on the public Wall of Heroes
-                </Label>
-              </div>
-              {optInWall && (
-                <div className="space-y-1 pl-6">
-                  <Label htmlFor="vip-display-name" className="text-xs">
-                    Name to display on our public Wall of Heroes
-                  </Label>
-                  <Input
-                    id="vip-display-name"
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
-                    placeholder="e.g. Sarah, The Smith Family, In memory of Jojo"
-                    maxLength={60}
-                    data-testid="input-vip-display-name"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Use your first name, your family name, a business name, or a memorial — for example, "The Smith Family" or "In memory of Jojo". If you leave this blank, the public Wall will show your first name plus your last initial (for example, "Sarah J.").
-                  </p>
+            {giftMode ? (
+              <div className="space-y-3 rounded-md border p-3 bg-muted/30">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <Gift className="h-4 w-4 text-primary" />
+                  Honoree details
                 </div>
-              )}
-            </div>
+                <div className="space-y-1">
+                  <Label htmlFor="gift-honoree-name" className="text-xs">Honoree name <span className="text-destructive">*</span></Label>
+                  <Input
+                    id="gift-honoree-name"
+                    value={giftHonoreeName}
+                    onChange={(e) => setGiftHonoreeName(e.target.value)}
+                    placeholder="e.g. Aunt Margaret"
+                    maxLength={120}
+                    data-testid="input-gift-honoree-name"
+                  />
+                  <p className="text-xs text-muted-foreground">Will appear on the Wall of Heroes as "In honor of {giftHonoreeName.trim() || '[Name]'}".</p>
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="gift-honoree-email" className="text-xs">Honoree email (optional)</Label>
+                  <Input
+                    id="gift-honoree-email"
+                    type="email"
+                    value={giftHonoreeEmail}
+                    onChange={(e) => setGiftHonoreeEmail(e.target.value)}
+                    placeholder="honoree@example.com"
+                    data-testid="input-gift-honoree-email"
+                  />
+                  <p className="text-xs text-muted-foreground">If you provide an email, we'll quietly let them know you've honored them — we never reveal the amount.</p>
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="gift-message" className="text-xs">Personal note (optional)</Label>
+                  <textarea
+                    id="gift-message"
+                    value={giftMessage}
+                    onChange={(e) => setGiftMessage(e.target.value)}
+                    placeholder="Add a few words to share with them"
+                    maxLength={500}
+                    rows={3}
+                    className="w-full rounded-md border bg-background p-2 text-sm"
+                    data-testid="input-gift-message"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="gift-announcement-date" className="text-xs">Announcement date (optional)</Label>
+                  <Input
+                    id="gift-announcement-date"
+                    type="date"
+                    value={giftAnnouncementDate}
+                    onChange={(e) => setGiftAnnouncementDate(e.target.value)}
+                    data-testid="input-gift-announcement-date"
+                  />
+                  <p className="text-xs text-muted-foreground">Leave blank to send right away. Pick a future date for birthdays, anniversaries, or holidays.</p>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2 rounded-md border p-3 bg-muted/30">
+                <div className="flex items-start gap-2">
+                  <Checkbox
+                    id="vip-wall-optin"
+                    checked={optInWall}
+                    onCheckedChange={(v) => setOptInWall(!!v)}
+                    data-testid="checkbox-wall-optin"
+                  />
+                  <Label htmlFor="vip-wall-optin" className="text-sm leading-snug font-normal cursor-pointer">
+                    Show my name on the public Wall of Heroes
+                  </Label>
+                </div>
+                {optInWall && (
+                  <div className="space-y-1 pl-6">
+                    <Label htmlFor="vip-display-name" className="text-xs">
+                      Name to display on our public Wall of Heroes
+                    </Label>
+                    <Input
+                      id="vip-display-name"
+                      value={displayName}
+                      onChange={(e) => setDisplayName(e.target.value)}
+                      placeholder="e.g. Sarah, The Smith Family, In memory of Jojo"
+                      maxLength={60}
+                      data-testid="input-vip-display-name"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Use your first name, your family name, a business name, or a memorial — for example, "The Smith Family" or "In memory of Jojo". If you leave this blank, the public Wall will show your first name plus your last initial (for example, "Sarah J.").
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
             <Button
               className="w-full"
               size="lg"
@@ -1277,6 +1490,77 @@ export default function VipClubPage() {
             {!tenant?.stripeEnabled && (
               <p className="text-xs text-destructive text-center">Online giving is not yet configured for this rescue.</p>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit gift details dialog (Task #197) */}
+      <Dialog open={!!editGift} onOpenChange={(o) => { if (!o) setEditGift(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit gift details</DialogTitle>
+            <DialogDescription>
+              Update who this monthly gift honors. Wall of Heroes recognition will update automatically.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label htmlFor="edit-gift-honoree" className="text-xs">Honoree name</Label>
+              <Input
+                id="edit-gift-honoree"
+                value={editGiftHonoree}
+                onChange={(e) => setEditGiftHonoree(e.target.value)}
+                maxLength={120}
+                data-testid="input-edit-gift-honoree"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="edit-gift-email" className="text-xs">Honoree email (optional)</Label>
+              <Input
+                id="edit-gift-email"
+                type="email"
+                value={editGiftEmail}
+                onChange={(e) => setEditGiftEmail(e.target.value)}
+                data-testid="input-edit-gift-email"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="edit-gift-message" className="text-xs">Personal note (optional)</Label>
+              <textarea
+                id="edit-gift-message"
+                value={editGiftMessage}
+                onChange={(e) => setEditGiftMessage(e.target.value)}
+                maxLength={500}
+                rows={3}
+                className="w-full rounded-md border bg-background p-2 text-sm"
+                data-testid="input-edit-gift-message"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="edit-gift-date" className="text-xs">Announcement date (optional)</Label>
+              <Input
+                id="edit-gift-date"
+                type="date"
+                value={editGiftDate}
+                onChange={(e) => setEditGiftDate(e.target.value)}
+                data-testid="input-edit-gift-date"
+              />
+            </div>
+            <Button
+              className="w-full"
+              disabled={giftEditMutation.isPending || !editGiftHonoree.trim()}
+              onClick={() => editGift && giftEditMutation.mutate({
+                subscriptionId: editGift.id,
+                honoreeName: editGiftHonoree.trim(),
+                honoreeEmail: editGiftEmail.trim(),
+                message: editGiftMessage.trim(),
+                announcementDate: editGiftDate,
+              })}
+              data-testid="button-save-edit-gift"
+            >
+              {giftEditMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Save changes
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

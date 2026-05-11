@@ -16270,9 +16270,38 @@ ${renderedHtml}
         // Legacy alias kept so older clients still in the wild keep working.
         firstNameDisplay: z.string().max(60).optional(),
         displayOnWallOfHeroes: z.boolean().default(false),
+        // Task #197: optional "gift this membership" payload. When present
+        // the gifter pays recurring; the honoree fields are persisted to
+        // subscription_gifts in the webhook and the parent subscription's
+        // wall name is forced to "In honor of {Honoree}" (unless the
+        // gifter explicitly opted out of the public Wall).
+        gift: z.object({
+          honoreeName: z.string().trim().min(1).max(120),
+          honoreeEmail: z.string().email().optional().or(z.literal('')),
+          message: z.string().max(500).optional().or(z.literal('')),
+          announcementDate: z.string().optional(),
+          displayOnWall: z.boolean().optional(),
+        }).optional(),
       });
       const data = bodySchema.parse(req.body);
-      const recognitionName = (data.displayName || data.firstNameDisplay || '').trim();
+      const isGift = !!data.gift;
+      const honoreeName = data.gift?.honoreeName.trim() || '';
+      // Gifters default to opting the tile onto the Wall as "In honor of X".
+      const giftWallOptIn = isGift ? (data.gift?.displayOnWall !== false) : false;
+      const effectiveWallOptIn = isGift ? giftWallOptIn : data.displayOnWallOfHeroes;
+      const recognitionName = isGift && giftWallOptIn
+        ? `In honor of ${honoreeName}`
+        : (data.displayName || data.firstNameDisplay || '').trim();
+      // Default announcement to today (UTC midnight) if not specified.
+      let giftAnnouncementIso: string | null = null;
+      if (isGift) {
+        const raw = (data.gift?.announcementDate || '').trim();
+        const parsed = raw ? new Date(raw) : new Date();
+        if (Number.isNaN(parsed.getTime())) {
+          return res.status(400).json({ error: 'Invalid announcement date' });
+        }
+        giftAnnouncementIso = parsed.toISOString();
+      }
 
       const [tier] = await db
         .select()
@@ -16323,11 +16352,21 @@ ${renderedHtml}
           source: 'vip_club',
           vipTierId: tier.id,
           vipTierName: tier.tierName,
-          displayOnWallOfHeroes: data.displayOnWallOfHeroes ? 'true' : 'false',
+          displayOnWallOfHeroes: effectiveWallOptIn ? 'true' : 'false',
           // Write both keys to Stripe metadata so any in-flight checkouts
           // resumed by the older webhook/reconciler code paths still resolve.
           displayName: recognitionName,
           firstNameDisplay: recognitionName,
+          // Task #197 — Stripe metadata is the single source of truth that
+          // crosses the public→webhook boundary. The webhook detects gift
+          // checkouts via `gift==='true'` + `gift.honoreeName`.
+          ...(isGift ? {
+            gift: 'true',
+            'gift.honoreeName': honoreeName.slice(0, 120),
+            'gift.honoreeEmail': (data.gift?.honoreeEmail || '').trim().slice(0, 200),
+            'gift.message': (data.gift?.message || '').trim().slice(0, 500),
+            'gift.announcementDate': giftAnnouncementIso || '',
+          } : {}),
           baseAmount: tier.amount.toString(),
           chargeAmount: tier.amount.toString(),
           platformFeeAmount: platformFeeAmount.toString(),
@@ -16511,13 +16550,14 @@ ${renderedHtml}
    */
   app.get('/api/vip-club/members', requireTenant, requireAuth, requireRoleOrPageAccess('donors', 'admin', 'owner'), async (req, res, next) => {
     try {
-      const { subscriptions: subs, donors, monthlyGivingTiers } = await import('@shared/schema');
+      const { subscriptions: subs, donors, monthlyGivingTiers, subscriptionGifts } = await import('@shared/schema');
       const tenantId = req.tenant!.id;
 
       // Pull every monthly subscription on this tenant — including ones whose
       // VIP tier snapshot is NULL (auto-tag failed) or points at a tier that
       // has since been deleted/deactivated. The page derives a tagState so
-      // staff can see and fix these silent drops.
+      // staff can see and fix these silent drops. LEFT JOIN gift metadata so
+      // staff can see "Gift in honor of X" inline. (Task #197.)
       const rows = await db
         .select({
           subscriptionId: subs.id,
@@ -16539,9 +16579,15 @@ ${renderedHtml}
           donorEmail: donors.email,
           donorPhone: donors.phone,
           totalDonated: donors.totalDonated,
+          giftHonoreeName: subscriptionGifts.honoreeName,
+          giftHonoreeEmail: subscriptionGifts.honoreeEmail,
+          giftMessage: subscriptionGifts.giftMessage,
+          giftAnnouncementDate: subscriptionGifts.announcementDate,
+          giftAnnouncementSentAt: subscriptionGifts.announcementSentAt,
         })
         .from(subs)
         .innerJoin(donors, eq(subs.donorId, donors.id))
+        .leftJoin(subscriptionGifts, eq(subscriptionGifts.subscriptionId, subs.id))
         .where(and(
           eq(subs.tenantId, tenantId),
           eq(subs.interval, 'month'),
@@ -29119,6 +29165,59 @@ Submitted: ${new Date().toLocaleString()}
               await db.update(payments)
                 .set({ subscriptionId: inserted[0].id })
                 .where(eq(payments.id, paymentRecord.id));
+            }
+
+            // Task #197 — record gift metadata for "Gift this membership"
+            // checkouts. Gift detection is metadata-driven so all three
+            // checkout paths (vip-club tier, generic monthly subscription,
+            // legacy) can share this same webhook code without forking.
+            // Idempotency: if the subscription insert was a no-op (a prior
+            // delivery already inserted it), resolve the existing row by
+            // (tenant_id, stripe_subscription_id) so a retry after a partial
+            // failure still backfills the gift row. The unique constraint
+            // on subscription_gifts.subscription_id prevents duplicates.
+            if (
+              sessionMeta.gift === 'true' &&
+              (sessionMeta['gift.honoreeName'] || '').trim()
+            ) {
+              try {
+                const { subscriptionGifts } = await import('@shared/schema');
+                let subId: string | undefined = inserted[0]?.id;
+                if (!subId) {
+                  const [existingSub] = await db
+                    .select({ id: subscriptions.id })
+                    .from(subscriptions)
+                    .where(and(
+                      eq(subscriptions.tenantId, tenant.id),
+                      eq(subscriptions.stripeSubscriptionId, session.subscription),
+                    ))
+                    .limit(1);
+                  subId = existingSub?.id;
+                }
+                if (subId) {
+                  const honoreeName = (sessionMeta['gift.honoreeName'] || '').trim().slice(0, 120);
+                  const honoreeEmailRaw = (sessionMeta['gift.honoreeEmail'] || '').trim();
+                  const honoreeEmail = honoreeEmailRaw && honoreeEmailRaw.includes('@')
+                    ? honoreeEmailRaw.slice(0, 200)
+                    : null;
+                  const giftMessage = (sessionMeta['gift.message'] || '').trim().slice(0, 500) || null;
+                  const annRaw = (sessionMeta['gift.announcementDate'] || '').trim();
+                  const ann = annRaw ? new Date(annRaw) : new Date();
+                  await db.insert(subscriptionGifts).values({
+                    tenantId: tenant.id,
+                    subscriptionId: subId,
+                    honoreeName,
+                    honoreeEmail,
+                    giftMessage,
+                    announcementDate: Number.isNaN(ann.getTime()) ? new Date() : ann,
+                  }).onConflictDoNothing({ target: [subscriptionGifts.subscriptionId] });
+                  console.log(`[Webhook] Recorded gift subscription for honoree "${honoreeName}" on sub ${subId}`);
+                } else {
+                  console.warn('[Webhook] Gift metadata present but no subscription row resolved for', session.subscription);
+                }
+              } catch (giftErr) {
+                console.error('[Webhook] Failed to record subscription gift (non-fatal):', giftErr);
+              }
             }
 
             // Send VIP welcome email + tax-deductible receipt for new VIP donors

@@ -19,6 +19,7 @@ import {
   AlertTriangle,
   Tag,
   Pencil,
+  Gift,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -69,6 +70,12 @@ interface Member {
   donorPhone: string | null;
   totalDonated: number;
   tagState: 'tagged' | 'untagged' | 'tier_deleted' | 'tier_inactive' | 'no_tiers_configured';
+  // Task #197 — surfaced from subscription_gifts when this sub was paid as a gift.
+  giftHonoreeName?: string | null;
+  giftHonoreeEmail?: string | null;
+  giftMessage?: string | null;
+  giftAnnouncementDate?: string | null;
+  giftAnnouncementSentAt?: string | null;
 }
 
 interface AdminTier {
@@ -504,6 +511,26 @@ export default function VipMembersPage() {
                                       <Badge variant="outline" className="text-xs gap-1" data-testid={`badge-tier-inactive-${m.subscriptionId}`}>
                                         Tier inactive
                                       </Badge>
+                                    ) : null}
+                                    {m.giftHonoreeName ? (
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Badge variant="outline" className="text-xs gap-1" data-testid={`badge-gift-${m.subscriptionId}`}>
+                                            <Gift className="h-3 w-3" />
+                                            Gift in honor of {m.giftHonoreeName}
+                                          </Badge>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                          <div className="text-xs space-y-0.5">
+                                            <div><span className="font-medium">Gifter:</span> {m.donorName}</div>
+                                            <div><span className="font-medium">Honoree:</span> {m.giftHonoreeName}</div>
+                                            {m.giftHonoreeEmail ? <div><span className="font-medium">Email:</span> {m.giftHonoreeEmail}</div> : null}
+                                            {m.giftAnnouncementSentAt
+                                              ? <div>Announcement sent {new Date(m.giftAnnouncementSentAt).toLocaleDateString()}</div>
+                                              : m.giftAnnouncementDate ? <div>Announces {new Date(m.giftAnnouncementDate).toLocaleDateString()}</div> : null}
+                                          </div>
+                                        </TooltipContent>
+                                      </Tooltip>
                                     ) : null}
                                   </div>
                                   <div className="text-xs text-muted-foreground">{m.donorEmail}</div>

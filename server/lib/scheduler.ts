@@ -729,6 +729,24 @@ export function initializeScheduler() {
 
   console.log(`✓ Govee temperature poller scheduled: ${goveePollerSchedule} (UTC)`);
 
+  // Task #197 — daily VIP gift announcement email job. Runs once per day
+  // and sends "you've been honored" notes to honorees whose announcement
+  // date has arrived. Idempotent via subscription_gifts.announcement_sent_at.
+  const giftAnnouncementSchedule = process.env.VIP_GIFT_ANNOUNCEMENT_SCHEDULE || "0 13 * * *";
+  cron.schedule(giftAnnouncementSchedule, async () => {
+    console.log("🎁 Running VIP gift announcement job...");
+    try {
+      const { runGiftAnnouncementJob } = await import("../services/vip-gift-emails");
+      const result = await runGiftAnnouncementJob();
+      if (result.sent || result.failed || result.skipped) {
+        console.log(`✓ VIP gift announcements: sent=${result.sent}, failed=${result.failed}, skipped=${result.skipped}`);
+      }
+    } catch (error) {
+      console.error(`❌ VIP gift announcement job failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }, { timezone: "UTC" });
+  console.log(`✓ VIP gift announcements scheduled: ${giftAnnouncementSchedule} (UTC)`);
+
   // Kick off an immediate poll on startup so dashboards aren't stale until
   // the first scheduled tick fires.
   (async () => {

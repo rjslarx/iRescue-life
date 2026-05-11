@@ -6,9 +6,10 @@ import {
   donations,
   payments,
   subscriptions,
+  subscriptionGifts,
   tenants,
 } from '@shared/schema';
-import { eq, and, desc, sql, inArray } from 'drizzle-orm';
+import { eq, and, desc, sql, inArray, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { EmailService } from '../lib/email-service';
 
@@ -205,7 +206,9 @@ router.get('/history', async (req: Request, res: Response) => {
 
     if (!donor) return res.status(404).json({ error: 'Donor not found' });
 
-    // Pull subscriptions for this donor
+    // Pull subscriptions for this donor (LEFT JOIN gift metadata so the UI
+    // can label gifted subs and let the gifter edit honoree name/message
+    // and re-send the announcement email).
     const subs = await db
       .select({
         id: subscriptions.id,
@@ -226,8 +229,15 @@ router.get('/history', async (req: Request, res: Response) => {
         memorialPhotoUrl: subscriptions.memorialPhotoUrl,
         memorialFrameStyle: subscriptions.memorialFrameStyle,
         foreverHero: subscriptions.foreverHero,
+        giftId: subscriptionGifts.id,
+        giftHonoreeName: subscriptionGifts.honoreeName,
+        giftHonoreeEmail: subscriptionGifts.honoreeEmail,
+        giftMessage: subscriptionGifts.giftMessage,
+        giftAnnouncementDate: subscriptionGifts.announcementDate,
+        giftAnnouncementSentAt: subscriptionGifts.announcementSentAt,
       })
       .from(subscriptions)
+      .leftJoin(subscriptionGifts, eq(subscriptionGifts.subscriptionId, subscriptions.id))
       .where(and(
         eq(subscriptions.tenantId, tenantId),
         eq(subscriptions.donorId, donorId),
@@ -707,8 +717,10 @@ router.patch('/subscriptions/:id/wall-of-heroes', async (req: Request, res: Resp
         id: subscriptions.id,
         displayOnWallOfHeroes: subscriptions.displayOnWallOfHeroes,
         displayName: subscriptions.displayName,
+        giftHonoreeName: subscriptionGifts.honoreeName,
       })
       .from(subscriptions)
+      .leftJoin(subscriptionGifts, eq(subscriptionGifts.subscriptionId, subscriptions.id))
       .where(and(
         eq(subscriptions.id, req.params.id),
         eq(subscriptions.tenantId, tenantId),
@@ -724,9 +736,16 @@ router.patch('/subscriptions/:id/wall-of-heroes', async (req: Request, res: Resp
       parsed.displayName !== undefined
         ? parsed.displayName
         : (parsed.firstNameDisplay !== undefined ? parsed.firstNameDisplay : undefined);
-    const nextDisplayName = parsed.displayOnWallOfHeroes
+    let nextDisplayName = parsed.displayOnWallOfHeroes
       ? (incomingName !== undefined ? incomingName : existing.displayName)
       : null;
+
+    // Task #197 — Wall recognition lockstep: if this subscription is a gift,
+    // force the Wall name to "In honor of {Honoree}" whenever the donor opts
+    // in, regardless of what arbitrary displayName they tried to submit.
+    if (parsed.displayOnWallOfHeroes && existing.giftHonoreeName) {
+      nextDisplayName = `In honor of ${existing.giftHonoreeName}`;
+    }
 
     await db
       .update(subscriptions)
@@ -916,6 +935,140 @@ router.patch('/subscriptions/:id/memorial-frame', async (req: Request, res: Resp
   } catch (error: any) {
     console.error('[VIP Portal] Memorial frame update failed:', error);
     res.status(500).json({ error: 'Failed to update frame style' });
+  }
+});
+
+/**
+ * PATCH /api/vip-portal/subscriptions/:id/gift
+ * Gifter edits honoree name / message / announcement date on an existing
+ * gift subscription. The wall recognition name is kept in sync with the
+ * "In honor of {Name}" pattern when the subscription is opted into the wall.
+ * Task #197.
+ */
+router.patch('/subscriptions/:id/gift', async (req: Request, res: Response) => {
+  const auth = await authVipDonor(req, res);
+  if (!auth) return;
+  const { donorId, tenantId } = auth;
+
+  const bodySchema = z.object({
+    honoreeName: z.string().trim().min(1).max(120),
+    honoreeEmail: z.string().email().nullable().optional().or(z.literal('')),
+    message: z.string().max(500).nullable().optional().or(z.literal('')),
+    announcementDate: z.string().optional(),
+  });
+  let parsed: z.infer<typeof bodySchema>;
+  try {
+    parsed = bodySchema.parse(req.body || {});
+  } catch (e: any) {
+    return res.status(400).json({ error: 'Invalid gift fields', details: e?.errors });
+  }
+
+  try {
+    const [sub] = await db
+      .select({
+        id: subscriptions.id,
+        displayOnWallOfHeroes: subscriptions.displayOnWallOfHeroes,
+      })
+      .from(subscriptions)
+      .where(and(
+        eq(subscriptions.id, req.params.id),
+        eq(subscriptions.tenantId, tenantId),
+        eq(subscriptions.donorId, donorId),
+      ))
+      .limit(1);
+    if (!sub) return res.status(404).json({ error: 'Subscription not found' });
+
+    const honoreeName = parsed.honoreeName.trim().slice(0, 120);
+    const emailRaw = (parsed.honoreeEmail || '').toString().trim();
+    const honoreeEmail = emailRaw && emailRaw.includes('@') ? emailRaw.slice(0, 200) : null;
+    const messageRaw = (parsed.message || '').toString().trim();
+    const giftMessage = messageRaw ? messageRaw.slice(0, 500) : null;
+    let announcementDate: Date | undefined;
+    if (parsed.announcementDate) {
+      const d = new Date(parsed.announcementDate);
+      if (Number.isNaN(d.getTime())) {
+        return res.status(400).json({ error: 'Invalid announcement date' });
+      }
+      announcementDate = d;
+    }
+
+    const [existing] = await db
+      .select()
+      .from(subscriptionGifts)
+      .where(eq(subscriptionGifts.subscriptionId, sub.id))
+      .limit(1);
+    if (!existing) return res.status(404).json({ error: 'This subscription is not a gift' });
+
+    const [updated] = await db
+      .update(subscriptionGifts)
+      .set({
+        honoreeName,
+        honoreeEmail,
+        giftMessage,
+        ...(announcementDate ? { announcementDate } : {}),
+      })
+      .where(eq(subscriptionGifts.id, existing.id))
+      .returning();
+
+    // Keep the public wall recognition aligned with the new honoree name
+    // when the subscription is opted in. Donors who turned off Wall opt-in
+    // keep their displayName cleared.
+    if (sub.displayOnWallOfHeroes) {
+      await db
+        .update(subscriptions)
+        .set({ displayName: `In honor of ${honoreeName}` })
+        .where(eq(subscriptions.id, sub.id));
+    }
+
+    res.json({ success: true, gift: updated });
+  } catch (error) {
+    console.error('[VIP Portal] Gift edit failed:', error);
+    res.status(500).json({ error: 'Failed to update gift details' });
+  }
+});
+
+/**
+ * POST /api/vip-portal/subscriptions/:id/gift/resend
+ * Re-queue the announcement email for tomorrow (clears sent stamp; the
+ * daily scheduler picks it up on its next run). Useful when the gifter
+ * fixes a typo in the honoree's email address. Task #197.
+ */
+router.post('/subscriptions/:id/gift/resend', async (req: Request, res: Response) => {
+  const auth = await authVipDonor(req, res);
+  if (!auth) return;
+  const { donorId, tenantId } = auth;
+
+  try {
+    const [sub] = await db
+      .select({ id: subscriptions.id })
+      .from(subscriptions)
+      .where(and(
+        eq(subscriptions.id, req.params.id),
+        eq(subscriptions.tenantId, tenantId),
+        eq(subscriptions.donorId, donorId),
+      ))
+      .limit(1);
+    if (!sub) return res.status(404).json({ error: 'Subscription not found' });
+
+    const [gift] = await db
+      .select()
+      .from(subscriptionGifts)
+      .where(eq(subscriptionGifts.subscriptionId, sub.id))
+      .limit(1);
+    if (!gift) return res.status(404).json({ error: 'This subscription is not a gift' });
+    if (!gift.honoreeEmail) {
+      return res.status(400).json({ error: 'Add an honoree email first so we know where to send the announcement.' });
+    }
+
+    await db
+      .update(subscriptionGifts)
+      .set({ announcementSentAt: null, announcementDate: new Date() })
+      .where(eq(subscriptionGifts.id, gift.id));
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[VIP Portal] Gift resend failed:', error);
+    res.status(500).json({ error: 'Failed to re-queue announcement' });
   }
 });
 
