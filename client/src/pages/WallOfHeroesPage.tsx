@@ -171,13 +171,14 @@ export default function WallOfHeroesPage() {
   const q = search.trim().toLowerCase();
 
   const filteredTributes = useMemo(() => {
+    // Tribute tiles have no donor tier, so the tier-filter pills don't apply
+    // to them — only the search box does. They stay visible regardless of
+    // which tier pill is active.
     return tributeTiles.filter((t) => {
       if (q && !t.name.toLowerCase().includes(q)) return false;
-      // Tier filter excludes tribute tiles entirely (they have no donor tier).
-      if (activeTier !== ALL_TIERS_KEY) return false;
       return true;
     });
-  }, [tributeTiles, q, activeTier]);
+  }, [tributeTiles, q]);
 
   const filteredHeroes = useMemo(() => {
     return heroTiles.filter((t) => {
