@@ -28796,19 +28796,41 @@ Submitted: ${new Date().toLocaleString()}
             console.log(`[STRIPE-WEBHOOK] Updated existing donor ${donor.id} for ${customerEmail}`);
           }
 
-          const [paymentRecord] = await db.insert(payments).values({
-            tenantId: tenant.id,
-            donorId: donor.id,
-            stripePaymentIntentId: session.payment_intent,
-            stripeCheckoutSessionId: session.id,
-            amount: session.amount_total || 0,
-            currency: session.currency || 'usd',
-            status: paymentStatus,
-            paymentMethod: 'stripe',
-            isRecurring: session.mode === 'subscription',
-            message: session.metadata?.message,
-          }).returning();
-          
+          // Task #215: The SELECT-based idempotency check above can race under
+          // concurrent webhook redeliveries (Stripe's at-least-once delivery +
+          // 1h/2h/2h retry on non-2xx). Partial unique indexes on
+          // payments(tenant_id, stripe_checkout_session_id) and
+          // payments(tenant_id, stripe_payment_intent_id) are the DB-level
+          // backstop — catch the unique violation (Postgres SQLSTATE 23505)
+          // and treat it as "already processed" instead of erroring, exactly
+          // like the pre-check path. This also short-circuits the rest of the
+          // case (donation row, expense-campaign match credit, receipts) so
+          // none of the downstream side-effects double-fire either.
+          let paymentRecord: typeof payments.$inferSelect;
+          try {
+            [paymentRecord] = await db.insert(payments).values({
+              tenantId: tenant.id,
+              donorId: donor.id,
+              stripePaymentIntentId: session.payment_intent,
+              stripeCheckoutSessionId: session.id,
+              amount: session.amount_total || 0,
+              currency: session.currency || 'usd',
+              status: paymentStatus,
+              paymentMethod: 'stripe',
+              isRecurring: session.mode === 'subscription',
+              message: session.metadata?.message,
+            }).returning();
+          } catch (err: unknown) {
+            const dbErr = err as { code?: unknown; constraint?: unknown };
+            const code = typeof dbErr.code === 'string' ? dbErr.code : undefined;
+            const constraint = typeof dbErr.constraint === 'string' ? dbErr.constraint : undefined;
+            if (code === '23505' && constraint && constraint.startsWith('payments_tenant_stripe_')) {
+              console.log(`[Webhook] Checkout session ${session.id} (intent=${session.payment_intent || 'n/a'}) hit unique-violation on ${constraint} — concurrent redelivery, treating as idempotent`);
+              return res.status(200).json({ received: true, idempotent: true });
+            }
+            throw err;
+          }
+
           console.log(`[STRIPE-WEBHOOK] Created payment record ${paymentRecord.id} for intent ${session.payment_intent}, amount: ${session.amount_total}, status: ${paymentStatus}`);
           
           // Classify payment type from metadata and DB cross-references

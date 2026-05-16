@@ -1029,7 +1029,18 @@ export const payments = pgTable("payments", {
   isRecurring: boolean("is_recurring").notNull().default(false),
   message: text("message"), // Optional donor message
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (table) => ({
+  // Task #215: Partial unique indexes prevent concurrent Stripe webhook
+  // redeliveries from double-inserting the same donation. The case-by-case
+  // SELECT-then-INSERT idempotency check in the webhook handler can race
+  // under at-least-once delivery; this is the DB-level backstop.
+  tenantStripeSessionUnique: uniqueIndex("payments_tenant_stripe_session_unique")
+    .on(table.tenantId, table.stripeCheckoutSessionId)
+    .where(sql`${table.stripeCheckoutSessionId} IS NOT NULL`),
+  tenantStripeIntentUnique: uniqueIndex("payments_tenant_stripe_intent_unique")
+    .on(table.tenantId, table.stripePaymentIntentId)
+    .where(sql`${table.stripePaymentIntentId} IS NOT NULL`),
+}));
 
 export const insertPaymentSchema = createInsertSchema(payments).omit({
   id: true,

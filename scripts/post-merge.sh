@@ -26,5 +26,19 @@ BEGIN
 END $$;
 SQL
 
+# Task #215: Partial unique indexes on payments.(tenant_id, stripe_checkout_session_id)
+# and payments.(tenant_id, stripe_payment_intent_id) so concurrent Stripe webhook
+# redeliveries cannot double-insert the same donation. Idempotent — CREATE INDEX
+# IF NOT EXISTS is a no-op if the indexes already exist. drizzle-kit push has
+# historically dropped partial-index WHERE clauses, so we apply via SQL first.
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' || echo "[post-merge] payments stripe unique indexes skipped (already applied or DB unreachable)."
+CREATE UNIQUE INDEX IF NOT EXISTS payments_tenant_stripe_session_unique
+  ON payments (tenant_id, stripe_checkout_session_id)
+  WHERE stripe_checkout_session_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS payments_tenant_stripe_intent_unique
+  ON payments (tenant_id, stripe_payment_intent_id)
+  WHERE stripe_payment_intent_id IS NOT NULL;
+SQL
+
 yes "" | timeout 60 npx drizzle-kit push --force || \
   echo "[post-merge] drizzle-kit push skipped (timeout or non-zero exit) — schema must be managed via SQL ALTER in the task."
