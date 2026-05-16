@@ -28919,25 +28919,38 @@ Submitted: ${new Date().toLocaleString()}
               const { expenseCampaigns, campaignMatchPools } = await import('@shared/schema');
               const { calculateMatch } = await import('@shared/expense-campaign-match');
               const campaignId = sessionMetadata.expenseCampaignId;
+              type PoolRow = {
+                id: string;
+                status: "active" | "exhausted" | "ended";
+                pledged_cap_cents: number;
+                total_matched_cents: number;
+                ratio_numerator: number;
+                ratio_denominator: number;
+                per_gift_cap_cents: number | null;
+                starts_at: string | Date | null;
+                ends_at: string | Date | null;
+              };
               donationRecord = await db.transaction(async (tx) => {
-                const campaignRows = await tx.execute(sql`
+                const campaignRowsRes = await tx.execute(sql`
                   SELECT id FROM expense_campaigns
                   WHERE id = ${campaignId} AND tenant_id = ${tenant.id}
                   FOR UPDATE
                 `);
-                if (!(campaignRows as any).rows?.[0]) {
+                const campaignRows = (campaignRowsRes as unknown as { rows: Array<{ id: string }> }).rows;
+                if (!campaignRows[0]) {
                   const [d] = await tx
                     .insert(donations)
                     .values({ ...donationValuesBase, expenseCampaignId: null })
                     .returning();
                   return d;
                 }
-                const poolRows = await tx.execute(sql`
+                const poolRowsRes = await tx.execute(sql`
                   SELECT * FROM campaign_match_pools
                   WHERE expense_campaign_id = ${campaignId} AND tenant_id = ${tenant.id}
                   FOR UPDATE
                 `);
-                const pool: any = (poolRows as any).rows?.[0];
+                const pool: PoolRow | undefined =
+                  (poolRowsRes as unknown as { rows: PoolRow[] }).rows[0];
                 let matched = 0;
                 if (pool) {
                   const result = calculateMatch(baseAmountCents, {

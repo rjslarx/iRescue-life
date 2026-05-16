@@ -73,3 +73,26 @@ export function publicSponsorLabel(
   const trimmed = (publicName ?? "").trim();
   return trimmed.length > 0 ? trimmed : "an anonymous donor";
 }
+
+/**
+ * Effective public match status: collapses the persisted `status` column with
+ * the time-window check. We compute this server-side so the public landing
+ * page renders the correct banner immediately after the window opens/closes
+ * without waiting for a cron to flip the stored status.
+ *
+ * - "pending"   — start time is in the future
+ * - "active"    — within the window AND pool not exhausted
+ * - "exhausted" — pool drained (persisted) OR cap fully matched
+ * - "ended"     — window closed OR persisted status === "ended"
+ */
+export function computeEffectiveMatchStatus(
+  pool: Pick<MatchPoolSnapshot, "status" | "startsAt" | "endsAt" | "pledgedCapCents" | "totalMatchedCents">,
+  now: Date = new Date(),
+): "pending" | "active" | "exhausted" | "ended" {
+  const remaining = Math.max(0, pool.pledgedCapCents - pool.totalMatchedCents);
+  if (pool.status === "exhausted" || remaining <= 0) return "exhausted";
+  if (pool.status === "ended") return "ended";
+  if (pool.endsAt && now > pool.endsAt) return "ended";
+  if (pool.startsAt && now < pool.startsAt) return "pending";
+  return "active";
+}

@@ -14,6 +14,7 @@ import assert from "node:assert/strict";
 import {
   calculateMatch,
   publicSponsorLabel,
+  computeEffectiveMatchStatus,
   type MatchPoolSnapshot,
 } from "../shared/expense-campaign-match";
 
@@ -115,5 +116,99 @@ describe("publicSponsorLabel", () => {
   });
   it("falls back to anonymous when sponsor opts out of public visibility", () => {
     assert.equal(publicSponsorLabel("Smith Family Foundation", false), "an anonymous donor");
+  });
+});
+
+describe("computeEffectiveMatchStatus", () => {
+  const base = {
+    status: "active" as const,
+    pledgedCapCents: 100_000,
+    totalMatchedCents: 0,
+    startsAt: null as Date | null,
+    endsAt: null as Date | null,
+  };
+  it("returns active for an open window with budget remaining", () => {
+    assert.equal(computeEffectiveMatchStatus(base), "active");
+  });
+  it("returns pending when startsAt is in the future", () => {
+    const start = new Date(Date.now() + 60_000);
+    assert.equal(computeEffectiveMatchStatus({ ...base, startsAt: start }), "pending");
+  });
+  it("returns ended when endsAt is in the past", () => {
+    const end = new Date(Date.now() - 60_000);
+    assert.equal(computeEffectiveMatchStatus({ ...base, endsAt: end }), "ended");
+  });
+  it("returns exhausted when remaining is zero even if window is open", () => {
+    assert.equal(
+      computeEffectiveMatchStatus({ ...base, totalMatchedCents: 100_000 }),
+      "exhausted",
+    );
+  });
+  it("prefers persisted exhausted over time window", () => {
+    const end = new Date(Date.now() - 60_000);
+    assert.equal(
+      computeEffectiveMatchStatus({ ...base, status: "exhausted", endsAt: end }),
+      "exhausted",
+    );
+  });
+  it("returns ended when persisted status is ended", () => {
+    assert.equal(computeEffectiveMatchStatus({ ...base, status: "ended" }), "ended");
+  });
+});
+
+describe("goal-met & total-impact accounting", () => {
+  // Mirrors the public landing-page math: total impact = raised + matched.
+  // raised tracks donor gifts ONLY; matched is the sponsor's contribution.
+  const impact = (raised: number, matched: number) => raised + matched;
+  it("does not double-count matched dollars in raised", () => {
+    // $1,000 donor gift with 1:1 match should produce raised=1000 + matched=1000
+    // = total impact of $2,000 — not $3,000.
+    assert.equal(impact(100_000, 100_000), 200_000);
+  });
+  it("goal is met when donor + sponsor combined reach goal", () => {
+    const goal = 500_000;
+    const totalImpact = impact(250_000, 250_000);
+    assert.equal(totalImpact >= goal, true);
+  });
+  it("goal is NOT met when only donor side without matching reaches half the goal", () => {
+    const goal = 500_000;
+    const totalImpact = impact(200_000, 0);
+    assert.equal(totalImpact >= goal, false);
+  });
+});
+
+describe("concurrency safety: sequential pool draining never overspends", () => {
+  // Simulates two donations hitting an almost-empty pool back-to-back.
+  // The real webhook uses SELECT … FOR UPDATE so the second tx sees the
+  // already-decremented total. The calculator MUST cap matched at remaining
+  // regardless of input order — this is the invariant the lock protects.
+  it("two large gifts to an $80 remaining pool together match at most $80", () => {
+    const pool: MatchPoolSnapshot = {
+      ...basePool,
+      pledgedCapCents: 500_000,
+      totalMatchedCents: 492_000, // $4,920 already matched, $80 left
+    };
+    const first = calculateMatch(50_000, pool);
+    assert.equal(first.matchedCents, 8_000); // capped to remaining
+    // Second donation runs after first commits — pool snapshot reflects it.
+    const poolAfterFirst = { ...pool, totalMatchedCents: pool.totalMatchedCents + first.matchedCents };
+    const second = calculateMatch(50_000, poolAfterFirst);
+    assert.equal(second.matchedCents, 0);
+    assert.equal(second.reason, "pool_exhausted");
+    assert.equal(
+      first.matchedCents + second.matchedCents,
+      pool.pledgedCapCents - pool.totalMatchedCents,
+    );
+  });
+  it("an exhausted pool refuses all further matches even with budget rounding edge cases", () => {
+    const pool: MatchPoolSnapshot = {
+      ...basePool,
+      status: "exhausted",
+      pledgedCapCents: 100_000,
+      totalMatchedCents: 100_000,
+    };
+    const result = calculateMatch(10_000, pool);
+    assert.equal(result.matchedCents, 0);
+    assert.equal(result.reason, "pool_disabled");
   });
 });

@@ -48,6 +48,7 @@ const usd = (cents: number) => `$${(cents / 100).toLocaleString("en-US", { minim
 
 const emptyForm = {
   title: "",
+  slug: "",
   shortDescription: "",
   longDescription: "",
   heroImageUrl: "",
@@ -63,6 +64,8 @@ const emptyForm = {
   ratioNumerator: 1,
   ratioDenominator: 1,
   perGiftCapDollars: "",
+  matchStartsAt: "",
+  matchEndsAt: "",
 };
 
 export function ExpenseCampaignsTab({ tenantSubdomain }: { tenantSubdomain?: string }) {
@@ -87,6 +90,7 @@ export function ExpenseCampaignsTab({ tenantSubdomain }: { tenantSubdomain?: str
         endDate: form.endDate ? new Date(form.endDate).toISOString() : null,
         status: form.status,
       };
+      if (form.slug && form.slug.trim()) payload.slug = form.slug.trim();
       if (form.hasMatch) {
         payload.matchPool = {
           publicSponsorName: form.publicSponsorName || null,
@@ -99,6 +103,8 @@ export function ExpenseCampaignsTab({ tenantSubdomain }: { tenantSubdomain?: str
           perGiftCapCents: form.perGiftCapDollars
             ? Math.round(parseFloat(form.perGiftCapDollars) * 100)
             : null,
+          startsAt: form.matchStartsAt ? new Date(form.matchStartsAt).toISOString() : null,
+          endsAt: form.matchEndsAt ? new Date(form.matchEndsAt).toISOString() : null,
         };
       } else {
         payload.matchPool = null;
@@ -132,8 +138,11 @@ export function ExpenseCampaignsTab({ tenantSubdomain }: { tenantSubdomain?: str
 
   const startEdit = (c: ExpenseCampaign) => {
     setEditing(c);
+    const toDtLocal = (iso: string | null | undefined) =>
+      iso ? new Date(iso).toISOString().slice(0, 16) : "";
     setForm({
       title: c.title,
+      slug: c.slug,
       shortDescription: c.shortDescription ?? "",
       longDescription: c.longDescription ?? "",
       heroImageUrl: c.heroImageUrl ?? "",
@@ -150,6 +159,8 @@ export function ExpenseCampaignsTab({ tenantSubdomain }: { tenantSubdomain?: str
       ratioDenominator: c.matchPool?.ratioDenominator ?? 1,
       perGiftCapDollars:
         c.matchPool?.perGiftCapCents != null ? (c.matchPool.perGiftCapCents / 100).toFixed(2) : "",
+      matchStartsAt: toDtLocal(c.matchPool?.startsAt),
+      matchEndsAt: toDtLocal(c.matchPool?.endsAt),
     });
     setDialogOpen(true);
   };
@@ -308,6 +319,19 @@ export function ExpenseCampaignsTab({ tenantSubdomain }: { tenantSubdomain?: str
                 placeholder="New A/C unit for the shelter"
                 data-testid="input-campaign-title"
               />
+            </div>
+            <div>
+              <Label htmlFor="ec-slug">Public link slug (optional — auto-generated from title)</Label>
+              <Input
+                id="ec-slug"
+                value={form.slug}
+                onChange={(e) => setForm({ ...form, slug: e.target.value })}
+                placeholder="new-ac-unit"
+                data-testid="input-slug"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Appears in the public URL: /expense-campaign/<strong>{form.slug || "your-slug"}</strong>
+              </p>
             </div>
             <div>
               <Label htmlFor="ec-short">Short description</Label>
@@ -484,6 +508,31 @@ export function ExpenseCampaignsTab({ tenantSubdomain }: { tenantSubdomain?: str
                       />
                     </div>
                   </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label htmlFor="mp-starts">Match window starts (optional)</Label>
+                      <Input
+                        id="mp-starts"
+                        type="datetime-local"
+                        value={form.matchStartsAt}
+                        onChange={(e) => setForm({ ...form, matchStartsAt: e.target.value })}
+                        data-testid="input-match-starts-at"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="mp-ends">Match window ends (optional)</Label>
+                      <Input
+                        id="mp-ends"
+                        type="datetime-local"
+                        value={form.matchEndsAt}
+                        onChange={(e) => setForm({ ...form, matchEndsAt: e.target.value })}
+                        data-testid="input-match-ends-at"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Leave blank for "starts immediately" / "no end date." Outside the window, donations still count but the matching donor stops matching.
+                  </p>
                 </div>
               )}
             </div>

@@ -10,7 +10,7 @@ import {
   auditLogs,
   insertExpenseCampaignSchema,
 } from "@shared/schema";
-import { calculateMatch, publicSponsorLabel } from "@shared/expense-campaign-match";
+import { calculateMatch, publicSponsorLabel, computeEffectiveMatchStatus } from "@shared/expense-campaign-match";
 import { requireAuth, requireRole } from "../middleware/auth";
 
 const router = Router();
@@ -533,11 +533,20 @@ publicRouter.get("/:slug", async (req: Request, res: Response, next: NextFunctio
           ratioNumerator: pool.ratioNumerator,
           ratioDenominator: pool.ratioDenominator,
           perGiftCapCents: pool.perGiftCapCents,
+          // Persisted status — kept for backward compat.
           status: pool.status,
+          // Time-window-aware status used by the public landing page banners.
+          effectiveStatus: computeEffectiveMatchStatus(pool),
           startsAt: pool.startsAt,
           endsAt: pool.endsAt,
         }
       : null;
+
+    // Goal met = donor gifts + sponsor match together cover the goal. Donations
+    // can continue past this point, but the page shows a thank-you state.
+    const totalImpactCents =
+      campaign.raisedAmountCents + (pool ? pool.totalMatchedCents : 0);
+    const goalMet = totalImpactCents >= campaign.goalAmountCents;
 
     res.json({
       campaign: {
@@ -551,6 +560,8 @@ publicRouter.get("/:slug", async (req: Request, res: Response, next: NextFunctio
         raisedAmountCents: campaign.raisedAmountCents,
         endDate: campaign.endDate,
         status: campaign.status,
+        totalImpactCents,
+        goalMet,
       },
       matchPool: publicPool,
     });

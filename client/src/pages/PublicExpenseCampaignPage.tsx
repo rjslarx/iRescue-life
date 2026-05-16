@@ -19,6 +19,9 @@ interface MatchPoolPublic {
   ratioDenominator: number;
   perGiftCapCents: number | null;
   status: "active" | "exhausted" | "ended";
+  effectiveStatus: "pending" | "active" | "exhausted" | "ended";
+  startsAt: string | null;
+  endsAt: string | null;
 }
 
 interface CampaignPublic {
@@ -32,6 +35,8 @@ interface CampaignPublic {
   raisedAmountCents: number;
   endDate: string | null;
   status: "active" | "ended" | "archived";
+  totalImpactCents: number;
+  goalMet: boolean;
 }
 
 const usd = (cents: number) =>
@@ -85,7 +90,7 @@ export default function PublicExpenseCampaignPage() {
   const pct = Math.min(100, Math.round((campaign.raisedAmountCents / Math.max(1, campaign.goalAmountCents)) * 100));
 
   const previewMatch = (() => {
-    if (!matchPool || matchPool.status !== "active") return 0;
+    if (!matchPool || matchPool.effectiveStatus !== "active") return 0;
     const cents = Math.round(parseFloat(amountDollars || "0") * 100);
     if (cents <= 0) return 0;
     const raw = Math.floor((cents * matchPool.ratioNumerator) / matchPool.ratioDenominator);
@@ -156,7 +161,7 @@ export default function PublicExpenseCampaignPage() {
               </div>
             )}
 
-            {matchPool && matchPool.status === "active" && matchPool.remainingCents > 0 && (
+            {matchPool && matchPool.effectiveStatus === "active" && (
               <div
                 className="rounded-md border-2 border-primary/40 bg-primary/5 p-4 space-y-1"
                 data-testid="banner-match-pool"
@@ -176,7 +181,13 @@ export default function PublicExpenseCampaignPage() {
               </div>
             )}
 
-            {matchPool && (matchPool.status === "exhausted" || matchPool.remainingCents === 0) && (
+            {matchPool && matchPool.effectiveStatus === "pending" && (
+              <Badge variant="secondary" data-testid="badge-match-pending">
+                Matching window opens soon
+              </Badge>
+            )}
+
+            {matchPool && matchPool.effectiveStatus === "exhausted" && (
               <div
                 className="rounded-md border-2 border-primary/40 bg-primary/5 p-4 flex items-center gap-2"
                 data-testid="banner-match-exhausted"
@@ -189,10 +200,23 @@ export default function PublicExpenseCampaignPage() {
               </div>
             )}
 
-            {matchPool && matchPool.status === "ended" && matchPool.remainingCents > 0 && (
+            {matchPool && matchPool.effectiveStatus === "ended" && (
               <Badge variant="secondary" data-testid="badge-match-ended">
                 Matching window has ended
               </Badge>
+            )}
+
+            {campaign.goalMet && (
+              <div
+                className="rounded-md border-2 border-emerald-500/40 bg-emerald-500/10 p-4 flex items-center gap-2"
+                data-testid="banner-goal-met"
+              >
+                <Heart className="h-5 w-5 text-emerald-600" />
+                <span className="font-semibold text-emerald-900 dark:text-emerald-100">
+                  Goal met! Thank you to everyone who made this happen.
+                  {!campaign.endDate && " Donations are still welcome — every dollar over goal helps the animals."}
+                </span>
+              </div>
             )}
 
             {campaign.status === "active" ? (
