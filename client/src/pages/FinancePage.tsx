@@ -583,6 +583,8 @@ export default function FinancePage() {
           </Alert>
         )}
 
+        <ExpenseCampaignsRollup />
+
         <Tabs defaultValue="records" className="w-full">
           <TabsList data-testid="tabs-finance">
             <TabsTrigger value="records" data-testid="tab-records">Records</TabsTrigger>
@@ -877,5 +879,88 @@ export default function FinancePage() {
         </Tabs>
       </div>
     </DashboardLayout>
+  );
+}
+
+interface ExpenseCampaignRollupRow {
+  id: string;
+  title: string;
+  slug: string;
+  status: "active" | "ended" | "archived";
+  goalAmountCents: number;
+  raisedAmountCents: number;
+  matchedAmountCents: number;
+  totalImpactCents: number;
+  hasMatchPool: boolean;
+  sponsorLabel: string | null;
+}
+interface ExpenseCampaignRollupResponse {
+  campaigns: ExpenseCampaignRollupRow[];
+  totals: { raisedCents: number; matchedCents: number; totalImpactCents: number };
+}
+
+function ExpenseCampaignsRollup() {
+  const { data } = useQuery<ExpenseCampaignRollupResponse>({
+    queryKey: ['/api/expense-campaigns/finance-rollup'],
+  });
+  if (!data || data.campaigns.length === 0) return null;
+  const usd = (cents: number) =>
+    `$${(cents / 100).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+  return (
+    <Card data-testid="card-expense-campaigns-rollup">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Heart className="h-5 w-5" /> Expense Campaign Roll-up
+        </CardTitle>
+        <CardDescription>
+          Donor gifts, sponsor matches, and total impact across all expense campaigns.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+          <div className="rounded-md border p-3">
+            <div className="text-xs text-muted-foreground">Raised (donor gifts)</div>
+            <div className="text-lg font-semibold" data-testid="text-rollup-raised">{usd(data.totals.raisedCents)}</div>
+          </div>
+          <div className="rounded-md border p-3">
+            <div className="text-xs text-muted-foreground">Matched (sponsors)</div>
+            <div className="text-lg font-semibold" data-testid="text-rollup-matched">{usd(data.totals.matchedCents)}</div>
+          </div>
+          <div className="rounded-md border p-3">
+            <div className="text-xs text-muted-foreground">Total impact</div>
+            <div className="text-lg font-semibold" data-testid="text-rollup-impact">{usd(data.totals.totalImpactCents)}</div>
+          </div>
+        </div>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Campaign</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="text-right">Goal</TableHead>
+              <TableHead className="text-right">Raised</TableHead>
+              <TableHead className="text-right">Matched</TableHead>
+              <TableHead className="text-right">Impact</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {data.campaigns.map((c) => (
+              <TableRow key={c.id} data-testid={`row-expense-campaign-${c.id}`}>
+                <TableCell className="font-medium">
+                  {c.title}
+                  {c.hasMatchPool && c.sponsorLabel && (
+                    <div className="text-xs text-muted-foreground">Match: {c.sponsorLabel}</div>
+                  )}
+                </TableCell>
+                <TableCell><Badge variant="secondary">{c.status}</Badge></TableCell>
+                <TableCell className="text-right">{usd(c.goalAmountCents)}</TableCell>
+                <TableCell className="text-right">{usd(c.raisedAmountCents)}</TableCell>
+                <TableCell className="text-right">{usd(c.matchedAmountCents)}</TableCell>
+                <TableCell className="text-right font-semibold">{usd(c.totalImpactCents)}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
   );
 }

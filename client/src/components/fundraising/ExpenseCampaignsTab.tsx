@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { RichTextEditor } from "@/components/RichTextEditor";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -344,13 +345,12 @@ export function ExpenseCampaignsTab({ tenantSubdomain }: { tenantSubdomain?: str
               />
             </div>
             <div>
-              <Label htmlFor="ec-long">Long description</Label>
-              <Textarea
-                id="ec-long"
-                rows={4}
+              <Label htmlFor="ec-long">Long description (Markdown supported)</Label>
+              <RichTextEditor
                 value={form.longDescription}
-                onChange={(e) => setForm({ ...form, longDescription: e.target.value })}
+                onChange={(value) => setForm({ ...form, longDescription: value })}
                 placeholder="Tell the full story. Why does the rescue need this? How will it help the animals?"
+                minHeight="180px"
                 data-testid="input-long-description"
               />
             </div>

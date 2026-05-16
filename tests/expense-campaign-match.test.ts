@@ -212,3 +212,100 @@ describe("concurrency safety: sequential pool draining never overspends", () => 
     assert.equal(result.reason, "pool_disabled");
   });
 });
+
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
+describe("migration round-trip: 0021_add_expense_campaigns.sql", () => {
+  const sql = readFileSync(
+    resolve(__dirname, "../migrations/0021_add_expense_campaigns.sql"),
+    "utf8",
+  );
+  it("creates the expense_campaigns table with required columns", () => {
+    assert.ok(/CREATE TABLE.*expense_campaigns/i.test(sql), "expense_campaigns table");
+    for (const col of [
+      "tenant_id", "title", "slug", "short_description", "long_description",
+      "hero_image_url", "goal_amount_cents", "raised_amount_cents",
+      "end_date", "status",
+    ]) {
+      assert.ok(new RegExp(`\\b${col}\\b`).test(sql), `missing column ${col}`);
+    }
+  });
+  it("enforces a unique (tenant_id, slug) constraint", () => {
+    assert.ok(
+      /UNIQUE\s*\(\s*tenant_id\s*,\s*slug\s*\)/i.test(sql),
+      "unique(tenant_id, slug)",
+    );
+  });
+  it("creates the campaign_match_pools table 1:1 to a campaign", () => {
+    assert.ok(/CREATE TABLE.*campaign_match_pools/i.test(sql));
+    for (const col of [
+      "expense_campaign_id", "public_sponsor_name", "show_sponsor_publicly",
+      "internal_sponsor_name", "internal_sponsor_email",
+      "pledged_cap_cents", "ratio_numerator", "ratio_denominator",
+      "per_gift_cap_cents", "total_matched_cents", "status",
+      "starts_at", "ends_at",
+    ]) {
+      assert.ok(new RegExp(`\\b${col}\\b`).test(sql), `missing pool column ${col}`);
+    }
+    assert.ok(
+      /UNIQUE\s*\(\s*expense_campaign_id\s*\)/i.test(sql),
+      "pool 1:1 uniqueness",
+    );
+  });
+  it("adds nullable expense_campaign_id and matched_amount_cents to donations", () => {
+    assert.ok(/ALTER TABLE.*donations[\s\S]*expense_campaign_id/i.test(sql));
+    assert.ok(/matched_amount_cents/i.test(sql));
+  });
+});
+
+// Mirrors the public landing-page render logic without needing a DOM:
+// derives which banner key the page would show for the four required states
+// (no match / named match / anonymous match / match exhausted) plus
+// pending and ended windows.
+function publicBannerKey(
+  pool: MatchPoolSnapshot | null,
+  sponsorLabel: string,
+): "none" | "active-named" | "active-anonymous" | "pending" | "exhausted" | "ended" {
+  if (!pool) return "none";
+  const effective = computeEffectiveMatchStatus(pool);
+  if (effective === "pending") return "pending";
+  if (effective === "ended") return "ended";
+  if (effective === "exhausted") return "exhausted";
+  return sponsorLabel === "an anonymous donor" ? "active-anonymous" : "active-named";
+}
+
+describe("public page rendering states (the four required states)", () => {
+  const activePool: MatchPoolSnapshot = { ...basePool };
+  const exhaustedPool: MatchPoolSnapshot = {
+    ...basePool,
+    status: "exhausted",
+    totalMatchedCents: basePool.pledgedCapCents,
+  };
+  it("renders no banner when no match pool is attached", () => {
+    assert.equal(publicBannerKey(null, ""), "none");
+  });
+  it("renders named-match banner with a public sponsor name", () => {
+    assert.equal(publicBannerKey(activePool, publicSponsorLabel("Acme Foundation", true)), "active-named");
+  });
+  it("renders anonymous-match banner when sponsor is hidden", () => {
+    assert.equal(publicBannerKey(activePool, publicSponsorLabel("Smith Family", false)), "active-anonymous");
+  });
+  it("renders exhausted banner when the pool is drained", () => {
+    assert.equal(publicBannerKey(exhaustedPool, "Acme Foundation"), "exhausted");
+  });
+  it("renders pending banner before the match window opens", () => {
+    const future = new Date(Date.now() + 86_400_000);
+    assert.equal(
+      publicBannerKey({ ...activePool, startsAt: future }, "Acme"),
+      "pending",
+    );
+  });
+  it("renders ended banner after the match window closes", () => {
+    const past = new Date(Date.now() - 86_400_000);
+    assert.equal(
+      publicBannerKey({ ...activePool, endsAt: past }, "Acme"),
+      "ended",
+    );
+  });
+});

@@ -9,6 +9,8 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Heart } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 interface MatchPoolPublic {
   sponsorLabel: string;
@@ -268,8 +270,13 @@ export default function PublicExpenseCampaignPage() {
 
         {campaign.longDescription && (
           <Card>
-            <CardContent className="pt-6 whitespace-pre-wrap" data-testid="text-long-description">
-              {campaign.longDescription}
+            <CardContent
+              className="pt-6 prose prose-sm dark:prose-invert max-w-none"
+              data-testid="text-long-description"
+            >
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {campaign.longDescription}
+              </ReactMarkdown>
             </CardContent>
           </Card>
         )}

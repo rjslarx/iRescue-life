@@ -15,6 +15,16 @@ import { requireAuth, requireRole } from "../middleware/auth";
 
 const router = Router();
 
+// Campaign-edit permission gate.
+// Mirrors the task spec requirement: "All staff actions are permission-gated
+// (campaign-edit role)." Tenant-admins, owners, and board members are the
+// roles authorized to create / edit / configure expense campaigns + match
+// pools. Staff have read-only access to reconciliation reports. Deletion is
+// reserved for tenant owners/admins.
+const requireCampaignEdit = requireRole("admin", "owner", "board_member");
+const requireCampaignView = requireRole("admin", "owner", "board_member", "staff");
+const requireCampaignDelete = requireRole("admin", "owner");
+
 function slugify(s: string): string {
   return s
     .toLowerCase()
@@ -102,7 +112,7 @@ async function ensureUniqueSlug(tenantId: string, base: string, excludeId?: stri
 router.get(
   "/",
   requireAuth,
-  requireRole("admin", "owner", "board_member", "staff"),
+  requireCampaignView,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const tenantId = req.tenant!.id;
@@ -136,7 +146,7 @@ router.get(
 router.post(
   "/",
   requireAuth,
-  requireRole("admin", "owner", "board_member"),
+  requireCampaignEdit,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const tenantId = req.tenant!.id;
@@ -195,7 +205,7 @@ router.post(
 router.patch(
   "/:id",
   requireAuth,
-  requireRole("admin", "owner", "board_member"),
+  requireCampaignEdit,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const tenantId = req.tenant!.id;
@@ -316,7 +326,7 @@ router.patch(
 router.delete(
   "/:id",
   requireAuth,
-  requireRole("admin", "owner"),
+  requireCampaignDelete,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { id } = req.params;
@@ -335,13 +345,72 @@ router.delete(
 );
 
 // ---------------------------------------------------------------------------
+// Finance roll-up: all expense campaigns + match totals for the Finance page
+// ---------------------------------------------------------------------------
+
+router.get(
+  "/finance-rollup",
+  requireAuth,
+  requireCampaignView,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const tenantId = req.tenant!.id;
+      const campaignRows = await db
+        .select()
+        .from(expenseCampaigns)
+        .where(eq(expenseCampaigns.tenantId, tenantId))
+        .orderBy(desc(expenseCampaigns.createdAt));
+
+      const ids = campaignRows.map((c) => c.id);
+      const pools = ids.length
+        ? await db
+            .select()
+            .from(campaignMatchPools)
+            .where(eq(campaignMatchPools.tenantId, tenantId))
+        : [];
+      const poolByCampaign = new Map(pools.map((p) => [p.expenseCampaignId, p]));
+
+      const rows = campaignRows.map((c) => {
+        const pool = poolByCampaign.get(c.id);
+        const matched = pool?.totalMatchedCents ?? 0;
+        return {
+          id: c.id,
+          title: c.title,
+          slug: c.slug,
+          status: c.status,
+          goalAmountCents: c.goalAmountCents,
+          raisedAmountCents: c.raisedAmountCents,
+          matchedAmountCents: matched,
+          totalImpactCents: c.raisedAmountCents + matched,
+          hasMatchPool: !!pool,
+          sponsorLabel: pool ? publicSponsorLabel(pool.publicSponsorName, pool.showSponsorPublicly) : null,
+        };
+      });
+
+      const totals = rows.reduce(
+        (acc, r) => ({
+          raisedCents: acc.raisedCents + r.raisedAmountCents,
+          matchedCents: acc.matchedCents + r.matchedAmountCents,
+          totalImpactCents: acc.totalImpactCents + r.totalImpactCents,
+        }),
+        { raisedCents: 0, matchedCents: 0, totalImpactCents: 0 },
+      );
+
+      res.json({ campaigns: rows, totals });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
 // Reconciliation: per-donation table + summary for a single campaign
 // ---------------------------------------------------------------------------
 
 router.get(
   "/:id/reconciliation",
   requireAuth,
-  requireRole("admin", "owner", "board_member", "staff"),
+  requireCampaignView,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const tenantId = req.tenant!.id;
@@ -401,7 +470,7 @@ router.get(
 router.get(
   "/:id/sponsor-invoice.pdf",
   requireAuth,
-  requireRole("admin", "owner", "board_member"),
+  requireCampaignEdit,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const tenantId = req.tenant!.id;
