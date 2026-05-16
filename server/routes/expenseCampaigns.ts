@@ -470,7 +470,7 @@ router.get(
 router.get(
   "/:id/sponsor-invoice.pdf",
   requireAuth,
-  requireCampaignEdit,
+  requireCampaignView,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const tenantId = req.tenant!.id;
