@@ -124,6 +124,7 @@ import EventSuccessPage from "@/pages/EventSuccessPage";
 import GivePage from "@/pages/GivePage";
 import PublicTransparencyPage from "@/pages/PublicTransparencyPage";
 import PublicCampaignPage from "@/pages/PublicCampaignPage";
+import PublicExpenseCampaignPage from "@/pages/PublicExpenseCampaignPage";
 import PublicAnimalProfilePage from "@/pages/PublicAnimalProfilePage";
 import DonationThankYouPage from "@/pages/DonationThankYouPage";
 import PublicShopPage from "@/pages/PublicShopPage";
@@ -261,6 +262,7 @@ function RouterSwitch() {
       <Route path="/campaign/:animalId/thank-you" component={DonationThankYouPage} />
       <Route path="/campaign/:slug/p/:participantId" component={ParticipantSubPage} />
       <Route path="/campaign/:slug" component={P2PCampaignLandingPage} />
+      <Route path="/expense-campaign/:slug" component={PublicExpenseCampaignPage} />
       <Route path="/contest/:slug" component={VotingContestPage} />
       <Route path="/intake/:token" component={CampaignIntakePage} />
       <Route path="/fundraise" component={PeerCampaignCreatePage} />

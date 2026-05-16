@@ -28905,7 +28905,74 @@ Submitted: ${new Date().toLocaleString()}
               tributeWallOptIn: isOneTimeGift ? !!tributeWallOptIn : false,
               tributeWallExpiresAt: isOneTimeGift ? tributeWallExpiresAt : null,
               tributeShowDonorName: isOneTimeGift ? tributeShowDonorName : false,
+              // Task #213 — link donation to an expense campaign (if any).
+              expenseCampaignId: sessionMetadata.expenseCampaignId || null,
             }).returning();
+
+            // Task #213 — Expense-campaign match-pool credit.
+            // Wrapped in a transaction with SELECT ... FOR UPDATE so concurrent
+            // checkouts can't double-spend the pool. Always credits the
+            // campaign's raised total; only credits the pool when one exists.
+            if (donationRecord && sessionMetadata.expenseCampaignId) {
+              try {
+                const { expenseCampaigns, campaignMatchPools } = await import('@shared/schema');
+                const { calculateMatch } = await import('@shared/expense-campaign-match');
+                const campaignId = sessionMetadata.expenseCampaignId;
+                await db.transaction(async (tx) => {
+                  // Row-lock the campaign so concurrent donations to the same
+                  // campaign can't lose updates on raised_amount_cents.
+                  const campaignRows = await tx.execute(sql`
+                    SELECT id FROM expense_campaigns
+                    WHERE id = ${campaignId} AND tenant_id = ${tenant.id}
+                    FOR UPDATE
+                  `);
+                  if (!(campaignRows as any).rows?.[0]) return;
+
+                  const poolRows = await tx.execute(sql`
+                    SELECT * FROM campaign_match_pools
+                    WHERE expense_campaign_id = ${campaignId} AND tenant_id = ${tenant.id}
+                    FOR UPDATE
+                  `);
+                  const pool: any = (poolRows as any).rows?.[0];
+                  let matched = 0;
+                  if (pool) {
+                    const result = calculateMatch(baseAmountCents, {
+                      status: pool.status,
+                      pledgedCapCents: pool.pledged_cap_cents,
+                      totalMatchedCents: pool.total_matched_cents,
+                      ratioNumerator: pool.ratio_numerator,
+                      ratioDenominator: pool.ratio_denominator,
+                      perGiftCapCents: pool.per_gift_cap_cents,
+                      startsAt: pool.starts_at ? new Date(pool.starts_at) : null,
+                      endsAt: pool.ends_at ? new Date(pool.ends_at) : null,
+                    });
+                    matched = result.matchedCents;
+                    if (matched > 0) {
+                      const newTotal = pool.total_matched_cents + matched;
+                      const newStatus = newTotal >= pool.pledged_cap_cents ? 'exhausted' : pool.status;
+                      await tx
+                        .update(campaignMatchPools)
+                        .set({ totalMatchedCents: newTotal, status: newStatus, updatedAt: new Date() })
+                        .where(eq(campaignMatchPools.id, pool.id));
+                      await tx
+                        .update(donations)
+                        .set({ matchedAmountCents: matched })
+                        .where(eq(donations.id, donationRecord.id));
+                    }
+                  }
+                  // Atomic SQL increment — never read-modify-write.
+                  const delta = baseAmountCents + matched;
+                  await tx.execute(sql`
+                    UPDATE expense_campaigns
+                    SET raised_amount_cents = raised_amount_cents + ${delta},
+                        updated_at = now()
+                    WHERE id = ${campaignId} AND tenant_id = ${tenant.id}
+                  `);
+                });
+              } catch (matchErr) {
+                console.error('[STRIPE-WEBHOOK] Expense-campaign match credit failed:', matchErr);
+              }
+            }
 
             // Tasteful tribute acknowledgment email — never reveals the amount.
             // Skip for ACH-pending until the bank actually clears (handled in async_payment_succeeded).
@@ -43420,6 +43487,11 @@ The user asking is a tenant administrator or staff member.`;
   // Register adopter portal routes (public-facing magic link auth + my pets)
   const adopterPortalRoutes = await import('./routes/adopterPortal');
   app.use('/api/adopter', requireTenant, adopterPortalRoutes.default);
+
+  // Task #213 — Expense campaigns (staff CRUD + public landing + checkout)
+  const expenseCampaignRoutes = await import('./routes/expenseCampaigns');
+  app.use('/api/expense-campaigns', requireTenant, expenseCampaignRoutes.default);
+  app.use('/api/public/expense-campaigns', requireTenant, expenseCampaignRoutes.publicRouter);
 
   // Register VIP donor portal routes (token-authenticated giving history + receipts)
   const vipPortalRoutes = await import('./routes/vipPortal');

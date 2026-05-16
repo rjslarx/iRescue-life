@@ -972,6 +972,10 @@ export const donations = pgTable("donations", {
   // "From {first name + last initial}" line under the honoree (Task #210).
   // Default OFF so silence stays private; donor opts in on the Donate page.
   tributeShowDonorName: boolean("tribute_show_donor_name").notNull().default(false),
+  // Task #213 — link donation to an expense campaign + matched amount credited
+  // by the matching-donor pool (see migration 0021).
+  expenseCampaignId: uuid("expense_campaign_id"),
+  matchedAmountCents: integer("matched_amount_cents").notNull().default(0),
   date: timestamp("date").notNull().defaultNow(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
@@ -6679,3 +6683,69 @@ export const insertMicrochipClinicRecordSchema = createInsertSchema(microchipCli
 });
 export type InsertMicrochipClinicRecord = z.infer<typeof insertMicrochipClinicRecordSchema>;
 export type MicrochipClinicRecord = typeof microchipClinicRecords.$inferSelect;
+
+// ============================================================================
+// Expense Campaigns (Task #213)
+// ============================================================================
+// Standalone goal-based fundraisers for organizational expenses (A/C unit,
+// electrical upgrade, replacement van). Not tied to an animal, event, or
+// peer fundraiser. Optionally paired with a single `campaign_match_pools`
+// row that doubles/multiplies each gift up to a pledged cap.
+export const expenseCampaigns = pgTable("expense_campaigns", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  title: text("title").notNull(),
+  slug: text("slug").notNull(),
+  shortDescription: text("short_description"),
+  longDescription: text("long_description"),
+  heroImageUrl: text("hero_image_url"),
+  goalAmountCents: integer("goal_amount_cents").notNull(),
+  raisedAmountCents: integer("raised_amount_cents").notNull().default(0),
+  endDate: timestamp("end_date"),
+  status: text("status").notNull().default("active").$type<"active" | "ended" | "archived">(),
+  createdByUserId: uuid("created_by_user_id").references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  tenantSlugUnique: unique("expense_campaigns_tenant_slug_unique").on(table.tenantId, table.slug),
+}));
+
+export const insertExpenseCampaignSchema = createInsertSchema(expenseCampaigns).omit({
+  id: true,
+  raisedAmountCents: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertExpenseCampaign = z.infer<typeof insertExpenseCampaignSchema>;
+export type ExpenseCampaign = typeof expenseCampaigns.$inferSelect;
+
+export const campaignMatchPools = pgTable("campaign_match_pools", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  expenseCampaignId: uuid("expense_campaign_id").notNull().references(() => expenseCampaigns.id, { onDelete: 'cascade' }),
+  publicSponsorName: text("public_sponsor_name"),
+  showSponsorPublicly: boolean("show_sponsor_publicly").notNull().default(true),
+  internalSponsorName: text("internal_sponsor_name").notNull(),
+  internalSponsorEmail: text("internal_sponsor_email").notNull(),
+  pledgedCapCents: integer("pledged_cap_cents").notNull(),
+  ratioNumerator: integer("ratio_numerator").notNull().default(1),
+  ratioDenominator: integer("ratio_denominator").notNull().default(1),
+  perGiftCapCents: integer("per_gift_cap_cents"),
+  startsAt: timestamp("starts_at"),
+  endsAt: timestamp("ends_at"),
+  totalMatchedCents: integer("total_matched_cents").notNull().default(0),
+  status: text("status").notNull().default("active").$type<"active" | "exhausted" | "ended">(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  campaignUnique: unique("campaign_match_pools_campaign_unique").on(table.expenseCampaignId),
+}));
+
+export const insertCampaignMatchPoolSchema = createInsertSchema(campaignMatchPools).omit({
+  id: true,
+  totalMatchedCents: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertCampaignMatchPool = z.infer<typeof insertCampaignMatchPoolSchema>;
+export type CampaignMatchPool = typeof campaignMatchPools.$inferSelect;

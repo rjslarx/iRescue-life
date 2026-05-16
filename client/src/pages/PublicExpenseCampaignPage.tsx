@@ -1,0 +1,219 @@
+import { useState } from "react";
+import { useParams } from "wouter";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
+import { Heart } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+
+interface MatchPoolPublic {
+  sponsorLabel: string;
+  pledgedCapCents: number;
+  totalMatchedCents: number;
+  remainingCents: number;
+  ratioNumerator: number;
+  ratioDenominator: number;
+  perGiftCapCents: number | null;
+  status: "active" | "exhausted" | "ended";
+}
+
+interface CampaignPublic {
+  id: string;
+  slug: string;
+  title: string;
+  shortDescription: string | null;
+  longDescription: string | null;
+  heroImageUrl: string | null;
+  goalAmountCents: number;
+  raisedAmountCents: number;
+  endDate: string | null;
+  status: "active" | "ended" | "archived";
+}
+
+const usd = (cents: number) =>
+  `$${(cents / 100).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+
+const PRESETS = [25, 50, 100, 250];
+
+export default function PublicExpenseCampaignPage() {
+  const { slug } = useParams<{ slug: string }>();
+  const { toast } = useToast();
+  const [amountDollars, setAmountDollars] = useState<string>("50");
+
+  const { data, isLoading } = useQuery<{ campaign: CampaignPublic; matchPool: MatchPoolPublic | null }>({
+    queryKey: ["/api/public/expense-campaigns", slug],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/public/expense-campaigns/${slug}`);
+      return res.json();
+    },
+  });
+
+  const checkoutMutation = useMutation({
+    mutationFn: async () => {
+      const cents = Math.round(parseFloat(amountDollars || "0") * 100);
+      if (cents < 100) throw new Error("Minimum donation is $1.");
+      const res = await apiRequest("POST", `/api/public/expense-campaigns/${data!.campaign.id}/checkout`, {
+        amountCents: cents,
+        donorCoversFees: false,
+      });
+      const body = await res.json();
+      if (body.url) window.location.href = body.url;
+      else throw new Error(body.error || "Could not start checkout.");
+    },
+    onError: (err: any) => {
+      toast({ title: "Donation failed", description: err?.message ?? "Unknown error", variant: "destructive" });
+    },
+  });
+
+  if (isLoading) {
+    return <div className="max-w-3xl mx-auto p-8 text-center text-muted-foreground">Loading…</div>;
+  }
+  if (!data?.campaign) {
+    return (
+      <div className="max-w-3xl mx-auto p-8 text-center" data-testid="page-expense-campaign-not-found">
+        <h1 className="text-2xl font-semibold">Campaign not found</h1>
+        <p className="text-muted-foreground mt-2">This campaign may have been archived.</p>
+      </div>
+    );
+  }
+
+  const { campaign, matchPool } = data;
+  const pct = Math.min(100, Math.round((campaign.raisedAmountCents / Math.max(1, campaign.goalAmountCents)) * 100));
+
+  const previewMatch = (() => {
+    if (!matchPool || matchPool.status !== "active") return 0;
+    const cents = Math.round(parseFloat(amountDollars || "0") * 100);
+    if (cents <= 0) return 0;
+    const raw = Math.floor((cents * matchPool.ratioNumerator) / matchPool.ratioDenominator);
+    const capped = matchPool.perGiftCapCents != null ? Math.min(raw, matchPool.perGiftCapCents) : raw;
+    return Math.max(0, Math.min(capped, matchPool.remainingCents));
+  })();
+
+  return (
+    <div className="min-h-screen bg-background" data-testid="page-public-expense-campaign">
+      {campaign.heroImageUrl && (
+        <div
+          className="relative h-64 md:h-80 bg-cover bg-center"
+          style={{ backgroundImage: `url(${campaign.heroImageUrl})` }}
+        >
+          <div className="absolute inset-0 bg-black/40" />
+          <div className="absolute inset-0 flex items-end p-6">
+            <h1 className="text-white text-3xl md:text-4xl font-bold" data-testid="text-campaign-title">
+              {campaign.title}
+            </h1>
+          </div>
+        </div>
+      )}
+
+      <div className="max-w-3xl mx-auto p-6 space-y-6">
+        {!campaign.heroImageUrl && (
+          <h1 className="text-3xl font-bold" data-testid="text-campaign-title">
+            {campaign.title}
+          </h1>
+        )}
+        {campaign.shortDescription && (
+          <p className="text-lg text-muted-foreground" data-testid="text-short-description">
+            {campaign.shortDescription}
+          </p>
+        )}
+
+        <Card>
+          <CardContent className="pt-6 space-y-4">
+            <div>
+              <div className="flex justify-between mb-2">
+                <span className="text-2xl font-bold" data-testid="text-raised">
+                  {usd(campaign.raisedAmountCents)}
+                </span>
+                <span className="text-muted-foreground">raised of {usd(campaign.goalAmountCents)} goal</span>
+              </div>
+              <Progress value={pct} data-testid="progress-raised" />
+            </div>
+
+            {matchPool && matchPool.status === "active" && matchPool.remainingCents > 0 && (
+              <div
+                className="rounded-md border-2 border-primary/40 bg-primary/5 p-4 space-y-1"
+                data-testid="banner-match-pool"
+              >
+                <div className="flex items-center gap-2">
+                  <Heart className="h-5 w-5 text-primary" />
+                  <span className="font-semibold">
+                    Every gift {matchPool.ratioNumerator === matchPool.ratioDenominator
+                      ? "is matched"
+                      : `gets a ${matchPool.ratioNumerator}:${matchPool.ratioDenominator} match`}{" "}
+                    by {matchPool.sponsorLabel}
+                  </span>
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  {usd(matchPool.remainingCents)} of {usd(matchPool.pledgedCapCents)} match still available.
+                </div>
+              </div>
+            )}
+
+            {matchPool && matchPool.status !== "active" && (
+              <Badge variant="secondary" data-testid="badge-match-ended">
+                Matching window has ended
+              </Badge>
+            )}
+
+            {campaign.status === "active" ? (
+              <div className="space-y-3 pt-2">
+                <div className="flex flex-wrap gap-2">
+                  {PRESETS.map((p) => (
+                    <Button
+                      key={p}
+                      variant={amountDollars === String(p) ? "default" : "outline"}
+                      onClick={() => setAmountDollars(String(p))}
+                      data-testid={`button-preset-${p}`}
+                    >
+                      ${p}
+                    </Button>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    type="number"
+                    min="1"
+                    step="0.01"
+                    value={amountDollars}
+                    onChange={(e) => setAmountDollars(e.target.value)}
+                    placeholder="Other amount"
+                    data-testid="input-amount"
+                  />
+                  <Button
+                    onClick={() => checkoutMutation.mutate()}
+                    disabled={checkoutMutation.isPending}
+                    data-testid="button-donate"
+                  >
+                    {checkoutMutation.isPending ? "Redirecting…" : "Donate"}
+                  </Button>
+                </div>
+                {previewMatch > 0 && (
+                  <p className="text-sm text-primary" data-testid="text-match-preview">
+                    Your {usd(Math.round(parseFloat(amountDollars || "0") * 100))} gift unlocks an additional{" "}
+                    {usd(previewMatch)} from {matchPool!.sponsorLabel}.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <p className="text-muted-foreground" data-testid="text-campaign-closed">
+                This campaign is no longer accepting donations.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        {campaign.longDescription && (
+          <Card>
+            <CardContent className="pt-6 whitespace-pre-wrap" data-testid="text-long-description">
+              {campaign.longDescription}
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    </div>
+  );
+}

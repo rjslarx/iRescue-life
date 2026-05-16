@@ -84,6 +84,7 @@ import { cn } from "@/lib/utils";
 import DashboardLayout from "@/components/DashboardLayout";
 import SocialPostArchitectDialog from "@/components/SocialPostArchitectDialog";
 import { getAvatarIcon, getAvatarColor, AVATAR_TYPES } from "@/lib/participant-avatars";
+import { ExpenseCampaignsTab } from "@/components/fundraising/ExpenseCampaignsTab";
 import type { VotingContest, VotingContestEntrant } from "@shared/schema";
 
 export default function FundraisingHubPage() {
@@ -114,6 +115,7 @@ export default function FundraisingHubPage() {
         <TabsList data-testid="tabs-fundraising">
           <TabsTrigger value="toolkit" data-testid="tab-toolkit">Toolkit</TabsTrigger>
           <TabsTrigger value="campaigns" data-testid="tab-campaign-manager">Campaigns</TabsTrigger>
+          <TabsTrigger value="expense-campaigns" data-testid="tab-expense-campaigns">Expense Campaigns</TabsTrigger>
           <TabsTrigger value="community" data-testid="tab-community-fundraisers">Community</TabsTrigger>
           <TabsTrigger value="voting-contests" data-testid="tab-voting-contests">Voting</TabsTrigger>
         </TabsList>
@@ -129,6 +131,10 @@ export default function FundraisingHubPage() {
 
         <TabsContent value="campaigns">
           <CampaignManagerTab tenantSubdomain={tenant?.subdomain} />
+        </TabsContent>
+
+        <TabsContent value="expense-campaigns">
+          <ExpenseCampaignsTab tenantSubdomain={tenant?.subdomain} />
         </TabsContent>
 
         <TabsContent value="community">
