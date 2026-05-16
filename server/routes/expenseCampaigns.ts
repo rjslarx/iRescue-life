@@ -334,10 +334,31 @@ router.delete(
   requireCampaignDelete,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const tenantId = req.tenant!.id;
       const { id } = req.params;
+
+      // Guardrail: preserve donor + finance history. If any donation has ever
+      // been credited to this campaign we refuse a hard delete and steer the
+      // caller toward archiving. (The schema's ON DELETE SET NULL on
+      // donations.expense_campaign_id would otherwise erase attribution.)
+      const linked = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(donations)
+        .where(
+          and(eq(donations.tenantId, tenantId), eq(donations.expenseCampaignId, id)),
+        );
+      const donationCount = linked[0]?.count ?? 0;
+      if (donationCount > 0) {
+        return res.status(409).json({
+          error: "Cannot delete a campaign that has donations on it.",
+          hint: "Archive the campaign instead to preserve donor + finance history.",
+          donationCount,
+        });
+      }
+
       const removed = await db
         .delete(expenseCampaigns)
-        .where(and(eq(expenseCampaigns.id, id), eq(expenseCampaigns.tenantId, req.tenant!.id)))
+        .where(and(eq(expenseCampaigns.id, id), eq(expenseCampaigns.tenantId, tenantId)))
         .returning();
       for (const row of removed) {
         await logCampaignAudit(req, "expense_campaign.delete", row.id, { before: row });
