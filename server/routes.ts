@@ -28868,7 +28868,10 @@ Submitted: ${new Date().toLocaleString()}
               : null;
             const isOneTimeGift = session.mode !== 'subscription';
 
-            const [donationRecord] = await db.insert(donations).values({
+            // Build the donation values once so we can either insert directly OR
+            // insert them inside a transaction alongside the expense-campaign
+            // match-pool credit (Task #213).
+            const donationValuesBase = {
               tenantId: tenant.id,
               donorId: donor.id,
               donorName: customerName,
@@ -28879,13 +28882,13 @@ Submitted: ${new Date().toLocaleString()}
               donorZip: billingAddr?.postal_code || null,
               donorCountry: billingAddr?.country || null,
               amount: baseAmountCents,
-              source: 'stripe',
+              source: 'stripe' as const,
               date: new Date(),
               message: session.metadata?.message || null,
               isRecurring: session.mode === 'subscription',
               recurringFrequency: session.mode === 'subscription' ? 'monthly' : null,
               recurringStatus: session.mode === 'subscription' ? 'active' : null,
-              donationType: isAchPending ? 'ach' : 'online',
+              donationType: (isAchPending ? 'ach' : 'online') as 'ach' | 'online',
               paymentMethod: isAchPending ? 'stripe_ach' : 'stripe',
               stripeCheckoutSessionId: session.id,
               isPublic: true,
@@ -28893,8 +28896,6 @@ Submitted: ${new Date().toLocaleString()}
               feesCovered: donorCoveredFees,
               grossAmount: grossAmountCents,
               netAmount: netAmountCents,
-              // Tribute fields (one-time gifts only). When tributeKind is null all
-              // these stay null/false — schema defaults keep wall opt-in false.
               tributeKind: isOneTimeGift ? tributeKind : null,
               tributeName: isOneTimeGift ? tributeName : null,
               tributeRecipientName: isOneTimeGift && tributeKind ? (sessionMetadata['tribute.recipientName'] || null) : null,
@@ -28905,73 +28906,76 @@ Submitted: ${new Date().toLocaleString()}
               tributeWallOptIn: isOneTimeGift ? !!tributeWallOptIn : false,
               tributeWallExpiresAt: isOneTimeGift ? tributeWallExpiresAt : null,
               tributeShowDonorName: isOneTimeGift ? tributeShowDonorName : false,
-              // Task #213 — link donation to an expense campaign (if any).
               expenseCampaignId: sessionMetadata.expenseCampaignId || null,
-            }).returning();
+              matchedAmountCents: 0,
+            };
 
-            // Task #213 — Expense-campaign match-pool credit.
-            // Wrapped in a transaction with SELECT ... FOR UPDATE so concurrent
-            // checkouts can't double-spend the pool. Always credits the
-            // campaign's raised total; only credits the pool when one exists.
-            if (donationRecord && sessionMetadata.expenseCampaignId) {
-              try {
-                const { expenseCampaigns, campaignMatchPools } = await import('@shared/schema');
-                const { calculateMatch } = await import('@shared/expense-campaign-match');
-                const campaignId = sessionMetadata.expenseCampaignId;
-                await db.transaction(async (tx) => {
-                  // Row-lock the campaign so concurrent donations to the same
-                  // campaign can't lose updates on raised_amount_cents.
-                  const campaignRows = await tx.execute(sql`
-                    SELECT id FROM expense_campaigns
-                    WHERE id = ${campaignId} AND tenant_id = ${tenant.id}
-                    FOR UPDATE
-                  `);
-                  if (!(campaignRows as any).rows?.[0]) return;
-
-                  const poolRows = await tx.execute(sql`
-                    SELECT * FROM campaign_match_pools
-                    WHERE expense_campaign_id = ${campaignId} AND tenant_id = ${tenant.id}
-                    FOR UPDATE
-                  `);
-                  const pool: any = (poolRows as any).rows?.[0];
-                  let matched = 0;
-                  if (pool) {
-                    const result = calculateMatch(baseAmountCents, {
-                      status: pool.status,
-                      pledgedCapCents: pool.pledged_cap_cents,
-                      totalMatchedCents: pool.total_matched_cents,
-                      ratioNumerator: pool.ratio_numerator,
-                      ratioDenominator: pool.ratio_denominator,
-                      perGiftCapCents: pool.per_gift_cap_cents,
-                      startsAt: pool.starts_at ? new Date(pool.starts_at) : null,
-                      endsAt: pool.ends_at ? new Date(pool.ends_at) : null,
-                    });
-                    matched = result.matchedCents;
-                    if (matched > 0) {
-                      const newTotal = pool.total_matched_cents + matched;
-                      const newStatus = newTotal >= pool.pledged_cap_cents ? 'exhausted' : pool.status;
-                      await tx
-                        .update(campaignMatchPools)
-                        .set({ totalMatchedCents: newTotal, status: newStatus, updatedAt: new Date() })
-                        .where(eq(campaignMatchPools.id, pool.id));
-                      await tx
-                        .update(donations)
-                        .set({ matchedAmountCents: matched })
-                        .where(eq(donations.id, donationRecord.id));
-                    }
-                  }
-                  // Atomic SQL increment — never read-modify-write.
-                  const delta = baseAmountCents + matched;
-                  await tx.execute(sql`
-                    UPDATE expense_campaigns
-                    SET raised_amount_cents = raised_amount_cents + ${delta},
-                        updated_at = now()
-                    WHERE id = ${campaignId} AND tenant_id = ${tenant.id}
-                  `);
-                });
-              } catch (matchErr) {
-                console.error('[STRIPE-WEBHOOK] Expense-campaign match credit failed:', matchErr);
-              }
+            let donationRecord: typeof donations.$inferSelect;
+            if (sessionMetadata.expenseCampaignId) {
+              // Task #213 — Atomic: donation insert + match decrement + campaign
+              // raised increment all in one transaction. `raised_amount_cents`
+              // tracks donor gifts ONLY; matched dollars stay in the pool's
+              // `total_matched_cents`. Total impact = raised + matched.
+              const { expenseCampaigns, campaignMatchPools } = await import('@shared/schema');
+              const { calculateMatch } = await import('@shared/expense-campaign-match');
+              const campaignId = sessionMetadata.expenseCampaignId;
+              donationRecord = await db.transaction(async (tx) => {
+                const campaignRows = await tx.execute(sql`
+                  SELECT id FROM expense_campaigns
+                  WHERE id = ${campaignId} AND tenant_id = ${tenant.id}
+                  FOR UPDATE
+                `);
+                if (!(campaignRows as any).rows?.[0]) {
+                  const [d] = await tx
+                    .insert(donations)
+                    .values({ ...donationValuesBase, expenseCampaignId: null })
+                    .returning();
+                  return d;
+                }
+                const poolRows = await tx.execute(sql`
+                  SELECT * FROM campaign_match_pools
+                  WHERE expense_campaign_id = ${campaignId} AND tenant_id = ${tenant.id}
+                  FOR UPDATE
+                `);
+                const pool: any = (poolRows as any).rows?.[0];
+                let matched = 0;
+                if (pool) {
+                  const result = calculateMatch(baseAmountCents, {
+                    status: pool.status,
+                    pledgedCapCents: pool.pledged_cap_cents,
+                    totalMatchedCents: pool.total_matched_cents,
+                    ratioNumerator: pool.ratio_numerator,
+                    ratioDenominator: pool.ratio_denominator,
+                    perGiftCapCents: pool.per_gift_cap_cents,
+                    startsAt: pool.starts_at ? new Date(pool.starts_at) : null,
+                    endsAt: pool.ends_at ? new Date(pool.ends_at) : null,
+                  });
+                  matched = result.matchedCents;
+                }
+                const [d] = await tx
+                  .insert(donations)
+                  .values({ ...donationValuesBase, matchedAmountCents: matched })
+                  .returning();
+                if (pool && matched > 0) {
+                  const newTotal = pool.total_matched_cents + matched;
+                  const newStatus = newTotal >= pool.pledged_cap_cents ? 'exhausted' : pool.status;
+                  await tx
+                    .update(campaignMatchPools)
+                    .set({ totalMatchedCents: newTotal, status: newStatus, updatedAt: new Date() })
+                    .where(eq(campaignMatchPools.id, pool.id));
+                }
+                // Atomic increment — donor gift only, NOT including matched.
+                await tx.execute(sql`
+                  UPDATE expense_campaigns
+                  SET raised_amount_cents = raised_amount_cents + ${baseAmountCents},
+                      updated_at = now()
+                  WHERE id = ${campaignId} AND tenant_id = ${tenant.id}
+                `);
+                return d;
+              });
+            } else {
+              const [d] = await db.insert(donations).values(donationValuesBase).returning();
+              donationRecord = d;
             }
 
             // Tasteful tribute acknowledgment email — never reveals the amount.

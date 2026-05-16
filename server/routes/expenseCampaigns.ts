@@ -7,6 +7,7 @@ import {
   campaignMatchPools,
   donations,
   tenants,
+  auditLogs,
   insertExpenseCampaignSchema,
 } from "@shared/schema";
 import { calculateMatch, publicSponsorLabel } from "@shared/expense-campaign-match";
@@ -49,6 +50,34 @@ const upsertCampaignSchema = z.object({
   status: z.enum(["active", "ended", "archived"]).default("active"),
   matchPool: matchPoolSchema.optional(),
 });
+
+// Task #213 — audit-log helper for campaign + match-pool config changes.
+// Skips silently if the request has no authenticated user (defensive — every
+// admin route is wrapped in requireAuth, so this should never happen).
+async function logCampaignAudit(
+  req: Request,
+  action: "expense_campaign.create" | "expense_campaign.update" | "expense_campaign.delete" |
+          "campaign_match_pool.create" | "campaign_match_pool.update" | "campaign_match_pool.delete",
+  entityId: string,
+  changes?: { before?: Record<string, any>; after?: Record<string, any> },
+): Promise<void> {
+  const userId = req.user?.id;
+  if (!userId) return;
+  try {
+    await db.insert(auditLogs).values({
+      userId,
+      tenantId: req.tenant?.id ?? null,
+      action,
+      entityType: action.startsWith("expense_campaign") ? "expense_campaign" : "campaign_match_pool",
+      entityId,
+      changes: changes ?? null,
+      ipAddress: req.ip ?? null,
+      userAgent: req.get("user-agent") ?? null,
+    });
+  } catch (err) {
+    console.error("[expense-campaign audit-log] failed:", err);
+  }
+}
 
 async function ensureUniqueSlug(tenantId: string, base: string, excludeId?: string): Promise<string> {
   let candidate = base;
@@ -130,6 +159,8 @@ router.post(
         })
         .returning();
 
+      await logCampaignAudit(req, "expense_campaign.create", campaign.id, { after: campaign });
+
       let pool = null;
       if (data.matchPool) {
         const mp = data.matchPool;
@@ -151,6 +182,7 @@ router.post(
           })
           .returning();
         pool = created;
+        await logCampaignAudit(req, "campaign_match_pool.create", created.id, { after: created });
       }
 
       res.status(201).json({ campaign: { ...campaign, matchPool: pool } });
@@ -197,18 +229,24 @@ router.patch(
         .where(and(eq(expenseCampaigns.id, id), eq(expenseCampaigns.tenantId, tenantId)))
         .returning();
 
+      await logCampaignAudit(req, "expense_campaign.update", id, { before: existing, after: campaign });
+
       // Match pool: explicit null clears, undefined leaves alone, object upserts.
       // Every query is tenant-scoped to prevent cross-tenant data mixing.
       let pool: any = null;
       if (data.matchPool === null) {
-        await db
+        const removed = await db
           .delete(campaignMatchPools)
           .where(
             and(
               eq(campaignMatchPools.expenseCampaignId, id),
               eq(campaignMatchPools.tenantId, tenantId),
             ),
-          );
+          )
+          .returning();
+        for (const row of removed) {
+          await logCampaignAudit(req, "campaign_match_pool.delete", row.id, { before: row });
+        }
       } else if (data.matchPool) {
         const mp = data.matchPool;
         const fields = {
@@ -246,11 +284,13 @@ router.patch(
               ),
             )
             .returning();
+          await logCampaignAudit(req, "campaign_match_pool.update", existingPool.id, { after: pool });
         } else {
           [pool] = await db
             .insert(campaignMatchPools)
             .values({ ...fields, tenantId, expenseCampaignId: id })
             .returning();
+          await logCampaignAudit(req, "campaign_match_pool.create", pool.id, { after: pool });
         }
       } else {
         pool = await db
@@ -280,9 +320,13 @@ router.delete(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { id } = req.params;
-      await db
+      const removed = await db
         .delete(expenseCampaigns)
-        .where(and(eq(expenseCampaigns.id, id), eq(expenseCampaigns.tenantId, req.tenant!.id)));
+        .where(and(eq(expenseCampaigns.id, id), eq(expenseCampaigns.tenantId, req.tenant!.id)))
+        .returning();
+      for (const row of removed) {
+        await logCampaignAudit(req, "expense_campaign.delete", row.id, { before: row });
+      }
       res.json({ success: true });
     } catch (err) {
       next(err);

@@ -133,6 +133,29 @@ export default function PublicExpenseCampaignPage() {
               <Progress value={pct} data-testid="progress-raised" />
             </div>
 
+            {matchPool && (
+              <div className="grid grid-cols-3 gap-2 text-center text-sm">
+                <div className="rounded-md bg-muted/40 p-2">
+                  <div className="text-xs text-muted-foreground">Matched so far</div>
+                  <div className="font-semibold" data-testid="text-matched-so-far">
+                    {usd(matchPool.totalMatchedCents)}
+                  </div>
+                </div>
+                <div className="rounded-md bg-muted/40 p-2">
+                  <div className="text-xs text-muted-foreground">Match pool remaining</div>
+                  <div className="font-semibold" data-testid="text-match-remaining">
+                    {usd(matchPool.remainingCents)}
+                  </div>
+                </div>
+                <div className="rounded-md bg-muted/40 p-2">
+                  <div className="text-xs text-muted-foreground">Total impact</div>
+                  <div className="font-semibold" data-testid="text-total-impact">
+                    {usd(campaign.raisedAmountCents + matchPool.totalMatchedCents)}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {matchPool && matchPool.status === "active" && matchPool.remainingCents > 0 && (
               <div
                 className="rounded-md border-2 border-primary/40 bg-primary/5 p-4 space-y-1"
@@ -153,7 +176,20 @@ export default function PublicExpenseCampaignPage() {
               </div>
             )}
 
-            {matchPool && matchPool.status !== "active" && (
+            {matchPool && (matchPool.status === "exhausted" || matchPool.remainingCents === 0) && (
+              <div
+                className="rounded-md border-2 border-primary/40 bg-primary/5 p-4 flex items-center gap-2"
+                data-testid="banner-match-exhausted"
+              >
+                <Heart className="h-5 w-5 text-primary" />
+                <span className="font-semibold">
+                  Match goal reached! Thanks to {matchPool.sponsorLabel}, the full {usd(matchPool.pledgedCapCents)}
+                  {" "}has been unlocked.
+                </span>
+              </div>
+            )}
+
+            {matchPool && matchPool.status === "ended" && matchPool.remainingCents > 0 && (
               <Badge variant="secondary" data-testid="badge-match-ended">
                 Matching window has ended
               </Badge>
