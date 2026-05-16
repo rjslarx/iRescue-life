@@ -1,9 +1,10 @@
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import { db } from '../db';
-import { donations, payments, tenants } from '@shared/schema';
+import { donations, payments, tenants, campaignMatchPools } from '@shared/schema';
 import { eq, and } from 'drizzle-orm';
 import { EmailService } from '../lib/email-service';
 import { TenantFileStorage } from '../lib/tenantFileStorage';
+import { publicSponsorLabel } from '@shared/expense-campaign-match';
 
 // IRS compliance: Vehicle-related keywords that require Form 1098-C
 const VEHICLE_KEYWORDS = ['car', 'boat', 'vehicle', 'trailer', 'automobile', 'truck', 'motorcycle', 'aircraft', 'airplane'];
@@ -679,6 +680,41 @@ export async function generateAndEmailReceipt(
     const donationType = (donation as any).donationType || 'cash';
     const inKindTypes = ['in_kind', 'in_kind_goods', 'in_kind_services'];
     const isInKind = inKindTypes.includes(donationType);
+
+    // Task #214 — If this gift was matched by an expense-campaign sponsor,
+    // surface the bonus in the receipt so the donor sees their impact doubled
+    // (or whatever the configured ratio is). Skipped when matched_amount_cents
+    // is 0 (out-of-window / pool exhausted) or no campaign is attached.
+    let matchLineHtml = '';
+    const matchedCents = donation.matchedAmountCents ?? 0;
+    if (donation.expenseCampaignId && matchedCents > 0) {
+      try {
+        const [pool] = await db
+          .select({
+            publicSponsorName: campaignMatchPools.publicSponsorName,
+            showSponsorPublicly: campaignMatchPools.showSponsorPublicly,
+          })
+          .from(campaignMatchPools)
+          .where(and(
+            eq(campaignMatchPools.tenantId, data.tenantId),
+            eq(campaignMatchPools.expenseCampaignId, donation.expenseCampaignId),
+          ))
+          .limit(1);
+        if (pool) {
+          const sponsorLabel = publicSponsorLabel(pool.publicSponsorName, pool.showSponsorPublicly);
+          matchLineHtml = `
+  <p style="background: #eef7ee; border-left: 4px solid #4caf50; padding: 12px 15px; border-radius: 6px; margin: 20px 0;">
+    Your gift unlocked an additional <strong>${formatCurrency(matchedCents)}</strong> from ${sponsorLabel}.
+  </p>
+  `;
+        }
+      } catch (matchErr) {
+        console.error(
+          `[RECEIPT] Failed to look up campaign match pool for receipt (donationId=${data.donationId}, tenantId=${data.tenantId}, expenseCampaignId=${donation.expenseCampaignId}):`,
+          matchErr,
+        );
+      }
+    }
     
     const emailBodyHtml = `
 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -699,7 +735,7 @@ export async function generateAndEmailReceipt(
       ? `<p style="margin: 5px 0;"><strong>${donation.tributeKind === 'memory' ? 'In loving memory of' : 'In honor of'}:</strong> ${donation.tributeName}</p>`
       : ''}
   </div>
-  
+  ${matchLineHtml}
   <p>Your support makes a real difference in the lives of the animals we rescue and care for. Thank you for being part of our mission!</p>
   
   <p>With gratitude,<br/>
