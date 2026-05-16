@@ -1,6 +1,6 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
 import { z } from "zod";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql, inArray } from "drizzle-orm";
 import { db } from "../db";
 import {
   expenseCampaigns,
@@ -8,7 +8,6 @@ import {
   donations,
   tenants,
   auditLogs,
-  insertExpenseCampaignSchema,
 } from "@shared/schema";
 import { calculateMatch, publicSponsorLabel, computeEffectiveMatchStatus } from "@shared/expense-campaign-match";
 import { requireAuth, requireRole } from "../middleware/auth";
@@ -127,7 +126,12 @@ router.get(
         ? await db
             .select()
             .from(campaignMatchPools)
-            .where(and(eq(campaignMatchPools.tenantId, tenantId)))
+            .where(
+              and(
+                eq(campaignMatchPools.tenantId, tenantId),
+                inArray(campaignMatchPools.expenseCampaignId, ids),
+              ),
+            )
         : [];
       const poolByCampaign = new Map(pools.map((p) => [p.expenseCampaignId, p]));
 
@@ -650,7 +654,6 @@ publicRouter.post("/:id/checkout", async (req: Request, res: Response, next: Nex
     const { id } = req.params;
     const schema = z.object({
       amountCents: z.number().int().min(100),
-      donorCoversFees: z.boolean().default(false),
     });
     const { amountCents } = schema.parse(req.body);
 

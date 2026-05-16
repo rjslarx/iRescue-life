@@ -65,7 +65,6 @@ export default function PublicExpenseCampaignPage() {
       if (cents < 100) throw new Error("Minimum donation is $1.");
       const res = await apiRequest("POST", `/api/public/expense-campaigns/${data!.campaign.id}/checkout`, {
         amountCents: cents,
-        donorCoversFees: false,
       });
       const body = await res.json();
       if (body.url) window.location.href = body.url;
