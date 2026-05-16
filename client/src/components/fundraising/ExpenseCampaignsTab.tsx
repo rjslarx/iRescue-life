@@ -82,7 +82,30 @@ export function ExpenseCampaignsTab({ tenantSubdomain }: { tenantSubdomain?: str
 
   const upsertMutation = useMutation({
     mutationFn: async () => {
-      const payload: any = {
+      type MatchPoolPayload = {
+        publicSponsorName: string | null;
+        showSponsorPublicly: boolean;
+        internalSponsorName: string;
+        internalSponsorEmail: string;
+        pledgedCapCents: number;
+        ratioNumerator: number;
+        ratioDenominator: number;
+        perGiftCapCents: number | null;
+        startsAt: string | null;
+        endsAt: string | null;
+      };
+      type CampaignPayload = {
+        title: string;
+        shortDescription: string | null;
+        longDescription: string | null;
+        heroImageUrl: string | null;
+        goalAmountCents: number;
+        endDate: string | null;
+        status: "active" | "ended" | "archived";
+        slug?: string;
+        matchPool: MatchPoolPayload | null;
+      };
+      const payload: CampaignPayload = {
         title: form.title,
         shortDescription: form.shortDescription || null,
         longDescription: form.longDescription || null,
@@ -90,6 +113,7 @@ export function ExpenseCampaignsTab({ tenantSubdomain }: { tenantSubdomain?: str
         goalAmountCents: Math.round(parseFloat(form.goalDollars || "0") * 100),
         endDate: form.endDate ? new Date(form.endDate).toISOString() : null,
         status: form.status,
+        matchPool: null,
       };
       if (form.slug && form.slug.trim()) payload.slug = form.slug.trim();
       if (form.hasMatch) {
@@ -122,7 +146,7 @@ export function ExpenseCampaignsTab({ tenantSubdomain }: { tenantSubdomain?: str
       setEditing(null);
       setForm(emptyForm);
     },
-    onError: (err: any) => {
+    onError: (err: Error) => {
       toast({ title: "Save failed", description: err?.message ?? "Unknown error", variant: "destructive" });
     },
   });
@@ -390,7 +414,10 @@ export function ExpenseCampaignsTab({ tenantSubdomain }: { tenantSubdomain?: str
             </div>
             <div>
               <Label htmlFor="ec-status">Status</Label>
-              <Select value={form.status} onValueChange={(v: any) => setForm({ ...form, status: v })}>
+              <Select
+                value={form.status}
+                onValueChange={(v) => setForm({ ...form, status: v as "active" | "ended" | "archived" })}
+              >
                 <SelectTrigger id="ec-status" data-testid="select-status">
                   <SelectValue />
                 </SelectTrigger>
@@ -611,6 +638,40 @@ function ReconciliationDialog({
               <Stat label="Matched" value={usd(data.summary.totalMatchedCents)} />
               <Stat label="Remaining pool" value={usd(data.summary.remainingPoolCents)} />
             </div>
+
+            {data.matchPool && (
+              <div
+                className="rounded-md border p-3 space-y-1 text-sm"
+                data-testid="section-sponsor-details"
+              >
+                <div className="font-semibold">Matching sponsor (staff-only)</div>
+                <div>
+                  <span className="text-muted-foreground">Internal name:</span>{" "}
+                  <span data-testid="text-sponsor-internal-name">
+                    {data.matchPool.internalSponsorName || "—"}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Internal email:</span>{" "}
+                  <span data-testid="text-sponsor-internal-email">
+                    {data.matchPool.internalSponsorEmail || "—"}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Pledged cap:</span>{" "}
+                  <span data-testid="text-sponsor-pledged-cap">
+                    {usd(data.matchPool.pledgedCapCents)}
+                  </span>{" "}
+                  · <span className="text-muted-foreground">Ratio:</span>{" "}
+                  {data.matchPool.ratioNumerator}:{data.matchPool.ratioDenominator}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Public display: {data.matchPool.showSponsorPublicly && data.matchPool.publicSponsorName
+                    ? data.matchPool.publicSponsorName
+                    : "an anonymous donor"}
+                </div>
+              </div>
+            )}
 
             {data.matchPool && (
               <Button asChild data-testid="button-download-sponsor-invoice">

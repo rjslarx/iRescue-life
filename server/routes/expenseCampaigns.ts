@@ -243,7 +243,8 @@ router.patch(
 
       // Match pool: explicit null clears, undefined leaves alone, object upserts.
       // Every query is tenant-scoped to prevent cross-tenant data mixing.
-      let pool: any = null;
+      type CampaignMatchPool = typeof campaignMatchPools.$inferSelect;
+      let pool: CampaignMatchPool | null = null;
       if (data.matchPool === null) {
         const removed = await db
           .delete(campaignMatchPools)
