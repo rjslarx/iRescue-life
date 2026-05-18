@@ -637,11 +637,13 @@ publicRouter.get("/:slug", async (req: Request, res: Response, next: NextFunctio
         }
       : null;
 
-    // Goal met = donor gifts + sponsor match together cover the goal. Donations
-    // can continue past this point, but the page shows a thank-you state.
+    // Goal met = donor cash alone covers the goal. The sponsor match is a
+    // bonus on top, so the thank-you state only fires once donors have
+    // collectively given the full goal amount. This keeps the "Goal met!"
+    // banner in lockstep with the progress bar, which also tracks donor cash.
     const totalImpactCents =
       campaign.raisedAmountCents + (pool ? pool.totalMatchedCents : 0);
-    const goalMet = totalImpactCents >= campaign.goalAmountCents;
+    const goalMet = campaign.raisedAmountCents >= campaign.goalAmountCents;
 
     res.json({
       campaign: {
