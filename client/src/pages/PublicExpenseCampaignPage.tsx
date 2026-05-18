@@ -11,6 +11,8 @@ import { Heart } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import PublicHeader from "@/components/PublicHeader";
+import type { Tenant } from "@shared/schema";
 
 interface MatchPoolPublic {
   sponsorLabel: string;
@@ -59,6 +61,12 @@ export default function PublicExpenseCampaignPage() {
     },
   });
 
+  const { data: tenantData } = useQuery<{ tenant: Tenant }>({
+    queryKey: ["/api/tenant"],
+  });
+  const tenant = tenantData?.tenant;
+  const rescueName = tenant?.name || "Animal Rescue";
+
   const checkoutMutation = useMutation({
     mutationFn: async () => {
       const cents = Math.round(parseFloat(amountDollars || "0") * 100);
@@ -76,13 +84,21 @@ export default function PublicExpenseCampaignPage() {
   });
 
   if (isLoading) {
-    return <div className="max-w-3xl mx-auto p-8 text-center text-muted-foreground">Loading…</div>;
+    return (
+      <div className="min-h-screen bg-background">
+        <PublicHeader rescueName={rescueName} logoUrl={tenant?.logoUrl || undefined} />
+        <div className="max-w-3xl mx-auto p-8 text-center text-muted-foreground">Loading…</div>
+      </div>
+    );
   }
   if (!data?.campaign) {
     return (
-      <div className="max-w-3xl mx-auto p-8 text-center" data-testid="page-expense-campaign-not-found">
-        <h1 className="text-2xl font-semibold">Campaign not found</h1>
-        <p className="text-muted-foreground mt-2">This campaign may have been archived.</p>
+      <div className="min-h-screen bg-background" data-testid="page-expense-campaign-not-found">
+        <PublicHeader rescueName={rescueName} logoUrl={tenant?.logoUrl || undefined} />
+        <div className="max-w-3xl mx-auto p-8 text-center">
+          <h1 className="text-2xl font-semibold">Campaign not found</h1>
+          <p className="text-muted-foreground mt-2">This campaign may have been archived.</p>
+        </div>
       </div>
     );
   }
@@ -101,6 +117,7 @@ export default function PublicExpenseCampaignPage() {
 
   return (
     <div className="min-h-screen bg-background" data-testid="page-public-expense-campaign">
+      <PublicHeader rescueName={rescueName} logoUrl={tenant?.logoUrl || undefined} />
       {campaign.heroImageUrl && (
         <div
           className="relative h-64 md:h-80 bg-cover bg-center"
