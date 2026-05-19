@@ -647,27 +647,66 @@ export default function CalendarViewPage() {
       case 'facebook':
         window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(imageUrl)}&quote=${encodeURIComponent(`${text}\n\nView full calendar: ${calendarPageUrl}`)}`, '_blank');
         break;
-      case 'messenger':
-        if (isMobile) {
-          window.location.href = `fb-messenger://share/?link=${encodeURIComponent(imageUrl)}`;
-          toast({
-            title: "Sharing via Messenger",
-            description: "Opening Messenger app...",
-          });
-        } else {
-          navigator.clipboard.writeText(imageUrl).then(() => {
+      case 'messenger': {
+        // Use the native Web Share API so the OS share sheet pops up with
+        // Messenger (and every other installed messaging app) as an option,
+        // AND we can attach the actual calendar PNG so the preview is
+        // guaranteed to render — no paste required, no preview gambling.
+        let didNativeShare = false;
+        try {
+          if (data?.objectPath && typeof navigator.share === 'function') {
+            const res = await fetch(`${basePath}${data.objectPath}`);
+            if (res.ok) {
+              const blob = await res.blob();
+              const file = new File(
+                [blob],
+                `${calendarName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-calendar.png`,
+                { type: blob.type || 'image/png' },
+              );
+              // canShare with files isn't supported everywhere (notably some
+              // desktop browsers); guard it before calling.
+              const shareData: ShareData = {
+                title: `${calendarName} Calendar`,
+                text: `${text}\n\nView full calendar: ${calendarPageUrl}`,
+                files: [file],
+              };
+              if (!('canShare' in navigator) || (navigator as any).canShare(shareData)) {
+                await navigator.share(shareData);
+                didNativeShare = true;
+              }
+            }
+          }
+        } catch (err: any) {
+          // User cancelled the share sheet — treat as success, don't fall back.
+          if (err?.name === 'AbortError') {
+            didNativeShare = true;
+          }
+        }
+
+        if (!didNativeShare) {
+          // Last-resort fallbacks for browsers without Web Share API support.
+          if (isMobile) {
+            window.location.href = `fb-messenger://share/?link=${encodeURIComponent(imageUrl)}`;
             toast({
-              title: "Link Copied",
-              description: "Calendar link copied to clipboard — paste it in your Messenger conversation.",
+              title: "Sharing via Messenger",
+              description: "Opening Messenger app...",
             });
-          }).catch(() => {
-            toast({
-              title: "Share Link",
-              description: imageUrl,
+          } else {
+            navigator.clipboard.writeText(imageUrl).then(() => {
+              toast({
+                title: "Link Copied",
+                description: "Calendar link copied to clipboard — paste it in your Messenger conversation.",
+              });
+            }).catch(() => {
+              toast({
+                title: "Share Link",
+                description: imageUrl,
+              });
             });
-          });
+          }
         }
         break;
+      }
       case 'whatsapp':
         if (isMobile) {
           window.location.href = `whatsapp://send?text=${encodeURIComponent(messageBody)}`;
