@@ -87,7 +87,11 @@ export async function injectOGTags(req: Request, res: Response, next: NextFuncti
   let ogData: { title: string; description: string; image: string } | null = null;
 
   try {
-    const calendarMatch = url.match(/^\/dashboard\/calendar(\?|$)/);
+    // Volunteer calendar lives at two URLs:
+    //   /dashboard/calendar  — staff-only, used internally for share previews
+    //   /volunteer           — public sign-up page, the one we share to social
+    // Both should render the same rich calendar OG card.
+    const calendarMatch = url.match(/^\/(?:dashboard\/calendar|volunteer)(?:\/)?(\?|$)/);
     if (calendarMatch) {
       const calendarList = await db.select({ name: calendars.name, type: calendars.type })
         .from(calendars)

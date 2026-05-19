@@ -621,50 +621,63 @@ export default function CalendarViewPage() {
     }
   };
 
+  // Public-facing volunteer signup page — anyone (no login required) can open
+  // this URL to see the calendar and sign up. This is the URL that should be
+  // shared on social media; /dashboard/calendar is staff-only and gated by login.
   const getCalendarPageUrl = () => {
-    return `${window.location.origin}${basePath}/dashboard/calendar`;
+    return `${window.location.origin}${basePath}/volunteer`;
   };
 
-  const getImageUrl = (imageUrl?: string) => {
-    if (imageUrl) return imageUrl;
+  // URL we hand to a share target. We always share the public volunteer page —
+  // Facebook/Messenger/WhatsApp will then fetch our OG tags and render a rich
+  // preview that includes the calendar image automatically.
+  const getShareUrl = (_objectPath?: string) => {
     return getCalendarPageUrl();
   };
 
   const handleSocialShare = async (platform: string) => {
+    // Pre-generate the share image so the OG cache is warm. We don't actually
+    // send the image URL itself — the OG middleware picks it up from the
+    // ?share_image query param on the public page.
     const data = await generateShareImage();
-    const imageUrl = data?.imageUrl || '';
+    const objectPath = data?.objectPath;
     const calendarPageUrl = getCalendarPageUrl();
+    // Attach the freshly-generated image so Facebook/Messenger's crawler picks
+    // it up as the preview image via our OG middleware.
+    const sharedUrl = objectPath
+      ? `${calendarPageUrl}?share_image=${encodeURIComponent(objectPath)}`
+      : calendarPageUrl;
+
     const selectedIds = Array.from(selectedCalendars);
     const selectedCal = selectedIds.length === 1
       ? calendarsData?.calendars.find(c => c.id === selectedIds[0])
       : null;
     const calendarName = selectedCal?.name || calendarsData?.calendars[0]?.name || 'our';
     const text = `Check out ${calendarName} calendar!`;
-    const messageBody = `${text}\n\nView full calendar: ${calendarPageUrl}`;
+    const messageBody = `${text}\n\n${sharedUrl}`;
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
     switch (platform) {
       case 'facebook':
-        window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(imageUrl)}&quote=${encodeURIComponent(`${text}\n\nView full calendar: ${calendarPageUrl}`)}`, '_blank');
+        window.open(
+          `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(sharedUrl)}&quote=${encodeURIComponent(text)}`,
+          '_blank',
+        );
         break;
       case 'messenger':
-        if (isMobile) {
-          window.location.href = `fb-messenger://share/?link=${encodeURIComponent(imageUrl)}`;
+        // Facebook deprecated the fb-messenger:// deep link for unregistered
+        // apps, so the only universally-reliable path is "copy and paste".
+        // The pasted link auto-expands into a rich preview inside Messenger.
+        try {
+          await navigator.clipboard.writeText(sharedUrl);
           toast({
-            title: "Sharing via Messenger",
-            description: "Opening Messenger app...",
+            title: "Link copied",
+            description: "Open Messenger and paste — a calendar preview will appear automatically.",
           });
-        } else {
-          navigator.clipboard.writeText(imageUrl).then(() => {
-            toast({
-              title: "Link Copied",
-              description: "Calendar link copied to clipboard — paste it in your Messenger conversation.",
-            });
-          }).catch(() => {
-            toast({
-              title: "Share Link",
-              description: imageUrl,
-            });
+        } catch {
+          toast({
+            title: "Share link",
+            description: sharedUrl,
           });
         }
         break;
@@ -680,7 +693,7 @@ export default function CalendarViewPage() {
         });
         break;
       case 'email':
-        window.location.href = `mailto:?subject=${encodeURIComponent(`${calendarName} Calendar`)}&body=${encodeURIComponent(`${text}\n\nView the calendar image: ${imageUrl}\n\nView full calendar & sign up: ${calendarPageUrl}`)}`;
+        window.location.href = `mailto:?subject=${encodeURIComponent(`${calendarName} Calendar`)}&body=${encodeURIComponent(`${text}\n\nView the calendar & sign up: ${sharedUrl}`)}`;
         break;
     }
   };
