@@ -222,7 +222,7 @@ export default function MedicalTransferPacket({
         ['Name', animal?.name || 'Unknown', 'ID', animal?.id?.substring(0, 8) || 'N/A'],
         ['Species', animal?.species || 'Unknown', 'Breed', animal?.breed || 'Unknown'],
         ['Sex', animal?.petfinderGender || animal?.gender || 'Unknown', 'Age/DOB', animal?.dateOfBirth ? formatDateSafe(animal.dateOfBirth, 'MMM d, yyyy') : (animal?.age || 'Unknown')],
-        ['Color', animal?.primaryColor || animal?.color || 'Unknown', 'Weight', animal?.weight ? `${animal.weight} lbs` : 'Unknown'],
+        ['Color', (Array.isArray(animal?.colors) && animal.colors.length > 0 ? animal.colors.join(', ') : (animal?.primaryColor || animal?.color || 'Unknown')), 'Weight', animal?.weight ? `${animal.weight} lbs` : 'Unknown'],
         ['Spay/Neuter', animal?.neuterStatus || 'Unknown', 'Microchip', animal?.microchipNumber || '']
       ];
 
