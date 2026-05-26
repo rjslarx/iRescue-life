@@ -4,6 +4,7 @@ import { useParams } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { CheckCircle2, AlertCircle, FileSignature, Loader2 } from "lucide-react";
@@ -101,6 +102,8 @@ export default function PublicFormSigningPage() {
   const [isComplete, setIsComplete] = useState(false);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [childrensNames, setChildrensNames] = useState('');
+  const [signerEmailInput, setSignerEmailInput] = useState('');
+  const [emailError, setEmailError] = useState<string | null>(null);
   const signatureCanvasRef = useRef<HTMLCanvasElement>(null);
   const signaturePadRef = useRef<SignaturePad | null>(null);
 
@@ -135,12 +138,12 @@ export default function PublicFormSigningPage() {
     }
   }, [data]);
 
-  const submitMutation = useMutation<SubmitResponse, Error, { signatureData: string; formData?: Record<string, string> }>({
-    mutationFn: async ({ signatureData, formData: extraFormData }) => {
+  const submitMutation = useMutation<SubmitResponse, Error, { signatureData: string; formData?: Record<string, string>; signerEmail?: string }>({
+    mutationFn: async ({ signatureData, formData: extraFormData, signerEmail }) => {
       const response = await fetch(`/api/public/forms/${token}/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ signatureData, formData: extraFormData }),
+        body: JSON.stringify({ signatureData, formData: extraFormData, signerEmail }),
       });
       if (!response.ok) {
         const result = await response.json();
@@ -160,18 +163,39 @@ export default function PublicFormSigningPage() {
     signaturePadRef.current?.clear();
   };
 
+  const needsEmailInput = data?.submission.signerEmail == null;
+  const willHaveEmailCopy =
+    !!data?.submission.signerEmail || (needsEmailInput && signerEmailInput.trim().length > 0);
+
   const handleSubmit = () => {
     if (data?.form.requiresSignature && (!signaturePadRef.current || signaturePadRef.current.isEmpty())) {
       alert('Please sign the form before submitting');
       return;
     }
-    
+
+    let signerEmail: string | undefined;
+    if (needsEmailInput) {
+      const trimmed = signerEmailInput.trim();
+      if (trimmed.length > 0) {
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+          setEmailError('Please enter a valid email address');
+          return;
+        }
+        signerEmail = trimmed;
+      }
+      setEmailError(null);
+    }
+
     const signatureData = signaturePadRef.current?.toDataURL('image/png') || '';
     const extraFormData: Record<string, string> = {};
     if (hasChildrensField) {
       extraFormData.childrens_names = childrensNames.trim() || 'N/A';
     }
-    submitMutation.mutate({ signatureData, formData: Object.keys(extraFormData).length > 0 ? extraFormData : undefined });
+    submitMutation.mutate({
+      signatureData,
+      formData: Object.keys(extraFormData).length > 0 ? extraFormData : undefined,
+      signerEmail,
+    });
   };
 
   if (isLoading) {
@@ -211,7 +235,9 @@ export default function PublicFormSigningPage() {
             </div>
             <CardTitle>Form Submitted Successfully</CardTitle>
             <CardDescription>
-              Thank you for completing this form. A copy has been sent to your email.
+              {willHaveEmailCopy
+                ? 'Thank you for completing this form. A copy has been sent to your email.'
+                : 'Thank you for completing this form.'}
             </CardDescription>
           </CardHeader>
           {downloadUrl && (
@@ -271,6 +297,37 @@ export default function PublicFormSigningPage() {
             />
           </CardContent>
         </Card>
+
+        {needsEmailInput && (
+          <Card data-testid="signer-email-card">
+            <CardHeader>
+              <CardTitle className="text-lg">Your Email (Optional)</CardTitle>
+              <CardDescription>
+                Add your email if you'd like a copy of the signed document sent to you. You can leave this blank.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                <Label htmlFor="signer-email">Email address</Label>
+                <Input
+                  id="signer-email"
+                  type="email"
+                  placeholder="you@example.com"
+                  value={signerEmailInput}
+                  onChange={(e) => {
+                    setSignerEmailInput(e.target.value);
+                    if (emailError) setEmailError(null);
+                  }}
+                  autoComplete="email"
+                  data-testid="input-signer-email"
+                />
+                {emailError && (
+                  <p className="text-sm text-destructive" data-testid="error-signer-email">{emailError}</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {hasChildrensField && (
           <Card data-testid="childrens-names-card">

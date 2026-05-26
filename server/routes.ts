@@ -13713,11 +13713,27 @@ ${renderedHtml}
         return res.status(404).json({ error: 'Form template not found' });
       }
 
-      const { signatureData, formData } = req.body;
+      const { signatureData, formData, signerEmail: providedSignerEmail } = req.body;
 
       if (form.requiresSignature && !signatureData) {
         return res.status(400).json({ error: 'Signature is required' });
       }
+
+      // Allow the signer to optionally supply / overwrite their email at sign-time.
+      // This is the path used after SMS-only sends, where the submission row was
+      // created with signerEmail = null. If they leave it blank, we keep the
+      // existing value (which may be null for SMS-only flows).
+      let effectiveSignerEmail: string | null = submission.signerEmail ?? null;
+      if (typeof providedSignerEmail === 'string' && providedSignerEmail.trim().length > 0) {
+        const trimmedEmail = providedSignerEmail.trim();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+          return res.status(400).json({ error: 'Please enter a valid email address' });
+        }
+        effectiveSignerEmail = trimmedEmail;
+      }
+      // Make every downstream branch (email-to-signer, person-documents,
+      // volunteer/foster auto-advance) see the effective email.
+      submission.signerEmail = effectiveSignerEmail;
 
       // Get IP address
       const ipAddress = req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || '';
@@ -13760,6 +13776,9 @@ ${renderedHtml}
         signerIpAddress: ipAddress,
         renderedHtml,
         status: 'completed',
+        // Persist the signer-supplied email if they provided one. When they didn't,
+        // this is a no-op overwrite of the existing value (including null).
+        signerEmail: effectiveSignerEmail,
       });
 
       // ========================================================================
