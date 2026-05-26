@@ -22,7 +22,7 @@ interface FormData {
   submission: {
     id: number;
     signerName: string;
-    signerEmail: string;
+    signerEmail: string | null;
     signerPhone: string | null;
   };
   animal: {
@@ -255,7 +255,12 @@ export default function PublicFormSigningPage() {
           <CardHeader>
             <CardTitle className="text-lg">Form Details</CardTitle>
             <CardDescription>
-              For: {data.submission.signerName} ({data.submission.signerEmail})
+              For: {data.submission.signerName}
+              {data.submission.signerEmail
+                ? ` (${data.submission.signerEmail})`
+                : data.submission.signerPhone
+                ? ` (${data.submission.signerPhone})`
+                : ''}
             </CardDescription>
           </CardHeader>
           <CardContent>

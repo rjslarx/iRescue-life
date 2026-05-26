@@ -14060,7 +14060,7 @@ ${renderedHtml}
             // Escape user-provided text fields
             const safeFormName = escapeHtml(form.name);
             const safeSignerName = escapeHtml(submission.signerName);
-            const safeSignerEmail = escapeHtml(submission.signerEmail);
+            const safeSignerEmail = submission.signerEmail ? escapeHtml(submission.signerEmail) : null;
             const safeSignerPhone = submission.signerPhone ? escapeHtml(submission.signerPhone) : null;
             const safeAnimalName = animal?.name ? escapeHtml(animal.name) : null;
             
@@ -14069,7 +14069,7 @@ ${renderedHtml}
 <h2>Form Submission Received</h2>
 <p><strong>Form Name:</strong> ${safeFormName}</p>
 <p><strong>Signed By:</strong> ${safeSignerName}</p>
-<p><strong>Email:</strong> ${safeSignerEmail}</p>
+${safeSignerEmail ? `<p><strong>Email:</strong> ${safeSignerEmail}</p>` : ''}
 ${safeSignerPhone ? `<p><strong>Phone:</strong> ${safeSignerPhone}</p>` : ''}
 <p><strong>Submitted:</strong> ${new Date().toLocaleString()}</p>
 ${safeAnimalName ? `<p><strong>Animal:</strong> ${safeAnimalName}</p>` : ''}

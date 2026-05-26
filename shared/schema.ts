@@ -5169,7 +5169,10 @@ export const customFormSubmissions = pgTable("custom_form_submissions", {
   animalId: uuid("animal_id").references(() => animals.id, { onDelete: 'set null' }), // Optional, for animal-specific forms
   // Signer information
   signerName: text("signer_name").notNull(),
-  signerEmail: text("signer_email").notNull(),
+  // Nullable: SMS-only sends (e.g. ad-hoc Hold Harmless to a walk-in volunteer with
+  // no email) create submission rows without an email address. The signer can still
+  // optionally provide one when completing the form.
+  signerEmail: text("signer_email"),
   signerPhone: text("signer_phone"),
   // Form data
   formData: jsonb("form_data").$type<Record<string, any>>(), // Custom field values

@@ -75,8 +75,8 @@ interface CustomFormSubmission {
   formId: string;
   animalId?: string;
   signerName: string;
-  signerEmail: string;
-  signerPhone?: string;
+  signerEmail: string | null;
+  signerPhone?: string | null;
   signedAt?: string;
   pdfUrl?: string;
   emailedAt?: string;
@@ -949,7 +949,9 @@ export default function CustomFormsPage() {
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="font-medium">{submission.signerName}</p>
-                          <p className="text-sm text-muted-foreground">{submission.signerEmail}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {submission.signerEmail || submission.signerPhone || 'No contact provided'}
+                          </p>
                           <p className="text-xs text-muted-foreground">
                             Created: {format(new Date(submission.createdAt), 'MMM d, yyyy h:mm a')}
                           </p>
