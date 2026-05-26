@@ -44,6 +44,10 @@ export const tenants = pgTable("tenants", {
   autoSendTaxReceipts: boolean("auto_send_tax_receipts").notNull().default(true), // Whether to automatically email tax receipts when donations are received via Stripe
   passFeesToAdopter: boolean("pass_fees_to_adopter").notNull().default(false), // Whether to add processing + platform fees to adoption fee (paid by adopter)
   requireSpayNeuterContract: boolean("require_spay_neuter_contract").notNull().default(false), // Whether adopters of unaltered animals must sign a spay/neuter agreement
+  // When true, public Adoption/Foster/Volunteer forms must collect a complete
+  // applicant address (Street + City + State + ZIP) and the server enforces it.
+  // Set to false to exempt a tenant (e.g. Haseya's New Beginning).
+  requireCompleteAddress: boolean("require_complete_address").notNull().default(true),
   defaultSurrenderFee: decimal("default_surrender_fee", { precision: 10, scale: 2 }), // Default owner surrender fee amount (null = no fee)
   // Email service settings (encrypted API keys per tenant)
   resendApiKeyEncrypted: text("resend_api_key_encrypted"), // Resend API key for transactional emails
@@ -890,6 +894,13 @@ export const applications = pgTable("applications", {
   applicantName: text("applicant_name").notNull(),
   applicantEmail: text("applicant_email").notNull(),
   applicantPhone: text("applicant_phone").notNull(),
+  // Applicant address (street + city + state + ZIP). Optional in the schema
+  // for backward compatibility; the server enforces it on new submissions when
+  // the tenant has `requireCompleteAddress = true`.
+  address: text("address"),
+  city: text("city"),
+  state: text("state"),
+  zip: text("zip"),
   stage: text("stage").notNull().default("new").$type<"new" | "screening" | "vet_check" | "home_visit" | "approved" | "trial" | "adopted" | "denied" | "trial_failed">(),
   notes: text("notes"),
   customResponses: jsonb("custom_responses").$type<Record<string, any>>(), // Stores answers to custom form fields
@@ -1255,6 +1266,9 @@ export const volunteerApplications = pgTable("volunteer_applications", {
   applicantEmail: text("applicant_email").notNull(),
   applicantPhone: text("applicant_phone").notNull(),
   address: text("address"),
+  city: text("city"),
+  state: text("state"),
+  zip: text("zip"),
   experience: text("experience").notNull(),
   availability: text("availability").notNull(),
   interests: text("interests"),
@@ -1287,6 +1301,9 @@ export const fosterApplications = pgTable("foster_applications", {
   applicantEmail: text("applicant_email").notNull(),
   applicantPhone: text("applicant_phone").notNull(),
   address: text("address").notNull(),
+  city: text("city"),
+  state: text("state"),
+  zip: text("zip"),
   housingType: text("housing_type").notNull().$type<"house" | "apartment" | "condo" | "other">(),
   hasYard: boolean("has_yard").notNull().default(false),
   hasOtherPets: boolean("has_other_pets").notNull().default(false),

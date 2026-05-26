@@ -10507,6 +10507,10 @@ Crawl-delay: 1
             applicantName: applications.applicantName,
             applicantEmail: applications.applicantEmail,
             applicantPhone: applications.applicantPhone,
+            address: applications.address,
+            city: applications.city,
+            state: applications.state,
+            zip: applications.zip,
             stage: applications.stage,
             createdAt: applications.createdAt,
             notes: applications.notes,
@@ -10553,7 +10557,20 @@ Crawl-delay: 1
         gclid: gclid || null,
         gclidCapturedAt: gclid ? new Date() : null,
       });
-      
+
+      // Task #222: Enforce complete applicant address (Street/City/State/ZIP)
+      // for tenants that require it. Internal bypass submissions are exempt.
+      if (!isBypass && req.tenant?.requireCompleteAddress) {
+        const missing: string[] = [];
+        if (!data.address || !String(data.address).trim()) missing.push('Street Address');
+        if (!data.city || !String(data.city).trim()) missing.push('City');
+        if (!data.state || !String(data.state).trim()) missing.push('State');
+        if (!data.zip || !String(data.zip).trim()) missing.push('ZIP');
+        if (missing.length) {
+          return res.status(400).json({ error: `Missing required address fields: ${missing.join(', ')}` });
+        }
+      }
+
       if (isBypass && data.animalId && data.applicantEmail) {
         const { applications } = await import('@shared/schema');
         const [existing] = await db
@@ -18856,6 +18873,18 @@ ${renderedHtml}
         tenantId: req.tenant!.id,
       });
 
+      // Task #222: Enforce complete applicant address for tenants that require it.
+      if (req.tenant?.requireCompleteAddress) {
+        const missing: string[] = [];
+        if (!data.address || !String(data.address).trim()) missing.push('Street Address');
+        if (!data.city || !String(data.city).trim()) missing.push('City');
+        if (!data.state || !String(data.state).trim()) missing.push('State');
+        if (!data.zip || !String(data.zip).trim()) missing.push('ZIP');
+        if (missing.length) {
+          return res.status(400).json({ error: `Missing required address fields: ${missing.join(', ')}` });
+        }
+      }
+
       const [application] = await db
         .insert(fosterApplications)
         .values([data as any])
@@ -18917,6 +18946,9 @@ ${renderedHtml}
         applicantEmail: fosterApplications.applicantEmail,
         applicantPhone: fosterApplications.applicantPhone,
         address: fosterApplications.address,
+        city: fosterApplications.city,
+        state: fosterApplications.state,
+        zip: fosterApplications.zip,
         housingType: fosterApplications.housingType,
         hasYard: fosterApplications.hasYard,
         hasOtherPets: fosterApplications.hasOtherPets,
@@ -18961,6 +18993,9 @@ ${renderedHtml}
         applicantEmail: fosterApplications.applicantEmail,
         applicantPhone: fosterApplications.applicantPhone,
         address: fosterApplications.address,
+        city: fosterApplications.city,
+        state: fosterApplications.state,
+        zip: fosterApplications.zip,
         housingType: fosterApplications.housingType,
         hasYard: fosterApplications.hasYard,
         hasOtherPets: fosterApplications.hasOtherPets,
@@ -19449,6 +19484,18 @@ Submitted: ${new Date().toLocaleString()}
         ...req.body,
         tenantId: req.tenant!.id,
       });
+
+      // Task #222: Enforce complete applicant address for tenants that require it.
+      if (req.tenant?.requireCompleteAddress) {
+        const missing: string[] = [];
+        if (!data.address || !String(data.address).trim()) missing.push('Street Address');
+        if (!data.city || !String(data.city).trim()) missing.push('City');
+        if (!data.state || !String(data.state).trim()) missing.push('State');
+        if (!data.zip || !String(data.zip).trim()) missing.push('ZIP');
+        if (missing.length) {
+          return res.status(400).json({ error: `Missing required address fields: ${missing.join(', ')}` });
+        }
+      }
 
       const [application] = await db
         .insert(volunteerApplications)

@@ -79,6 +79,10 @@ interface AdoptionData {
   applicantName: string;
   applicantEmail: string;
   applicantPhone: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
   stage: string;
   notes?: string;
   customResponses?: Record<string, any>;
@@ -100,6 +104,9 @@ interface FosterData {
   applicantEmail: string;
   applicantPhone: string;
   address?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
   housingType?: string;
   hasYard?: boolean;
   hasOtherPets?: boolean;
@@ -123,6 +130,9 @@ interface VolunteerData {
   applicantEmail: string;
   applicantPhone: string;
   address?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
   experience?: string;
   availability?: string;
   interests?: string;
@@ -808,6 +818,13 @@ export default function ApplicationDetailSheet({
             label="Submitted" 
             value={new Date(adoptionData.createdAt).toLocaleDateString()} 
           />
+          {(() => {
+            // Task #222: Show the combined applicant address when present.
+            const parts = [adoptionData.address, [adoptionData.city, adoptionData.state].filter(Boolean).join(', '), adoptionData.zip]
+              .filter((p) => p && String(p).trim().length > 0);
+            if (parts.length === 0) return null;
+            return <SummaryItem label="Address" value={parts.join(' • ')} />;
+          })()}
           
           {/* Dealbreaker questions section */}
           {dealbreakerKeys.some(key => customResponses[key] !== undefined && customResponses[key] !== null) && (
@@ -1038,9 +1055,13 @@ export default function ApplicationDetailSheet({
             label="Submitted" 
             value={new Date(fosterData.createdAt).toLocaleDateString()} 
           />
-          {fosterData.address && (
-            <SummaryItem label="Address" value={fosterData.address} />
-          )}
+          {(() => {
+            // Task #222: Show the combined applicant address when present.
+            const parts = [fosterData.address, [fosterData.city, fosterData.state].filter(Boolean).join(', '), fosterData.zip]
+              .filter((p) => p && String(p).trim().length > 0);
+            if (parts.length === 0) return null;
+            return <SummaryItem label="Address" value={parts.join(' • ')} />;
+          })()}
           <div className="border-t pt-2 mt-2" />
           <SummaryItem label="Housing Type" value={fosterData.housingType || "Not specified"} />
           <SummaryItem label="Has Yard" value={fosterData.hasYard ? "Yes" : "No"} />
@@ -1127,9 +1148,13 @@ export default function ApplicationDetailSheet({
             label="Submitted" 
             value={new Date(volunteerData.createdAt).toLocaleDateString()} 
           />
-          {volunteerData.address && (
-            <SummaryItem label="Address" value={volunteerData.address} />
-          )}
+          {(() => {
+            // Task #222: Show the combined applicant address when present.
+            const parts = [volunteerData.address, [volunteerData.city, volunteerData.state].filter(Boolean).join(', '), volunteerData.zip]
+              .filter((p) => p && String(p).trim().length > 0);
+            if (parts.length === 0) return null;
+            return <SummaryItem label="Address" value={parts.join(' • ')} />;
+          })()}
           <div className="border-t pt-2 mt-2" />
           <SummaryItem label="Experience" value={volunteerData.experience || "Not specified"} />
           <SummaryItem label="Availability" value={volunteerData.availability || "Not specified"} />

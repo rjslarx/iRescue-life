@@ -45,6 +45,11 @@ export default function PublicFosterPage() {
   });
   const smsConsentEnabled = formSettingsData?.setting?.smsConsentEnabled === true;
 
+  // Task #222: All tenants require a complete applicant address by default;
+  // only tenants with the flag explicitly set to `false` (currently Haseya's)
+  // are exempt.
+  const requireAddress = (tenantData?.tenant as any)?.requireCompleteAddress !== false;
+
   const fosterFormSchema = useMemo(() => {
     return insertFosterApplicationSchema
       .omit({ tenantId: true, status: true, notes: true })
@@ -52,7 +57,16 @@ export default function PublicFosterPage() {
         applicantName: z.string().trim().min(1, "Full name is required"),
         applicantEmail: z.string().trim().min(1, "Email is required").email("Please enter a valid email"),
         applicantPhone: z.string().trim().min(1, "Mobile phone is required"),
-        address: z.string().trim().min(1, "Address is required"),
+        address: z.string().trim().min(1, "Street address is required"),
+        city: requireAddress
+          ? z.string().trim().min(1, "City is required")
+          : z.string().optional(),
+        state: requireAddress
+          ? z.string().trim().min(1, "State is required")
+          : z.string().optional(),
+        zip: requireAddress
+          ? z.string().trim().min(1, "ZIP is required")
+          : z.string().optional(),
         experience: z.string().trim().min(1, "Experience with animals is required"),
         availability: z.string().trim().min(1, "Availability is required"),
         customResponses: z.record(z.any()).optional(),
@@ -60,7 +74,7 @@ export default function PublicFosterPage() {
           ? z.literal(true, { errorMap: () => ({ message: "You must consent to receive SMS messages to submit this form" }) })
           : z.boolean().optional(),
       });
-  }, [smsConsentEnabled]);
+  }, [smsConsentEnabled, requireAddress]);
 
   const form = useForm<InsertFosterApplication & { customResponses?: Record<string, any> }>({
     resolver: zodResolver(fosterFormSchema),
@@ -69,6 +83,9 @@ export default function PublicFosterPage() {
       applicantEmail: "",
       applicantPhone: "",
       address: "",
+      city: "",
+      state: "",
+      zip: "",
       housingType: "house",
       hasYard: false,
       hasOtherPets: false,
@@ -92,7 +109,10 @@ export default function PublicFosterPage() {
     applicantName: { label: "Full Name", testId: "input-applicant-name" },
     applicantEmail: { label: "Email", testId: "input-applicant-email" },
     applicantPhone: { label: "Mobile Phone", testId: "input-applicant-phone" },
-    address: { label: "Address", testId: "input-address" },
+    address: { label: "Street Address", testId: "input-address" },
+    city: { label: "City", testId: "input-city" },
+    state: { label: "State", testId: "input-state" },
+    zip: { label: "ZIP", testId: "input-zip" },
     housingType: { label: "Housing Type", testId: "select-housing-type" },
     experience: { label: "Fostering / Pet Care Experience", testId: "textarea-experience" },
     availability: { label: "Time Commitment & Availability", testId: "textarea-availability" },
@@ -451,14 +471,63 @@ export default function PublicFosterPage() {
                         name="address"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Address</FormLabel>
+                            <FormLabel>{requireAddress ? 'Street Address' : 'Address'}</FormLabel>
                             <FormControl>
-                              <Input placeholder="123 Main St, City, State ZIP" {...field} data-testid="input-address" />
+                              <Input
+                                placeholder={requireAddress ? '123 Main St' : '123 Main St, City, State ZIP'}
+                                {...field}
+                                value={field.value ?? ''}
+                                data-testid="input-address"
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
                         )}
                       />
+
+                      {requireAddress && (
+                        <div className="grid md:grid-cols-3 gap-6">
+                          <FormField
+                            control={form.control}
+                            name="city"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>City</FormLabel>
+                                <FormControl>
+                                  <Input placeholder="Phoenix" {...field} value={field.value ?? ""} data-testid="input-city" />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={form.control}
+                            name="state"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>State</FormLabel>
+                                <FormControl>
+                                  <Input placeholder="AZ" {...field} value={field.value ?? ""} data-testid="input-state" />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={form.control}
+                            name="zip"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>ZIP</FormLabel>
+                                <FormControl>
+                                  <Input placeholder="85001" {...field} value={field.value ?? ""} data-testid="input-zip" />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                      )}
 
                       <div className="space-y-4">
                         <FormField

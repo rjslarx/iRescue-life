@@ -31,6 +31,13 @@ const publicAdoptionSchema = z.object({
   applicantName: z.string().min(2, "Name must be at least 2 characters"),
   applicantEmail: z.string().email("Please enter a valid email address"),
   applicantPhone: z.string().min(10, "Please enter a valid phone number"),
+  // Task #222: Address fields are validated conditionally below based on the
+  // tenant's requireCompleteAddress flag. Keep them optional in the base
+  // schema so the form still accepts empty values for exempt tenants.
+  address: z.string().optional(),
+  city: z.string().optional(),
+  state: z.string().optional(),
+  zip: z.string().optional(),
   smsConsent: z.literal(true, { errorMap: () => ({ message: "You must consent to receive SMS messages to submit this form" }) }),
   notes: z.string().min(100, "Please tell us a bit more about yourself (minimum 100 characters)"),
   customResponses: z.record(z.any()).optional(),
@@ -74,12 +81,30 @@ export function PublicAdoptionDialog({ animal, open, onOpenChange }: PublicAdopt
     queryKey: ['/api/form-settings', 'adoption'],
   });
 
+  // Task #222: All tenants require a complete applicant address by default;
+  // only tenants with the flag explicitly set to `false` (currently just
+  // Haseya's) are exempt.
+  const requireAddress = (tenant as any)?.requireCompleteAddress !== false;
+
   const form = useForm<PublicAdoptionFormData>({
-    resolver: zodResolver(publicAdoptionSchema),
+    resolver: zodResolver(
+      requireAddress
+        ? publicAdoptionSchema.extend({
+            address: z.string().trim().min(1, "Street address is required"),
+            city: z.string().trim().min(1, "City is required"),
+            state: z.string().trim().min(1, "State is required"),
+            zip: z.string().trim().min(1, "ZIP is required"),
+          })
+        : publicAdoptionSchema,
+    ),
     defaultValues: {
       applicantName: "",
       applicantEmail: "",
       applicantPhone: "",
+      address: "",
+      city: "",
+      state: "",
+      zip: "",
       smsConsent: false,
       notes: "",
       customResponses: {},
@@ -96,6 +121,10 @@ export function PublicAdoptionDialog({ animal, open, onOpenChange }: PublicAdopt
     applicantName: { label: "Your Full Name", testId: "input-applicant-name" },
     applicantEmail: { label: "Email Address", testId: "input-applicant-email" },
     applicantPhone: { label: "Mobile Phone", testId: "input-applicant-phone" },
+    address: { label: "Street Address", testId: "input-applicant-address" },
+    city: { label: "City", testId: "input-applicant-city" },
+    state: { label: "State", testId: "input-applicant-state" },
+    zip: { label: "ZIP", testId: "input-applicant-zip" },
     notes: { label: "Tell Us About Yourself", testId: "input-applicant-notes" },
     smsConsent: { label: "SMS Consent", testId: "checkbox-sms-consent" },
   };
@@ -258,6 +287,10 @@ export function PublicAdoptionDialog({ animal, open, onOpenChange }: PublicAdopt
         applicantName: data.applicantName,
         applicantEmail: data.applicantEmail,
         applicantPhone: data.applicantPhone,
+        address: data.address || null,
+        city: data.city || null,
+        state: data.state || null,
+        zip: data.zip || null,
         smsConsent: data.smsConsent || false,
         notes: data.notes || null,
         customResponses: data.customResponses || {},
@@ -375,6 +408,85 @@ export function PublicAdoptionDialog({ animal, open, onOpenChange }: PublicAdopt
                 </FormItem>
               )}
             />
+
+            {requireAddress && (
+              <>
+                <FormField
+                  control={form.control}
+                  name="address"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Street Address *</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="123 Main St"
+                          {...field}
+                          value={field.value ?? ""}
+                          data-testid="input-applicant-address"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <FormField
+                    control={form.control}
+                    name="city"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>City *</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="Phoenix"
+                            {...field}
+                            value={field.value ?? ""}
+                            data-testid="input-applicant-city"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="state"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>State *</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="AZ"
+                            {...field}
+                            value={field.value ?? ""}
+                            data-testid="input-applicant-state"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="zip"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>ZIP *</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="85001"
+                            {...field}
+                            value={field.value ?? ""}
+                            data-testid="input-applicant-zip"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </>
+            )}
 
             <FormField
               control={form.control}

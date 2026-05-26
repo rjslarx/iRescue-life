@@ -112,6 +112,7 @@ export interface TenantContext {
   jotformSurrenderUrl?: string | null;
   tnrEnabled?: boolean | null;
   microchipClinicEnabled?: boolean | null;
+  requireCompleteAddress?: boolean | null;
   // Organization Legal Settings
   orgLegalName?: string | null;
   orgAddressStreet?: string | null;
@@ -432,6 +433,7 @@ export async function resolveTenant(req: Request, res: Response, next: NextFunct
           jotformSurrenderUrl: tenants.jotformSurrenderUrl,
           tnrEnabled: tenants.tnrEnabled,
           microchipClinicEnabled: tenants.microchipClinicEnabled,
+          requireCompleteAddress: tenants.requireCompleteAddress,
         })
         .from(tenants)
         .where(whereClause!)
@@ -527,6 +529,7 @@ export async function resolveTenant(req: Request, res: Response, next: NextFunct
         jotformSurrenderUrl: tenant.jotformSurrenderUrl,
         tnrEnabled: tenant.tnrEnabled,
         microchipClinicEnabled: tenant.microchipClinicEnabled,
+        requireCompleteAddress: tenant.requireCompleteAddress,
       };
       
       // Set cookie for PWA manifest resolution on path-based tenants
