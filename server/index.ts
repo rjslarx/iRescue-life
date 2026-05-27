@@ -16,6 +16,7 @@ import { backfillSupersededPreventativeCare } from "./scripts/backfill-supersede
 import { backfillTerminalAnimalMedicalCleanup } from "./scripts/backfill-terminal-animal-medical-cleanup";
 import { backfillComplianceObligationsSync } from "./scripts/backfill-compliance-obligations-sync";
 import { backfillAdoptionsFromApplications } from "./scripts/backfill-adoptions-from-applications";
+import { backfillRtoSignedAgreements } from "./scripts/backfill-rto-signed-agreements";
 import { db } from "./db";
 import { medicalCatalog, medicalPrescriptions, medicalDoses } from "@shared/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
@@ -338,5 +339,10 @@ app.use((req, res, next) => {
     // Runtime hooks in vaccine create, PCR create, exam create, animal PATCH,
     // and the staff confirmation-approve endpoint handle new events.
     backfillComplianceObligationsSync();
+
+    // One-time: regenerate signed Reclaim Agreement PDFs for historical RTOs
+    // that only have the bare signature image on file. Going forward the
+    // POST /api/animals/:id/reclaim endpoint stores the full signed PDF live.
+    backfillRtoSignedAgreements();
   });
 })();
