@@ -37106,6 +37106,149 @@ Email: ${application.applicantEmail || ''}`
   });
 
   /**
+   * PATCH /api/medical/doses/:doseId
+   * Edit an existing dose's recorded given date/time and/or notes.
+   * Only doses that have already been actioned (status: 'given' | 'unable' | 'skipped')
+   * are editable — pending doses should be actioned via /administer or /unable.
+   * Writes to audit_logs with action 'medical_dose.edit'.
+   */
+  app.patch('/api/medical/doses/:doseId', requireTenant, requireAuth, requireRole('admin', 'staff', 'board_member'), async (req, res, next) => {
+    try {
+      const { medicalDoses, medicalPrescriptions } = await import('@shared/schema');
+      const { createAuditLog } = await import('./audit');
+
+      const updateSchema = z.object({
+        givenAt: z.string().optional(),
+        notes: z.string().nullable().optional(),
+      }).refine((d) => d.givenAt !== undefined || d.notes !== undefined, {
+        message: 'At least one of givenAt or notes must be provided',
+      });
+
+      const { givenAt, notes } = updateSchema.parse(req.body);
+
+      let givenAtDate: Date | undefined;
+      if (givenAt !== undefined) {
+        givenAtDate = new Date(givenAt);
+        if (isNaN(givenAtDate.getTime())) {
+          return res.status(400).json({ error: 'Invalid givenAt date' });
+        }
+        const fiveMinutesFromNow = new Date(Date.now() + 5 * 60 * 1000);
+        if (givenAtDate > fiveMinutesFromNow) {
+          return res.status(400).json({ error: 'Cannot set a dose date in the future. Please select a current or past date/time.' });
+        }
+      }
+
+      // Load existing dose for tenant scoping + audit "before" snapshot
+      const [existing] = await db
+        .select()
+        .from(medicalDoses)
+        .where(and(
+          eq(medicalDoses.id, req.params.doseId),
+          eq(medicalDoses.tenantId, req.tenant!.id)
+        ));
+
+      if (!existing) {
+        return res.status(404).json({ error: 'Dose not found' });
+      }
+
+      if (existing.status === 'due') {
+        return res.status(400).json({ error: 'This dose has not been recorded yet. Use Administer or Unable instead of Edit.' });
+      }
+
+      const updates: Partial<typeof existing> = {};
+      if (givenAtDate !== undefined) updates.givenAt = givenAtDate;
+      if (notes !== undefined) updates.notes = notes ?? null;
+
+      const [updated] = await db
+        .update(medicalDoses)
+        .set(updates)
+        .where(and(
+          eq(medicalDoses.id, req.params.doseId),
+          eq(medicalDoses.tenantId, req.tenant!.id)
+        ))
+        .returning();
+
+      // If we changed givenAt on a 'given' dose for a recurring prescription, and
+      // this dose is the most-recent given dose on that prescription, re-compute
+      // nextScheduledDose so the schedule mirrors the corrected date.
+      if (givenAtDate !== undefined && updated.status === 'given' && updated.prescriptionId) {
+        const [prescription] = await db
+          .select()
+          .from(medicalPrescriptions)
+          .where(and(
+            eq(medicalPrescriptions.id, updated.prescriptionId),
+            eq(medicalPrescriptions.tenantId, req.tenant!.id)
+          ));
+
+        if (prescription && prescription.frequency && prescription.frequency.toUpperCase() !== 'ONCE') {
+          // Find latest given dose for this prescription
+          const givenDoses = await db
+            .select()
+            .from(medicalDoses)
+            .where(and(
+              eq(medicalDoses.prescriptionId, updated.prescriptionId),
+              eq(medicalDoses.tenantId, req.tenant!.id),
+              eq(medicalDoses.status, 'given'),
+            ));
+          const latest = givenDoses
+            .filter(d => d.givenAt)
+            .sort((a, b) => (b.givenAt!.getTime() - a.givenAt!.getTime()))[0];
+
+          if (latest && latest.id === updated.id) {
+            const protocol: ProtocolTimes = {
+              morning: req.tenant?.defaultMorningRounds || '08:00',
+              midday: req.tenant?.defaultMiddayRounds || '13:00',
+              evening: req.tenant?.defaultEveningRounds || '17:00',
+            };
+            const nextDose = computeNextScheduledDose(givenAtDate, prescription.frequency, protocol);
+            const dailyDosing = isDailyDosingFrequency(prescription.frequency);
+            let pastEndDate = false;
+            if (nextDose && prescription.endDate) {
+              const endOfDay = new Date(prescription.endDate);
+              endOfDay.setHours(23, 59, 59, 999);
+              pastEndDate = nextDose > endOfDay;
+            }
+            const shouldClear = (dailyDosing && !prescription.endDate) || pastEndDate;
+            if (nextDose && !shouldClear) {
+              await db
+                .update(medicalPrescriptions)
+                .set({ nextScheduledDose: nextDose })
+                .where(eq(medicalPrescriptions.id, prescription.id));
+            } else if (shouldClear && prescription.nextScheduledDose) {
+              await db
+                .update(medicalPrescriptions)
+                .set({ nextScheduledDose: null })
+                .where(eq(medicalPrescriptions.id, prescription.id));
+            }
+          }
+        }
+      }
+
+      try {
+        await createAuditLog({
+          userId: req.user!.id,
+          tenantId: req.tenant!.id,
+          action: 'medical_dose.edit',
+          entityType: 'medical_dose',
+          entityId: updated.id,
+          changes: {
+            before: { givenAt: existing.givenAt, notes: existing.notes },
+            after: { givenAt: updated.givenAt, notes: updated.notes },
+          },
+          metadata: { prescriptionId: updated.prescriptionId },
+          req,
+        });
+      } catch (auditErr) {
+        console.error('[medical_dose.edit] audit log failed:', auditErr);
+      }
+
+      res.json({ dose: updated });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * PATCH /api/medical/doses/:doseId/unable
    * Mark a dose as unable to administer with reason
    */

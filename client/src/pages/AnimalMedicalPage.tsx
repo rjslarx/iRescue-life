@@ -176,6 +176,10 @@ export default function AnimalMedicalPage() {
   const [unablePrescription, setUnablePrescription] = useState<any>(null);
   const [unableReason, setUnableReason] = useState<"animal_sick" | "unable_to_swallow" | "other">("animal_sick");
   const [unableNotes, setUnableNotes] = useState("");
+  const [editDoseDialogOpen, setEditDoseDialogOpen] = useState(false);
+  const [editingDose, setEditingDose] = useState<any>(null);
+  const [editDoseGivenAt, setEditDoseGivenAt] = useState('');
+  const [editDoseNotes, setEditDoseNotes] = useState('');
   const [quarantineDialogOpen, setQuarantineDialogOpen] = useState(false);
   const [medicalImportDialogOpen, setMedicalImportDialogOpen] = useState(false);
   const [quarantineReason, setQuarantineReason] = useState("");
@@ -632,6 +636,55 @@ export default function AnimalMedicalPage() {
       });
     },
   });
+
+  const editDoseMutation = useMutation({
+    mutationFn: async ({ doseId, givenAt, notes }: { doseId: string; givenAt?: string; notes?: string }) => {
+      return await apiRequest('PATCH', `/api/medical/doses/${doseId}`, { givenAt, notes });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}/medical/prescriptions`] });
+      if (expandedPrescriptionId) {
+        queryClient.invalidateQueries({ queryKey: ['/api/medical/prescriptions', expandedPrescriptionId, 'doses'] });
+      }
+      queryClient.invalidateQueries({ queryKey: ['/api/medical/doses/today'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/medical/doses/overdue'] });
+      toast({
+        title: "Dose updated",
+        description: "The dose record has been updated.",
+      });
+      setEditDoseDialogOpen(false);
+      setEditingDose(null);
+      setEditDoseGivenAt('');
+      setEditDoseNotes('');
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to update dose.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const openEditDoseDialog = (dose: any) => {
+    setEditingDose(dose);
+    // Pre-fill datetime-local with the existing givenAt (in local tz)
+    const seed = dose.givenAt ? new Date(dose.givenAt) : new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const localISO = `${seed.getFullYear()}-${pad(seed.getMonth() + 1)}-${pad(seed.getDate())}T${pad(seed.getHours())}:${pad(seed.getMinutes())}`;
+    setEditDoseGivenAt(localISO);
+    setEditDoseNotes(dose.notes || '');
+    setEditDoseDialogOpen(true);
+  };
+
+  const handleSubmitEditDose = () => {
+    if (!editingDose) return;
+    editDoseMutation.mutate({
+      doseId: editingDose.id,
+      givenAt: editDoseGivenAt ? new Date(editDoseGivenAt).toISOString() : undefined,
+      notes: editDoseNotes,
+    });
+  };
 
   const unableMutation = useMutation({
     mutationFn: async ({ prescriptionId, reason, notes }: { prescriptionId: string; reason: "animal_sick" | "unable_to_swallow" | "other"; notes?: string }) => {
@@ -2100,6 +2153,7 @@ export default function AnimalMedicalPage() {
                           administerExistingDoseMutation.mutate({ doseId, administeredAt });
                         }}
                         isAdministering={administerExistingDoseMutation.isPending}
+                        onEditDose={openEditDoseDialog}
                       />
                     )}
                   </CardContent>
@@ -3148,6 +3202,73 @@ export default function AnimalMedicalPage() {
         />
       )}
 
+      <Dialog open={editDoseDialogOpen} onOpenChange={(open) => {
+        setEditDoseDialogOpen(open);
+        if (!open) {
+          setEditingDose(null);
+          setEditDoseGivenAt('');
+          setEditDoseNotes('');
+        }
+      }}>
+        <DialogContent data-testid="dialog-edit-dose">
+          <DialogHeader>
+            <DialogTitle>Edit Dose Record</DialogTitle>
+            <DialogDescription>
+              Correct the date/time or notes for this recorded dose. Changes are saved to the audit log.
+            </DialogDescription>
+          </DialogHeader>
+          {editingDose && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-dose-given-at">Date & Time Given</Label>
+                <Input
+                  id="edit-dose-given-at"
+                  type="datetime-local"
+                  value={editDoseGivenAt}
+                  max={(() => {
+                    const now = new Date();
+                    const pad = (n: number) => n.toString().padStart(2, '0');
+                    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+                  })()}
+                  onChange={(e) => setEditDoseGivenAt(e.target.value)}
+                  data-testid="input-edit-dose-given-at"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Future times are not allowed. If this is the most recent dose for a recurring medication, the next-due date will be recalculated.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-dose-notes">Notes (optional)</Label>
+                <Textarea
+                  id="edit-dose-notes"
+                  placeholder="Any observations about this administration..."
+                  value={editDoseNotes}
+                  onChange={(e) => setEditDoseNotes(e.target.value)}
+                  data-testid="input-edit-dose-notes"
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setEditDoseDialogOpen(false)}
+                  disabled={editDoseMutation.isPending}
+                  data-testid="button-cancel-edit-dose"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleSubmitEditDose}
+                  disabled={editDoseMutation.isPending || !editDoseGivenAt}
+                  data-testid="button-confirm-edit-dose"
+                >
+                  {editDoseMutation.isPending ? "Saving..." : "Save Changes"}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={doseChartDialogOpen} onOpenChange={(open) => {
         setDoseChartDialogOpen(open);
         if (!open) {
@@ -3411,10 +3532,11 @@ export default function AnimalMedicalPage() {
   );
 }
 
-function PrescriptionDoseHistory({ prescriptionId, onAdministerDose, isAdministering }: {
+function PrescriptionDoseHistory({ prescriptionId, onAdministerDose, isAdministering, onEditDose }: {
   prescriptionId: string;
   onAdministerDose: (doseId: string, administeredAt?: string) => void;
   isAdministering: boolean;
+  onEditDose?: (dose: any) => void;
 }) {
   const { data, isLoading, error, refetch } = useQuery<any>({
     queryKey: ['/api/medical/prescriptions', prescriptionId, 'doses'],
@@ -3492,6 +3614,23 @@ function PrescriptionDoseHistory({ prescriptionId, onAdministerDose, isAdministe
                 <p className="text-xs text-muted-foreground mt-0.5">{dose.notes}</p>
               )}
             </div>
+            {onEditDose && dose.status !== 'due' && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => onEditDose(dose)}
+                    data-testid={`button-edit-dose-${dose.id}`}
+                  >
+                    <Edit className="w-4 h-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Edit recorded date or notes</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
           </div>
         ))}
       </div>
