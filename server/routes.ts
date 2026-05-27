@@ -8987,6 +8987,62 @@ Crawl-delay: 1
             console.error('Failed to upload RTO signature to object storage, saving inline:', sigErr.message);
             allDocs.push({ url: data.signatureData, desc: 'RTO - Owner Signature on Waiver', mimeType: 'image/png', fileSize: data.signatureData.length });
           }
+
+          // Generate full signed Reclaim Agreement PDF (waiver text + owner info + signature)
+          try {
+            const { generateReclaimAgreementPdfBuffer } = await import('./services/reclaim-agreement-pdf');
+            let ownerName = data.newContact?.name || '';
+            let ownerEmail = data.newContact?.email || '';
+            let ownerPhone = data.newContact?.phone || '';
+            let ownerAddress = data.newContact?.address || '';
+            if (ownerContactId) {
+              const [ownerContact] = await db.select()
+                .from(contacts)
+                .where(eq(contacts.id, ownerContactId))
+                .limit(1);
+              if (ownerContact) {
+                ownerName = ownerName || ownerContact.name || '';
+                ownerEmail = ownerEmail || ownerContact.email || '';
+                ownerPhone = ownerPhone || ownerContact.phone || '';
+                ownerAddress = ownerAddress || ownerContact.address || '';
+              }
+            }
+            const tenantName = req.tenant!.name || 'the rescue organization';
+            const pdfBuffer = await generateReclaimAgreementPdfBuffer({
+              tenantName,
+              animalName: animal.name,
+              animalSpecies: (animal as any).species ?? null,
+              animalBreed: (animal as any).breed ?? null,
+              ownerName,
+              ownerEmail: ownerEmail || null,
+              ownerPhone: ownerPhone || null,
+              ownerAddress: ownerAddress || null,
+              reclaimFeePaid: feeAmount,
+              feeWaived: !!data.waiveFee,
+              ownershipVerified: !!data.ownershipVerified,
+              signatureDataUrl: data.signatureData,
+              signedAt: new Date(),
+              ipAddress: (req.headers['x-forwarded-for'] as string) || req.ip || null,
+              staffName: req.user!.fullName || req.user!.email || null,
+            });
+            const pdfFilename = `rto-agreement-${animal.id}-${Date.now()}.pdf`;
+            const pdfResult = await objectStorage.uploadTenantFile(
+              req.tenant!.id,
+              'rto-documents',
+              pdfBuffer,
+              'application/pdf',
+              pdfFilename,
+            );
+            allDocs.push({
+              url: pdfResult.objectPath,
+              desc: 'RTO - Signed Reclaim Agreement',
+              mimeType: 'application/pdf',
+              fileSize: pdfBuffer.length,
+            });
+            console.log(`RTO: Generated signed reclaim agreement PDF: ${pdfResult.objectPath}`);
+          } catch (pdfErr: any) {
+            console.error('Failed to generate RTO signed agreement PDF:', pdfErr?.message || pdfErr);
+          }
         }
 
         // Attempt to resolve file sizes for uploaded docs from object storage metadata
