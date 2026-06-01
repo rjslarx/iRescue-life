@@ -107,6 +107,7 @@ import SurgeryDayRequestsPage from "@/pages/SurgeryDayRequestsPage";
 import FormSuccessPage from "@/pages/FormSuccessPage";
 import PublicAdoptionCheckoutPage from "@/pages/PublicAdoptionCheckoutPage";
 import PublicFosterAgreementPage from "@/pages/PublicFosterAgreementPage";
+import PublicSurrenderAgreementPage from "@/pages/PublicSurrenderAgreementPage";
 import PublicPlacementAgreementPage from "@/pages/PublicPlacementAgreementPage";
 import PublicFormSigningPage from "@/pages/PublicFormSigningPage";
 import PublicWaiverPage from "@/pages/PublicWaiverPage";
@@ -279,6 +280,7 @@ function RouterSwitch() {
       <Route path="/event/:id" component={EventDetailPage} />
       <Route path="/adoption-checkout/:token" component={PublicAdoptionCheckoutPage} />
       <Route path="/foster-agreement/sign/:token" component={PublicFosterAgreementPage} />
+      <Route path="/surrender-agreement/sign/:token" component={PublicSurrenderAgreementPage} />
       <Route path="/placement-agreement/sign/:token" component={PublicPlacementAgreementPage} />
       <Route path="/run-sheet/:token" component={RunSheetPage} />
       <Route path="/volunteer-waiver" component={PublicWaiverPage} />

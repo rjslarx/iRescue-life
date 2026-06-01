@@ -8098,6 +8098,21 @@ Crawl-delay: 1
               eq(surrenderRequests.id, surrenderRequestId),
               eq(surrenderRequests.tenantId, req.tenant!.id)
             ));
+
+          // 5. Auto-send the owner surrender agreement for e-signature (non-blocking)
+          try {
+            const { sendSurrenderAgreement } = await import('./services/surrender-agreement');
+            await sendSurrenderAgreement({
+              tenant: req.tenant!,
+              surrenderRequestId,
+              ownerName: surrenderOwnerInfo.name,
+              ownerEmail: surrenderOwnerInfo.email,
+              ownerPhone: surrenderOwnerInfo.phone,
+              animalName: animal.name,
+            });
+          } catch (agreementError) {
+            console.error('[Surrender Agreement] Failed to send on intake:', agreementError);
+          }
         } catch (surrenderError) {
           console.error('[SURRENDER INTAKE] Post-processing error (animal was still created):', surrenderError);
         }
@@ -12028,6 +12043,207 @@ Crawl-delay: 1
    * GET /api/public/foster-agreements/:token
    * Get foster agreement session data for signing (public, token-protected)
    */
+  /**
+   * GET /api/public/surrender-agreements/:token
+   * Public, token-protected. Returns owner + animal info and the rendered
+   * (unsigned) surrender agreement HTML for review before signing.
+   */
+  app.get('/api/public/surrender-agreements/:token', async (req, res, next) => {
+    try {
+      const { surrenderAgreementSessions, surrenderRequests, tenants } = await import('@shared/schema');
+      const crypto = await import('crypto');
+      const DOMPurify = (await import('isomorphic-dompurify')).default;
+
+      const tokenHash = crypto.createHash('sha256').update(req.params.token).digest('hex');
+
+      const [session] = await db
+        .select()
+        .from(surrenderAgreementSessions)
+        .where(eq(surrenderAgreementSessions.secureTokenHash, tokenHash))
+        .limit(1);
+
+      if (!session) {
+        return res.status(404).json({ error: 'Session not found or expired' });
+      }
+      if (session.expiresAt && new Date(session.expiresAt) < new Date()) {
+        return res.status(410).json({ error: 'Session has expired' });
+      }
+
+      const [tenant] = await db
+        .select({ name: tenants.name })
+        .from(tenants)
+        .where(eq(tenants.id, session.tenantId))
+        .limit(1);
+
+      const [surrenderRequest] = await db
+        .select({
+          dogName: surrenderRequests.dogName,
+          dogAge: surrenderRequests.dogAge,
+          dogBreed: surrenderRequests.dogBreed,
+          dogGender: surrenderRequests.dogGender,
+        })
+        .from(surrenderRequests)
+        .where(eq(surrenderRequests.id, session.surrenderRequestId))
+        .limit(1);
+
+      const { buildSurrenderAgreementHtml } = await import('./services/surrender-contract-template');
+      const html = buildSurrenderAgreementHtml({
+        tenantName: tenant?.name || '',
+        ownerName: session.ownerName || '',
+        ownerPhone: session.ownerPhone,
+        animalName: session.animalName || surrenderRequest?.dogName || null,
+        animalAge: surrenderRequest?.dogAge || null,
+        animalBreed: surrenderRequest?.dogBreed || null,
+        animalSex: surrenderRequest?.dogGender || null,
+      });
+
+      const sanitizedHtml = DOMPurify.sanitize(html, {
+        ALLOWED_TAGS: ['div', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'strong', 'em', 'u', 'br', 'hr', 'ul', 'ol', 'li', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'img'],
+        ALLOWED_ATTR: ['class', 'style', 'src', 'alt'],
+        ALLOW_DATA_ATTR: false,
+      });
+
+      res.json({
+        session: {
+          id: session.id,
+          status: session.status,
+          expiresAt: session.expiresAt,
+          signedAt: session.signedAt,
+          ownerName: session.ownerName,
+          ownerEmail: session.ownerEmail,
+        },
+        applicant: {
+          name: session.ownerName,
+          email: session.ownerEmail,
+          phone: session.ownerPhone,
+        },
+        contract: { html: sanitizedHtml, name: 'Owner Surrender Agreement' },
+        organization: tenant ? { name: tenant.name } : null,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/public/surrender-agreements/:token/sign
+   * Submit signature for an owner surrender agreement (public, token-protected).
+   */
+  app.post('/api/public/surrender-agreements/:token/sign', async (req, res, next) => {
+    try {
+      const { surrenderAgreementSessions, surrenderRequests, tenants } = await import('@shared/schema');
+      const crypto = await import('crypto');
+
+      const tokenHash = crypto.createHash('sha256').update(req.params.token).digest('hex');
+
+      const [session] = await db
+        .select()
+        .from(surrenderAgreementSessions)
+        .where(eq(surrenderAgreementSessions.secureTokenHash, tokenHash))
+        .limit(1);
+
+      if (!session) {
+        return res.status(404).json({ error: 'Session not found or expired' });
+      }
+      if (session.status === 'signed') {
+        return res.status(400).json({ error: 'Agreement has already been signed' });
+      }
+      if (session.expiresAt && new Date(session.expiresAt) < new Date()) {
+        return res.status(410).json({ error: 'Session has expired' });
+      }
+
+      const signatureSchema = z.object({
+        signerName: z.string().min(1),
+        signerEmail: z.string().email(),
+        // Strict data-URL only: prevents empty/non-image "signatures" and blocks
+        // remote URLs that would be fetched server-side during PDF rendering (SSRF).
+        signatureImageData: z
+          .string()
+          .max(2_000_000)
+          .regex(
+            /^data:image\/(png|jpe?g|webp);base64,[A-Za-z0-9+/]+={0,2}$/,
+            'A valid signature image is required',
+          ),
+      });
+      const signatureData = signatureSchema.parse(req.body);
+
+      const [tenant] = await db
+        .select({ name: tenants.name })
+        .from(tenants)
+        .where(eq(tenants.id, session.tenantId))
+        .limit(1);
+
+      const [surrenderRequest] = await db
+        .select({
+          dogName: surrenderRequests.dogName,
+          dogAge: surrenderRequests.dogAge,
+          dogBreed: surrenderRequests.dogBreed,
+          dogGender: surrenderRequests.dogGender,
+        })
+        .from(surrenderRequests)
+        .where(eq(surrenderRequests.id, session.surrenderRequestId))
+        .limit(1);
+
+      const signedAt = new Date();
+      const { buildSurrenderAgreementHtml } = await import('./services/surrender-contract-template');
+      const renderedContract = buildSurrenderAgreementHtml({
+        tenantName: tenant?.name || '',
+        ownerName: signatureData.signerName,
+        ownerPhone: session.ownerPhone,
+        animalName: session.animalName || surrenderRequest?.dogName || null,
+        animalAge: surrenderRequest?.dogAge || null,
+        animalBreed: surrenderRequest?.dogBreed || null,
+        animalSex: surrenderRequest?.dogGender || null,
+        signatureImageUrl: signatureData.signatureImageData,
+        signedTimestamp: signedAt.toISOString(),
+      });
+
+      // Status precondition makes signing idempotent: only a still-pending
+      // session can transition to signed, so a concurrent double-submit can't
+      // overwrite an existing signature.
+      const [updated] = await db
+        .update(surrenderAgreementSessions)
+        .set({
+          status: 'signed',
+          signedAt,
+          signatureData: signatureData.signatureImageData,
+          signedIp: req.ip,
+          renderedContract,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(surrenderAgreementSessions.id, session.id),
+            eq(surrenderAgreementSessions.status, 'pending'),
+          ),
+        )
+        .returning({ id: surrenderAgreementSessions.id });
+
+      if (!updated) {
+        return res.status(409).json({ error: 'This agreement has already been signed' });
+      }
+
+      // Generate the legally-stamped PDF (non-blocking for the signer experience)
+      try {
+        const { generateSurrenderAgreementPDF } = await import('./services/surrender-agreement-pdf');
+        await generateSurrenderAgreementPDF(session.id, renderedContract, {
+          ipAddress: req.ip,
+          signedAt,
+        });
+        console.log(`[Surrender Agreement] Generated PDF for session ${session.id}`);
+      } catch (pdfError) {
+        console.error('[Surrender Agreement] Failed to generate PDF:', pdfError);
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Invalid signature data', details: error.errors });
+      }
+      next(error);
+    }
+  });
+
   app.get('/api/public/foster-agreements/:token', async (req, res, next) => {
     try {
       const { fosterAgreementSessions, fosterContractTemplates, fosterApplications, animals, tenants } = await import('@shared/schema');
@@ -21829,7 +22045,22 @@ Submitted: ${new Date().toLocaleString()}
           eq(surrenderRequests.id, surrenderId),
           eq(surrenderRequests.tenantId, req.tenant!.id)
         ));
-      
+
+      // Auto-send the owner surrender agreement for e-signature (non-blocking)
+      try {
+        const { sendSurrenderAgreement } = await import('./services/surrender-agreement');
+        await sendSurrenderAgreement({
+          tenant: req.tenant!,
+          surrenderRequestId: surrenderId,
+          ownerName: surrenderRequest.ownerName,
+          ownerEmail: surrenderRequest.ownerEmail,
+          ownerPhone: surrenderRequest.ownerPhone,
+          animalName: surrenderRequest.dogName,
+        });
+      } catch (agreementError) {
+        console.error('[Surrender Agreement] Failed to send on promote:', agreementError);
+      }
+
       res.json({ 
         success: true, 
         animalId: animal.id,

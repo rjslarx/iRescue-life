@@ -1,0 +1,1 @@
+- [E-signature agreements](e-signature-agreements.md) — token-based foster/surrender/adoption sign flows; idempotency + signature-input + sandbox tsc/db:push gotchas.

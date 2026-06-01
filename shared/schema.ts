@@ -3318,7 +3318,13 @@ export const surrenderAgreementSessions = pgTable("surrender_agreement_sessions"
   contractPdfUrl: text("contract_pdf_url"), // URL to the generated PDF in object storage
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+}, (table) => ({
+  // Guarantees at most one active (pending/signed) agreement per surrender request
+  // so the owner is never sent the agreement twice across the two intake paths.
+  activeSessionUnique: uniqueIndex("surrender_agreement_active_session_unique")
+    .on(table.tenantId, table.surrenderRequestId)
+    .where(sql`${table.status} IN ('pending', 'signed')`),
+}));
 
 export const insertSurrenderAgreementSessionSchema = createInsertSchema(surrenderAgreementSessions).omit({
   id: true,
