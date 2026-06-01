@@ -24,7 +24,7 @@ must be idempotent across BOTH.
 
 ## Verifying these flows end-to-end (testing gotchas)
 - **The signing token is only emailed (stored as sha256 hash), so a browser test can't read it.** Pre-generate a token + its sha256 hash, run the real approval path to create the session, then `[DB] UPDATE *_agreement_sessions SET secure_token_hash='<hash>'` and navigate `/{subdomain}/.../sign/<token>`.
-- **The `demo` admin's stored password does NOT match the `DEMO_USER_PASSWORD` env (`password123`)** — login fails with "Password verification failed". Before a browser login test, set a known hash: `UPDATE users SET password_hash='<bcrypt of password123>' WHERE email='admin@demo.com'`. Demo tenant resets daily so this is safe.
+- **The `demo` admin's stored password hash does NOT match the value in the `DEMO_USER_PASSWORD` env var** — login fails with "Password verification failed". Before a browser login test, set the demo admin's `password_hash` to a bcrypt hash of a password you control via a one-off SQL UPDATE, then log in with that. Demo tenant resets daily so this is safe. (Never hardcode credential values in code or memory.)
 - After signing, reloading the public page shows "Agreement Already Signed" (status card) rather than the post-submit "Agreement Signed!" success step — both are expected, not a bug.
 
 ## Environment gotcha

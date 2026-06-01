@@ -3299,6 +3299,31 @@ export const insertVolunteerAgreementSessionSchema = createInsertSchema(voluntee
 export type InsertVolunteerAgreementSession = z.infer<typeof insertVolunteerAgreementSessionSchema>;
 export type VolunteerAgreementSession = typeof volunteerAgreementSessions.$inferSelect;
 
+// Surrender Contract Templates table - tenant-editable owner surrender agreement templates
+export const surrenderContractTemplates = pgTable("surrender_contract_templates", {
+  id: serial("id").primaryKey(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  name: text("name").notNull(), // e.g., "Standard Owner Surrender Agreement"
+  description: text("description"), // Optional description of the template
+  version: text("version").notNull().default("1.0"),
+  editorMode: text("editor_mode").notNull().default("smart").$type<"richText" | "guided" | "smart">(),
+  htmlTemplate: text("html_template").notNull(), // HTML with {{mustache}} placeholders
+  guidedSections: jsonb("guided_sections").$type<ContractTemplateSection[]>(), // For guided builder mode
+  isDefault: boolean("is_default").notNull().default(false),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  updatedBy: uuid("updated_by").references(() => users.id),
+});
+
+export const insertSurrenderContractTemplateSchema = createInsertSchema(surrenderContractTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertSurrenderContractTemplate = z.infer<typeof insertSurrenderContractTemplateSchema>;
+export type SurrenderContractTemplate = typeof surrenderContractTemplates.$inferSelect;
+
 // Surrender Agreement Sessions table - manages owner surrender agreement signing workflow
 export const surrenderAgreementSessions = pgTable("surrender_agreement_sessions", {
   id: uuid("id").primaryKey().defaultRandom(),

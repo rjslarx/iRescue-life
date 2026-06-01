@@ -73,7 +73,7 @@ interface MergeFields {
   [key: string]: string;
 }
 
-type ContractType = 'adoption' | 'foster' | 'placement';
+type ContractType = 'adoption' | 'foster' | 'placement' | 'surrender';
 
 // Default adoption sections for guided builder
 const DEFAULT_ADOPTION_SECTIONS: ContractTemplateSection[] = [
@@ -267,11 +267,76 @@ const DEFAULT_PLACEMENT_SECTIONS: ContractTemplateSection[] = [
   },
 ];
 
+// Merge fields for surrender agreements
+const SURRENDER_MERGE_FIELDS: MergeFields = {
+  '{{tenant_name}}': 'Your organization name',
+  '{{organization_name}}': 'Organization name (alias)',
+  '{{owner_name}}': 'Surrendering owner full name',
+  '{{owner_email}}': 'Owner email address',
+  '{{owner_phone}}': 'Owner phone number',
+  '{{owner_address}}': 'Owner full address',
+  '{{animal_name}}': 'Animal name',
+  '{{animal_species}}': 'Animal species (Dog, Cat, etc.)',
+  '{{animal_breed}}': 'Animal breed',
+  '{{animal_sex}}': 'Animal sex',
+  '{{animal_age}}': 'Animal age',
+  '{{surrender_reason}}': 'Reason for surrender',
+  '{{contract_date}}': 'Agreement signing date',
+  '{{today}}': "Today's date",
+  '{{signature_image_url}}': 'Digital signature image',
+  '{{signed_timestamp}}': 'Signature timestamp',
+  '{{signed_ip}}': 'Signer IP address',
+};
+
+// Default surrender sections for guided builder
+const DEFAULT_SURRENDER_SECTIONS: ContractTemplateSection[] = [
+  {
+    id: 'header',
+    type: 'header',
+    title: 'Agreement Header',
+    content: '<h1>{{organization_name}} - Owner Surrender Agreement</h1>\n<p>This Owner Surrender Agreement is entered into on {{contract_date}}</p>',
+    required: true,
+    order: 0,
+  },
+  {
+    id: 'owner-info',
+    type: 'paragraph',
+    title: 'Owner Information',
+    content: '<h2>Owner Information</h2>\n<p><strong>Name:</strong> {{owner_name}}</p>\n<p><strong>Email:</strong> {{owner_email}}</p>\n<p><strong>Phone:</strong> {{owner_phone}}</p>\n<p><strong>Address:</strong> {{owner_address}}</p>',
+    required: true,
+    order: 1,
+  },
+  {
+    id: 'animal-info',
+    type: 'paragraph',
+    title: 'Animal Information',
+    content: '<h2>Animal Information</h2>\n<p><strong>Name:</strong> {{animal_name}}</p>\n<p><strong>Species:</strong> {{animal_species}}</p>\n<p><strong>Breed:</strong> {{animal_breed}}</p>\n<p><strong>Age:</strong> {{animal_age}}</p>\n<p><strong>Sex:</strong> {{animal_sex}}</p>\n<p><strong>Reason for Surrender:</strong> {{surrender_reason}}</p>',
+    required: true,
+    order: 2,
+  },
+  {
+    id: 'terms',
+    type: 'terms',
+    title: 'Relinquishment of Ownership',
+    content: '<h2>Relinquishment of Ownership</h2>\n<ol>\n<li>You are the legal owner of the animal you are relinquishing.</li>\n<li>I hereby give ownership of said animal to {{organization_name}} to be placed for adoption or rescue.</li>\n<li>I assume all responsibility for damages caused during my ownership of said animal and agree to make all veterinarian records available.</li>\n<li>I certify, to my knowledge, that this animal has not bitten anyone in the last 10 days, nor has been exposed to rabies.</li>\n<li>I understand the shelter reserves the right to place this animal in a foster home or for adoption.</li>\n</ol>',
+    required: true,
+    order: 3,
+  },
+  {
+    id: 'signature',
+    type: 'signature',
+    title: 'Signature Section',
+    content: '<h2>Owner Signature</h2>\n<p>By signing below, I acknowledge that I have read and agree to abide by all terms.</p>\n<div class="signature-box">\n<img src="{{signature_image_url}}" alt="Signature" />\n<p><strong>Name:</strong> {{owner_name}}</p>\n<p><strong>Date:</strong> {{contract_date}}</p>\n</div>',
+    required: true,
+    order: 4,
+  },
+];
+
 // Generate HTML from guided sections
 function generateHtmlFromSections(sections: ContractTemplateSection[], contractType: ContractType): string {
   const sortedSections = [...sections].sort((a, b) => a.order - b.order);
   const bodyContent = sortedSections.map(s => s.content).join('\n\n');
-  const title = contractType === 'adoption' ? 'Adoption Contract' : contractType === 'foster' ? 'Foster Care Agreement' : 'Animal Placement Agreement';
+  const title = contractType === 'adoption' ? 'Adoption Contract' : contractType === 'foster' ? 'Foster Care Agreement' : contractType === 'surrender' ? 'Owner Surrender Agreement' : 'Animal Placement Agreement';
   
   return `<!DOCTYPE html>
 <html lang="en">
@@ -339,8 +404,8 @@ export default function ContractTemplatesPage() {
   const [editableVariables, setEditableVariables] = useState<EditableVariable[]>([]);
 
   // Get current merge fields and default sections based on active contract type
-  const currentMergeFields = activeContractType === 'adoption' ? ADOPTION_MERGE_FIELDS : activeContractType === 'foster' ? FOSTER_MERGE_FIELDS : PLACEMENT_MERGE_FIELDS;
-  const currentDefaultSections = activeContractType === 'adoption' ? DEFAULT_ADOPTION_SECTIONS : activeContractType === 'foster' ? DEFAULT_FOSTER_SECTIONS : DEFAULT_PLACEMENT_SECTIONS;
+  const currentMergeFields = activeContractType === 'adoption' ? ADOPTION_MERGE_FIELDS : activeContractType === 'foster' ? FOSTER_MERGE_FIELDS : activeContractType === 'surrender' ? SURRENDER_MERGE_FIELDS : PLACEMENT_MERGE_FIELDS;
+  const currentDefaultSections = activeContractType === 'adoption' ? DEFAULT_ADOPTION_SECTIONS : activeContractType === 'foster' ? DEFAULT_FOSTER_SECTIONS : activeContractType === 'surrender' ? DEFAULT_SURRENDER_SECTIONS : DEFAULT_PLACEMENT_SECTIONS;
 
   // Form for creating new templates
   const createForm = useForm<TemplateFormData>({
@@ -383,15 +448,21 @@ export default function ContractTemplatesPage() {
     queryKey: ['/api/placement-agreement-templates'],
   });
 
+  // Fetch surrender agreement templates
+  const { data: surrenderData, isLoading: surrenderLoading } = useQuery<{ templates: ContractTemplate[]; mergeFields: MergeFields }>({
+    queryKey: ['/api/surrender-contract-templates'],
+  });
+
   const adoptionTemplates = adoptionData?.templates || [];
   const fosterTemplates = fosterData?.templates || [];
   const placementTemplates = placementData?.templates || [];
-  const templates = activeContractType === 'adoption' ? adoptionTemplates : activeContractType === 'foster' ? fosterTemplates : placementTemplates;
-  const isLoading = activeContractType === 'adoption' ? adoptionLoading : activeContractType === 'foster' ? fosterLoading : placementLoading;
+  const surrenderTemplates = surrenderData?.templates || [];
+  const templates = activeContractType === 'adoption' ? adoptionTemplates : activeContractType === 'foster' ? fosterTemplates : activeContractType === 'surrender' ? surrenderTemplates : placementTemplates;
+  const isLoading = activeContractType === 'adoption' ? adoptionLoading : activeContractType === 'foster' ? fosterLoading : activeContractType === 'surrender' ? surrenderLoading : placementLoading;
 
   // API endpoint based on contract type
   const getApiEndpoint = (type: ContractType) => 
-    type === 'adoption' ? '/api/contract-templates' : type === 'foster' ? '/api/foster-contract-templates' : '/api/placement-agreement-templates';
+    type === 'adoption' ? '/api/contract-templates' : type === 'foster' ? '/api/foster-contract-templates' : type === 'surrender' ? '/api/surrender-contract-templates' : '/api/placement-agreement-templates';
 
   // Create mutation
   const createMutation = useMutation({
@@ -404,7 +475,7 @@ export default function ContractTemplatesPage() {
       createForm.reset();
       toast({
         title: "Template created",
-        description: `${({ adoption: 'Adoption', foster: 'Foster', placement: 'Placement' } as const)[activeContractType]} contract template has been created successfully`,
+        description: `${({ adoption: 'Adoption', foster: 'Foster', placement: 'Placement', surrender: 'Surrender' } as const)[activeContractType]} contract template has been created successfully`,
       });
     },
     onError: (error: any) => {
@@ -458,7 +529,7 @@ export default function ContractTemplatesPage() {
       editForm.reset();
       toast({
         title: "Template updated",
-        description: `${({ adoption: 'Adoption', foster: 'Foster', placement: 'Placement' } as const)[activeContractType]} contract template has been updated successfully`,
+        description: `${({ adoption: 'Adoption', foster: 'Foster', placement: 'Placement', surrender: 'Surrender' } as const)[activeContractType]} contract template has been updated successfully`,
       });
     },
     onError: (error: any) => {
@@ -481,7 +552,7 @@ export default function ContractTemplatesPage() {
       setSelectedTemplate(null);
       toast({
         title: "Template deleted",
-        description: `${({ adoption: 'Adoption', foster: 'Foster', placement: 'Placement' } as const)[activeContractType]} contract template has been deleted successfully`,
+        description: `${({ adoption: 'Adoption', foster: 'Foster', placement: 'Placement', surrender: 'Surrender' } as const)[activeContractType]} contract template has been deleted successfully`,
       });
     },
     onError: (error: any) => {
@@ -502,7 +573,7 @@ export default function ContractTemplatesPage() {
       queryClient.invalidateQueries({ queryKey: [getApiEndpoint(activeContractType)] });
       toast({
         title: "Default template updated",
-        description: `This template is now the default for new ${{ adoption: 'adoptions', foster: 'foster placements', placement: 'animal placements' }[activeContractType]}`,
+        description: `This template is now the default for new ${{ adoption: 'adoptions', foster: 'foster placements', placement: 'animal placements', surrender: 'owner surrenders' }[activeContractType]}`,
       });
     },
     onError: (error: any) => {
@@ -667,7 +738,7 @@ export default function ContractTemplatesPage() {
   const handleTabChange = (value: string) => {
     const newType = value as ContractType;
     setActiveContractType(newType);
-    setGuidedSections(newType === 'adoption' ? DEFAULT_ADOPTION_SECTIONS : newType === 'foster' ? DEFAULT_FOSTER_SECTIONS : DEFAULT_PLACEMENT_SECTIONS);
+    setGuidedSections(newType === 'adoption' ? DEFAULT_ADOPTION_SECTIONS : newType === 'foster' ? DEFAULT_FOSTER_SECTIONS : newType === 'surrender' ? DEFAULT_SURRENDER_SECTIONS : DEFAULT_PLACEMENT_SECTIONS);
   };
 
   if (adoptionLoading && fosterLoading && placementLoading) {
@@ -724,7 +795,7 @@ export default function ContractTemplatesPage() {
 
         {/* Contract Type Tabs */}
         <Tabs value={activeContractType} onValueChange={handleTabChange} className="w-full">
-          <TabsList className="grid w-full max-w-xl grid-cols-3">
+          <TabsList className="grid w-full max-w-2xl grid-cols-4">
             <TabsTrigger value="adoption" className="gap-2" data-testid="tab-adoption-contracts">
               <PawPrint className="h-4 w-4" />
               Adoption
@@ -746,6 +817,13 @@ export default function ContractTemplatesPage() {
                 <Badge variant="secondary" className="ml-1">{placementTemplates.length}</Badge>
               )}
             </TabsTrigger>
+            <TabsTrigger value="surrender" className="gap-2" data-testid="tab-surrender-contracts">
+              <FileText className="h-4 w-4" />
+              Surrender
+              {surrenderTemplates.length > 0 && (
+                <Badge variant="secondary" className="ml-1">{surrenderTemplates.length}</Badge>
+              )}
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="adoption" className="mt-6">
@@ -759,17 +837,21 @@ export default function ContractTemplatesPage() {
           <TabsContent value="placement" className="mt-6">
             {renderTemplateGrid(placementTemplates, placementLoading)}
           </TabsContent>
+
+          <TabsContent value="surrender" className="mt-6">
+            {renderTemplateGrid(surrenderTemplates, surrenderLoading)}
+          </TabsContent>
         </Tabs>
 
         {/* Wizard Dialog */}
         <Dialog open={isWizardOpen} onOpenChange={setIsWizardOpen}>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <ContractTemplateWizard
-              onComplete={(data) => wizardCreateMutation.mutate(data)}
+              onComplete={(data) => wizardCreateMutation.mutate({ ...data, contractType: activeContractType })}
               onCancel={() => setIsWizardOpen(false)}
               isPending={wizardCreateMutation.isPending}
               tenantName={tenant?.name || ""}
-              contractType={activeContractType === "placement" ? "adoption" : activeContractType}
+              contractType={activeContractType === "placement" || activeContractType === "surrender" ? "adoption" : activeContractType}
             />
           </DialogContent>
         </Dialog>
@@ -780,10 +862,10 @@ export default function ContractTemplatesPage() {
             <form onSubmit={createForm.handleSubmit(onSubmitCreate)}>
               <DialogHeader>
                 <DialogTitle>
-                  Create {({ adoption: 'Adoption', foster: 'Foster', placement: 'Placement' } as const)[activeContractType]} Contract Template
+                  Create {({ adoption: 'Adoption', foster: 'Foster', placement: 'Placement', surrender: 'Surrender' } as const)[activeContractType]} Contract Template
                 </DialogTitle>
                 <DialogDescription>
-                  Create a new {{ adoption: 'adoption', foster: 'foster care', placement: 'placement agreement' }[activeContractType]} template with merge fields.
+                  Create a new {{ adoption: 'adoption', foster: 'foster care', placement: 'placement agreement', surrender: 'owner surrender' }[activeContractType]} template with merge fields.
                 </DialogDescription>
               </DialogHeader>
 
@@ -793,7 +875,7 @@ export default function ContractTemplatesPage() {
                   <Input
                     id="name"
                     {...createForm.register("name")}
-                    placeholder={`e.g., Standard ${activeContractType === 'adoption' ? 'Adoption' : 'Foster Care'} Contract`}
+                    placeholder={`e.g., Standard ${({ adoption: 'Adoption', foster: 'Foster Care', placement: 'Placement', surrender: 'Owner Surrender' } as const)[activeContractType]} Contract`}
                     data-testid="input-template-name"
                   />
                   {createForm.formState.errors.name && (
@@ -1055,7 +1137,7 @@ export default function ContractTemplatesPage() {
                   <Input
                     id="edit-name"
                     {...editForm.register("name")}
-                    placeholder={`e.g., Standard ${activeContractType === 'adoption' ? 'Adoption' : 'Foster Care'} Contract`}
+                    placeholder={`e.g., Standard ${({ adoption: 'Adoption', foster: 'Foster Care', placement: 'Placement', surrender: 'Owner Surrender' } as const)[activeContractType]} Contract`}
                     data-testid="input-edit-template-name"
                   />
                   {editForm.formState.errors.name && (
@@ -1345,7 +1427,7 @@ export default function ContractTemplatesPage() {
             )}
             <p className="text-lg font-medium mb-2">No {activeContractType} templates yet</p>
             <p className="text-sm text-muted-foreground mb-4">
-              Create your first {{ adoption: 'adoption', foster: 'foster care', placement: 'placement agreement' }[activeContractType]} template to get started
+              Create your first {{ adoption: 'adoption', foster: 'foster care', placement: 'placement agreement', surrender: 'owner surrender' }[activeContractType]} template to get started
             </p>
             <Button onClick={handleCreate} data-testid="button-create-first-template">
               <Plus className="h-4 w-4 mr-2" />

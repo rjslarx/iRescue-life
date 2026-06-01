@@ -12081,20 +12081,24 @@ Crawl-delay: 1
           dogAge: surrenderRequests.dogAge,
           dogBreed: surrenderRequests.dogBreed,
           dogGender: surrenderRequests.dogGender,
+          reasonForSurrender: surrenderRequests.reasonForSurrender,
         })
         .from(surrenderRequests)
         .where(eq(surrenderRequests.id, session.surrenderRequestId))
         .limit(1);
 
-      const { buildSurrenderAgreementHtml } = await import('./services/surrender-contract-template');
-      const html = buildSurrenderAgreementHtml({
+      const { renderSurrenderAgreement } = await import('./services/surrender-contract-template');
+      const html = await renderSurrenderAgreement({
+        tenantId: session.tenantId,
         tenantName: tenant?.name || '',
         ownerName: session.ownerName || '',
+        ownerEmail: session.ownerEmail,
         ownerPhone: session.ownerPhone,
         animalName: session.animalName || surrenderRequest?.dogName || null,
         animalAge: surrenderRequest?.dogAge || null,
         animalBreed: surrenderRequest?.dogBreed || null,
         animalSex: surrenderRequest?.dogGender || null,
+        surrenderReason: surrenderRequest?.reasonForSurrender || null,
       });
 
       const sanitizedHtml = DOMPurify.sanitize(html, {
@@ -12179,23 +12183,28 @@ Crawl-delay: 1
           dogAge: surrenderRequests.dogAge,
           dogBreed: surrenderRequests.dogBreed,
           dogGender: surrenderRequests.dogGender,
+          reasonForSurrender: surrenderRequests.reasonForSurrender,
         })
         .from(surrenderRequests)
         .where(eq(surrenderRequests.id, session.surrenderRequestId))
         .limit(1);
 
       const signedAt = new Date();
-      const { buildSurrenderAgreementHtml } = await import('./services/surrender-contract-template');
-      const renderedContract = buildSurrenderAgreementHtml({
+      const { renderSurrenderAgreement } = await import('./services/surrender-contract-template');
+      const renderedContract = await renderSurrenderAgreement({
+        tenantId: session.tenantId,
         tenantName: tenant?.name || '',
         ownerName: signatureData.signerName,
+        ownerEmail: signatureData.signerEmail || session.ownerEmail,
         ownerPhone: session.ownerPhone,
         animalName: session.animalName || surrenderRequest?.dogName || null,
         animalAge: surrenderRequest?.dogAge || null,
         animalBreed: surrenderRequest?.dogBreed || null,
         animalSex: surrenderRequest?.dogGender || null,
+        surrenderReason: surrenderRequest?.reasonForSurrender || null,
         signatureImageUrl: signatureData.signatureImageData,
         signedTimestamp: signedAt.toISOString(),
+        signedIp: req.ip,
       });
 
       // Status precondition makes signing idempotent: only a still-pending
@@ -13166,6 +13175,197 @@ Crawl-delay: 1
       const { ensureDefaultFosterTemplate } = await import('./services/foster-contract-template');
       const template = await ensureDefaultFosterTemplate(req.tenant!.id, req.tenant!.name);
       res.json({ template, message: 'Default foster template ensured' });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // ============================================================================
+  // Surrender Contract Template Routes
+  // ============================================================================
+
+  /**
+   * GET /api/surrender-contract-templates
+   * List all surrender contract templates for tenant (staff only)
+   */
+  app.get('/api/surrender-contract-templates', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      const { getAllSurrenderTemplates, ensureDefaultSurrenderTemplate, SURRENDER_MERGE_FIELDS } = await import('./services/surrender-contract-template');
+
+      // Ensure a default template exists for new tenants
+      await ensureDefaultSurrenderTemplate(req.tenant!.id, req.tenant!.name);
+
+      const templates = await getAllSurrenderTemplates(req.tenant!.id);
+      res.json({ templates, mergeFields: SURRENDER_MERGE_FIELDS });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/surrender-contract-templates
+   * Create new surrender contract template (admin only)
+   */
+  app.post('/api/surrender-contract-templates', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+    try {
+      const { createSurrenderTemplate, validateSurrenderTemplate } = await import('./services/surrender-contract-template');
+      const { insertSurrenderContractTemplateSchema } = await import('@shared/schema');
+
+      const validation = validateSurrenderTemplate(req.body.htmlTemplate || '');
+      if (!validation.valid) {
+        return res.status(400).json({
+          error: 'Invalid template HTML',
+          validationErrors: validation.errors
+        });
+      }
+
+      const data = insertSurrenderContractTemplateSchema.parse({
+        ...req.body,
+        tenantId: req.tenant!.id,
+        updatedBy: req.user!.id,
+      });
+
+      const template = await createSurrenderTemplate(data);
+      res.json({ template, message: 'Surrender template created successfully' });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * PUT /api/surrender-contract-templates/:id
+   * Update surrender contract template (admin only)
+   */
+  app.put('/api/surrender-contract-templates/:id', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+    try {
+      const { updateSurrenderTemplate, validateSurrenderTemplate } = await import('./services/surrender-contract-template');
+      const { insertSurrenderContractTemplateSchema } = await import('@shared/schema');
+
+      if (req.body.htmlTemplate) {
+        const validation = validateSurrenderTemplate(req.body.htmlTemplate);
+        if (!validation.valid) {
+          return res.status(400).json({
+            error: 'Invalid template HTML',
+            validationErrors: validation.errors
+          });
+        }
+      }
+
+      const updateSchema = insertSurrenderContractTemplateSchema.partial().omit({ tenantId: true });
+      const validatedUpdates = updateSchema.parse(req.body);
+
+      const updates = {
+        ...validatedUpdates,
+        updatedBy: req.user!.id,
+      };
+
+      const template = await updateSurrenderTemplate(req.params.id, req.tenant!.id, updates);
+
+      if (!template) {
+        return res.status(404).json({ error: 'Surrender template not found' });
+      }
+
+      res.json({ template, message: 'Surrender template updated successfully' });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * DELETE /api/surrender-contract-templates/:id
+   * Delete surrender contract template (admin only)
+   */
+  app.delete('/api/surrender-contract-templates/:id', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+    try {
+      const { deleteSurrenderTemplate, getSurrenderTemplateById } = await import('./services/surrender-contract-template');
+
+      const template = await getSurrenderTemplateById(req.params.id, req.tenant!.id);
+      if (template?.isDefault) {
+        return res.status(400).json({ error: 'Cannot delete the default template. Set another template as default first.' });
+      }
+
+      await deleteSurrenderTemplate(req.params.id, req.tenant!.id);
+      res.json({ success: true, message: 'Surrender template deleted successfully' });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * PUT /api/surrender-contract-templates/:id/set-default
+   * Set surrender template as default for tenant (admin only)
+   */
+  app.put('/api/surrender-contract-templates/:id/set-default', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+    try {
+      const { setDefaultSurrenderTemplate } = await import('./services/surrender-contract-template');
+
+      const template = await setDefaultSurrenderTemplate(req.params.id, req.tenant!.id);
+
+      if (!template) {
+        return res.status(404).json({ error: 'Surrender template not found' });
+      }
+
+      res.json({ template, message: 'Surrender template set as default successfully' });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/surrender-contract-templates/:id/preview
+   * Generate preview HTML with sample merge data (admin/staff only)
+   */
+  app.get('/api/surrender-contract-templates/:id/preview', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      const { getSurrenderTemplateById, mergeSurrenderPlaceholders, buildSurrenderMergeData } = await import('./services/surrender-contract-template');
+      const DOMPurify = (await import('isomorphic-dompurify')).default;
+
+      const template = await getSurrenderTemplateById(req.params.id, req.tenant!.id);
+
+      if (!template) {
+        return res.status(404).json({ error: 'Surrender template not found' });
+      }
+
+      const sampleData = buildSurrenderMergeData({
+        tenantName: req.tenant!.name,
+        ownerName: 'Jane Smith',
+        ownerEmail: 'jane.smith@example.com',
+        ownerPhone: '(555) 987-6543',
+        ownerAddress: '456 Oak Avenue, Petville, ST 67890',
+        animalName: 'Buddy',
+        animalSpecies: 'Dog',
+        animalBreed: 'Labrador Retriever',
+        animalSex: 'Male',
+        animalAge: '3 years',
+        surrenderReason: 'Moving to a residence that does not allow pets',
+        signatureImageUrl: '/placeholder-signature.png',
+        signedTimestamp: new Date().toISOString(),
+        signedIp: '192.168.1.100',
+      });
+
+      const mergedHtml = mergeSurrenderPlaceholders(template.htmlTemplate, sampleData);
+
+      const sanitizedHtml = DOMPurify.sanitize(mergedHtml, {
+        ALLOWED_TAGS: ['html', 'head', 'body', 'title', 'meta', 'style', 'link', 'div', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'strong', 'em', 'u', 'br', 'hr', 'ul', 'ol', 'li', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'img', 'a'],
+        ALLOWED_ATTR: ['class', 'id', 'style', 'href', 'src', 'alt', 'title', 'target', 'colspan', 'rowspan'],
+        ALLOW_DATA_ATTR: false,
+      });
+
+      res.json({ html: sanitizedHtml });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/surrender-contract-templates/ensure-default
+   * Ensure a default surrender template exists for tenant (staff only)
+   */
+  app.get('/api/surrender-contract-templates/ensure-default', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      const { ensureDefaultSurrenderTemplate } = await import('./services/surrender-contract-template');
+      const template = await ensureDefaultSurrenderTemplate(req.tenant!.id, req.tenant!.name);
+      res.json({ template, message: 'Default surrender template ensured' });
     } catch (error) {
       next(error);
     }

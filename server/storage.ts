@@ -1,7 +1,7 @@
-import { type User, type InsertUser, type AdoptionContractTemplate, type InsertAdoptionContractTemplate, type FosterContractTemplate, type InsertFosterContractTemplate } from "@shared/schema";
+import { type User, type InsertUser, type AdoptionContractTemplate, type InsertAdoptionContractTemplate, type FosterContractTemplate, type InsertFosterContractTemplate, type SurrenderContractTemplate, type InsertSurrenderContractTemplate } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { db } from "./db";
-import { users, adoptionContractTemplates, fosterContractTemplates } from "@shared/schema";
+import { users, adoptionContractTemplates, fosterContractTemplates, surrenderContractTemplates } from "@shared/schema";
 import { eq, and, desc } from "drizzle-orm";
 
 // modify the interface with any CRUD methods
@@ -29,6 +29,15 @@ export interface IStorage {
   updateFosterContractTemplate(id: string, tenantId: string, updates: Partial<InsertFosterContractTemplate>): Promise<FosterContractTemplate | null>;
   deleteFosterContractTemplate(id: string, tenantId: string): Promise<void>;
   setDefaultFosterContractTemplate(id: string, tenantId: string): Promise<FosterContractTemplate | null>;
+
+  // Surrender contract template methods
+  getAllSurrenderContractTemplates(tenantId: string): Promise<SurrenderContractTemplate[]>;
+  getSurrenderContractTemplateById(id: string, tenantId: string): Promise<SurrenderContractTemplate | null>;
+  getDefaultSurrenderContractTemplate(tenantId: string): Promise<SurrenderContractTemplate | null>;
+  createSurrenderContractTemplate(data: InsertSurrenderContractTemplate): Promise<SurrenderContractTemplate>;
+  updateSurrenderContractTemplate(id: string, tenantId: string, updates: Partial<InsertSurrenderContractTemplate>): Promise<SurrenderContractTemplate | null>;
+  deleteSurrenderContractTemplate(id: string, tenantId: string): Promise<void>;
+  setDefaultSurrenderContractTemplate(id: string, tenantId: string): Promise<SurrenderContractTemplate | null>;
 }
 
 export class MemStorage implements IStorage {
@@ -251,6 +260,107 @@ export class MemStorage implements IStorage {
         and(
           eq(fosterContractTemplates.id, parseInt(id)),
           eq(fosterContractTemplates.tenantId, tenantId)
+        )
+      )
+      .returning();
+    return template || null;
+  }
+
+  // Surrender contract template methods
+  async getAllSurrenderContractTemplates(tenantId: string): Promise<SurrenderContractTemplate[]> {
+    const templates = await db
+      .select()
+      .from(surrenderContractTemplates)
+      .where(eq(surrenderContractTemplates.tenantId, tenantId))
+      .orderBy(desc(surrenderContractTemplates.isDefault), desc(surrenderContractTemplates.createdAt));
+    return templates;
+  }
+
+  async getSurrenderContractTemplateById(id: string, tenantId: string): Promise<SurrenderContractTemplate | null> {
+    const [template] = await db
+      .select()
+      .from(surrenderContractTemplates)
+      .where(
+        and(
+          eq(surrenderContractTemplates.id, parseInt(id)),
+          eq(surrenderContractTemplates.tenantId, tenantId)
+        )
+      )
+      .limit(1);
+    return template || null;
+  }
+
+  async getDefaultSurrenderContractTemplate(tenantId: string): Promise<SurrenderContractTemplate | null> {
+    const [template] = await db
+      .select()
+      .from(surrenderContractTemplates)
+      .where(
+        and(
+          eq(surrenderContractTemplates.tenantId, tenantId),
+          eq(surrenderContractTemplates.isDefault, true)
+        )
+      )
+      .limit(1);
+    return template || null;
+  }
+
+  async createSurrenderContractTemplate(data: InsertSurrenderContractTemplate): Promise<SurrenderContractTemplate> {
+    const [template] = await db
+      .insert(surrenderContractTemplates)
+      .values(data)
+      .returning();
+    return template;
+  }
+
+  async updateSurrenderContractTemplate(
+    id: string,
+    tenantId: string,
+    updates: Partial<InsertSurrenderContractTemplate>
+  ): Promise<SurrenderContractTemplate | null> {
+    const [template] = await db
+      .update(surrenderContractTemplates)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(
+        and(
+          eq(surrenderContractTemplates.id, parseInt(id)),
+          eq(surrenderContractTemplates.tenantId, tenantId)
+        )
+      )
+      .returning();
+    return template || null;
+  }
+
+  async deleteSurrenderContractTemplate(id: string, tenantId: string): Promise<void> {
+    await db
+      .delete(surrenderContractTemplates)
+      .where(
+        and(
+          eq(surrenderContractTemplates.id, parseInt(id)),
+          eq(surrenderContractTemplates.tenantId, tenantId)
+        )
+      );
+  }
+
+  async setDefaultSurrenderContractTemplate(id: string, tenantId: string): Promise<SurrenderContractTemplate | null> {
+    // First, unset any existing default
+    await db
+      .update(surrenderContractTemplates)
+      .set({ isDefault: false })
+      .where(
+        and(
+          eq(surrenderContractTemplates.tenantId, tenantId),
+          eq(surrenderContractTemplates.isDefault, true)
+        )
+      );
+
+    // Then set the new default
+    const [template] = await db
+      .update(surrenderContractTemplates)
+      .set({ isDefault: true })
+      .where(
+        and(
+          eq(surrenderContractTemplates.id, parseInt(id)),
+          eq(surrenderContractTemplates.tenantId, tenantId)
         )
       )
       .returning();
