@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -263,6 +263,27 @@ export default function IntakeManagerPage() {
   const { data: formFieldsData } = useQuery<{ fields: SurrenderFormField[] }>({
     queryKey: ["/api/surrender-form-fields"],
   });
+
+  // Deep-link support: open a specific request's detail dialog when arriving
+  // via ?request=<id> (e.g. from the "surrender agreement signed" staff email).
+  useEffect(() => {
+    if (surrenderRequests.length === 0) return;
+    const params = new URLSearchParams(window.location.search);
+    const requestId = params.get('request');
+    if (!requestId) return;
+    const match = surrenderRequests.find((req) => req.id === requestId);
+    if (match) {
+      setSelectedRequest(match);
+      setDetailsDialogOpen(true);
+    }
+    params.delete('request');
+    const newSearch = params.toString();
+    window.history.replaceState(
+      {},
+      '',
+      `${window.location.pathname}${newSearch ? `?${newSearch}` : ''}`,
+    );
+  }, [surrenderRequests]);
 
   // Filter out declined/intaken requests for active board
   const activeRequests = surrenderRequests.filter(

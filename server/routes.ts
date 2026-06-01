@@ -12244,6 +12244,23 @@ Crawl-delay: 1
         console.error('[Surrender Agreement] Failed to generate PDF:', pdfError);
       }
 
+      // Notify configured staff that the owner signed. Fire-and-forget so the
+      // signer's response is never delayed by email/SMS provider latency; the
+      // service catches and logs its own errors internally.
+      void (async () => {
+        try {
+          const { sendSurrenderSignedStaffNotification } = await import('./services/surrender-signed-notification');
+          await sendSurrenderSignedStaffNotification({
+            tenantId: session.tenantId,
+            surrenderRequestId: session.surrenderRequestId,
+            ownerName: signatureData.signerName,
+            animalName: session.animalName || surrenderRequest?.dogName || null,
+          });
+        } catch (notifyError) {
+          console.error('[Surrender Agreement] Failed to send staff signed notification:', notifyError);
+        }
+      })();
+
       res.json({ success: true });
     } catch (error) {
       if (error instanceof z.ZodError) {
