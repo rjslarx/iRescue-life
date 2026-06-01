@@ -69,7 +69,8 @@ import {
   Stethoscope,
   Loader2,
   XCircle,
-  Plus
+  Plus,
+  RotateCcw
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import type { SurrenderRequest, SurrenderFormField } from "@shared/schema";
@@ -293,6 +294,26 @@ export default function IntakeManagerPage() {
     },
   });
 
+  const reopenMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest("POST", `/api/surrender/${id}/reopen`, {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/surrender-requests"] });
+      toast({
+        title: "Request reopened",
+        description: "The request has been moved back to the Review stage.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to reopen request",
+        variant: "destructive",
+      });
+    },
+  });
+
   const getRequestsByStage = (stageId: string) => {
     return activeRequests.filter((req) => req.status === stageId);
   };
@@ -426,6 +447,8 @@ export default function IntakeManagerPage() {
                       setSelectedRequest(request);
                       setDetailsDialogOpen(true);
                     }}
+                    onReopen={() => reopenMutation.mutate(request.id)}
+                    isReopening={reopenMutation.isPending && reopenMutation.variables === request.id}
                   />
                 ))}
               </CardContent>
@@ -577,6 +600,8 @@ export default function IntakeManagerPage() {
                       setSelectedRequest(request);
                       setDetailsDialogOpen(true);
                     }}
+                    onReopen={() => reopenMutation.mutate(request.id)}
+                    isReopening={reopenMutation.isPending && reopenMutation.variables === request.id}
                   />
                 ))}
               </div>
@@ -729,9 +754,11 @@ function ReIntakeDialog({
 interface DeclinedCardProps {
   request: SurrenderRequest;
   onView: () => void;
+  onReopen: () => void;
+  isReopening: boolean;
 }
 
-function DeclinedCard({ request, onView }: DeclinedCardProps) {
+function DeclinedCard({ request, onView, onReopen, isReopening }: DeclinedCardProps) {
   return (
     <Card className="bg-muted/50 border-dashed" data-testid={`declined-card-${request.id}`}>
       <CardContent className="p-3">
@@ -760,11 +787,29 @@ function DeclinedCard({ request, onView }: DeclinedCardProps) {
             <span className="sr-only">View</span>
           </Button>
         </div>
-        {request.declinedAt && (
-          <p className="text-xs text-muted-foreground mt-2">
-            Declined: {new Date(request.declinedAt).toLocaleDateString()}
-          </p>
-        )}
+        <div className="flex items-center justify-between gap-2 mt-2 flex-wrap">
+          {request.declinedAt ? (
+            <p className="text-xs text-muted-foreground">
+              Declined: {new Date(request.declinedAt).toLocaleDateString()}
+            </p>
+          ) : (
+            <span />
+          )}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onReopen}
+            disabled={isReopening}
+            data-testid={`button-reopen-declined-${request.id}`}
+          >
+            {isReopening ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <RotateCcw className="mr-2 h-4 w-4" />
+            )}
+            Reopen
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );
@@ -943,6 +988,28 @@ function SurrenderDetailsDialog({ request, open, onOpenChange, formFields }: Sur
       toast({
         title: "Error",
         description: error.message || "Failed to decline request",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const reopenMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await apiRequest("POST", `/api/surrender/${id}/reopen`, {});
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Request Reopened",
+        description: "The request has been moved back to the Review stage.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/surrender-requests"] });
+      onOpenChange(false);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to reopen request",
         variant: "destructive",
       });
     },
@@ -1206,6 +1273,25 @@ function SurrenderDetailsDialog({ request, open, onOpenChange, formFields }: Sur
                   Declined on: {new Date(request.declinedAt).toLocaleDateString()}
                 </p>
               )}
+              <Button
+                variant="outline"
+                onClick={() => reopenMutation.mutate(request.id)}
+                disabled={reopenMutation.isPending}
+                className="mt-3 w-full sm:w-auto"
+                data-testid="button-reopen-request"
+              >
+                {reopenMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Reopening...
+                  </>
+                ) : (
+                  <>
+                    <RotateCcw className="mr-2 h-4 w-4" />
+                    Reopen Request
+                  </>
+                )}
+              </Button>
             </div>
           )}
 

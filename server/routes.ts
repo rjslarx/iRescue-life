@@ -21565,6 +21565,91 @@ Submitted: ${new Date().toLocaleString()}
   });
 
   /**
+   * POST /api/surrender/:id/reopen
+   * Reopen a declined surrender request back into the active intake pipeline.
+   * Sets status to 'review' and clears the decline reason/timestamp.
+   */
+  app.post('/api/surrender/:id/reopen', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff'), async (req, res, next) => {
+    try {
+      const surrenderId = req.params.id;
+
+      // Validate UUID format
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(surrenderId)) {
+        return res.status(400).json({ error: 'Invalid surrender request ID' });
+      }
+
+      // Fetch and verify the request exists
+      const [existing] = await db.select({
+        id: surrenderRequests.id,
+        status: surrenderRequests.status,
+        ownerName: surrenderRequests.ownerName,
+        dogName: surrenderRequests.dogName,
+      })
+        .from(surrenderRequests)
+        .where(and(
+          eq(surrenderRequests.id, surrenderId),
+          eq(surrenderRequests.tenantId, req.tenant!.id)
+        ))
+        .limit(1);
+
+      if (!existing) {
+        return res.status(404).json({ error: 'Surrender request not found' });
+      }
+
+      // Only declined requests can be reopened
+      if (existing.status !== 'declined') {
+        return res.status(400).json({ error: 'Only declined requests can be reopened' });
+      }
+
+      // Move back into the active pipeline at the 'review' stage and clear decline info.
+      // The status='declined' guard in the WHERE clause makes this atomic against
+      // concurrent writes so only a still-declined record can be reopened.
+      const [updated] = await db.update(surrenderRequests)
+        .set({
+          status: 'review',
+          declinedReason: null,
+          declinedAt: null,
+          updatedAt: new Date()
+        })
+        .where(and(
+          eq(surrenderRequests.id, surrenderId),
+          eq(surrenderRequests.tenantId, req.tenant!.id),
+          eq(surrenderRequests.status, 'declined')
+        ))
+        .returning();
+
+      if (!updated) {
+        return res.status(409).json({ error: 'Request is no longer declined and cannot be reopened' });
+      }
+
+      try {
+        const { createAuditLog } = await import('./audit');
+        await createAuditLog({
+          userId: req.user!.id,
+          tenantId: req.tenant!.id,
+          action: 'surrender_request.reopened',
+          entityType: 'surrender_request',
+          entityId: surrenderId,
+          changes: { before: { status: 'declined' }, after: { status: 'review' } },
+          metadata: { ownerName: existing.ownerName || null, dogName: existing.dogName || null },
+          req,
+        });
+      } catch (auditErr) {
+        console.error('Failed to create audit log:', auditErr);
+      }
+
+      res.json({
+        success: true,
+        message: 'Surrender request has been reopened',
+        request: updated
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * POST /api/surrender/:id/promote
    * Promote a surrender request to an animal in the medical intake queue
    * Converts SurrenderRequest → Animal with medicalStatus='needs_vetting'
