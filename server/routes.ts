@@ -21688,6 +21688,24 @@ Submitted: ${new Date().toLocaleString()}
         console.error('Failed to create audit log:', auditErr);
       }
 
+      // Auto-send the owner surrender agreement for e-signature when the request
+      // reaches the "Scheduled" stage (non-blocking; idempotent via dedupe).
+      if (status === 'scheduled') {
+        try {
+          const { sendSurrenderAgreement } = await import('./services/surrender-agreement');
+          await sendSurrenderAgreement({
+            tenant: req.tenant!,
+            surrenderRequestId: updated.id,
+            ownerName: updated.ownerName,
+            ownerEmail: updated.ownerEmail,
+            ownerPhone: updated.ownerPhone,
+            animalName: updated.dogName,
+          });
+        } catch (agreementError) {
+          console.error('[Surrender Agreement] Failed to send on scheduled:', agreementError);
+        }
+      }
+
       res.json(updated);
     } catch (error) {
       next(error);
