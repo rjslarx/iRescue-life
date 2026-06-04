@@ -10622,16 +10622,21 @@ Crawl-delay: 1
       const { createApplication } = await import('./services/applications');
       const { insertApplicationSchema } = await import('@shared/schema');
       
-      const { gclid, isBypass, ...applicationData } = req.body;
+      const { gclid, isBypass: requestedBypass, ...applicationData } = req.body;
+      // Task #230: Only honor the internal fast-track bypass for authenticated
+      // staff. A public/unauthenticated submission can never self-assert
+      // `isBypass` to skip the always-required address enforcement below.
+      const isBypass = requestedBypass === true && !!req.user;
       const data = insertApplicationSchema.omit({ tenantId: true }).parse({
         ...applicationData,
         gclid: gclid || null,
         gclidCapturedAt: gclid ? new Date() : null,
       });
 
-      // Task #222: Enforce complete applicant address (Street/City/State/ZIP)
-      // for tenants that require it. Internal bypass submissions are exempt.
-      if (!isBypass && req.tenant?.requireCompleteAddress) {
+      // Task #230: Enforce a complete applicant address (Street/City/State/ZIP)
+      // on all adoption applications for every tenant, regardless of the
+      // requireCompleteAddress flag. Internal bypass submissions are exempt.
+      if (!isBypass) {
         const missing: string[] = [];
         if (!data.address || !String(data.address).trim()) missing.push('Street Address');
         if (!data.city || !String(data.city).trim()) missing.push('City');

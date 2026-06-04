@@ -31,13 +31,12 @@ const publicAdoptionSchema = z.object({
   applicantName: z.string().min(2, "Name must be at least 2 characters"),
   applicantEmail: z.string().email("Please enter a valid email address"),
   applicantPhone: z.string().min(10, "Please enter a valid phone number"),
-  // Task #222: Address fields are validated conditionally below based on the
-  // tenant's requireCompleteAddress flag. Keep them optional in the base
-  // schema so the form still accepts empty values for exempt tenants.
-  address: z.string().optional(),
-  city: z.string().optional(),
-  state: z.string().optional(),
-  zip: z.string().optional(),
+  // Task #230: A complete applicant address is now always required on adoption
+  // applications for every tenant, regardless of the requireCompleteAddress flag.
+  address: z.string().trim().min(1, "Street address is required"),
+  city: z.string().trim().min(1, "City is required"),
+  state: z.string().trim().min(1, "State is required"),
+  zip: z.string().trim().min(1, "ZIP is required"),
   smsConsent: z.literal(true, { errorMap: () => ({ message: "You must consent to receive SMS messages to submit this form" }) }),
   notes: z.string().min(100, "Please tell us a bit more about yourself (minimum 100 characters)"),
   customResponses: z.record(z.any()).optional(),
@@ -81,22 +80,8 @@ export function PublicAdoptionDialog({ animal, open, onOpenChange }: PublicAdopt
     queryKey: ['/api/form-settings', 'adoption'],
   });
 
-  // Task #222: All tenants require a complete applicant address by default;
-  // only tenants with the flag explicitly set to `false` (currently just
-  // Haseya's) are exempt.
-  const requireAddress = (tenant as any)?.requireCompleteAddress !== false;
-
   const form = useForm<PublicAdoptionFormData>({
-    resolver: zodResolver(
-      requireAddress
-        ? publicAdoptionSchema.extend({
-            address: z.string().trim().min(1, "Street address is required"),
-            city: z.string().trim().min(1, "City is required"),
-            state: z.string().trim().min(1, "State is required"),
-            zip: z.string().trim().min(1, "ZIP is required"),
-          })
-        : publicAdoptionSchema,
-    ),
+    resolver: zodResolver(publicAdoptionSchema),
     defaultValues: {
       applicantName: "",
       applicantEmail: "",
@@ -409,8 +394,7 @@ export function PublicAdoptionDialog({ animal, open, onOpenChange }: PublicAdopt
               )}
             />
 
-            {requireAddress && (
-              <>
+            <>
                 <FormField
                   control={form.control}
                   name="address"
@@ -485,8 +469,7 @@ export function PublicAdoptionDialog({ animal, open, onOpenChange }: PublicAdopt
                     )}
                   />
                 </div>
-              </>
-            )}
+            </>
 
             <FormField
               control={form.control}
