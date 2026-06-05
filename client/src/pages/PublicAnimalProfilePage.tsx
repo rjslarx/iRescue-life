@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "wouter";
-import { useSEO } from "@/hooks/useSEO";
+import { useSEO, useJsonLd } from "@/hooks/useSEO";
 import PublicHeader from "@/components/PublicHeader";
 import { PublicAdoptionDialog } from "@/components/PublicAdoptionDialog";
 import DonationForm from "@/components/DonationForm";
@@ -101,6 +101,25 @@ export default function PublicAnimalProfilePage() {
     siteName: rescueName,
     image: ogImage,
     type: 'website',
+  });
+
+  const tenantOriginAnimal = typeof window !== 'undefined' ? window.location.origin : '';
+
+  useJsonLd({
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "name": rescueName,
+        "url": tenantOriginAnimal
+      },
+      {
+        "@type": "Organization",
+        "name": rescueName,
+        "url": tenantOriginAnimal,
+        ...(tenant?.logoUrl ? { "logo": tenant.logoUrl } : {})
+      }
+    ]
   });
 
   const getShareUrl = () => {

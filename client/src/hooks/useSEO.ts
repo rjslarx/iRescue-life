@@ -67,7 +67,7 @@ export function useSEO(config: SEOConfig) {
       }
     });
 
-    metaTags.forEach(({ name, property, content }) => {
+    metaTags.forEach(({ name, property, content } : { name?: string; property?: string; content?: string }) => {
       if (!content) return;
 
       const attribute = property ? 'property' : 'name';
@@ -80,7 +80,7 @@ export function useSEO(config: SEOConfig) {
         element.setAttribute(SEO_OWNER_ATTR, currentInstanceId);
       } else {
         element = document.createElement('meta');
-        element.setAttribute(attribute, value);
+        element.setAttribute(attribute, value!);
         element.setAttribute('content', content);
         element.setAttribute(SEO_OWNER_ATTR, currentInstanceId);
         document.head.appendChild(element);
@@ -104,4 +104,21 @@ export function useSEO(config: SEOConfig) {
       }
     };
   }, [config.title, config.description, config.image, config.url, config.type, config.siteName]);
+}
+
+export function useJsonLd(data: Record<string, unknown> | null | undefined) {
+  const serialized = data ? JSON.stringify(data) : null;
+
+  useEffect(() => {
+    if (!serialized) return;
+
+    const script = document.createElement('script');
+    script.setAttribute('type', 'application/ld+json');
+    script.textContent = serialized;
+    document.head.appendChild(script);
+
+    return () => {
+      script.remove();
+    };
+  }, [serialized]);
 }

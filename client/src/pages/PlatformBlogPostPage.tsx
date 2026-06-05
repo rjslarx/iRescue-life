@@ -1,7 +1,7 @@
 import { useRoute, Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useSEO } from "@/hooks/useSEO";
+import { useSEO, useJsonLd } from "@/hooks/useSEO";
 import { ArrowLeft, PawPrint, Calendar, Clock } from "lucide-react";
 
 export default function PlatformBlogPostPage() {
@@ -14,6 +14,7 @@ export default function PlatformBlogPostPage() {
       title: "Stop Juggling Spreadsheets: How Your Animal Rescue Can Get Google Workspace for Free",
       excerpt: "Running an animal rescue is chaotic. See how your 501(c)(3) can get Google Workspace for Nonprofits 100% free, and how it integrates with rescue management software like iRescue.life.",
       date: "January 15, 2025",
+      isoDate: "2025-01-15",
       category: "Nonprofit Resources",
       readTime: "8 min read",
       content: `
@@ -179,6 +180,48 @@ export default function PlatformBlogPostPage() {
     description: post?.excerpt || "Read our latest blog post about animal rescue management.",
     siteName: "iRescue.life",
   });
+
+  const pageUrl = typeof window !== 'undefined'
+    ? window.location.href
+    : `https://irescue.life/platform/blog/${slug}`;
+
+  useJsonLd(post ? {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "BlogPosting",
+        "headline": post.title,
+        "description": post.excerpt,
+        "datePublished": post.isoDate || post.date,
+        "articleSection": post.category,
+        "mainEntityOfPage": pageUrl,
+        "publisher": {
+          "@type": "Organization",
+          "name": "iRescue.life",
+          "url": "https://irescue.life",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://irescue.life/icon-512.png"
+          }
+        },
+        "author": {
+          "@type": "Organization",
+          "name": "iRescue.life"
+        }
+      },
+      {
+        "@type": "WebSite",
+        "name": "iRescue.life",
+        "url": "https://irescue.life"
+      },
+      {
+        "@type": "Organization",
+        "name": "iRescue.life",
+        "url": "https://irescue.life",
+        "logo": "https://irescue.life/icon-512.png"
+      }
+    ]
+  } : null);
 
   if (!post) {
     return (

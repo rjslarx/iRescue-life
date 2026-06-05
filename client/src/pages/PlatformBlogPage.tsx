@@ -2,7 +2,7 @@ import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { useSEO } from "@/hooks/useSEO";
+import { useSEO, useJsonLd } from "@/hooks/useSEO";
 import { ArrowLeft, PawPrint, ArrowRight, Calendar } from "lucide-react";
 
 export default function PlatformBlogPage() {
@@ -10,6 +10,23 @@ export default function PlatformBlogPage() {
     title: "Blog - iRescue.life",
     description: "Tips, guides, and insights for animal rescue organizations. Learn how to streamline operations and save more lives.",
     siteName: "iRescue.life",
+  });
+
+  useJsonLd({
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "name": "iRescue.life",
+        "url": "https://irescue.life"
+      },
+      {
+        "@type": "Organization",
+        "name": "iRescue.life",
+        "url": "https://irescue.life",
+        "logo": "https://irescue.life/icon-512.png"
+      }
+    ]
   });
 
   const blogPosts = [

@@ -1,0 +1,30 @@
+# iRescue.life
+> Animal rescue management platform for rescues, adopters, fosters, volunteers, and donors.
+
+iRescue.life is a multi-tenant SaaS platform that gives animal rescue organizations a complete operational hub: adoption pipeline management, foster coordination, medical records, donor management, volunteer scheduling, fundraising campaigns, and a public-facing website with custom branding.
+
+## Important URLs
+
+- https://irescue.life/platform — Platform home and feature overview
+- https://irescue.life/platform/blog — Blog: tips and guides for animal rescue organizations
+- https://irescue.life/platform/pricing — Subscription tiers and pricing
+- https://irescue.life/sitemap.xml — Full sitemap
+
+## Tenant Public Pages
+
+Each rescue organization on iRescue.life has its own subdomain (e.g., https://rescuename.irescue.life) or custom domain with these public sections:
+
+- /{tenant}/animals — Adoptable animals listing and individual animal profiles
+- /{tenant}/donate — Public donation page for the rescue
+- /{tenant}/shop — Rescue shop (merchandise, raffle tickets, event tickets)
+- /{tenant}/foster — Foster application and information
+- /{tenant}/volunteer — Volunteer sign-up
+- /{tenant}/campaign/{id} — Individual fundraising campaign pages
+- /{tenant}/vip — VIP membership club
+- /{tenant}/wall-of-heroes — Public donor recognition wall
+
+## Notes
+
+- Tenant public pages under the paths listed above are fully public content intended for adopters, donors, volunteers, and supporters.
+- Dashboard, admin, and staff portal routes (e.g., /dashboard, /animals, /applications, /finance) require authentication and are not public content.
+- Platform marketing and blog content lives under /platform/* on the irescue.life root domain.

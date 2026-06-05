@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRoute, Link } from "wouter";
 import { useTenant } from "@/contexts/TenantContext";
-import { useSEO } from "@/hooks/useSEO";
+import { useSEO, useJsonLd } from "@/hooks/useSEO";
 import PublicHeader from "@/components/PublicHeader";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -81,6 +81,41 @@ export default function PublicProductPage() {
     }
     return product.variants.every(v => v.inventory <= 0);
   }, [product, selectedVariant]);
+
+  const tenantOrigin = typeof window !== 'undefined' ? window.location.origin : '';
+
+  useJsonLd(product ? {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Product",
+        "name": product.name,
+        "description": product.description || undefined,
+        "image": product.imageUrls && product.imageUrls.length > 0 ? product.imageUrls : undefined,
+        "sku": product.id,
+        "offers": {
+          "@type": "Offer",
+          "price": currentPrice.toFixed(2),
+          "priceCurrency": "USD",
+          "availability": isOutOfStock
+            ? "https://schema.org/OutOfStock"
+            : "https://schema.org/InStock",
+          "url": typeof window !== 'undefined' ? window.location.href : undefined
+        }
+      },
+      {
+        "@type": "WebSite",
+        "name": rescueName,
+        "url": tenantOrigin
+      },
+      {
+        "@type": "Organization",
+        "name": rescueName,
+        "url": tenantOrigin,
+        ...(tenant?.logoUrl ? { "logo": tenant.logoUrl } : {})
+      }
+    ]
+  } : null);
 
   const maxQuantity = useMemo(() => {
     if (!product) return 1;

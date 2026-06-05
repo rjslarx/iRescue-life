@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams } from "wouter";
-import { useSEO } from "@/hooks/useSEO";
+import { useSEO, useJsonLd } from "@/hooks/useSEO";
 import { apiRequest } from "@/lib/queryClient";
 import PublicHeader from "@/components/PublicHeader";
 import { Card, CardContent } from "@/components/ui/card";
@@ -136,6 +136,25 @@ export default function PublicCampaignPage() {
     siteName: rescueName,
     image: heroPhoto || undefined,
     type: 'website',
+  });
+
+  const tenantOriginCampaign = typeof window !== 'undefined' ? window.location.origin : '';
+
+  useJsonLd({
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "name": rescueName,
+        "url": tenantOriginCampaign
+      },
+      {
+        "@type": "Organization",
+        "name": rescueName,
+        "url": tenantOriginCampaign,
+        ...(tenant?.logoUrl ? { "logo": tenant.logoUrl } : {})
+      }
+    ]
   });
 
   if (loading) {
