@@ -7,9 +7,10 @@ import { X, Check } from "lucide-react";
 interface SignatureCanvasProps {
   onSignatureChange: (signatureData: string | null) => void;
   disabled?: boolean;
+  description?: string;
 }
 
-export function SignatureCanvas({ onSignatureChange, disabled = false }: SignatureCanvasProps) {
+export function SignatureCanvas({ onSignatureChange, disabled = false, description }: SignatureCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [signaturePad, setSignaturePad] = useState<SignaturePad | null>(null);
   const [isEmpty, setIsEmpty] = useState(true);
@@ -113,7 +114,7 @@ export function SignatureCanvas({ onSignatureChange, disabled = false }: Signatu
           Sign with your finger or mouse
         </p>
         <p className="text-xs text-muted-foreground">
-          Your signature will be included in the adoption contract
+          {description ?? "Your signature will be included in the adoption contract"}
         </p>
       </div>
 

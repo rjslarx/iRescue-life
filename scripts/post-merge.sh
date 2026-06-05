@@ -40,5 +40,14 @@ CREATE UNIQUE INDEX IF NOT EXISTS payments_tenant_stripe_intent_unique
   WHERE stripe_payment_intent_id IS NOT NULL;
 SQL
 
+# Task #240: Donation receipt authorized signature. Tenant-level columns that
+# store the signature image path + signer name/title stamped onto every receipt
+# PDF. Idempotent — ADD COLUMN IF NOT EXISTS is a no-op when already applied.
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' || echo "[post-merge] tenants receipt signature columns skipped (already applied or DB unreachable)."
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS receipt_signature_url text;
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS receipt_signature_name text;
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS receipt_signature_title text;
+SQL
+
 yes "" | timeout 60 npx drizzle-kit push --force || \
   echo "[post-merge] drizzle-kit push skipped (timeout or non-zero exit) — schema must be managed via SQL ALTER in the task."

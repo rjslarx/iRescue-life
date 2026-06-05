@@ -45,6 +45,7 @@ import type { Tenant } from "@shared/schema";
 import { ObjectUploader } from "@/components/ObjectUploader";
 import { RichTextEditor } from "@/components/RichTextEditor";
 import DashboardLayout from "@/components/DashboardLayout";
+import { ReceiptSignatureSettings } from "@/components/ReceiptSignatureSettings";
 
 const urlOrPathSchema = z.string().refine(
   (val) => val === "" || val.startsWith("/") || val.startsWith("http://") || val.startsWith("https://"),
@@ -1562,6 +1563,9 @@ export default function BrandingSettingsPage() {
               </Form>
             </CardContent>
           </Card>
+
+          {/* Donation Receipt Signature */}
+          <ReceiptSignatureSettings canEdit={canEdit} />
         </div>
       )}
     </DashboardLayout>

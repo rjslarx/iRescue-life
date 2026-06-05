@@ -311,6 +311,10 @@ export const tenants = pgTable("tenants", {
   supervisingVetName: text("supervising_vet_name"), // Supervising veterinarian name
   supervisingVetLicense: text("supervising_vet_license"), // Vet license number
   orgTaxEin: text("org_tax_ein"), // Tax EIN for receiving organizations
+  // Donation receipt authorized signature (saved once at org level, stamped on every receipt PDF)
+  receiptSignatureUrl: text("receipt_signature_url"), // Object storage path to the signature PNG (/objects/signatures/...)
+  receiptSignatureName: text("receipt_signature_name"), // Signer name, e.g. "Jane Doe"
+  receiptSignatureTitle: text("receipt_signature_title"), // Signer title, e.g. "Executive Director"
   
   jotformAdoptionUrl: text("jotform_adoption_url"),
   jotformFosterUrl: text("jotform_foster_url"),

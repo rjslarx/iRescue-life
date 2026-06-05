@@ -5,6 +5,39 @@ import { eq, and } from 'drizzle-orm';
 import { EmailService } from '../lib/email-service';
 import { TenantFileStorage } from '../lib/tenantFileStorage';
 import { publicSponsorLabel } from '@shared/expense-campaign-match';
+import { objectStorageClient } from '../objectStorage';
+
+/**
+ * Downloads a saved receipt-signature PNG from object storage so it can be
+ * embedded in the receipt PDF. Returns null (never throws) when the signature
+ * is missing or unreadable — the signature is best-effort decoration and must
+ * never break receipt generation.
+ */
+async function downloadSignaturePng(objectUrl: string): Promise<Buffer | null> {
+  try {
+    const privateObjectDir = process.env.PRIVATE_OBJECT_DIR;
+    if (!privateObjectDir) return null;
+    if (!objectUrl.includes('/signatures/')) return null;
+    const filename = objectUrl.split('/').pop();
+    if (!filename) return null;
+
+    const objectPath = `${privateObjectDir}/signatures/${filename}`;
+    const pathParts = objectPath.split('/');
+    const bucketName = pathParts[1];
+    const objectName = pathParts.slice(2).join('/');
+
+    const bucket = objectStorageClient.bucket(bucketName);
+    const file = bucket.file(objectName);
+    const [exists] = await file.exists();
+    if (!exists) return null;
+
+    const [buffer] = await file.download();
+    return Buffer.from(buffer);
+  } catch (err) {
+    console.error('[RECEIPT] Failed to download signature image:', err);
+    return null;
+  }
+}
 
 // IRS compliance: Vehicle-related keywords that require Form 1098-C
 const VEHICLE_KEYWORDS = ['car', 'boat', 'vehicle', 'trailer', 'automobile', 'truck', 'motorcycle', 'aircraft', 'airplane'];
@@ -566,6 +599,55 @@ export async function generateDonationReceipt(
 
     // Footer
     const footerY = 50;
+
+    // Authorized signature block (Task #240) — stamped only when the org saved one.
+    // Best-effort: a missing or unreadable signature must never break the receipt.
+    if (tenant.receiptSignatureUrl) {
+      try {
+        const sigBuffer = await downloadSignaturePng(tenant.receiptSignatureUrl);
+        if (sigBuffer) {
+          const sigImage = await pdfDoc.embedPng(sigBuffer);
+          const dims = sigImage.size();
+          const maxSigWidth = 180;
+          const maxSigHeight = 50;
+          const scale = Math.min(maxSigWidth / dims.width, maxSigHeight / dims.height, 1);
+          const drawW = dims.width * scale;
+          const drawH = dims.height * scale;
+
+          // Flow below the mission line, but keep the whole block above the footer divider.
+          let sigY = y - 60;
+          if (sigY < footerY + 70) sigY = footerY + 70;
+
+          page.drawImage(sigImage, { x: leftMargin, y: sigY, width: drawW, height: drawH });
+          page.drawLine({
+            start: { x: leftMargin, y: sigY - 4 },
+            end: { x: leftMargin + maxSigWidth, y: sigY - 4 },
+            thickness: 0.5,
+            color: rgb(0.6, 0.6, 0.6),
+          });
+
+          let labelY = sigY - 16;
+          page.drawText('Authorized Signature', {
+            x: leftMargin, y: labelY, size: 8, font: helvetica, color: mutedColor,
+          });
+          if (tenant.receiptSignatureName) {
+            labelY -= 13;
+            page.drawText(tenant.receiptSignatureName, {
+              x: leftMargin, y: labelY, size: 10, font: helveticaBold, color: textColor,
+            });
+          }
+          if (tenant.receiptSignatureTitle) {
+            labelY -= 12;
+            page.drawText(tenant.receiptSignatureTitle, {
+              x: leftMargin, y: labelY, size: 9, font: helvetica, color: mutedColor,
+            });
+          }
+        }
+      } catch (sigErr) {
+        console.error('[RECEIPT] Failed to embed signature on receipt, continuing without it:', sigErr);
+      }
+    }
+
     page.drawLine({
       start: { x: leftMargin, y: footerY + 20 },
       end: { x: rightMargin, y: footerY + 20 },
