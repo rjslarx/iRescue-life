@@ -228,3 +228,46 @@ test('(4) no signature on file → original receipt layout, no signature block',
 
   assert.ok(!pdfText.includes(SIGNATURE_LABEL), 'receipts without a saved signature show no block');
 });
+
+test('(5) content-dense in-kind receipt → signature flows onto its own page, never overlapping body text (Task #243)', async () => {
+  sigState = 'present';
+  await setTenantSignature({ url: SIGNATURE_URL, name: SIGNER_NAME, title: SIGNER_TITLE });
+
+  // Worst case: in-kind donation with a very long wrapped item description, a
+  // full multi-line mailing address, and a tribute. Under the old clamped
+  // placement this stamped the signature image on top of the mission line.
+  const longDescription = Array.from(
+    { length: 60 },
+    (_, i) => `assorted donated supply item number ${i + 1} including premium kibble and bedding`,
+  ).join(', ');
+
+  const donationId = await insertDonation({
+    donationType: 'in_kind_goods',
+    amount: null,
+    description: longDescription,
+    donorAddress: '12345 Very Long Memorial Boulevard Suite 6789',
+    donorCity: 'Springfield-on-the-Long-River',
+    donorState: 'Massachusetts',
+    donorZip: '01234-5678',
+    tributeKind: 'memory',
+    tributeName: 'Sir Reginald Fluffington III',
+  });
+
+  const result = await generateAndEmailReceipt({ donationId, tenantId });
+  assert.equal(result.success, true, result.message);
+  assert.ok(result.pdfBuffer && result.pdfBuffer.length > 0, 'expected a PDF buffer');
+
+  // The signature block (image + labels) must still be present...
+  const pdfText = await extractPdfText(result.pdfBuffer!);
+  assert.ok(pdfText.includes(SIGNATURE_LABEL), 'dense receipt still carries the signature block');
+  assert.ok(pdfText.includes(SIGNER_NAME), 'dense receipt still prints the signer name');
+
+  // ...but to avoid overlapping the body text it must flow onto a second page.
+  const { PDFDocument } = await import('pdf-lib');
+  const rendered = await PDFDocument.load(result.pdfBuffer!);
+  assert.equal(
+    rendered.getPageCount(),
+    2,
+    'dense receipt should push the signature onto a fresh page instead of stamping it over the text',
+  );
+});

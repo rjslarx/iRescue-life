@@ -602,6 +602,7 @@ export async function generateDonationReceipt(
 
     // Authorized signature block (Task #240) — stamped only when the org saved one.
     // Best-effort: a missing or unreadable signature must never break the receipt.
+    let sigPage = page;
     if (tenant.receiptSignatureUrl) {
       try {
         const sigBuffer = await downloadSignaturePng(tenant.receiptSignatureUrl);
@@ -614,12 +615,32 @@ export async function generateDonationReceipt(
           const drawW = dims.width * scale;
           const drawH = dims.height * scale;
 
-          // Flow below the mission line, but keep the whole block above the footer divider.
-          let sigY = y - 60;
-          if (sigY < footerY + 70) sigY = footerY + 70;
+          // Total vertical extent of the labels that sit below the signature line.
+          const labelsHeight =
+            16 +
+            (tenant.receiptSignatureName ? 13 : 0) +
+            (tenant.receiptSignatureTitle ? 12 : 0);
+          // Floor that keeps the labels clear of the footer divider (footerY + 20).
+          const minSigY = footerY + 20 + 8 + labelsHeight;
+          // Minimum gap to leave between the body text and the top of the image so
+          // the signature never visually collides with the text above it.
+          const minGapAboveSignature = 8;
 
-          page.drawImage(sigImage, { x: leftMargin, y: sigY, width: drawW, height: drawH });
-          page.drawLine({
+          // Preferred placement: a comfortable gap below the running text cursor,
+          // then tighten upward toward the footer floor if the page is dense.
+          let sigY = y - 24 - drawH;
+          if (sigY < minSigY) sigY = minSigY;
+
+          // If even the tightest in-bounds placement would still overlap the body
+          // text (image top crossing above the cursor), flow onto a fresh page
+          // rather than stamping the signature on top of the receipt content.
+          if (sigY + drawH > y - minGapAboveSignature) {
+            sigPage = pdfDoc.addPage([612, 792]);
+            sigY = height - 120 - drawH;
+          }
+
+          sigPage.drawImage(sigImage, { x: leftMargin, y: sigY, width: drawW, height: drawH });
+          sigPage.drawLine({
             start: { x: leftMargin, y: sigY - 4 },
             end: { x: leftMargin + maxSigWidth, y: sigY - 4 },
             thickness: 0.5,
@@ -627,18 +648,18 @@ export async function generateDonationReceipt(
           });
 
           let labelY = sigY - 16;
-          page.drawText('Authorized Signature', {
+          sigPage.drawText('Authorized Signature', {
             x: leftMargin, y: labelY, size: 8, font: helvetica, color: mutedColor,
           });
           if (tenant.receiptSignatureName) {
             labelY -= 13;
-            page.drawText(tenant.receiptSignatureName, {
+            sigPage.drawText(tenant.receiptSignatureName, {
               x: leftMargin, y: labelY, size: 10, font: helveticaBold, color: textColor,
             });
           }
           if (tenant.receiptSignatureTitle) {
             labelY -= 12;
-            page.drawText(tenant.receiptSignatureTitle, {
+            sigPage.drawText(tenant.receiptSignatureTitle, {
               x: leftMargin, y: labelY, size: 9, font: helvetica, color: mutedColor,
             });
           }
@@ -648,7 +669,7 @@ export async function generateDonationReceipt(
       }
     }
 
-    page.drawLine({
+    sigPage.drawLine({
       start: { x: leftMargin, y: footerY + 20 },
       end: { x: rightMargin, y: footerY + 20 },
       thickness: 0.5,
@@ -656,7 +677,7 @@ export async function generateDonationReceipt(
     });
 
     const footerText = `Generated on ${formatDate(new Date())} | Receipt ID: ${receiptNumber}`;
-    page.drawText(footerText, {
+    sigPage.drawText(footerText, {
       x: leftMargin,
       y: footerY,
       size: 8,
