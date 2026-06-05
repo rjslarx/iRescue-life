@@ -192,6 +192,32 @@ test('in-kind receipt email body shows the items + magic language but NO dollar 
   assert.doesNotMatch(html, ANY_DOLLAR_RE, 'in-kind receipt email must not contain any dollar amount');
 });
 
+test('in-kind receipt still generates when donorStatedValue is null (form no longer collects it)', async () => {
+  // The Record Donation form no longer captures a donor-stated value, so new
+  // in-kind donations arrive with donorStatedValue = null. Receipt generation
+  // must NOT gate on that field.
+  const donationId = await insertDonation({
+    donationType: 'in_kind_goods',
+    amount: 0,
+    description: IN_KIND_DESCRIPTION,
+    donorStatedValue: null,
+  });
+  sentEmails.length = 0;
+
+  const result = await generateAndEmailReceipt({ donationId, tenantId });
+  assert.equal(result.success, true, result.message);
+  assert.ok(result.pdfBuffer && result.pdfBuffer.length > 0, 'expected a PDF buffer');
+  assert.equal(sentEmails.length, 1, 'exactly one in-kind receipt email should have been sent');
+
+  const pdfText = await extractPdfText(result.pdfBuffer!);
+  assert.match(pdfText, /premium dog kibble/, 'PDF should describe the donated items');
+  assert.ok(
+    pdfText.includes(MAGIC_LANGUAGE),
+    'PDF must contain the IRS "no goods or services" disclosure statement',
+  );
+  assert.doesNotMatch(pdfText, ANY_DOLLAR_RE, 'in-kind receipt PDF must not contain any dollar amount');
+});
+
 test('companion: a cash receipt PDF + email DO include the dollar amount (and the IRS disclosure)', async () => {
   const donationId = await insertDonation({
     donationType: 'cash',

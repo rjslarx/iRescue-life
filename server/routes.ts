@@ -16103,22 +16103,18 @@ ${renderedHtml}
           if (!data.description || data.description.trim().length === 0) {
             return false;
           }
-          // IRS compliance: require email, full address, and donor-stated value for in-kind donations
+          // IRS compliance: require email and full address for in-kind donations
           if (!data.donorEmail) {
             return false;
           }
           if (!data.donorAddress || !data.donorCity || !data.donorState || !data.donorZip) {
             return false;
           }
-          // Donor-stated value is required for IRS-compliant receipts
-          if (!data.donorStatedValue || data.donorStatedValue <= 0) {
-            return false;
-          }
           return true;
         }
         return data.amount !== null && data.amount !== undefined && data.amount > 0;
       }, {
-        message: "Amount is required for cash/check donations. For in-kind: description, email, full address, and donor-stated value are required for IRS compliance.",
+        message: "Amount is required for cash/check donations. For in-kind: description, email, and full address are required for IRS compliance.",
       });
       
       const data = offlineDonationSchema.parse(req.body);

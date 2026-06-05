@@ -43,7 +43,6 @@ const formSchema = z.object({
   donationType: z.enum(["cash", "check", "in_kind_goods", "in_kind_services"]),
   amount: z.string().optional(),
   description: z.string().optional(),
-  donorStatedValue: z.string().optional(),
   estimatedValue: z.string().optional(),
   checkNumber: z.string().optional(),
   notes: z.string().optional(),
@@ -106,13 +105,6 @@ const formSchema = z.object({
         path: ["donorZip"],
       });
     }
-    if (!data.donorStatedValue || parseFloat(data.donorStatedValue) <= 0) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Donor-stated value is required for IRS-compliant receipt",
-        path: ["donorStatedValue"],
-      });
-    }
   }
 });
 
@@ -142,7 +134,6 @@ export function RecordOfflineDonationDialog({
       donationType: "cash",
       amount: "",
       description: "",
-      donorStatedValue: "",
       estimatedValue: "",
       checkNumber: "",
       notes: "",
@@ -166,7 +157,6 @@ export function RecordOfflineDonationDialog({
         donationType: data.donationType,
         amount: data.amount ? parseFloat(data.amount) : null,
         description: data.description || null,
-        donorStatedValue: data.donorStatedValue ? parseFloat(data.donorStatedValue) : null,
         estimatedValue: data.estimatedValue ? parseFloat(data.estimatedValue) : null,
         checkNumber: data.checkNumber || null,
         notes: data.notes || null,
@@ -410,60 +400,32 @@ export function RecordOfflineDonationDialog({
                   )}
                 />
 
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="donorStatedValue"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Donor Stated Value *</FormLabel>
-                        <FormControl>
-                          <div className="flex items-center gap-2">
-                            <span className="text-lg">$</span>
-                            <Input
-                              type="number"
-                              step="0.01"
-                              min="0.01"
-                              placeholder="0.00"
-                              {...field}
-                              data-testid="input-donor-stated-value"
-                            />
-                          </div>
-                        </FormControl>
-                        <FormDescription className="text-xs">
-                          Required for IRS-compliant receipt
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="estimatedValue"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Org Estimated Value</FormLabel>
-                        <FormControl>
-                          <div className="flex items-center gap-2">
-                            <span className="text-lg">$</span>
-                            <Input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              placeholder="0.00"
-                              {...field}
-                              data-testid="input-estimated-value"
-                            />
-                          </div>
-                        </FormControl>
-                        <FormDescription className="text-xs">
-                          Internal tracking only
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
+                <FormField
+                  control={form.control}
+                  name="estimatedValue"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Org Estimated Value</FormLabel>
+                      <FormControl>
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">$</span>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            placeholder="0.00"
+                            {...field}
+                            data-testid="input-estimated-value"
+                          />
+                        </div>
+                      </FormControl>
+                      <FormDescription className="text-xs">
+                        Internal tracking only
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </>
             )}
 

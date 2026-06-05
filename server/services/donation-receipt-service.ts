@@ -135,7 +135,9 @@ export async function generateDonationReceipt(
       }
     }
 
-    // IRS Safety Check: In-kind donations require email, address, and donor-stated value
+    // IRS Safety Check: In-kind donations require email and full mailing address.
+    // Donor-stated value is intentionally NOT required — the IRS prohibits the
+    // charity from stating a value on the receipt, so no dollar value is printed.
     const donationTypeForCheck = donation.donationType || 'cash';
     const inKindTypesForCheck = ['in_kind', 'in_kind_goods', 'in_kind_services'];
     if (inKindTypesForCheck.includes(donationTypeForCheck)) {
@@ -150,13 +152,6 @@ export async function generateDonationReceipt(
         return {
           success: false,
           message: 'In-kind donation receipts require full donor mailing address for IRS compliance. Please update the donation record.',
-          requiresManualReview: true
-        };
-      }
-      if (!(donation as any).donorStatedValue) {
-        return {
-          success: false,
-          message: 'In-kind donation receipts require donor-stated value for IRS compliance. Please update the donation record.',
           requiresManualReview: true
         };
       }
