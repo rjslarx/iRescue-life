@@ -727,6 +727,7 @@ export async function generateAndEmailReceipt(
       : ''}
   </div>
   ${matchLineHtml}
+  <p style="font-weight: bold; margin: 20px 0;">No goods or services were provided in exchange for this contribution.</p>
   <p>Your support makes a real difference in the lives of the animals we rescue and care for. Thank you for being part of our mission!</p>
   
   <p>With gratitude,<br/>
