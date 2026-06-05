@@ -1,0 +1,18 @@
+No, **the receipt absolutely should not have a dollar value on it**, regardless of what value the donor tells you.
+According to IRS regulations, it is the **exclusive responsibility of the donor** to establish and substantiate the fair market value of any in-kind (non-cash) donation for their tax deductions.
+For the rescue to remain fully IRS compliant, your official acknowledgment letter or receipt must stick to specific, objective facts.
+### What Your Receipt *Must* Include
+To be compliant for any donation valued at $250 or more (though it is best practice to give this for all donations), your written acknowledgment must contain:
+ 1. **The name of your organization.**
+ 2. **A detailed description** of the specific items donated (e.g., *"Five boxes of assorted medical syringes and three gently used large wire crates"*).
+ 3. **A explicit statement** confirming whether or not the organization provided any goods or services in exchange for the donation. (Standard language: *"No goods or services were provided in exchange for this contribution."*).
+ 4. **The date** the donation was received.
+### Why You Leave the Dollar Value Blank
+If the rescue prints a receipt stating an item is worth $500, and the IRS audits the donor and values it at $50, the rescue can be penalized for aiding and abetting an overstatement of a tax deduction. By keeping your receipts descriptive rather than financial, you protect both the rescue and the donor.
+### The One Big Exception: IRS Form 8283
+If a donor gives you an item (or a collection of similar items) that they value at **over $5,000**, the rules shift slightly:
+ * The donor must file **IRS Form 8283** (Noncash Charitable Contributions) with their taxes.
+ * They will bring this form to you, and an authorized officer of the rescue must sign **Section B, Part IV (Donee Acknowledgment)**.
+ * By signing this, you are *still* not validating the dollar value. You are simply signing to officially verify: *"Yes, the rescue received these exact items on this date, and we are a qualified 501(c)(3) organization."*
+> **A Crucial Rule for Reselling High-Value Items:** If you sign a Form 8283 for an item worth over $5,000, and the rescue turns around and sells it **within 3 years** of receiving it, you are required by law to file **IRS Form 8282** (Donee Information Return) within 125 days of the sale. This form reports the actual sale price back to the IRS and the donor.
+> 
