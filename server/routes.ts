@@ -8,7 +8,7 @@ import { requireAuth, requireRole, requireRoleOrPageAccess } from "./middleware/
 import { loginUser, createTenantWithAdmin, createUser } from "./services/auth";
 import { PushNotificationService } from "./services/push-notifications";
 import { db } from "./db";
-import { tenants, users, demoRequests, insertDemoRequestSchema, smsMessageLogs, emailEvents, animals, platformIntegrations, newsletterCampaigns, newsletterSubscribers, happyTails, animalMergeHistory, activityLogs, medicalExams, medicalPrescriptions, medicalBills, medicalFiles, animalNotes, applications, adoptionCheckoutSessions, adoptions, partnerOrganizations, microchipRecords, surrenderRequests, surrenderFormFields, insertSurrenderRequestSchema, insertSurrenderFormFieldSchema, inboundEmails, calendars, careInstructionSnippets, fosterApplications, volunteerApplications, adoptionContracts, fosterAgreementSessions, volunteerAgreementSessions, surrenderAgreementSessions, customFormSubmissions, customForms, placementAgreementSessions, medicationTasks, medicationPlans, fosterAnimals, messageQueue, contacts, campaignIntakeTokens, surgeryDayRequests, surgeryDayRequestAnimals, formSettings } from "@shared/schema";
+import { tenants, users, demoRequests, insertDemoRequestSchema, smsMessageLogs, emailEvents, animals, platformIntegrations, newsletterCampaigns, newsletterSubscribers, happyTails, animalMergeHistory, activityLogs, medicalExams, medicalPrescriptions, medicalBills, medicalFiles, animalNotes, applications, adoptionCheckoutSessions, adoptions, partnerOrganizations, microchipRecords, surrenderRequests, surrenderFormFields, insertSurrenderRequestSchema, insertSurrenderFormFieldSchema, inboundEmails, calendars, careInstructionSnippets, fosterApplications, volunteerApplications, adoptionContracts, fosterAgreementSessions, volunteerAgreementSessions, surrenderAgreementSessions, customFormSubmissions, customForms, placementAgreementSessions, medicationTasks, medicationPlans, fosterAnimals, messageQueue, contacts, campaignIntakeTokens, surgeryDayRequests, surgeryDayRequestAnimals, formSettings, customPages, shopProducts, peerCampaigns, expenseCampaigns, votingContests, donationLinks as donationLinksTable } from "@shared/schema";
 import { eq, and, desc, asc, sql, inArray, lt, lte, gte, not, notInArray, or, ne, isNull, isNotNull } from "drizzle-orm";
 import { z } from "zod";
 import { authLimiter, signupLimiter, passwordResetLimiter, emailLimiter } from "./config/security";
@@ -533,62 +533,144 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   /**
    * GET /robots.txt
-   * Serve robots.txt for SEO - tells search engines what to crawl
+   * Serve robots.txt for SEO - host-aware for tenant custom domains and subdomains
    */
   app.get('/robots.txt', (req, res) => {
-    const robotsTxt = `# robots.txt for iRescue.life
-# https://irescue.life
+    const PLATFORM_DOMAIN = 'irescue.life';
+    const hostname = (req.get('host') || '').split(':')[0].replace(/^www\./i, '').toLowerCase();
+    const tenant = req.tenant;
+
+    // If a tenant is resolved and we're NOT on the main platform domain, serve tenant-specific robots.txt.
+    // req.tenant is only set for /robots.txt when the host itself resolves a tenant
+    // (custom domain or legacy subdomain). Path-based tenants on irescue.life don't produce
+    // a tenant context for this root-level URL.
+    if (tenant && hostname !== PLATFORM_DOMAIN) {
+      const isCustomDomain = !!(tenant.customDomain && tenant.customDomainVerified &&
+        hostname === tenant.customDomain.toLowerCase());
+      const tenantHost = isCustomDomain ? tenant.customDomain! : hostname;
+      const protocol = 'https';
+
+      const robotsTxt = `# robots.txt for ${tenant.name}
+# ${protocol}://${tenantHost}
 
 User-agent: *
 
 # Allow public pages
 Allow: /
+Allow: /animals
+Allow: /adopt
+Allow: /donate
+Allow: /volunteer
+Allow: /become-a-foster
+Allow: /foster
+Allow: /surrender
+Allow: /contact
+Allow: /wishlist
+Allow: /shop
+Allow: /vip-club
+Allow: /wall-of-heroes
+Allow: /transparency
+Allow: /fundraisers
+Allow: /fundraise
+Allow: /give
+
+# Block internal/admin routes
+Disallow: /dashboard
+Disallow: /login
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /accept-invitation
+Disallow: /my-pets
+Disallow: /adoption-checkout/
+Disallow: /foster-agreement/
+Disallow: /surrender-agreement/
+Disallow: /placement-agreement/
+Disallow: /intake/
+Disallow: /confirm/
+Disallow: /run-sheet/
+Disallow: /form/
+Disallow: /forms/
+
+# Block API endpoints
+Disallow: /api/
+
+# Block utility routes
+Disallow: /manifest.json
+
+# Sitemap location
+Sitemap: ${protocol}://${tenantHost}/sitemap.xml
+
+# Crawl-delay for politeness
+Crawl-delay: 1
+`;
+
+      res.setHeader('Content-Type', 'text/plain');
+      return res.send(robotsTxt);
+    }
+
+    // Platform-level robots.txt for irescue.life (path-based routing)
+    const robotsTxt = `# robots.txt for iRescue.life
+# https://irescue.life
+
+User-agent: *
+
+# Allow platform pages
+Allow: /
 Allow: /platform
+Allow: /platform/pricing
 Allow: /platform/privacy
 Allow: /platform/terms
 Allow: /platform/security
 Allow: /platform/blog
 Allow: /platform/integrations
 
-# Allow tenant public pages (path-based routing)
+# Allow tenant public pages (path-based routing: /subdomain/page)
 Allow: /*/animals
-Allow: /*/events
-Allow: /*/happy-tails
+Allow: /*/adopt
 Allow: /*/donate
 Allow: /*/foster
+Allow: /*/become-a-foster
 Allow: /*/volunteer
 Allow: /*/surrender
 Allow: /*/wishlist
 Allow: /*/contact
 Allow: /*/shop
+Allow: /*/vip-club
+Allow: /*/wall-of-heroes
+Allow: /*/transparency
+Allow: /*/fundraisers
+Allow: /*/fundraise
+Allow: /*/give
 
 # Block internal/admin routes
 Disallow: /*/dashboard
-Disallow: /*/admin
-Disallow: /*/settings
-Disallow: /*/team
-Disallow: /*/communications
-Disallow: /*/documents
-Disallow: /*/analytics
-Disallow: /*/finance
-Disallow: /*/grants
-Disallow: /*/applications
-Disallow: /*/medical
-Disallow: /*/kennels
-
-# Block API endpoints
-Disallow: /api/
-
-# Block authentication pages
 Disallow: /*/login
 Disallow: /*/forgot-password
 Disallow: /*/reset-password
 Disallow: /*/accept-invitation
+Disallow: /*/my-pets
+Disallow: /*/adoption-checkout/
+Disallow: /*/foster-agreement/
+Disallow: /*/surrender-agreement/
+Disallow: /*/placement-agreement/
+Disallow: /*/intake/
+Disallow: /*/confirm/
+Disallow: /*/form/
+Disallow: /*/forms/
+Disallow: /*/run-sheet/
+
+# Block API endpoints
+Disallow: /api/
+
+# Block platform auth/admin pages
 Disallow: /platform/signup
 Disallow: /platform/login
 Disallow: /platform/admin
+Disallow: /platform/dashboard
+Disallow: /platform/tenants
+Disallow: /platform/users
 
-# Block utility routes (but allow /objects/ for social media image sharing)
+# Block utility routes
 Disallow: /manifest.json
 
 # Sitemap location
@@ -604,78 +686,167 @@ Crawl-delay: 1
 
   /**
    * GET /sitemap.xml
-   * Dynamic sitemap generation for SEO
-   * Includes platform pages and all active tenant public pages
+   * Dynamic, host-aware sitemap generation for SEO.
+   * - On the main irescue.life domain: platform pages + path-based tenant pages (static + dynamic slugs).
+   * - On a tenant custom domain or legacy subdomain: root-level pages for that tenant only.
    */
   app.get('/sitemap.xml', async (req, res, next) => {
     try {
-      const baseUrl = 'https://irescue.life';
+      const PLATFORM_DOMAIN = 'irescue.life';
+      const hostname = (req.get('host') || '').split(':')[0].replace(/^www\./i, '').toLowerCase();
+      const tenant = req.tenant;
       const today = new Date().toISOString().split('T')[0];
+      const protocol = 'https';
 
-      // Platform static pages
+      const xmlUrlFull = (loc: string, changefreq: string, priority: string) =>
+        `  <url>\n    <loc>${loc}</loc>\n    <lastmod>${today}</lastmod>\n    <changefreq>${changefreq}</changefreq>\n    <priority>${priority}</priority>\n  </url>\n`;
+
+      const xmlUrlBasic = (loc: string) =>
+        `  <url>\n    <loc>${loc}</loc>\n    <lastmod>${today}</lastmod>\n  </url>\n`;
+
+      // Helper: fetch all public dynamic URLs for a given tenant ID
+      async function fetchTenantDynamicUrls(tenantId: string, base: string): Promise<string> {
+        const [custPages, activeShopItems, activePeerCampaigns, activeExpenseCampaigns, activeContests, activeDonationCampaigns] =
+          await Promise.all([
+            db.select({ slug: customPages.slug })
+              .from(customPages)
+              .where(and(eq(customPages.tenantId, tenantId), eq(customPages.isPublished, true))),
+            db.select({ slug: shopProducts.slug })
+              .from(shopProducts)
+              .where(and(eq(shopProducts.tenantId, tenantId), eq(shopProducts.status, 'active'))),
+            db.select({ slug: peerCampaigns.slug })
+              .from(peerCampaigns)
+              .where(and(eq(peerCampaigns.tenantId, tenantId), eq(peerCampaigns.status, 'active'))),
+            db.select({ slug: expenseCampaigns.slug })
+              .from(expenseCampaigns)
+              .where(and(eq(expenseCampaigns.tenantId, tenantId), eq(expenseCampaigns.status, 'active'))),
+            db.select({ slug: votingContests.slug })
+              .from(votingContests)
+              .where(and(eq(votingContests.tenantId, tenantId), eq(votingContests.isActive, true))),
+            // donationLinksTable backs /campaigns/:campaignId (public campaign pages)
+            db.select({ id: donationLinksTable.id })
+              .from(donationLinksTable)
+              .where(and(eq(donationLinksTable.tenantId, tenantId), eq(donationLinksTable.isActive, true))),
+          ]);
+
+        let xml = '';
+        for (const p of custPages) xml += xmlUrlBasic(`${base}/${p.slug}`);
+        for (const p of activeShopItems) xml += xmlUrlBasic(`${base}/shop/${p.slug}`);
+        for (const p of activePeerCampaigns) {
+          // Each peer campaign exposes two public URLs:
+          // /fundraise/:slug (individual peer page) and /campaign/:slug (campaign landing)
+          xml += xmlUrlBasic(`${base}/fundraise/${p.slug}`);
+          xml += xmlUrlBasic(`${base}/campaign/${p.slug}`);
+        }
+        for (const p of activeExpenseCampaigns) xml += xmlUrlBasic(`${base}/expense-campaign/${p.slug}`);
+        for (const p of activeContests) xml += xmlUrlBasic(`${base}/contest/${p.slug}`);
+        for (const p of activeDonationCampaigns) xml += xmlUrlBasic(`${base}/campaigns/${p.id}`);
+        return xml;
+      }
+
+      // ── Tenant-specific sitemap (custom domain or legacy subdomain) ──────────
+      if (tenant && hostname !== PLATFORM_DOMAIN) {
+        const isCustomDomain = !!(tenant.customDomain && tenant.customDomainVerified &&
+          hostname === tenant.customDomain.toLowerCase());
+        const tenantHost = isCustomDomain ? tenant.customDomain! : hostname;
+        const base = `${protocol}://${tenantHost}`;
+
+        // Static public paths that exist for every tenant
+        const corePaths = [
+          { path: '', priority: '0.8', changefreq: 'daily' },
+          { path: '/animals', priority: '0.9', changefreq: 'daily' },
+          { path: '/adopt', priority: '0.9', changefreq: 'daily' },
+          { path: '/donate', priority: '0.7', changefreq: 'monthly' },
+          { path: '/foster', priority: '0.6', changefreq: 'monthly' },
+          { path: '/become-a-foster', priority: '0.6', changefreq: 'monthly' },
+          { path: '/volunteer', priority: '0.6', changefreq: 'monthly' },
+          { path: '/surrender', priority: '0.5', changefreq: 'monthly' },
+          { path: '/contact', priority: '0.4', changefreq: 'monthly' },
+          { path: '/wishlist', priority: '0.5', changefreq: 'weekly' },
+          { path: '/shop', priority: '0.5', changefreq: 'weekly' },
+          { path: '/vip-club', priority: '0.5', changefreq: 'monthly' },
+          { path: '/wall-of-heroes', priority: '0.5', changefreq: 'weekly' },
+          { path: '/transparency', priority: '0.4', changefreq: 'monthly' },
+          { path: '/fundraisers', priority: '0.6', changefreq: 'weekly' },
+          { path: '/give', priority: '0.5', changefreq: 'monthly' },
+        ];
+
+        let sitemap = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n`;
+        for (const p of corePaths) sitemap += xmlUrlFull(`${base}${p.path}`, p.changefreq, p.priority);
+        sitemap += await fetchTenantDynamicUrls(tenant.id, base);
+        sitemap += `</urlset>`;
+
+        res.setHeader('Content-Type', 'application/xml');
+        return res.send(sitemap);
+      }
+
+      // ── Platform sitemap for irescue.life (path-based routing) ───────────────
+      const platformBase = `${protocol}://${PLATFORM_DOMAIN}`;
+
+      // Known blog post slugs — keep in sync with PlatformBlogPage.tsx
+      const blogPostSlugs = [
+        'google-for-nonprofits-for-animal-rescues',
+      ];
+
       const platformPages = [
         { loc: '/', priority: '1.0', changefreq: 'weekly' },
         { loc: '/platform', priority: '1.0', changefreq: 'weekly' },
+        { loc: '/platform/pricing', priority: '0.8', changefreq: 'monthly' },
         { loc: '/platform/privacy', priority: '0.3', changefreq: 'monthly' },
         { loc: '/platform/terms', priority: '0.3', changefreq: 'monthly' },
         { loc: '/platform/security', priority: '0.4', changefreq: 'monthly' },
         { loc: '/platform/blog', priority: '0.7', changefreq: 'weekly' },
         { loc: '/platform/integrations', priority: '0.6', changefreq: 'monthly' },
+        ...blogPostSlugs.map(slug => ({ loc: `/platform/blog/${slug}`, priority: '0.6', changefreq: 'monthly' as const })),
       ];
 
-      // Get all active tenants for tenant-specific pages
-      const activeTenants = await db
-        .select({
-          subdomain: tenants.subdomain,
-          isActive: tenants.isActive,
-        })
+      // Only include path-based tenants (no verified custom domain) — their canonical
+      // URLs live on irescue.life. Tenants with custom domains are excluded to avoid
+      // duplicate-content signals (their canonical is on their own domain).
+      const pathBasedTenants = await db
+        .select({ id: tenants.id, subdomain: tenants.subdomain })
         .from(tenants)
-        .where(eq(tenants.isActive, true));
+        .where(and(
+          eq(tenants.isActive, true),
+          or(isNull(tenants.customDomain), eq(tenants.customDomainVerified, false)),
+        ));
 
-      // Tenant public pages (for each active tenant)
+      // Static public paths guaranteed to exist for every tenant
       const tenantPublicPaths = [
-        { path: '', priority: '0.8', changefreq: 'daily' }, // Home
+        { path: '', priority: '0.8', changefreq: 'daily' },
         { path: '/animals', priority: '0.9', changefreq: 'daily' },
-        { path: '/events', priority: '0.6', changefreq: 'weekly' },
-        { path: '/happy-tails', priority: '0.5', changefreq: 'weekly' },
+        { path: '/adopt', priority: '0.9', changefreq: 'daily' },
         { path: '/donate', priority: '0.7', changefreq: 'monthly' },
         { path: '/foster', priority: '0.6', changefreq: 'monthly' },
+        { path: '/become-a-foster', priority: '0.6', changefreq: 'monthly' },
         { path: '/volunteer', priority: '0.6', changefreq: 'monthly' },
-        { path: '/wishlist', priority: '0.5', changefreq: 'weekly' },
+        { path: '/surrender', priority: '0.5', changefreq: 'monthly' },
         { path: '/contact', priority: '0.4', changefreq: 'monthly' },
+        { path: '/wishlist', priority: '0.5', changefreq: 'weekly' },
+        { path: '/shop', priority: '0.5', changefreq: 'weekly' },
+        { path: '/vip-club', priority: '0.5', changefreq: 'monthly' },
+        { path: '/wall-of-heroes', priority: '0.5', changefreq: 'weekly' },
+        { path: '/transparency', priority: '0.4', changefreq: 'monthly' },
+        { path: '/fundraisers', priority: '0.6', changefreq: 'weekly' },
+        { path: '/give', priority: '0.5', changefreq: 'monthly' },
       ];
 
-      // Build sitemap XML
-      let sitemap = `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-`;
+      let sitemap = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n`;
 
-      // Add platform pages
       for (const page of platformPages) {
-        sitemap += `  <url>
-    <loc>${baseUrl}${page.loc}</loc>
-    <lastmod>${today}</lastmod>
-    <changefreq>${page.changefreq}</changefreq>
-    <priority>${page.priority}</priority>
-  </url>
-`;
+        sitemap += xmlUrlFull(`${platformBase}${page.loc}`, page.changefreq, page.priority);
       }
 
-      // Add tenant pages (path-based routing: /subdomain/page)
-      for (const tenant of activeTenants) {
-        for (const pagePath of tenantPublicPaths) {
-          sitemap += `  <url>
-    <loc>${baseUrl}/${tenant.subdomain}${pagePath.path}</loc>
-    <lastmod>${today}</lastmod>
-    <changefreq>${pagePath.changefreq}</changefreq>
-    <priority>${pagePath.priority}</priority>
-  </url>
-`;
+      for (const t of pathBasedTenants) {
+        const tenantBase = `${platformBase}/${t.subdomain}`;
+        for (const p of tenantPublicPaths) {
+          sitemap += xmlUrlFull(`${tenantBase}${p.path}`, p.changefreq, p.priority);
         }
+        // Dynamic content: custom pages, shop products, peer campaigns, expense campaigns, contests
+        sitemap += await fetchTenantDynamicUrls(t.id, tenantBase);
       }
 
       sitemap += `</urlset>`;
-
       res.setHeader('Content-Type', 'application/xml');
       res.send(sitemap);
     } catch (error) {

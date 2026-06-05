@@ -67,13 +67,19 @@ export async function injectOGTags(req: Request, res: Response, next: NextFuncti
     url = url.slice(tenantPrefix.length) || '/';
   }
 
+  const PLATFORM_DOMAIN = 'irescue.life';
   const hostname = req.get('host') || '';
-  const isCustomDomain = tenant.customDomain && tenant.customDomainVerified &&
-    hostname.replace(/^www\./i, '').toLowerCase() === tenant.customDomain.toLowerCase();
+  const normalizedHostname = hostname.split(':')[0].replace(/^www\./i, '').toLowerCase();
+  const isCustomDomain = !!(tenant.customDomain && tenant.customDomainVerified &&
+    normalizedHostname === tenant.customDomain.toLowerCase());
+  // Legacy subdomain tenants: e.g. demo.irescue.life — the tenant prefix is NOT in the URL path
+  const isLegacySubdomain = !isCustomDomain &&
+    normalizedHostname !== PLATFORM_DOMAIN &&
+    normalizedHostname.endsWith('.' + PLATFORM_DOMAIN);
   const protocol = 'https';
   const baseUrl = isCustomDomain
     ? `${protocol}://${tenant.customDomain}`
-    : `${protocol}://${req.get('host')}`;
+    : `${protocol}://${hostname}`;
 
   const resolveImageUrl = (imgUrl: string | null | undefined): string | null => {
     if (!imgUrl) return null;
@@ -453,9 +459,16 @@ export async function injectOGTags(req: Request, res: Response, next: NextFuncti
       console.log(`[OG-TAGS] Using tenant fallback for: ${url} (tenant=${tenant.subdomain})`);
     }
 
+    // Build canonical URL based on the resolved routing mode:
+    // - Custom domain: canonical lives on the tenant's verified custom domain
+    // - Legacy subdomain (demo.irescue.life): canonical is at the root of the subdomain host,
+    //   with no extra /{tenant.subdomain} path segment
+    // - Path-based (irescue.life/demo/...): canonical includes the tenant subdomain prefix
     const canonicalUrl = isCustomDomain
       ? `${protocol}://${tenant.customDomain}${url}`
-      : `${protocol}://${req.get('host')}/${tenant.subdomain}${url}`;
+      : isLegacySubdomain
+        ? `${protocol}://${hostname}${url}`
+        : `${protocol}://${hostname}/${tenant.subdomain}${url}`;
 
     let ogImage = ogData.image;
     const ogImageOriginal = ogData.image;
