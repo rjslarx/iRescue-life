@@ -468,18 +468,10 @@ export async function generateDonationReceipt(
         y -= 25;
       }
 
-      // Show donor-stated value if provided (IRS requirement - use donor's valuation, not org estimate)
-      const donorStatedValue = (donation as any).donorStatedValue;
-      if (donorStatedValue) {
-        page.drawText(`Donor-Stated Value: ${formatCurrency(donorStatedValue)}`, {
-          x: leftMargin,
-          y,
-          size: 11,
-          font: helveticaBold,
-          color: textColor,
-        });
-        y -= 18;
-      }
+      // IRS requirement: the rescue's receipt must NOT state a dollar value for
+      // in-kind items. Establishing fair market value is the donor's sole
+      // responsibility. The donor-stated value remains stored on the donation
+      // record for the rescue's internal tracking, but is never printed here.
 
       // Note about valuation (IRS requirement for in-kind)
       page.drawText('Note: The value of in-kind donations is determined by the donor.', {
@@ -729,8 +721,7 @@ export async function generateAndEmailReceipt(
     <p style="margin: 5px 0;"><strong>Donation Date:</strong> ${formatDate(donation.date)}</p>
     ${!isInKind 
       ? `<p style="margin: 5px 0;"><strong>Amount:</strong> ${formatCurrency(donation.amount)}</p>` 
-      : `<p style="margin: 5px 0;"><strong>Items:</strong> ${donation.description || 'In-kind donation'}</p>
-         ${(donation as any).donorStatedValue ? `<p style="margin: 5px 0;"><strong>Donor-Stated Value:</strong> ${formatCurrency((donation as any).donorStatedValue)}</p>` : ''}`}
+      : `<p style="margin: 5px 0;"><strong>Items:</strong> ${donation.description || 'In-kind donation'}</p>`}
     ${donation.tributeKind && donation.tributeName
       ? `<p style="margin: 5px 0;"><strong>${donation.tributeKind === 'memory' ? 'In loving memory of' : 'In honor of'}:</strong> ${donation.tributeName}</p>`
       : ''}
