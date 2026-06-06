@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -18,7 +19,15 @@ import {
   Heart,
   Play,
   Sparkles,
+  ExternalLink,
 } from "lucide-react";
+
+interface FeaturedRescue {
+  name: string;
+  domain: string;
+  url: string;
+  logoUrl: string | null;
+}
 
 import dualPhoneMockup from "@assets/generated_images/dual_phone_app_mockup.png";
 
@@ -37,6 +46,11 @@ export default function PlatformLandingPage() {
   const [privacyPolicyModalOpen, setPrivacyPolicyModalOpen] = useState(false);
   const [termsOfServiceModalOpen, setTermsOfServiceModalOpen] = useState(false);
   const [cookiePolicyModalOpen, setCookiePolicyModalOpen] = useState(false);
+
+  const { data: featuredRescues = [], isLoading: rescuesLoading } = useQuery<FeaturedRescue[]>({
+    queryKey: ["/api/platform/featured-rescues"],
+  });
+  const [failedLogos, setFailedLogos] = useState<Record<string, boolean>>({});
 
   useSEO({
     title: "iRescue.life - Complete Animal Rescue Management Platform",
@@ -193,6 +207,81 @@ export default function PlatformLandingPage() {
           </div>
         </div>
       </section>
+
+      {/* ======== Featured Rescues ======== */}
+      {(rescuesLoading || featuredRescues.length > 0) && (
+        <section className="py-12 sm:py-16 lg:py-20" style={{ backgroundColor: TEAL_LIGHT }} data-testid="section-featured-rescues">
+          <div className="container max-w-6xl mx-auto px-4 sm:px-6">
+            <div className="text-center space-y-3 mb-10">
+              <p className="text-sm font-semibold uppercase tracking-wider" style={{ color: TEAL }}>Trusted By Rescues</p>
+              <h2 className="font-display text-2xl sm:text-3xl lg:text-4xl font-bold" data-testid="heading-featured-rescues">
+                Rescues Already Saving Lives on iRescue
+              </h2>
+              <p className="text-muted-foreground max-w-xl mx-auto">
+                Real organizations using iRescue.life every day. Visit their sites to see them in action.
+              </p>
+            </div>
+
+            {rescuesLoading ? (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {[0, 1, 2].map((i) => (
+                  <Card key={i} className="p-6 animate-pulse" data-testid={`skeleton-rescue-${i}`}>
+                    <div className="h-16 w-16 rounded-md bg-muted mx-auto mb-4" />
+                    <div className="h-4 w-3/4 bg-muted rounded mx-auto mb-3" />
+                    <div className="h-8 w-28 bg-muted rounded mx-auto" />
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {featuredRescues.map((rescue) => (
+                  <Card
+                    key={rescue.domain}
+                    className="p-6 flex flex-col items-center text-center gap-4"
+                    data-testid={`card-rescue-${rescue.domain}`}
+                  >
+                    {rescue.logoUrl && !failedLogos[rescue.domain] ? (
+                      <img
+                        src={rescue.logoUrl}
+                        alt={`${rescue.name} logo`}
+                        className="h-16 w-16 object-contain rounded-md"
+                        loading="lazy"
+                        onError={() => setFailedLogos((prev) => ({ ...prev, [rescue.domain]: true }))}
+                        data-testid={`img-rescue-logo-${rescue.domain}`}
+                      />
+                    ) : (
+                      <div
+                        className="h-16 w-16 rounded-md flex items-center justify-center"
+                        style={{ backgroundColor: TEAL_BADGE }}
+                        aria-hidden="true"
+                      >
+                        <PawPrint className="h-8 w-8" style={{ color: TEAL }} />
+                      </div>
+                    )}
+
+                    {/* Tile reserves space for an optional testimonial quote (added later). */}
+                    <h3 className="font-display font-semibold text-lg leading-snug flex-1" data-testid={`text-rescue-name-${rescue.domain}`}>
+                      {rescue.name}
+                    </h3>
+
+                    <Button
+                      asChild
+                      variant="outline"
+                      size="sm"
+                      data-testid={`link-rescue-visit-${rescue.domain}`}
+                    >
+                      <a href={rescue.url} target="_blank" rel="noopener noreferrer">
+                        Visit Site
+                        <ExternalLink className="ml-1.5 h-3.5 w-3.5" />
+                      </a>
+                    </Button>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
 
       {/* ======== Final CTA ======== */}
       <section className="py-12 sm:py-16" style={{ backgroundColor: TEAL }}>

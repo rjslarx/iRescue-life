@@ -9,7 +9,8 @@ import {
 } from '@shared/schema';
 import { requireAuth } from '../middleware/auth';
 import { requirePlatformAdmin } from '../middleware/tenant';
-import { eq, count, gte, and, sql, desc, or, isNull, lte } from 'drizzle-orm';
+import { eq, count, gte, and, sql, desc, or, isNull, isNotNull, lte } from 'drizzle-orm';
+import { FEATURED_RESCUES } from '../lib/featured-rescues';
 import { createAuditLog } from '../audit';
 import { hash } from 'bcrypt';
 import Stripe from 'stripe';
@@ -374,6 +375,60 @@ router.post('/finalize-subscription', async (req, res, next) => {
     }
     
     // Generic error handler
+    next(error);
+  }
+});
+
+/**
+ * GET /api/platform/featured-rescues
+ * Returns the curated list of rescues featured on the public landing page,
+ * best-effort enriched with each tenant's logo when a tenant row matches the
+ * rescue's domain (via customDomain or customDomainAliases).
+ * PUBLIC ROUTE - No auth required. Returns only public display fields.
+ */
+router.get('/featured-rescues', async (req, res, next) => {
+  try {
+    const normalizeDomain = (d: string) =>
+      d.trim().toLowerCase().replace(/^www\./, '');
+    const domains = FEATURED_RESCUES.map((r) => normalizeDomain(r.domain));
+
+    // Best-effort logo lookup: fetch tenants that have a custom domain set and
+    // match any featured domain against customDomain or customDomainAliases.
+    const logoByDomain = new Map<string, string>();
+    if (domains.length > 0) {
+      const candidates = await db
+        .select({
+          logoUrl: tenants.logoUrl,
+          customDomain: tenants.customDomain,
+          customDomainAliases: tenants.customDomainAliases,
+        })
+        .from(tenants)
+        .where(isNotNull(tenants.logoUrl));
+
+      for (const row of candidates) {
+        if (!row.logoUrl) continue;
+        const tenantDomains: string[] = [];
+        if (row.customDomain) tenantDomains.push(normalizeDomain(row.customDomain));
+        for (const alias of row.customDomainAliases ?? []) {
+          if (alias) tenantDomains.push(normalizeDomain(alias));
+        }
+        for (const d of tenantDomains) {
+          if (domains.includes(d) && !logoByDomain.has(d)) {
+            logoByDomain.set(d, row.logoUrl);
+          }
+        }
+      }
+    }
+
+    const result = FEATURED_RESCUES.map((r) => ({
+      name: r.name,
+      domain: r.domain,
+      url: `https://${r.domain}`,
+      logoUrl: logoByDomain.get(normalizeDomain(r.domain)) ?? null,
+    }));
+
+    res.json(result);
+  } catch (error) {
     next(error);
   }
 });
