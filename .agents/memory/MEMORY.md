@@ -1,3 +1,4 @@
 - [E-signature agreements](e-signature-agreements.md) — token-based foster/surrender/adoption sign flows; idempotency + signature-input + sandbox tsc/db:push gotchas.
+- [Platform email quota reset](email-quota-reset.md) — platform-key email is capped (emailsSentThisMonth/emailQuotaLimit); "not configured" errors often mean quota exhausted; monthly rollover is a scheduled job.
 - [Tenant settings data source](tenant-settings-data-source.md) — new tenants columns aren't in req.tenant/`/api/tenant`; read full row via `/api/tenant/settings`.
 - [In-kind donation receipt compliance](in-kind-donation-receipts.md) — IRS gating (no value on receipt; required fields) lives in 3 layers that must stay in lockstep: form, offline-donation route, receipt-service.

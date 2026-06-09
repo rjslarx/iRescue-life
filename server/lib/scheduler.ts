@@ -4,6 +4,7 @@ import { runMedicalRemindersForAllTenants } from "./medical-reminders";
 import { runOnboardingEmailsJob } from "./onboarding-emails";
 import { runImpactStatsCalculation, runReviewRequestEmails } from "./compliance-jobs";
 import { runRetentionEmailsJob } from "./retention-emails";
+import { resetMonthlyEmailQuotas } from "./email-quota-reset";
 import { VolunteerThresholdAlertService } from "../services/volunteer-threshold-alerts";
 import { VolunteerScheduleDigestService } from "../services/volunteer-schedule-digest";
 import { VolunteerRecruitmentSmsService } from "../services/volunteer-recruitment-sms";
@@ -192,6 +193,42 @@ export function initializeScheduler() {
   });
 
   console.log(`✓ Retention emails scheduled for: ${retentionEmailSchedule} (UTC)`);
+
+  // Schedule monthly email quota reset (self-healing, runs daily).
+  // Resets emailsSentThisMonth for any tenant whose last reset predates the
+  // current calendar month, so platform-email quotas (default 500/mo) roll over
+  // instead of accumulating forever and permanently locking tenants out.
+  // "0 0 * * *" means: at 00:00 every day (start of day, UTC).
+  const emailQuotaResetSchedule = process.env.EMAIL_QUOTA_RESET_SCHEDULE || "0 0 * * *";
+
+  cron.schedule(emailQuotaResetSchedule, async () => {
+    try {
+      const result = await resetMonthlyEmailQuotas();
+      if (result.resetCount > 0) {
+        console.log(`✓ Email quota reset: ${result.resetCount} tenant(s) rolled over to a new month`);
+      }
+    } catch (error) {
+      console.error(`❌ Email quota reset failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }, {
+    timezone: "UTC"
+  });
+
+  console.log(`✓ Email quota reset scheduled for: ${emailQuotaResetSchedule} (UTC)`);
+
+  // Self-heal on boot: immediately roll over any tenant overdue for a monthly
+  // reset, so a deploy/restart unblocks tenants that already hit their cap
+  // instead of waiting for the next scheduled run.
+  void (async () => {
+    try {
+      const result = await resetMonthlyEmailQuotas();
+      if (result.resetCount > 0) {
+        console.log(`✓ Email quota reset (boot self-heal): ${result.resetCount} tenant(s) rolled over to a new month`);
+      }
+    } catch (error) {
+      console.error(`❌ Email quota reset (boot self-heal) failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  })();
 
   // Schedule volunteer threshold alerts every hour (they have their own internal timing logic)
   // "0 * * * *" means: at minute 0, every hour
