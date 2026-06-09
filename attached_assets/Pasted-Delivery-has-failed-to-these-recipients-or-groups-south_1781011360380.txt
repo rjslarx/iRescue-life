@@ -1,0 +1,90 @@
+Delivery has failed to these recipients or groups:
+
+southernpetsanimalrescue@yahoo.com
+The address you sent your message to wasn't found at the destination domain. It might be misspelled or it might not exist. Try to fix the problem by doing one or more of the following:
+Send the message again, but before you do, delete and retype the address. If your email program automatically suggests an address to use, don't select it.
+Clear the recipient AutoComplete cache in your email program by following the steps in this article: Status code 5.1.1. Then resend the message, but before you do, be sure to delete and retype the address.
+Contact the recipient by some other means (by phone, for example) to confirm you're using the right address. Ask them if they've set up an email forwarding rule that could be forwarding your message to an incorrect address.
+
+
+The following organization rejected your message: mta7.am0.yahoodns.net. (67.195.204.74, the server for the domain yahoo.com.).
+
+
+
+
+
+
+
+Diagnostic information for administrators:
+
+Generating server: googlemail.com
+southernpetsanimalrescue@yahoo.com
+mta7.am0.yahoodns.net. (67.195.204.74, the server for the domain yahoo.com.)
+Remote server returned '554 5.1.1 <mta7.am0.yahoodns.net. (67.195.204.74, the server for the domain yahoo.com.) #5.1.1 smtp; 552 1 Requested mail action aborted, mailbox not found>'
+Original message headers:
+
+ARC-Seal: i=1; a=rsa-sha256; t=1781003529; cv=none;
+        d=google.com; s=arc-20240605;
+        b=JD4I7JTZ681SEbwtMlv9XKZe9Bv1z9rayd51VAAYZ1fcGlSiF84rfo9SEJQBx0YSM2
+         H54bvtBc9PhESE4x+OpOqz6REG2PftyYBm9s3USUf1cmjrV2CqNRpk/4CPJHc5FJjwkS
+         FfkNQp+HI/FD6Ent4p3R9Et5S8rnClVrUqxVG6lBv44gHbisO7KDK6q/AmR14gEmBLdc
+         Kd9h+UO64/RSupwETulHajhGthUqD3MWCRVN+8wx6QlZy6tIfOx26Mau8Xyp1TyTzVu3
+         tIw9kzMquFmOPYAO5YcUbUTHH/lUhwFpMyCwTpF1Ai++yfbCQlrygtY31RSfQEigszEF
+         g2sA==
+ARC-Message-Signature: i=1; a=rsa-sha256; c=relaxed/relaxed; d=google.com; s=arc-20240605;
+        h=to:subject:message-id:date:mime-version:from:dkim-signature;
+        bh=GJx/8tuoxUjHzeM7kUgOv7uXl/WIXJr7aCZ0MNTQUQw=;
+        fh=KgkHEQXuN+wTmSb3ap1EOht9ipy22ZFOGTZzQKy1geY=;
+        b=RVRXUW4WE2BoMQEbW6Jb4SW80+8FyEGpyE8936WJmZguWdERjsJBE9pxITAgxuGj43
+         t7kD8aiOhjl5KhVj5Mrpam0mH+bGsAmb4Y4p/9WR6vo9rfaJlKi62Qkc8dYE6lApgq0K
+         2gpgGhhQ5vCg65Cv3zEQTzSxAxRn7ViQeae9MyW5gfBQjotN/gVxMDUWa30hdLXbhNAA
+         2lzZ3q0MxRpIkJCkGEDBwL8GzswDxomyfuUkVbzaTe3mxg/mMsakYVyha35Ky3Q22L6t
+         3L3GShPP3IfJyhMWh5gcryMU2BHSwFTVhjvS0v+LthTYIgRa9uU+fZJq79ImyGM4GNgO
+         Pj6g==;
+        darn=yahoo.com
+ARC-Authentication-Results: i=1; mx.google.com; arc=none
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=haseyasnewbeginningar.com; s=google; t=1781003529; x=1781608329; darn=yahoo.com;
+        h=to:subject:message-id:date:mime-version:from:from:to:cc:subject
+         :date:message-id:reply-to;
+        bh=GJx/8tuoxUjHzeM7kUgOv7uXl/WIXJr7aCZ0MNTQUQw=;
+        b=TisrDCH2LTQAGxEEMlv9DXRFpK1FbQ5gd4+UDI2X01P+/NWZst7eLH2SlFI1tSK0Cy
+         0rXgAN6CK1A8sQRm8mFpOsvVe25LSZjFd0gApyyzEkq4Ab2cGwpEE03HpP5MArEYpmPn
+         f8vaNAziJLG8awfEGVlfpdY3SxWoWNYQBdPvjuZVQZ+yNAF0uwR0QM+OgPeH/wljCeNe
+         Nly+xYNmJs4A4q3u9Snw+v1YfJg/+2JQnmyohbHHo+gpDUzVmdA3OnTQ6x2gZI6FPDJm
+         9pZ2mqW5YV4wwsG4kn2DoS6Gchgfg9NtW1N1PufzX2bPtcMZOXNT7O4ipoKqGcSLowLp
+         70hQ==
+X-Google-DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=1e100.net; s=20251104; t=1781003529; x=1781608329;
+        h=to:subject:message-id:date:mime-version:from:x-gm-gg
+         :x-gm-message-state:from:to:cc:subject:date:message-id:reply-to;
+        bh=GJx/8tuoxUjHzeM7kUgOv7uXl/WIXJr7aCZ0MNTQUQw=;
+        b=KnWbpax8AmpY9OXsN2K5O+DltQZtp4yh1rNrwY+vDik/F5Z9eCoppFqKOA4wkod8c6
+         NV4iEHGdEhA14Uoinz7hcu54vZ2+f+lbTo+RTR1rr8j/1SopZePsErait4lmYuWF2upS
+         0eLGLN66WZ+vceVFBIQ9ovtV/OmxNOljol+QzTV54DLcX2VqrDa3WUDSoBO2wHJuPzO9
+         QEAiFNe9VGgvKW2/3hEk8Y7hb0qtD8ClHkRF0k6yMDIK1huj5AoVf2Kn7sX9zmVdl8O+
+         4iOIv3ERf7vM+clorjId3R9Q6JccVjDO8Zw3jSSpmMzz7tx6OvkY3Cegw+Ax9V5aHjQq
+         v9zg==
+X-Gm-Message-State: AOJu0YxtdWrWGKc6h20TuTm1pcCQmjWGXPZLxM668mrKeRha6n2fXgff
+	o5N9XpUj47kOIQ9UVG+DAb7O5/ODEUrFy+4NpuHX3C7r++vyM3Sz2iw+jE8wMmthONL4GJA1KVp
+	2BEM99oVHWrDTSk8ESJfj6SbgGJ+XclHPb6mCMX9e9/E+P6HH5RgLnA==
+X-Gm-Gg: Acq92OHQ3yj5fVrilEuC4Dir2io2pi8Cph1irVCVbS/dBvkMT+JIMN7DSVt1cDaIDr+
+	teOHl0n1JbQBWdA+ShNCF/ogm6Pf12PvYW48zo/lKvBsZol7qqOF7UukkEG7ZqQVyY9u9dXiWSP
+	/b+Dvt9xZwRGZ+Ey2VfpQiLbwpgSXpcp+rH76/vBb3zuqH0t6W/zFQJcRCXRNSvLpVbfPlkJJsw
+	dgH3plYcYGizIvyRxcPAeKnYRQtUZIthud4OaBd9OspUrwGMe1qtLOAThGkMk7bWZsI//+Slt4V
+	Yw4yEQr3hyrfNS6hheIftBamqeM2Jw==
+X-Received: by 2002:a05:6122:1811:b0:5a4:6680:64f0 with SMTP id
+ 71dfb90a1353d-5ac4d32dee5mr8629112e0c.4.1781003528543; Tue, 09 Jun 2026
+ 04:12:08 -0700 (PDT)
+Received: from 124696500616 named unknown by gmailapi.google.com with
+ HTTPREST; Tue, 9 Jun 2026 04:12:06 -0700
+Received: from 124696500616 named unknown by gmailapi.google.com with
+ HTTPREST; Tue, 9 Jun 2026 04:12:06 -0700
+From: Robby Stelly <robby@haseyasnewbeginningar.com>
+MIME-Version: 1.0
+Date: Tue, 9 Jun 2026 04:12:06 -0700
+X-Gm-Features: AVVi8Cffkq8A5as_qUjWnt__Xo99uo6PJfeXJgm_Hty2KKWfI0j8JQEl7qWZSpQ
+Message-ID: <CAAFSOOvqq=k+zy+aB60-dsHrZv95E=qxttu7YnX-76iTX=OsCw@mail.gmail.com>
+Subject: [Haseya's New Beginning Animal Rescue] Update on your surgery day request
+To: southernpetsanimalrescue@yahoo.com
+Content-Type: text/plain
