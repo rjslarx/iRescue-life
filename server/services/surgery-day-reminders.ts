@@ -13,6 +13,37 @@ export interface SurgeryDayReminderResult {
 // 18 == 6 PM, ~14 hours before the 8 AM drop-off window.
 const REMINDER_LOCAL_HOUR = 18;
 
+// Fallback timezone used when a tenant has no (or an invalid) IANA timezone on
+// file. Without this we'd fire at midnight UTC and compute "tomorrow in UTC",
+// which for a US (west-of-UTC) tenant is the previous evening locally — so the
+// reminder would target a date two local days out and arrive a day too soon.
+// Defaulting to a real US timezone keeps the reminder firing the evening BEFORE
+// the surgery (correct day) even before per-tenant timezones are configured.
+const HARDCODED_DEFAULT_TIMEZONE = 'America/Chicago';
+
+function isValidTimezone(tz: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Resolve (and validate) the configured default once at load. If the env var is
+// missing or invalid we fall back to a known-good hardcoded zone, so the default
+// is ALWAYS a valid IANA zone and no-timezone tenants are never skipped.
+const DEFAULT_TENANT_TIMEZONE = ((): string => {
+  const env = process.env.DEFAULT_TENANT_TIMEZONE;
+  if (env && isValidTimezone(env)) return env;
+  if (env) {
+    console.warn(
+      `[SurgeryDayReminder] invalid DEFAULT_TENANT_TIMEZONE "${env}"; using ${HARDCODED_DEFAULT_TIMEZONE}`,
+    );
+  }
+  return HARDCODED_DEFAULT_TIMEZONE;
+})();
+
 function normalizePhoneE164(raw: string | null | undefined): string | null {
   if (!raw) return null;
   const trimmed = String(raw).trim();
@@ -156,8 +187,9 @@ export async function sendSurgeryDayReminderSms(params: {
  *
  * Designed to run hourly. For each tenant, we only do real work when the
  * current hour in that tenant's local timezone is the configured reminder hour
- * (6 PM by default). Tenants without a configured timezone fall back to the
- * legacy behavior: send only when it is midnight UTC, using "tomorrow in UTC".
+ * (6 PM by default). Tenants without a configured (or with an invalid) timezone
+ * use DEFAULT_TENANT_TIMEZONE so they still fire on the correct LOCAL evening
+ * before the surgery instead of the old (buggy) midnight-UTC schedule.
  *
  * The `reminder_sms_sent_at` dedupe column still prevents double-sends across
  * runs (the cron now ticks every hour, so this is doing real work).
@@ -182,31 +214,31 @@ export async function runSurgeryDayRemindersForAllTenants(): Promise<{
     for (const tenant of activeTenants) {
       try {
         let tomorrowDateStr: string;
-        const local = tenant.timezone ? getLocalParts(tenant.timezone, now) : null;
 
-        if (local) {
-          if (local.hour !== REMINDER_LOCAL_HOUR) {
-            // Not 6 PM in this tenant's timezone; skip silently.
-            continue;
-          }
-          tomorrowDateStr = nextDayString(local.year, local.month, local.day);
-        } else {
-          // Legacy fallback: tenant has no timezone configured (or has an
-          // invalid one). Preserve the original behavior — fire only at
-          // midnight UTC so we don't silently send at the wrong hour.
-          if (tenant.timezone) {
-            errors.push(`[${tenant.id}] invalid timezone "${tenant.timezone}"; falling back to UTC schedule`);
-          }
-          if (now.getUTCHours() !== 0) {
-            continue;
-          }
-          const tomorrow = new Date(Date.UTC(
-            now.getUTCFullYear(),
-            now.getUTCMonth(),
-            now.getUTCDate() + 1,
-          ));
-          tomorrowDateStr = tomorrow.toISOString().slice(0, 10);
+        // Resolve the tenant's timezone, falling back to a sane US default when
+        // none is configured (or the configured one is invalid). This keeps the
+        // reminder on the correct LOCAL schedule (6 PM the evening before the
+        // surgery) instead of the old midnight-UTC path, which sent a day early
+        // for west-of-UTC tenants.
+        const effectiveTz = tenant.timezone || DEFAULT_TENANT_TIMEZONE;
+        let local = getLocalParts(effectiveTz, now);
+        if (!local && tenant.timezone) {
+          // Configured timezone was invalid; fall back to the default.
+          errors.push(`[${tenant.id}] invalid timezone "${tenant.timezone}"; using ${DEFAULT_TENANT_TIMEZONE}`);
+          local = getLocalParts(DEFAULT_TENANT_TIMEZONE, now);
         }
+        if (!local) {
+          // Should never happen (default is a valid IANA zone), but never send
+          // at an unknown hour — skip this tick rather than guess.
+          errors.push(`[${tenant.id}] could not resolve a timezone; skipping`);
+          continue;
+        }
+
+        if (local.hour !== REMINDER_LOCAL_HOUR) {
+          // Not 6 PM in this tenant's (effective) timezone; skip silently.
+          continue;
+        }
+        tomorrowDateStr = nextDayString(local.year, local.month, local.day);
 
         tenantsProcessed++;
 
