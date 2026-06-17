@@ -16967,7 +16967,7 @@ ${renderedHtml}
         displayName: z.string().max(60).optional(),
         // Legacy alias kept so older clients still in the wild keep working.
         firstNameDisplay: z.string().max(60).optional(),
-        displayOnWallOfHeroes: z.boolean().default(false),
+        displayOnWallOfHeroes: z.boolean().default(true),
         // Task #197: optional "gift this membership" payload. When present
         // the gifter pays recurring; the honoree fields are persisted to
         // subscription_gifts in the webhook and the parent subscription's
@@ -30060,10 +30060,10 @@ Submitted: ${new Date().toLocaleString()}
             const sessionMeta = session.metadata || {};
             let vipTierId: string | null = sessionMeta.vipTierId || null;
             let vipTierName: string | null = sessionMeta.vipTierName || null;
-            const wallOptIn = sessionMeta.displayOnWallOfHeroes === 'true';
+            const wallOptInRaw = sessionMeta.displayOnWallOfHeroes;
             // Accept the new `displayName` key first, then fall back to the
             // legacy `firstNameDisplay` for older sessions still in flight.
-            const displayName =
+            const rawDisplayName =
               sessionMeta.displayName || sessionMeta.firstNameDisplay || null;
 
             // Determine the actual subscription interval from Stripe. We do
@@ -30146,6 +30146,26 @@ Submitted: ${new Date().toLocaleString()}
               vipTierId = null;
               vipTierName = null;
             }
+
+            // Default monthly donors onto the public Wall of Heroes unless they
+            // explicitly opted out. The donate-page recurring flow never sends
+            // the flag, so treat "absent" as opt-in for monthly subs; non-monthly
+            // subs keep the strict opt-in (explicit 'true' required).
+            const wallOptIn = isMonthly
+              ? (wallOptInRaw !== 'false')
+              : (wallOptInRaw === 'true');
+            // When a donor lands on the Wall without a chosen recognition name,
+            // auto-derive "First L." from their name so the public tile never
+            // falls back to "Anonymous" and the portal/exports stay in sync.
+            const displayName = (() => {
+              const chosen = rawDisplayName?.trim();
+              if (chosen) return chosen;
+              if (!wallOptIn) return null;
+              const parts = (donor.name || '').trim().split(/\s+/).filter(Boolean);
+              if (parts.length === 0) return null;
+              if (parts.length === 1) return parts[0];
+              return `${parts[0]} ${parts[parts.length - 1].charAt(0).toUpperCase()}.`;
+            })();
 
             // Insert as 'active' immediately so the donor lands on the Wall of
             // Heroes / VIP roster right away. customer.subscription.updated may
