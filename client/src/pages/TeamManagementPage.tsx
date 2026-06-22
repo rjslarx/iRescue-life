@@ -1091,37 +1091,36 @@ export default function TeamManagementPage() {
                                   
                                   <div className="border-t pt-4">
                                     <Label className="text-base font-medium">Roles</Label>
-                                    {user.roles.includes('admin') ? (
+                                    {user.roles.includes('admin') && (
                                       <div className="bg-muted/50 border rounded-lg p-3 mt-2 space-y-1">
                                         <div className="flex items-center gap-2">
                                           <Shield className="h-4 w-4 text-primary" />
                                           <span className="text-sm font-medium">Admin Role</span>
                                         </div>
                                         <p className="text-xs text-muted-foreground">
-                                          Admins automatically have full access to all features.
+                                          Admins automatically have full access to all features. Uncheck Admin below to change this member's access level.
                                         </p>
                                       </div>
-                                    ) : (
-                                      <div className="space-y-3 mt-2">
-                                        {AVAILABLE_ROLES.map((role) => (
-                                          <div key={role.value} className="flex items-center space-x-2">
-                                            <Checkbox
-                                              id={`edit-role-mobile-${user.id}-${role.value}`}
-                                              checked={user.roles.includes(role.value as any)}
-                                              onCheckedChange={() => toggleEditRole(user, role.value)}
-                                              disabled={updateUserMutation.isPending}
-                                              data-testid={`checkbox-edit-role-mobile-${user.id}-${role.value}`}
-                                            />
-                                            <Label
-                                              htmlFor={`edit-role-mobile-${user.id}-${role.value}`}
-                                              className="text-sm font-normal cursor-pointer"
-                                            >
-                                              {role.label}
-                                            </Label>
-                                          </div>
-                                        ))}
-                                      </div>
                                     )}
+                                    <div className="space-y-3 mt-2">
+                                      {AVAILABLE_ROLES.map((role) => (
+                                        <div key={role.value} className="flex items-center space-x-2">
+                                          <Checkbox
+                                            id={`edit-role-mobile-${user.id}-${role.value}`}
+                                            checked={user.roles.includes(role.value as any)}
+                                            onCheckedChange={() => toggleEditRole(user, role.value)}
+                                            disabled={updateUserMutation.isPending}
+                                            data-testid={`checkbox-edit-role-mobile-${user.id}-${role.value}`}
+                                          />
+                                          <Label
+                                            htmlFor={`edit-role-mobile-${user.id}-${role.value}`}
+                                            className="text-sm font-normal cursor-pointer"
+                                          >
+                                            {role.label}
+                                          </Label>
+                                        </div>
+                                      ))}
+                                    </div>
                                   </div>
 
                                   <div className="border-t pt-4">
@@ -1371,37 +1370,36 @@ export default function TeamManagementPage() {
                                         
                                         <div className="border-t pt-4">
                                           <Label className="text-base font-medium">Roles</Label>
-                                          {user.roles.includes('admin') ? (
+                                          {user.roles.includes('admin') && (
                                             <div className="bg-muted/50 border rounded-lg p-3 mt-2 space-y-1">
                                               <div className="flex items-center gap-2">
                                                 <Shield className="h-4 w-4 text-primary" />
                                                 <span className="text-sm font-medium">Admin Role</span>
                                               </div>
                                               <p className="text-xs text-muted-foreground">
-                                                Admins automatically have full access to all features.
+                                                Admins automatically have full access to all features. Uncheck Admin below to change this member's access level.
                                               </p>
                                             </div>
-                                          ) : (
-                                            <div className="space-y-3 mt-2">
-                                              {AVAILABLE_ROLES.map((role) => (
-                                                <div key={role.value} className="flex items-center space-x-2">
-                                                  <Checkbox
-                                                    id={`edit-role-${user.id}-${role.value}`}
-                                                    checked={user.roles.includes(role.value as any)}
-                                                    onCheckedChange={() => toggleEditRole(user, role.value)}
-                                                    disabled={updateUserMutation.isPending}
-                                                    data-testid={`checkbox-edit-role-${user.id}-${role.value}`}
-                                                  />
-                                                  <Label
-                                                    htmlFor={`edit-role-${user.id}-${role.value}`}
-                                                    className="text-sm font-normal cursor-pointer"
-                                                  >
-                                                    {role.label}
-                                                  </Label>
-                                                </div>
-                                              ))}
-                                            </div>
                                           )}
+                                          <div className="space-y-3 mt-2">
+                                            {AVAILABLE_ROLES.map((role) => (
+                                              <div key={role.value} className="flex items-center space-x-2">
+                                                <Checkbox
+                                                  id={`edit-role-${user.id}-${role.value}`}
+                                                  checked={user.roles.includes(role.value as any)}
+                                                  onCheckedChange={() => toggleEditRole(user, role.value)}
+                                                  disabled={updateUserMutation.isPending}
+                                                  data-testid={`checkbox-edit-role-${user.id}-${role.value}`}
+                                                />
+                                                <Label
+                                                  htmlFor={`edit-role-${user.id}-${role.value}`}
+                                                  className="text-sm font-normal cursor-pointer"
+                                                >
+                                                  {role.label}
+                                                </Label>
+                                              </div>
+                                            ))}
+                                          </div>
                                         </div>
 
                                         <div className="border-t pt-4">
