@@ -681,10 +681,30 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
     'tnr-log': tnrEnabled,
     'microchip-clinic-log': microchipClinicEnabled,
   };
+  // Some pageIds gate more than one distinct page. The clearest example is
+  // `finance`, which controls the entire Fundraising suite (Fundraising Hub,
+  // Donation Links, Events & Products) AND the Finance ledger. When such a
+  // permission is granted to a non-admin user we must surface ALL of those
+  // links — not just one — otherwise the granted access appears to "do nothing".
+  const pageIdToNavItems: Record<string, NavItem[]> = {
+    finance: [
+      { title: "Fundraising Hub", url: "/dashboard/fundraising", icon: Megaphone },
+      { title: "Donation Links", url: "/dashboard/donation-links", icon: DollarSign },
+      { title: "Events & Products", url: "/dashboard/fundraisers", icon: TicketPercent },
+      { title: "Finance", url: "/dashboard/finance", icon: DollarSign },
+    ],
+  };
+  const seenAdditionalUrls = new Set<string>();
   const additionalItems: NavItem[] = accessiblePages
     .filter(pageId => !(pageId in featureFlaggedPageIds) || featureFlaggedPageIds[pageId])
-    .map(pageId => pageIdToNavItem[pageId])
-    .filter((item): item is NavItem => !!item && !existingUrls.has(item.url));
+    .flatMap(pageId => pageIdToNavItems[pageId] ?? (pageIdToNavItem[pageId] ? [pageIdToNavItem[pageId]] : []))
+    .filter((item): item is NavItem => {
+      if (!item || existingUrls.has(item.url) || seenAdditionalUrls.has(item.url)) {
+        return false;
+      }
+      seenAdditionalUrls.add(item.url);
+      return true;
+    });
 
   if (additionalItems.length > 0) {
     filteredGroups.push({
