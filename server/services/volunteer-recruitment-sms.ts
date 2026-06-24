@@ -383,8 +383,6 @@ export class VolunteerRecruitmentSmsService {
       const dayLabel = format(parseISO(s.date), "EEEE M/d");
       if (s.signedUpCount === 0) {
         message = `🐕 ${orgName}: ${s.calendarName} on ${dayLabel} has 0 volunteers signed up! We need ${s.minVolunteersRequired}.`;
-      } else if (s.signedUpCount === 1 && s.signedUpNames.length === 1) {
-        message = `🐕 ${orgName}: We only have 1 volunteer for ${s.calendarName} on ${dayLabel}! Please help ${s.signedUpNames[0]}.`;
       } else {
         message = `🐕 ${orgName}: ${s.calendarName} on ${dayLabel} needs ${s.shortage} more volunteer${s.shortage !== 1 ? "s" : ""} (${s.signedUpCount}/${s.minVolunteersRequired} signed up).`;
       }

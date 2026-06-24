@@ -3,3 +3,4 @@
 - [Tenant timezone & local-time crons](tenant-timezone-scheduling.md) — tenants.timezone is always null (no UI sets it); per-tenant local-time jobs must default it, never use a midnight-UTC fallback (caused day-early SMS).
 - [Tenant settings data source](tenant-settings-data-source.md) — new tenants columns aren't in req.tenant/`/api/tenant`; read full row via `/api/tenant/settings`.
 - [In-kind donation receipt compliance](in-kind-donation-receipts.md) — IRS gating (no value on receipt; required fields) lives in 3 layers that must stay in lockstep: form, offline-donation route, receipt-service.
+- [Volunteer alert systems](volunteer-alert-systems.md) — two shortage-alert services; recruitment-sms dedup-history insert silently fails (bad FK values), relies on 24h SMS gate; no individual names in blast SMS.
