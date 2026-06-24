@@ -1,5 +1,5 @@
 import { db } from '../db';
-import { tenants, surgeryDayRequests } from '@shared/schema';
+import { tenants, surgeryDayRequests, matchmakerSettings } from '@shared/schema';
 import { eq, and } from 'drizzle-orm';
 
 export type FormType = 'adoption' | 'foster' | 'volunteer' | 'surrender' | 'surgery_day';
@@ -532,5 +532,163 @@ This confirmation was sent automatically by ${tenant.name} when your surgery day
   } catch (error: any) {
     console.error('[SurgeryDayConfirmation] Failed to send confirmation email:', error);
     return { sent: false, reason: error?.message || 'Unknown error' };
+  }
+}
+
+export interface MatchmakerResponse {
+  label: string;
+  value: string;
+}
+
+export interface MatchmakerNotificationData {
+  tenantId: string;
+  name: string;
+  email: string;
+  phone?: string | null;
+  location?: string | null;
+  responses: MatchmakerResponse[];
+}
+
+/**
+ * Email an Adoption Matchmaker submission to the tenant's configured recipient
+ * addresses. Recipients come from `matchmaker_settings.recipientEmails`, falling
+ * back to the tenant's contact email so a lead is never silently dropped.
+ * There is no in-portal review page for these submissions.
+ */
+export async function sendMatchmakerSubmissionNotification(
+  data: MatchmakerNotificationData
+): Promise<{ sent: boolean; recipientCount: number; reason?: string }> {
+  try {
+    const [tenant] = await db
+      .select({
+        id: tenants.id,
+        name: tenants.name,
+        subdomain: tenants.subdomain,
+        contactEmail: tenants.contactEmail,
+        customDomain: tenants.customDomain,
+      })
+      .from(tenants)
+      .where(eq(tenants.id, data.tenantId))
+      .limit(1);
+
+    if (!tenant) {
+      console.error('[Matchmaker] Tenant not found for notification:', data.tenantId);
+      return { sent: false, recipientCount: 0, reason: 'Tenant not found' };
+    }
+
+    const [settings] = await db
+      .select({ recipientEmails: matchmakerSettings.recipientEmails })
+      .from(matchmakerSettings)
+      .where(eq(matchmakerSettings.tenantId, data.tenantId))
+      .limit(1);
+
+    let recipientEmails: string[] = (settings?.recipientEmails || [])
+      .map(e => (e || '').trim())
+      .filter(e => e && e.includes('@'));
+
+    if (recipientEmails.length === 0 && tenant.contactEmail) {
+      recipientEmails = [tenant.contactEmail];
+    }
+    recipientEmails = [...new Set(recipientEmails.map(e => e.toLowerCase()))];
+
+    if (recipientEmails.length === 0) {
+      console.warn(`[Matchmaker] No recipient emails configured for tenant ${tenant.subdomain}; submission stored only.`);
+      return { sent: false, recipientCount: 0, reason: 'No recipients configured' };
+    }
+
+    const responseRows = (data.responses || [])
+      .filter(r => r && r.label)
+      .map(r => {
+        const value = r.value && String(r.value).trim() ? String(r.value) : 'No preference';
+        return `<div class="detail" style="margin: 8px 0;">
+          <span class="label" style="font-weight: 600; color: #64748b;">${escapeHtml(r.label)}:</span> ${escapeHtml(value)}
+        </div>`;
+      })
+      .join('\n');
+
+    const responseText = (data.responses || [])
+      .filter(r => r && r.label)
+      .map(r => `${r.label}: ${r.value && String(r.value).trim() ? r.value : 'No preference'}`)
+      .join('\n');
+
+    const subject = `New Adoption Matchmaker submission from ${data.name}`;
+
+    const htmlBody = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; }
+    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+    .header { background: #2563eb; color: white; padding: 20px; border-radius: 8px 8px 0 0; }
+    .content { background: #f8fafc; padding: 20px; border: 1px solid #e2e8f0; border-radius: 0 0 8px 8px; }
+    .detail { margin: 8px 0; }
+    .label { font-weight: 600; color: #64748b; }
+    .section { margin-top: 20px; border-top: 1px solid #e2e8f0; padding-top: 15px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1 style="margin: 0; font-size: 24px;">New Adoption Matchmaker Submission</h1>
+      <p style="margin: 10px 0 0 0; opacity: 0.9;">${escapeHtml(tenant.name)}</p>
+    </div>
+    <div class="content">
+      <p>Someone filled out your Adoption Matchmaker form. Here's what they told you:</p>
+      <div class="detail"><span class="label">Name:</span> ${escapeHtml(data.name)}</div>
+      <div class="detail"><span class="label">Email:</span> <a href="mailto:${escapeHtml(data.email)}">${escapeHtml(data.email)}</a></div>
+      ${data.phone ? `<div class="detail"><span class="label">Phone:</span> ${escapeHtml(data.phone)}</div>` : ''}
+      ${data.location ? `<div class="detail"><span class="label">Location:</span> ${escapeHtml(data.location)}</div>` : ''}
+      <div class="section">
+        <h3 style="margin: 0 0 15px 0; color: #1e293b; font-size: 16px;">Home &amp; Preferences</h3>
+        ${responseRows}
+      </div>
+    </div>
+  </div>
+</body>
+</html>
+    `.trim();
+
+    const textBody = `
+New Adoption Matchmaker Submission — ${tenant.name}
+
+Name: ${data.name}
+Email: ${data.email}
+${data.phone ? `Phone: ${data.phone}` : ''}
+${data.location ? `Location: ${data.location}` : ''}
+
+--- Home & Preferences ---
+${responseText}
+    `.trim();
+
+    const { EmailService } = await import('../lib/email-service');
+    const emailService = await EmailService.forTenant(data.tenantId);
+    if (!emailService) {
+      console.warn(`[Matchmaker] Email service not configured for tenant ${data.tenantId}; submission stored only.`);
+      return { sent: false, recipientCount: 0, reason: 'Email service not configured' };
+    }
+
+    let sentCount = 0;
+    for (const recipientEmail of recipientEmails) {
+      try {
+        await emailService.send({
+          to: recipientEmail,
+          subject,
+          html: htmlBody,
+          text: textBody,
+          replyTo: data.email,
+        });
+        sentCount += 1;
+      } catch (emailError) {
+        console.error(`[Matchmaker] Failed to send to ${recipientEmail}:`, emailError);
+      }
+    }
+
+    console.log(`[Matchmaker] Notification sent to ${sentCount}/${recipientEmails.length} recipient(s) for tenant ${tenant.subdomain}`);
+    return { sent: sentCount > 0, recipientCount: sentCount };
+  } catch (error: any) {
+    console.error('[Matchmaker] Failed to send submission notification:', error);
+    return { sent: false, recipientCount: 0, reason: error?.message || 'Unknown error' };
   }
 }

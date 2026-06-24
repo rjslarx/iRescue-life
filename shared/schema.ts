@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, integer, boolean, jsonb, unique, uniqueIndex, numeric, serial, decimal, date, varchar, real, doublePrecision } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, integer, boolean, jsonb, unique, uniqueIndex, index, numeric, serial, decimal, date, varchar, real, doublePrecision } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -889,6 +889,51 @@ export const insertFormSettingSchema = createInsertSchema(formSettings).omit({
 });
 export type InsertFormSetting = z.infer<typeof insertFormSettingSchema>;
 export type FormSetting = typeof formSettings.$inferSelect;
+
+// Adoption Matchmaker settings - per-tenant config for the public, no-auth
+// "Adoption Matchmaker" questionnaire. Submissions are emailed to the recipient
+// addresses configured here (there is no in-portal review page).
+export const matchmakerSettings = pgTable("matchmaker_settings", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  enabled: boolean("enabled").notNull().default(true),
+  recipientEmails: text("recipient_emails").array().notNull().default(sql`ARRAY[]::text[]`),
+  introText: text("intro_text"), // Optional text shown at the top of the public form
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  uniqueTenant: unique().on(table.tenantId),
+}));
+
+export const insertMatchmakerSettingsSchema = createInsertSchema(matchmakerSettings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertMatchmakerSettings = z.infer<typeof insertMatchmakerSettingsSchema>;
+export type MatchmakerSettings = typeof matchmakerSettings.$inferSelect;
+
+// Adoption Matchmaker submissions - insert-only safety net so a lead is never lost
+// if email delivery fails. There is intentionally no portal UI to browse these.
+export const matchmakerSubmissions = pgTable("matchmaker_submissions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  name: text("name").notNull(),
+  email: text("email").notNull(),
+  phone: text("phone"),
+  location: text("location"),
+  answers: jsonb("answers").$type<Record<string, any>>().notNull().default(sql`'{}'::jsonb`),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  tenantIdx: index("matchmaker_submissions_tenant_idx").on(table.tenantId, table.createdAt),
+}));
+
+export const insertMatchmakerSubmissionSchema = createInsertSchema(matchmakerSubmissions).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertMatchmakerSubmission = z.infer<typeof insertMatchmakerSubmissionSchema>;
+export type MatchmakerSubmission = typeof matchmakerSubmissions.$inferSelect;
 
 // Applications table - adoption applications per tenant
 export const applications = pgTable("applications", {

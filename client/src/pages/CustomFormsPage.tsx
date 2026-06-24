@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/contexts/AuthContext";
@@ -50,7 +50,7 @@ import {
 import { 
   FileText, Plus, Edit, Trash2, Eye, Copy, ChevronDown, 
   Send, FileSignature, PawPrint, Users, Link as LinkIcon,
-  Clock, CheckCircle, XCircle, Mail
+  Clock, CheckCircle, XCircle, Mail, X, Heart, Loader2
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -118,7 +118,7 @@ type SendFormData = z.infer<typeof sendFormSchema>;
 
 export default function CustomFormsPage() {
   const { user } = useAuth();
-  const { tenant } = useTenant();
+  const { tenant, basePath } = useTenant();
   const { toast } = useToast();
   
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -187,6 +187,51 @@ export default function CustomFormsPage() {
   const forms = data?.forms || [];
   const mergeFields = data?.mergeFields || { standalone: {}, animal_specific: {} };
   const animals = animalsData?.animals || [];
+
+  // ---- Adoption Matchmaker settings ----
+  const [matchmakerEnabled, setMatchmakerEnabled] = useState(true);
+  const [matchmakerRecipients, setMatchmakerRecipients] = useState<string[]>([]);
+  const [matchmakerIntro, setMatchmakerIntro] = useState("");
+
+  const { data: matchmakerData, isLoading: matchmakerLoading } = useQuery<{
+    settings: { enabled: boolean; recipientEmails: string[]; introText: string | null } | null;
+  }>({
+    queryKey: ['/api/matchmaker-settings'],
+  });
+
+  useEffect(() => {
+    const s = matchmakerData?.settings;
+    if (s) {
+      setMatchmakerEnabled(s.enabled ?? true);
+      setMatchmakerRecipients(s.recipientEmails?.length ? s.recipientEmails : []);
+      setMatchmakerIntro(s.introText || "");
+    }
+  }, [matchmakerData]);
+
+  const matchmakerMutation = useMutation({
+    mutationFn: async () => {
+      const recipients = matchmakerRecipients.map((e) => e.trim()).filter(Boolean);
+      return apiRequest('PUT', '/api/matchmaker-settings', {
+        enabled: matchmakerEnabled,
+        recipientEmails: recipients,
+        introText: matchmakerIntro.trim() || null,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/matchmaker-settings'] });
+      toast({ title: "Saved", description: "Matchmaker settings updated." });
+    },
+    onError: (error: any) => {
+      toast({ variant: "destructive", title: "Error", description: error?.message || "Failed to save settings." });
+    },
+  });
+
+  const matchmakerLink = `${window.location.origin}${basePath || ''}/matchmaker`;
+  const updateRecipient = (i: number, val: string) =>
+    setMatchmakerRecipients((prev) => prev.map((e, idx) => (idx === i ? val : e)));
+  const addRecipient = () => setMatchmakerRecipients((prev) => [...prev, ""]);
+  const removeRecipient = (i: number) =>
+    setMatchmakerRecipients((prev) => prev.filter((_, idx) => idx !== i));
 
   const createMutation = useMutation({
     mutationFn: async (formData: FormData) => {
@@ -597,6 +642,120 @@ export default function CustomFormsPage() {
             New Form
           </Button>
         </div>
+
+        <Card data-testid="card-matchmaker-settings">
+          <CardHeader>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Heart className="h-5 w-5" />
+                  Adoption Matchmaker
+                </CardTitle>
+                <CardDescription>
+                  A public form where potential adopters describe their home and preferences.
+                  Submissions are emailed to the recipients below — there is no in-portal review page.
+                </CardDescription>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={matchmakerEnabled}
+                  onCheckedChange={setMatchmakerEnabled}
+                  disabled={matchmakerLoading}
+                  data-testid="switch-matchmaker-enabled"
+                />
+                <Label className="text-sm text-muted-foreground">
+                  {matchmakerEnabled ? "Accepting submissions" : "Paused"}
+                </Label>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="space-y-2">
+              <Label>Shareable link</Label>
+              <div className="flex items-center gap-2">
+                <Input value={matchmakerLink} readOnly data-testid="input-matchmaker-link" />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={() => copyToClipboard(matchmakerLink)}
+                  data-testid="button-copy-matchmaker-link"
+                >
+                  <Copy className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Recipient emails</Label>
+              <p className="text-sm text-muted-foreground">
+                Each submission is emailed to these addresses. If none are set, submissions go to your
+                rescue's contact email.
+              </p>
+              <div className="space-y-2">
+                {matchmakerRecipients.map((email, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <Input
+                      type="email"
+                      value={email}
+                      onChange={(e) => updateRecipient(i, e.target.value)}
+                      placeholder="name@example.com"
+                      data-testid={`input-matchmaker-recipient-${i}`}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeRecipient(i)}
+                      data-testid={`button-remove-recipient-${i}`}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={addRecipient}
+                data-testid="button-add-recipient"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add email
+              </Button>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="matchmaker-intro">Intro text (optional)</Label>
+              <Textarea
+                id="matchmaker-intro"
+                value={matchmakerIntro}
+                onChange={(e) => setMatchmakerIntro(e.target.value)}
+                placeholder="A short welcome message shown at the top of the form."
+                rows={3}
+                data-testid="textarea-matchmaker-intro"
+              />
+            </div>
+          </CardContent>
+          <CardFooter className="flex justify-end">
+            <Button
+              type="button"
+              onClick={() => matchmakerMutation.mutate()}
+              disabled={matchmakerMutation.isPending || matchmakerLoading}
+              data-testid="button-save-matchmaker"
+            >
+              {matchmakerMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save matchmaker settings"
+              )}
+            </Button>
+          </CardFooter>
+        </Card>
 
         {isLoading ? (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

@@ -101,6 +101,7 @@ import PublicVolunteerPage from "@/pages/PublicVolunteerPage";
 import VolunteerApplicationManagementPage from "@/pages/VolunteerApplicationManagementPage";
 import VolunteerApplicationsPipelinePage from "@/pages/VolunteerApplicationsPipelinePage";
 import PublicFosterPage from "@/pages/PublicFosterPage";
+import PublicMatchmakerPage from "@/pages/PublicMatchmakerPage";
 import PublicSurrenderPage from "@/pages/PublicSurrenderPage";
 import PublicSurgeryDayRequestPage from "@/pages/PublicSurgeryDayRequestPage";
 import SurgeryDayRequestsPage from "@/pages/SurgeryDayRequestsPage";
@@ -244,6 +245,7 @@ function RouterSwitch() {
       <Route path="/animal/:animalId" component={PublicAnimalProfilePage} />
       <Route path="/volunteer" component={PublicVolunteerPage} />
       <Route path="/become-a-foster" component={PublicFosterPage} />
+      <Route path="/matchmaker" component={PublicMatchmakerPage} />
       <Route path="/surrender" component={PublicSurrenderPage} />
       <Route path="/surgery-day-request" component={PublicSurgeryDayRequestPage} />
       <Route path="/form-success/:formType" component={FormSuccessPage} />

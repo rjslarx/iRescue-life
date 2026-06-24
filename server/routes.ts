@@ -19611,6 +19611,192 @@ ${renderedHtml}
     }
   });
 
+  // ==========================================================================
+  // ADOPTION MATCHMAKER
+  // Public, no-auth questionnaire. Submissions are stored (safety net) and
+  // emailed to admin-configured recipients. There is no in-portal review page.
+  // ==========================================================================
+
+  /**
+   * GET /api/matchmaker-settings (admin)
+   * Returns the tenant's matchmaker recipient/enable config, creating a default row if missing.
+   */
+  app.get('/api/matchmaker-settings', requireTenant, requireAuth, requireRole('admin', 'owner'), async (req, res, next) => {
+    try {
+      const { matchmakerSettings } = await import('@shared/schema');
+      let [settings] = await db
+        .select()
+        .from(matchmakerSettings)
+        .where(eq(matchmakerSettings.tenantId, req.tenant!.id))
+        .limit(1);
+      if (!settings) {
+        [settings] = await db
+          .insert(matchmakerSettings)
+          .values([{ tenantId: req.tenant!.id }])
+          .onConflictDoNothing()
+          .returning();
+        if (!settings) {
+          [settings] = await db
+            .select()
+            .from(matchmakerSettings)
+            .where(eq(matchmakerSettings.tenantId, req.tenant!.id))
+            .limit(1);
+        }
+      }
+      res.json({ settings });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * PUT /api/matchmaker-settings (admin)
+   * Upsert the matchmaker recipient/enable config.
+   */
+  app.put('/api/matchmaker-settings', requireTenant, requireAuth, requireRole('admin', 'owner'), async (req, res, next) => {
+    try {
+      const { matchmakerSettings } = await import('@shared/schema');
+      const bodySchema = z.object({
+        enabled: z.boolean().optional(),
+        recipientEmails: z.array(z.string()).max(50).optional(),
+        introText: z.string().max(2000).nullable().optional(),
+      });
+      const parsed = bodySchema.parse(req.body);
+
+      const cleanedEmails = (parsed.recipientEmails ?? [])
+        .map(e => (e || '').trim())
+        .filter(e => e.length > 0);
+      const invalid = cleanedEmails.filter(e => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
+      if (invalid.length > 0) {
+        return res.status(400).json({ error: `Invalid email address(es): ${invalid.join(', ')}` });
+      }
+      const dedupedEmails = [...new Set(cleanedEmails.map(e => e.toLowerCase()))];
+
+      const updateValues: Record<string, any> = { updatedAt: new Date() };
+      if (parsed.enabled !== undefined) updateValues.enabled = parsed.enabled;
+      if (parsed.recipientEmails !== undefined) updateValues.recipientEmails = dedupedEmails;
+      if (parsed.introText !== undefined) {
+        const trimmed = (parsed.introText ?? '').trim();
+        updateValues.introText = trimmed.length > 0 ? trimmed : null;
+      }
+
+      const [settings] = await db
+        .insert(matchmakerSettings)
+        .values([{
+          tenantId: req.tenant!.id,
+          enabled: parsed.enabled ?? true,
+          recipientEmails: parsed.recipientEmails !== undefined ? dedupedEmails : [],
+          introText: updateValues.introText ?? null,
+        }])
+        .onConflictDoUpdate({
+          target: matchmakerSettings.tenantId,
+          set: updateValues,
+        })
+        .returning();
+
+      res.json({ settings });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors.map(e => e.message).join(', ') });
+      }
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/public/matchmaker
+   * Public: returns whether the matchmaker is enabled and its intro text.
+   */
+  app.get('/api/public/matchmaker', requireTenant, async (req, res, next) => {
+    try {
+      const { matchmakerSettings } = await import('@shared/schema');
+      const [settings] = await db
+        .select({ enabled: matchmakerSettings.enabled, introText: matchmakerSettings.introText })
+        .from(matchmakerSettings)
+        .where(eq(matchmakerSettings.tenantId, req.tenant!.id))
+        .limit(1);
+      // Default to enabled when no row exists yet (matches schema default).
+      res.json({
+        enabled: settings ? settings.enabled : true,
+        introText: settings?.introText ?? null,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/public/matchmaker
+   * Public: store a matchmaker submission and email it to configured recipients.
+   */
+  app.post('/api/public/matchmaker', requireTenant, async (req, res, next) => {
+    try {
+      const { matchmakerSettings, matchmakerSubmissions } = await import('@shared/schema');
+
+      const [settings] = await db
+        .select({ enabled: matchmakerSettings.enabled })
+        .from(matchmakerSettings)
+        .where(eq(matchmakerSettings.tenantId, req.tenant!.id))
+        .limit(1);
+      if (settings && settings.enabled === false) {
+        return res.status(403).json({ error: 'This form is not currently accepting submissions.' });
+      }
+
+      const submitSchema = z.object({
+        name: z.string().trim().min(1, 'Name is required').max(200),
+        email: z.string().trim().min(1, 'Email is required').email('Please enter a valid email').max(320),
+        phone: z.string().trim().max(50).optional().nullable(),
+        location: z.string().trim().max(200).optional().nullable(),
+        responses: z
+          .array(z.object({
+            label: z.string().trim().min(1).max(200),
+            value: z.string().max(2000),
+          }))
+          .max(40)
+          .default([]),
+      });
+      const data = submitSchema.parse(req.body);
+
+      const [submission] = await db
+        .insert(matchmakerSubmissions)
+        .values([{
+          tenantId: req.tenant!.id,
+          name: data.name,
+          email: data.email,
+          phone: data.phone || null,
+          location: data.location || null,
+          answers: { responses: data.responses },
+        }])
+        .returning();
+
+      // Email the submission to configured recipients (non-blocking for the visitor).
+      try {
+        const { sendMatchmakerSubmissionNotification } = await import('./services/form-notifications');
+        await sendMatchmakerSubmissionNotification({
+          tenantId: req.tenant!.id,
+          name: data.name,
+          email: data.email,
+          phone: data.phone,
+          location: data.location,
+          responses: data.responses,
+        });
+      } catch (notifyError) {
+        console.error('[Matchmaker] Notification dispatch failed:', notifyError);
+      }
+
+      res.json({
+        success: true,
+        submissionId: submission.id,
+        message: "Thank you! We've received your information and will be in touch soon about dogs that might be a great match.",
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors.map(e => e.message).join(', ') });
+      }
+      next(error);
+    }
+  });
+
   /**
    * GET /api/foster-applications
    * List foster applications (admin/staff only)
