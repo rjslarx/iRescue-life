@@ -79,6 +79,7 @@ import {
   X,
   Palette,
   Sparkles,
+  CalendarHeart,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -107,6 +108,14 @@ export default function FundraisingHubPage() {
     return "";
   })();
 
+  const fiveDollarFridayUrl = (() => {
+    if (!tenant?.stripeEnabled) return "";
+    const base = window.location.origin;
+    const usePrefix = tenant?.subdomain && !isCustomDomain();
+    const path = usePrefix ? `/${tenant.subdomain}/five-dollar-friday` : "/five-dollar-friday";
+    return `${base}${path}`;
+  })();
+
   return (
     <DashboardLayout title="Donation & Fundraising Hub" description="Your centralized toolkit for managing donations, running campaigns, and maximizing fundraising impact.">
       <div className="space-y-6" data-testid="page-fundraising-hub">
@@ -123,6 +132,7 @@ export default function FundraisingHubPage() {
         <TabsContent value="toolkit">
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-6">
             <GeneralDonationsCard donationUrl={donationUrl} tenantName={tenant?.name} isLoading={tenantLoading} />
+            <FiveDollarFridayCard fridayUrl={fiveDollarFridayUrl} tenantName={tenant?.name} isLoading={tenantLoading} />
             <AnimalCampaignsCard onNavigate={setLocation} />
             <SocialPostArchitectCard />
             <SocialMediaPlaybookCard />
@@ -696,6 +706,124 @@ function GeneralDonationsCard({ donationUrl, tenantName, isLoading }: { donation
               <p className="text-sm font-medium" data-testid="text-no-stripe-link">No donation link configured</p>
               <p className="text-xs text-muted-foreground">
                 Set up your Stripe donation link in Settings &gt; Integrations to enable general donations.
+              </p>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function FiveDollarFridayCard({ fridayUrl, tenantName, isLoading }: { fridayUrl: string; tenantName?: string; isLoading: boolean }) {
+  const { toast } = useToast();
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [qrGenerated, setQrGenerated] = useState(false);
+
+  useEffect(() => {
+    if (fridayUrl && canvasRef.current) {
+      QRCode.toCanvas(canvasRef.current, fridayUrl, {
+        width: 180,
+        margin: 2,
+        color: { dark: "#000000", light: "#ffffff" },
+      }).then(() => setQrGenerated(true)).catch(() => setQrGenerated(false));
+    }
+  }, [fridayUrl]);
+
+  const handleCopyLink = async () => {
+    if (!fridayUrl) return;
+    try {
+      await navigator.clipboard.writeText(fridayUrl);
+      toast({ title: "Link copied", description: "$5 Friday link copied to clipboard." });
+    } catch {
+      toast({ title: "Copy failed", description: "Could not copy to clipboard.", variant: "destructive" });
+    }
+  };
+
+  const handleDownloadQR = () => {
+    if (!canvasRef.current) return;
+    const link = document.createElement("a");
+    link.download = `${tenantName || "rescue"}-5-dollar-friday-qr.png`;
+    link.href = canvasRef.current.toDataURL("image/png");
+    link.click();
+  };
+
+  return (
+    <Card data-testid="card-five-dollar-friday">
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <CalendarHeart className="h-5 w-5 text-primary" />
+          <CardTitle className="text-lg">$5 Friday</CardTitle>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          A dedicated QR code and link for your weekly $5 Friday push. Donors can give $5 in one tap and opt into a monthly gift.
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {isLoading ? (
+          <div className="flex flex-col items-center gap-3 py-6">
+            <div className="h-[180px] w-[180px] rounded-md bg-muted animate-pulse" />
+            <div className="h-9 w-48 rounded-md bg-muted animate-pulse" />
+          </div>
+        ) : fridayUrl ? (
+          <>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-muted-foreground">$5 Friday URL</label>
+              <div className="flex items-center gap-2">
+                <Input
+                  readOnly
+                  value={fridayUrl}
+                  className="text-sm font-mono"
+                  data-testid="input-five-dollar-friday-url"
+                />
+                <Button size="icon" variant="outline" onClick={handleCopyLink} data-testid="button-copy-friday-link">
+                  <Copy />
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex flex-col items-center gap-3 py-2">
+              <canvas ref={canvasRef} className="rounded-md border" data-testid="qr-code-canvas-friday" />
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={handleCopyLink}
+                  data-testid="button-copy-friday-link-secondary"
+                >
+                  <Copy className="mr-2 h-4 w-4" />
+                  Copy Link
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleDownloadQR}
+                  disabled={!qrGenerated}
+                  data-testid="button-download-friday-qr"
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  Download QR
+                </Button>
+              </div>
+            </div>
+
+            <Button
+              variant="ghost"
+              className="w-full justify-start text-muted-foreground"
+              onClick={() => window.open(fridayUrl, "_blank")}
+              data-testid="button-open-friday-page"
+            >
+              <ExternalLink className="mr-2 h-4 w-4" />
+              Preview $5 Friday page
+            </Button>
+          </>
+        ) : (
+          <div className="flex flex-col items-center gap-3 py-6 text-center">
+            <div className="rounded-full bg-muted p-3">
+              <AlertCircle className="h-6 w-6 text-muted-foreground" />
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm font-medium" data-testid="text-no-stripe-friday">Stripe not configured</p>
+              <p className="text-xs text-muted-foreground">
+                Connect Stripe in Settings &gt; Integrations to enable $5 Friday donations.
               </p>
             </div>
           </div>

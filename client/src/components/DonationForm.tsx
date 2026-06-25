@@ -18,6 +18,20 @@ import TributeSection, { emptyTribute, type TributeFormValue } from "@/component
 interface DonationFormProps {
   sponsoredAnimalName?: string;
   tenant?: Tenant;
+  /** Optional campaign tag stored on the Stripe checkout metadata (e.g. "five-dollar-friday"). */
+  campaignTag?: string;
+  /** Override the preset amount grid for a specific campaign. */
+  campaignAmounts?: number[];
+  /** Initial selected amount for a campaign (e.g. 5 for $5 Friday). */
+  campaignDefaultAmount?: number;
+  /** Initial donation frequency: true = Monthly, false = One-Time. */
+  campaignDefaultRecurring?: boolean;
+  /** Override the card heading. */
+  campaignTitle?: string;
+  /** Override the card description. */
+  campaignDescription?: string;
+  /** Short encouragement shown beneath the frequency toggle (e.g. nudge to give monthly). */
+  monthlyNudge?: string;
 }
 
 const iconMap = {
@@ -30,16 +44,16 @@ const iconMap = {
   home: Home,
 } as const;
 
-export default function DonationForm({ sponsoredAnimalName, tenant }: DonationFormProps) {
+export default function DonationForm({ sponsoredAnimalName, tenant, campaignTag, campaignAmounts, campaignDefaultAmount, campaignDefaultRecurring, campaignTitle, campaignDescription, monthlyNudge }: DonationFormProps) {
   const { toast } = useToast();
   
   const donationSection = (tenant as any)?.donationSection || {};
-  const donationTitle = donationSection.monthlyGivingTitle || "Make a Donation";
-  const donationDescription = donationSection.monthlyGivingDescription || "Your generous gift helps save lives. Every dollar makes a difference.";
+  const donationTitle = campaignTitle || donationSection.monthlyGivingTitle || "Make a Donation";
+  const donationDescription = campaignDescription || donationSection.monthlyGivingDescription || "Your generous gift helps save lives. Every dollar makes a difference.";
   const donationIcon = donationSection.monthlyGivingIcon || "heart";
   
   // One-time donation preset amounts (6 amounts in 3x2 grid)
-  const oneTimeAmounts: number[] = donationSection.oneTimeAmounts || [250, 100, 50, 30, 25, 10];
+  const oneTimeAmounts: number[] = campaignAmounts || donationSection.oneTimeAmounts || [250, 100, 50, 30, 25, 10];
   const showCustomAmount = donationSection.showCustomAmount !== false;
   
   // Mailing address settings
@@ -47,8 +61,10 @@ export default function DonationForm({ sponsoredAnimalName, tenant }: DonationFo
   const donateMailingAddress = donationSection.donateMailingAddress || (tenant as any)?.footerAddress;
   
   // Donation frequency: monthly is default for general donations, one-time only for sponsorships
-  const [isRecurring, setIsRecurring] = useState(!sponsoredAnimalName); // Monthly by default, one-time for sponsors
-  const [amount, setAmount] = useState<number | null>(sponsoredAnimalName ? 25 : 30);
+  const [isRecurring, setIsRecurring] = useState(
+    sponsoredAnimalName ? false : (campaignDefaultRecurring ?? true)
+  ); // Monthly by default, one-time for sponsors; campaign can override
+  const [amount, setAmount] = useState<number | null>(sponsoredAnimalName ? 25 : (campaignDefaultAmount ?? 30));
   const [customAmount, setCustomAmount] = useState("");
   const [donorCoversFees, setDonorCoversFees] = useState(true); // Default checked
   const [tribute, setTribute] = useState<TributeFormValue>(emptyTribute);
@@ -104,6 +120,7 @@ export default function DonationForm({ sponsoredAnimalName, tenant }: DonationFo
         donorCoversFees: params.donorCoversFees || false,
         metadata: {
           sponsoredAnimalName: sponsoredAnimalName || '',
+          ...(campaignTag ? { campaign: campaignTag } : {}),
           ...tributeMeta,
         },
       });
@@ -248,6 +265,19 @@ export default function DonationForm({ sponsoredAnimalName, tenant }: DonationFo
               </div>
             )}
 
+            {/* Optional campaign nudge encouraging recurring gifts */}
+            {!sponsoredAnimalName && monthlyNudge && !isRecurring && (
+              <button
+                type="button"
+                onClick={() => setIsRecurring(true)}
+                className="w-full flex items-start gap-2 p-3 rounded-md border bg-muted/40 text-left hover-elevate"
+                data-testid="button-monthly-nudge"
+              >
+                <HeartHandshake className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
+                <span className="text-xs text-muted-foreground leading-relaxed">{monthlyNudge}</span>
+              </button>
+            )}
+
             {/* Preset amount buttons - 3x2 grid */}
             <div className="grid grid-cols-3 gap-2">
               {oneTimeAmounts.map((presetAmount: number) => (
@@ -285,7 +315,7 @@ export default function DonationForm({ sponsoredAnimalName, tenant }: DonationFo
                       setAmount(null);
                     } else {
                       // Reset to default when cleared
-                      setAmount(30);
+                      setAmount(sponsoredAnimalName ? 25 : (campaignDefaultAmount ?? 30));
                     }
                   }}
                   onFocus={() => {

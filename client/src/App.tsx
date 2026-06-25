@@ -116,6 +116,7 @@ import PublicConfirmationPage from "@/pages/PublicConfirmationPage";
 import FormPaymentPage from "@/pages/FormPaymentPage";
 import PublicContactPage from "@/pages/PublicContactPage";
 import DonatePage from "@/pages/DonatePage";
+import FiveDollarFridayPage from "@/pages/FiveDollarFridayPage";
 import DonationLinkRedirectPage from "@/pages/DonationLinkRedirectPage";
 import FundraiserEventPage from "@/pages/FundraiserEventPage";
 import FundraisersPage from "@/pages/FundraisersPage";
@@ -254,6 +255,7 @@ function RouterSwitch() {
       <Route path="/fundraisers" component={PublicFundraisersPage} />
       <Route path="/donate/event/:eventId" component={FundraiserEventPage} />
       <Route path="/donate/:linkId" component={DonationLinkRedirectPage} />
+      <Route path="/five-dollar-friday" component={FiveDollarFridayPage} />
       <Route path="/donate" component={DonatePage} />
       <Route path="/vip-club" component={VipClubPage} />
       <Route path="/wall-of-heroes" component={WallOfHeroesPage} />
