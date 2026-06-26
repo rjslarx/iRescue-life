@@ -916,7 +916,7 @@ function FiveDollarFridayCard({ fridayUrl, tenantName, fridayImageUrl, fridaySta
               <p className="text-xs text-muted-foreground">
                 Optionally set a window for when your $5 Friday page is live. Outside this window, visitors are sent to your general donation page. Leave both empty to keep it always live.
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3">
                 <div className="space-y-1.5">
                   <label htmlFor="friday-starts-at" className="text-xs font-medium text-muted-foreground">Starts</label>
                   <Input

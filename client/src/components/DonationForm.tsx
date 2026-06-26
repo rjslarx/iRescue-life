@@ -304,8 +304,8 @@ export default function DonationForm({ sponsoredAnimalName, tenant, campaignTag,
               </button>
             )}
 
-            {/* Preset amount buttons - 3x2 grid */}
-            <div className="grid grid-cols-3 gap-2">
+            {/* Preset amount buttons - 3x2 grid, or a single big button for one-amount campaigns */}
+            <div className={`grid gap-2 ${oneTimeAmounts.length === 1 ? 'grid-cols-1' : 'grid-cols-3'}`}>
               {oneTimeAmounts.map((presetAmount: number) => (
                 <button
                   key={presetAmount}
@@ -314,7 +314,9 @@ export default function DonationForm({ sponsoredAnimalName, tenant, campaignTag,
                     setAmount(presetAmount);
                     setCustomAmount("");
                   }}
-                  className={`py-3 px-2 rounded-lg border-2 text-sm font-medium transition-all ${
+                  className={`rounded-lg border-2 font-medium transition-all ${
+                    oneTimeAmounts.length === 1 ? 'py-5 text-3xl' : 'py-3 px-2 text-sm'
+                  } ${
                     amount === presetAmount && !customAmount
                       ? 'border-primary bg-primary/5 text-primary' 
                       : 'border-border bg-background text-muted-foreground hover:border-muted-foreground/50'

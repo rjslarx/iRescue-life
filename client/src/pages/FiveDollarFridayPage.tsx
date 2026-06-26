@@ -135,7 +135,7 @@ export default function FiveDollarFridayPage() {
             campaignTag="five-dollar-friday"
             campaignTitle="$5 Friday Gift"
             campaignDescription="Every $5 helps feed, shelter, and care for animals waiting for their forever homes."
-            campaignAmounts={[5, 10, 15, 25, 50, 100]}
+            campaignAmounts={[5]}
             campaignDefaultAmount={5}
             campaignDefaultRecurring={false}
             showWeeklyOption
