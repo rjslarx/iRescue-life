@@ -899,7 +899,7 @@ function FiveDollarFridayCard({ fridayUrl, tenantName, fridayImageUrl, fridaySta
             <div className="space-y-2 border-t pt-4">
               <label className="text-sm font-medium text-muted-foreground">Page image</label>
               <p className="text-xs text-muted-foreground">
-                Add a custom photo shown as the banner on your $5 Friday page. Leave empty to use the default look.
+                Add a custom photo shown as the banner on your $5 Friday page. Leave empty to use the default look. Recommended size: 2400&times;800px (3:1 wide landscape), under 2MB. Keep the subject centered &mdash; the edges crop on different screens, and lighter text sits on top.
               </p>
               <ObjectUploader
                 value={fridayImageUrl ? [fridayImageUrl] : []}
