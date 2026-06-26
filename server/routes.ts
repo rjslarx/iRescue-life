@@ -27325,6 +27325,7 @@ Submitted: ${new Date().toLocaleString()}
         fiveDollarFridayImageUrl: z.string().optional().or(z.literal("")),
         fiveDollarFridayStartsAt: z.string().optional().or(z.literal("")),
         fiveDollarFridayEndsAt: z.string().optional().or(z.literal("")),
+        fiveDollarFridayDayOfWeek: z.number().int().min(0).max(6).nullable().optional(),
       });
 
       const settings = brandingSettingsSchema.parse(req.body);
@@ -27368,6 +27369,10 @@ Submitted: ${new Date().toLocaleString()}
         const v = settings.fiveDollarFridayEndsAt;
         const d = v ? new Date(v) : null;
         updateData.fiveDollarFridayEndsAt = d && !isNaN(d.getTime()) ? d : null;
+      }
+      if (settings.fiveDollarFridayDayOfWeek !== undefined) {
+        const v = settings.fiveDollarFridayDayOfWeek;
+        updateData.fiveDollarFridayDayOfWeek = (v !== null && v >= 0 && v <= 6) ? v : null;
       }
       if (
         updateData.fiveDollarFridayStartsAt instanceof Date &&

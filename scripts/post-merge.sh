@@ -63,5 +63,12 @@ ALTER TABLE tenants ADD COLUMN IF NOT EXISTS five_dollar_friday_starts_at timest
 ALTER TABLE tenants ADD COLUMN IF NOT EXISTS five_dollar_friday_ends_at timestamp;
 SQL
 
+# $5 Friday recurring-day model: the campaign now runs all day on a per-tenant
+# weekday (0=Sun..6=Sat, JS getDay; null defaults to Friday in code) instead of
+# a fixed datetime window. Idempotent.
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' || echo "[post-merge] tenants five_dollar_friday_day_of_week column skipped (already applied or DB unreachable)."
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS five_dollar_friday_day_of_week integer;
+SQL
+
 yes "" | timeout 60 npx drizzle-kit push --force || \
   echo "[post-merge] drizzle-kit push skipped (timeout or non-zero exit) — schema must be managed via SQL ALTER in the task."

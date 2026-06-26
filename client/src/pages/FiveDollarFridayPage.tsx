@@ -5,7 +5,11 @@ import DonationForm from "@/components/DonationForm";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useSEO } from "@/hooks/useSEO";
 import { CalendarHeart, Coffee, Repeat } from "lucide-react";
-import type { Tenant } from "@shared/schema";
+import {
+  fiveDollarDayName,
+  FIVE_DOLLAR_DEFAULT_TIMEZONE,
+  type Tenant,
+} from "@shared/schema";
 
 interface TenantResponse {
   tenant: Tenant;
@@ -20,25 +24,23 @@ export default function FiveDollarFridayPage() {
   const rescueName = tenant?.name || "Animal Rescue";
   const heroImageUrl = tenant?.fiveDollarFridayImageUrl || undefined;
 
+  // The $5 campaign runs all day on a single weekday each week (default Friday).
+  // Each rescue can pick which weekday so it can become "$5 Tuesday" etc.
+  const dayName = fiveDollarDayName(tenant?.fiveDollarFridayDayOfWeek);
+
   useSEO({
-    title: `$5 Friday | ${rescueName}`,
-    description: `It's $5 Friday at ${rescueName}! Skip one coffee and give $5 to help animals in need. Make it a monthly gift and your $5 saves lives every month.`,
+    title: `$5 ${dayName} | ${rescueName}`,
+    description: `It's $5 ${dayName} at ${rescueName}! Skip one coffee and give $5 to help animals in need. Make it a monthly gift and your $5 saves lives every month.`,
     siteName: rescueName,
   });
 
-  // Optional campaign window: if the rescue scheduled a start/end, send visitors
-  // to the general donation page when the page is viewed before it begins or
-  // after it ends. No schedule set means the page is always live.
-  const now = Date.now();
-  const startsAt = tenant?.fiveDollarFridayStartsAt
-    ? new Date(tenant.fiveDollarFridayStartsAt as string | Date).getTime()
-    : null;
-  const endsAt = tenant?.fiveDollarFridayEndsAt
-    ? new Date(tenant.fiveDollarFridayEndsAt as string | Date).getTime()
-    : null;
-  const beforeStart = startsAt !== null && !isNaN(startsAt) && now < startsAt;
-  const afterEnd = endsAt !== null && !isNaN(endsAt) && now > endsAt;
-  if (!isLoading && tenant && (beforeStart || afterEnd)) {
+  // Recurring weekly campaign: the page is only live on the chosen weekday,
+  // evaluated in the rescue's timezone (defaults to America/Chicago). On any
+  // other day, send visitors to the general donation page.
+  const tz = (tenant as { timezone?: string | null } | undefined)?.timezone || FIVE_DOLLAR_DEFAULT_TIMEZONE;
+  const todayName = new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "long" }).format(new Date());
+  const isCampaignDay = todayName === dayName;
+  if (!isLoading && tenant && !isCampaignDay) {
     return <Redirect to="/donate" />;
   }
 
@@ -59,13 +61,13 @@ export default function FiveDollarFridayPage() {
           <div className="relative container max-w-2xl mx-auto px-4 sm:px-6 py-14 sm:py-20 text-center">
             <div className="inline-flex items-center gap-2 rounded-full border border-white/30 bg-white/10 backdrop-blur px-3 py-1 text-xs font-medium text-white mb-4">
               <CalendarHeart className="h-3.5 w-3.5" />
-              $5 Friday
+              $5 {dayName}
             </div>
             <h1
               className="font-display text-3xl sm:text-5xl font-bold mb-3 tracking-tight text-white drop-shadow"
               data-testid="text-five-dollar-friday-title"
             >
-              Give $5 this Friday
+              Give $5 this {dayName}
             </h1>
             <p
               className="text-white/90 text-base sm:text-lg max-w-xl mx-auto drop-shadow"
@@ -93,13 +95,13 @@ export default function FiveDollarFridayPage() {
           <div className="container max-w-2xl mx-auto px-4 sm:px-6 py-10 sm:py-14 text-center">
             <div className="inline-flex items-center gap-2 rounded-full border bg-background/70 backdrop-blur px-3 py-1 text-xs font-medium text-primary mb-4">
               <CalendarHeart className="h-3.5 w-3.5" />
-              $5 Friday
+              $5 {dayName}
             </div>
             <h1
               className="font-display text-3xl sm:text-5xl font-bold mb-3 tracking-tight"
               data-testid="text-five-dollar-friday-title"
             >
-              Give $5 this Friday
+              Give $5 this {dayName}
             </h1>
             <p
               className="text-muted-foreground text-base sm:text-lg max-w-xl mx-auto"
@@ -133,13 +135,13 @@ export default function FiveDollarFridayPage() {
           <DonationForm
             tenant={tenant}
             campaignTag="five-dollar-friday"
-            campaignTitle="$5 Friday Gift"
+            campaignTitle={`$5 ${dayName} Gift`}
             campaignDescription="Every $5 helps feed, shelter, and care for animals waiting for their forever homes."
             campaignAmounts={[5]}
             campaignDefaultAmount={5}
             campaignDefaultRecurring={false}
             showWeeklyOption
-            monthlyNudge="Love $5 Friday? Make it weekly or monthly and your $5 helps animals all year — tap to switch to a recurring gift."
+            monthlyNudge={`Love $5 ${dayName}? Make it weekly or monthly and your $5 helps animals all year — tap to switch to a recurring gift.`}
           />
         )}
       </div>

@@ -86,7 +86,7 @@ import DashboardLayout from "@/components/DashboardLayout";
 import SocialPostArchitectDialog from "@/components/SocialPostArchitectDialog";
 import { getAvatarIcon, getAvatarColor, AVATAR_TYPES } from "@/lib/participant-avatars";
 import { ExpenseCampaignsTab } from "@/components/fundraising/ExpenseCampaignsTab";
-import type { VotingContest, VotingContestEntrant } from "@shared/schema";
+import { fiveDollarDayName, FIVE_DOLLAR_DEFAULT_DAY, DAY_OF_WEEK_NAMES, type VotingContest, type VotingContestEntrant } from "@shared/schema";
 
 export default function FundraisingHubPage() {
   const { toast } = useToast();
@@ -132,7 +132,7 @@ export default function FundraisingHubPage() {
         <TabsContent value="toolkit">
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-6">
             <GeneralDonationsCard donationUrl={donationUrl} tenantName={tenant?.name} isLoading={tenantLoading} />
-            <FiveDollarFridayCard fridayUrl={fiveDollarFridayUrl} tenantName={tenant?.name} fridayImageUrl={tenant?.fiveDollarFridayImageUrl || ""} fridayStartsAt={tenant?.fiveDollarFridayStartsAt} fridayEndsAt={tenant?.fiveDollarFridayEndsAt} isLoading={tenantLoading} />
+            <FiveDollarFridayCard fridayUrl={fiveDollarFridayUrl} tenantName={tenant?.name} fridayImageUrl={tenant?.fiveDollarFridayImageUrl || ""} fridayDayOfWeek={tenant?.fiveDollarFridayDayOfWeek} isLoading={tenantLoading} />
             <AnimalCampaignsCard onNavigate={setLocation} />
             <SocialPostArchitectCard />
             <SocialMediaPlaybookCard />
@@ -715,18 +715,11 @@ function GeneralDonationsCard({ donationUrl, tenantName, isLoading }: { donation
   );
 }
 
-function toDatetimeLocalValue(raw?: string | Date | null): string {
-  if (!raw) return "";
-  const d = new Date(raw);
-  if (isNaN(d.getTime())) return "";
-  const offset = d.getTimezoneOffset();
-  return new Date(d.getTime() - offset * 60000).toISOString().slice(0, 16);
-}
-
-function FiveDollarFridayCard({ fridayUrl, tenantName, fridayImageUrl, fridayStartsAt, fridayEndsAt, isLoading }: { fridayUrl: string; tenantName?: string; fridayImageUrl: string; fridayStartsAt?: string | Date | null; fridayEndsAt?: string | Date | null; isLoading: boolean }) {
+function FiveDollarFridayCard({ fridayUrl, tenantName, fridayImageUrl, fridayDayOfWeek, isLoading }: { fridayUrl: string; tenantName?: string; fridayImageUrl: string; fridayDayOfWeek?: number | null; isLoading: boolean }) {
   const { toast } = useToast();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [qrGenerated, setQrGenerated] = useState(false);
+  const dayName = fiveDollarDayName(fridayDayOfWeek);
 
   const imageMutation = useMutation({
     mutationFn: async (url: string) => {
@@ -757,59 +750,34 @@ function FiveDollarFridayCard({ fridayUrl, tenantName, fridayImageUrl, fridaySta
     },
   });
 
-  const [startInput, setStartInput] = useState(() => toDatetimeLocalValue(fridayStartsAt));
-  const [endInput, setEndInput] = useState(() => toDatetimeLocalValue(fridayEndsAt));
+  const currentDay = fridayDayOfWeek ?? FIVE_DOLLAR_DEFAULT_DAY;
 
-  useEffect(() => { setStartInput(toDatetimeLocalValue(fridayStartsAt)); }, [fridayStartsAt]);
-  useEffect(() => { setEndInput(toDatetimeLocalValue(fridayEndsAt)); }, [fridayEndsAt]);
-
-  const scheduleMutation = useMutation({
-    mutationFn: async (payload: { start: string; end: string }) => {
+  const dayMutation = useMutation({
+    mutationFn: async (day: number) => {
       const response = await apiRequest('PATCH', '/api/tenant/settings/branding', {
-        fiveDollarFridayStartsAt: payload.start ? new Date(payload.start).toISOString() : "",
-        fiveDollarFridayEndsAt: payload.end ? new Date(payload.end).toISOString() : "",
+        fiveDollarFridayDayOfWeek: day,
       });
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Failed to save schedule');
+        throw new Error(errorData.error || 'Failed to save day');
       }
       return response.json();
     },
-    onSuccess: (_data, payload) => {
+    onSuccess: (_data, day) => {
       queryClient.invalidateQueries({ queryKey: ["/api/tenant"] });
       toast({
-        title: payload.start || payload.end ? "Schedule saved" : "Schedule cleared",
-        description: payload.start || payload.end
-          ? "Your $5 Friday page will only be live during this window."
-          : "Your $5 Friday page is always live.",
+        title: "Campaign day saved",
+        description: `Your $5 ${fiveDollarDayName(day)} page now turns on automatically every ${fiveDollarDayName(day)}.`,
       });
     },
     onError: (error: any) => {
       toast({
-        title: "Could not save schedule",
+        title: "Could not save day",
         description: error.message || "Please try again.",
         variant: "destructive",
       });
     },
   });
-
-  const handleSaveSchedule = () => {
-    if (startInput && endInput && new Date(endInput).getTime() <= new Date(startInput).getTime()) {
-      toast({
-        title: "Invalid window",
-        description: "The end time must be after the start time.",
-        variant: "destructive",
-      });
-      return;
-    }
-    scheduleMutation.mutate({ start: startInput, end: endInput });
-  };
-
-  const handleClearSchedule = () => {
-    setStartInput("");
-    setEndInput("");
-    scheduleMutation.mutate({ start: "", end: "" });
-  };
 
   useEffect(() => {
     if (fridayUrl && canvasRef.current) {
@@ -844,10 +812,10 @@ function FiveDollarFridayCard({ fridayUrl, tenantName, fridayImageUrl, fridaySta
       <CardHeader>
         <div className="flex items-center gap-2">
           <CalendarHeart className="h-5 w-5 text-primary" />
-          <CardTitle className="text-lg">$5 Friday</CardTitle>
+          <CardTitle className="text-lg">$5 {dayName}</CardTitle>
         </div>
         <p className="text-sm text-muted-foreground">
-          A dedicated QR code and link for your weekly $5 Friday push. Donors can give $5 in one tap and opt into a monthly gift.
+          A dedicated QR code and link for your weekly $5 {dayName} push. Donors can give $5 in one tap and opt into a monthly gift.
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -859,7 +827,7 @@ function FiveDollarFridayCard({ fridayUrl, tenantName, fridayImageUrl, fridaySta
         ) : fridayUrl ? (
           <>
             <div className="space-y-2">
-              <label className="text-sm font-medium text-muted-foreground">$5 Friday URL</label>
+              <label className="text-sm font-medium text-muted-foreground">$5 {dayName} URL</label>
               <div className="flex items-center gap-2">
                 <Input
                   readOnly
@@ -912,54 +880,26 @@ function FiveDollarFridayCard({ fridayUrl, tenantName, fridayImageUrl, fridaySta
             </div>
 
             <div className="space-y-3 border-t pt-4">
-              <label className="text-sm font-medium text-muted-foreground">Campaign schedule</label>
+              <label className="text-sm font-medium text-muted-foreground">Campaign day</label>
               <p className="text-xs text-muted-foreground">
-                Optionally set a window for when your $5 Friday page is live. Outside this window, visitors are sent to your general donation page. Leave both empty to keep it always live.
+                Pick which day of the week your $5 campaign runs. It turns on automatically all day, every {dayName}. On other days, visitors are sent to your general donation page.
               </p>
-              <div className="grid grid-cols-1 gap-3">
-                <div className="space-y-1.5">
-                  <label htmlFor="friday-starts-at" className="text-xs font-medium text-muted-foreground">Starts</label>
-                  <Input
-                    id="friday-starts-at"
-                    type="datetime-local"
-                    value={startInput}
-                    onChange={(e) => setStartInput(e.target.value)}
-                    data-testid="input-friday-starts-at"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label htmlFor="friday-ends-at" className="text-xs font-medium text-muted-foreground">Ends</label>
-                  <Input
-                    id="friday-ends-at"
-                    type="datetime-local"
-                    value={endInput}
-                    onChange={(e) => setEndInput(e.target.value)}
-                    data-testid="input-friday-ends-at"
-                  />
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleSaveSchedule}
-                  disabled={scheduleMutation.isPending}
-                  data-testid="button-save-friday-schedule"
-                >
-                  Save schedule
-                </Button>
-                {(startInput || endInput) && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleClearSchedule}
-                    disabled={scheduleMutation.isPending}
-                    data-testid="button-clear-friday-schedule"
-                  >
-                    Clear
-                  </Button>
-                )}
-              </div>
+              <Select
+                value={String(currentDay)}
+                onValueChange={(v) => dayMutation.mutate(Number(v))}
+                disabled={dayMutation.isPending}
+              >
+                <SelectTrigger className="w-full" data-testid="select-friday-day-of-week">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {DAY_OF_WEEK_NAMES.map((name, idx) => (
+                    <SelectItem key={idx} value={String(idx)} data-testid={`option-friday-day-${idx}`}>
+                      {name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <Button
@@ -969,7 +909,7 @@ function FiveDollarFridayCard({ fridayUrl, tenantName, fridayImageUrl, fridaySta
               data-testid="button-open-friday-page"
             >
               <ExternalLink className="mr-2 h-4 w-4" />
-              Preview $5 Friday page
+              Preview $5 {dayName} page
             </Button>
           </>
         ) : (

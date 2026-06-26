@@ -3,6 +3,21 @@ import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+// --- $5 Friday recurring-day helpers (shared between client and server) ---
+// The $5 campaign runs all day on one weekday each week. Day numbering matches
+// JS Date.getDay(): 0=Sunday .. 6=Saturday. When a tenant has no value set, the
+// campaign defaults to Friday. Liveness is evaluated in the tenant's timezone,
+// which defaults to America/Chicago (no tenant currently sets a timezone).
+export const FIVE_DOLLAR_DEFAULT_DAY = 5; // Friday
+export const FIVE_DOLLAR_DEFAULT_TIMEZONE = "America/Chicago";
+export const DAY_OF_WEEK_NAMES = [
+  "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
+] as const;
+export function fiveDollarDayName(day?: number | null): string {
+  const d = day ?? FIVE_DOLLAR_DEFAULT_DAY;
+  return DAY_OF_WEEK_NAMES[d] ?? DAY_OF_WEEK_NAMES[FIVE_DOLLAR_DEFAULT_DAY];
+}
+
 // Tenants table - core of multi-tenancy
 export const tenants = pgTable("tenants", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -283,6 +298,7 @@ export const tenants = pgTable("tenants", {
   fiveDollarFridayImageUrl: text("five_dollar_friday_image_url"), // Object storage path (/objects/...) for the $5 Friday page hero image
   fiveDollarFridayStartsAt: timestamp("five_dollar_friday_starts_at"), // optional campaign window start; before this the public page redirects to /donate
   fiveDollarFridayEndsAt: timestamp("five_dollar_friday_ends_at"), // optional campaign window end; after this the public page redirects to /donate
+  fiveDollarFridayDayOfWeek: integer("five_dollar_friday_day_of_week"), // 0=Sun..6=Sat; the weekday the $5 campaign runs all day, every week (defaults to Friday when null)
   
   // Owner-controlled admin restrictions (allows owners to limit what admins can edit)
   restrictAdminSettingsEdit: boolean("restrict_admin_settings_edit").notNull().default(false), // When true, admins can view but not edit Settings
