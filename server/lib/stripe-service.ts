@@ -118,7 +118,7 @@ export class StripeService {
       currency: string;
       customerEmail?: string;
       isRecurring: boolean;
-      interval?: 'month' | 'year';
+      interval?: 'week' | 'month' | 'year';
       successUrl: string;
       cancelUrl: string;
       metadata?: Record<string, string>;
@@ -226,14 +226,19 @@ export class StripeService {
     }
 
     if (params.isRecurring) {
+      const recurringInterval = params.interval || 'month';
+      const intervalLabel =
+        recurringInterval === 'week' ? 'Weekly'
+        : recurringInterval === 'year' ? 'Annual'
+        : 'Monthly';
       const price = await stripe.prices.create({
         unit_amount: params.amount,
         currency: params.currency,
         recurring: {
-          interval: params.interval || 'month',
+          interval: recurringInterval,
         },
         product_data: {
-          name: params.productName || `Monthly Donation to ${tenant.name}`,
+          name: params.productName || `${intervalLabel} Donation to ${tenant.name}`,
           ...(params.productDescription ? { description: params.productDescription } : {}),
         },
       });

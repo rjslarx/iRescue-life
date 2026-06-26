@@ -17,6 +17,7 @@ export default function FiveDollarFridayPage() {
 
   const tenant = data?.tenant;
   const rescueName = tenant?.name || "Animal Rescue";
+  const heroImageUrl = tenant?.fiveDollarFridayImageUrl || undefined;
 
   useSEO({
     title: `$5 Friday | ${rescueName}`,
@@ -29,39 +30,82 @@ export default function FiveDollarFridayPage() {
       <PublicHeader rescueName={rescueName} logoUrl={tenant?.logoUrl || undefined} />
 
       {/* Hero */}
-      <div className="relative overflow-hidden bg-gradient-to-br from-primary/15 via-primary/5 to-transparent">
-        <div className="container max-w-2xl mx-auto px-4 sm:px-6 py-10 sm:py-14 text-center">
-          <div className="inline-flex items-center gap-2 rounded-full border bg-background/70 backdrop-blur px-3 py-1 text-xs font-medium text-primary mb-4">
-            <CalendarHeart className="h-3.5 w-3.5" />
-            $5 Friday
-          </div>
-          <h1
-            className="font-display text-3xl sm:text-5xl font-bold mb-3 tracking-tight"
-            data-testid="text-five-dollar-friday-title"
-          >
-            Give $5 this Friday
-          </h1>
-          <p
-            className="text-muted-foreground text-base sm:text-lg max-w-xl mx-auto"
-            data-testid="text-five-dollar-friday-subtitle"
-          >
-            Skip one coffee and help {rescueName} care for animals in need. Five
-            dollars goes further than you'd think — and you can make it monthly so
-            your kindness keeps giving all year long.
-          </p>
+      {heroImageUrl ? (
+        <div className="relative overflow-hidden" data-testid="hero-five-dollar-friday-image">
+          <img
+            src={heroImageUrl}
+            alt={`${rescueName} $5 Friday`}
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+          {/* Dark wash so light text is readable over any image, in light or dark mode */}
+          <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/55 to-black/70" />
+          <div className="relative container max-w-2xl mx-auto px-4 sm:px-6 py-14 sm:py-20 text-center">
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/30 bg-white/10 backdrop-blur px-3 py-1 text-xs font-medium text-white mb-4">
+              <CalendarHeart className="h-3.5 w-3.5" />
+              $5 Friday
+            </div>
+            <h1
+              className="font-display text-3xl sm:text-5xl font-bold mb-3 tracking-tight text-white drop-shadow"
+              data-testid="text-five-dollar-friday-title"
+            >
+              Give $5 this Friday
+            </h1>
+            <p
+              className="text-white/90 text-base sm:text-lg max-w-xl mx-auto drop-shadow"
+              data-testid="text-five-dollar-friday-subtitle"
+            >
+              Skip one coffee and help {rescueName} care for animals in need. Five
+              dollars goes further than you'd think — make it weekly or monthly so
+              your kindness keeps giving all year long.
+            </p>
 
-          <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
-            <span className="flex items-center gap-2">
-              <Coffee className="h-4 w-4 text-primary" />
-              About the price of a latte
-            </span>
-            <span className="flex items-center gap-2">
-              <Repeat className="h-4 w-4 text-primary" />
-              Make it monthly in one tap
-            </span>
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-white/85">
+              <span className="flex items-center gap-2">
+                <Coffee className="h-4 w-4" />
+                About the price of a latte
+              </span>
+              <span className="flex items-center gap-2">
+                <Repeat className="h-4 w-4" />
+                Make it weekly or monthly in one tap
+              </span>
+            </div>
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="relative overflow-hidden bg-gradient-to-br from-primary/15 via-primary/5 to-transparent">
+          <div className="container max-w-2xl mx-auto px-4 sm:px-6 py-10 sm:py-14 text-center">
+            <div className="inline-flex items-center gap-2 rounded-full border bg-background/70 backdrop-blur px-3 py-1 text-xs font-medium text-primary mb-4">
+              <CalendarHeart className="h-3.5 w-3.5" />
+              $5 Friday
+            </div>
+            <h1
+              className="font-display text-3xl sm:text-5xl font-bold mb-3 tracking-tight"
+              data-testid="text-five-dollar-friday-title"
+            >
+              Give $5 this Friday
+            </h1>
+            <p
+              className="text-muted-foreground text-base sm:text-lg max-w-xl mx-auto"
+              data-testid="text-five-dollar-friday-subtitle"
+            >
+              Skip one coffee and help {rescueName} care for animals in need. Five
+              dollars goes further than you'd think — make it weekly or monthly so
+              your kindness keeps giving all year long.
+            </p>
+
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
+              <span className="flex items-center gap-2">
+                <Coffee className="h-4 w-4 text-primary" />
+                About the price of a latte
+              </span>
+              <span className="flex items-center gap-2">
+                <Repeat className="h-4 w-4 text-primary" />
+                Make it weekly or monthly in one tap
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="container max-w-2xl mx-auto py-8 sm:py-12 px-4 sm:px-6">
         {isLoading ? (
@@ -77,7 +121,8 @@ export default function FiveDollarFridayPage() {
             campaignAmounts={[5, 10, 15, 25, 50, 100]}
             campaignDefaultAmount={5}
             campaignDefaultRecurring={false}
-            monthlyNudge="Love $5 Friday? Make it monthly and your $5 helps animals every single month — tap to switch to a recurring gift."
+            showWeeklyOption
+            monthlyNudge="Love $5 Friday? Make it weekly or monthly and your $5 helps animals all year — tap to switch to a recurring gift."
           />
         )}
       </div>

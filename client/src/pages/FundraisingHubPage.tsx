@@ -132,7 +132,7 @@ export default function FundraisingHubPage() {
         <TabsContent value="toolkit">
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-6">
             <GeneralDonationsCard donationUrl={donationUrl} tenantName={tenant?.name} isLoading={tenantLoading} />
-            <FiveDollarFridayCard fridayUrl={fiveDollarFridayUrl} tenantName={tenant?.name} isLoading={tenantLoading} />
+            <FiveDollarFridayCard fridayUrl={fiveDollarFridayUrl} tenantName={tenant?.name} fridayImageUrl={tenant?.fiveDollarFridayImageUrl || ""} isLoading={tenantLoading} />
             <AnimalCampaignsCard onNavigate={setLocation} />
             <SocialPostArchitectCard />
             <SocialMediaPlaybookCard />
@@ -715,10 +715,39 @@ function GeneralDonationsCard({ donationUrl, tenantName, isLoading }: { donation
   );
 }
 
-function FiveDollarFridayCard({ fridayUrl, tenantName, isLoading }: { fridayUrl: string; tenantName?: string; isLoading: boolean }) {
+function FiveDollarFridayCard({ fridayUrl, tenantName, fridayImageUrl, isLoading }: { fridayUrl: string; tenantName?: string; fridayImageUrl: string; isLoading: boolean }) {
   const { toast } = useToast();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [qrGenerated, setQrGenerated] = useState(false);
+
+  const imageMutation = useMutation({
+    mutationFn: async (url: string) => {
+      const response = await apiRequest('PATCH', '/api/tenant/settings/branding', {
+        fiveDollarFridayImageUrl: url,
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to save image');
+      }
+      return response.json();
+    },
+    onSuccess: (_data, url) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/tenant"] });
+      toast({
+        title: url ? "Image saved" : "Image removed",
+        description: url
+          ? "Your $5 Friday page image has been updated."
+          : "Your $5 Friday page is back to the default look.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Could not save image",
+        description: error.message || "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
 
   useEffect(() => {
     if (fridayUrl && canvasRef.current) {
@@ -803,6 +832,21 @@ function FiveDollarFridayCard({ fridayUrl, tenantName, isLoading }: { fridayUrl:
                   Download QR
                 </Button>
               </div>
+            </div>
+
+            <div className="space-y-2 border-t pt-4">
+              <label className="text-sm font-medium text-muted-foreground">Page image</label>
+              <p className="text-xs text-muted-foreground">
+                Add a custom photo shown as the banner on your $5 Friday page. Leave empty to use the default look.
+              </p>
+              <ObjectUploader
+                value={fridayImageUrl ? [fridayImageUrl] : []}
+                onChange={(urls) => imageMutation.mutate(urls[0] || "")}
+                maxFiles={1}
+                accept="image/*"
+                buttonVariant="outline"
+                data-testid="button-upload-friday-image"
+              />
             </div>
 
             <Button

@@ -27322,6 +27322,7 @@ Submitted: ${new Date().toLocaleString()}
         socialYoutube: z.string().url().optional().or(z.literal("")),
         socialTiktok: z.string().url().optional().or(z.literal("")),
         sponsorLogos: z.array(sponsorLogoSchema).optional(),
+        fiveDollarFridayImageUrl: z.string().optional().or(z.literal("")),
       });
 
       const settings = brandingSettingsSchema.parse(req.body);
@@ -27352,6 +27353,10 @@ Submitted: ${new Date().toLocaleString()}
       if (settings.socialYoutube !== undefined) updateData.socialYoutube = settings.socialYoutube || null;
       if (settings.socialTiktok !== undefined) updateData.socialTiktok = settings.socialTiktok || null;
       if (settings.sponsorLogos !== undefined) updateData.sponsorLogos = settings.sponsorLogos || null;
+      if (settings.fiveDollarFridayImageUrl !== undefined) {
+        const v = settings.fiveDollarFridayImageUrl;
+        updateData.fiveDollarFridayImageUrl = v && v.startsWith('/objects/') ? v : null;
+      }
       
       // Handle branding colors (stored in jsonb)
       if (settings.primaryColor !== undefined || 
@@ -29244,7 +29249,7 @@ Submitted: ${new Date().toLocaleString()}
         currency: z.string().default("usd"),
         customerEmail: z.string().email().optional(),
         isRecurring: z.boolean().default(false),
-        interval: z.enum(["month", "year"]).optional(),
+        interval: z.enum(["week", "month", "year"]).optional(),
         donorCoversFees: z.boolean().default(false),
         metadata: z.record(z.string()).optional(),
       });

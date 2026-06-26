@@ -279,6 +279,8 @@ export const tenants = pgTable("tenants", {
   donationLandingButtonUrl: text("donation_landing_button_url"), // Custom URL override for donation button
   donationLandingMailingAddress: text("donation_landing_mailing_address"), // e.g., "PO Box 123, City, ST 12345"
   donationLandingMailingText: text("donation_landing_mailing_text"), // e.g., "Prefer to mail a check? Send to:"
+  // $5 Friday campaign — optional custom hero image shown on the public /five-dollar-friday page
+  fiveDollarFridayImageUrl: text("five_dollar_friday_image_url"), // Object storage path (/objects/...) for the $5 Friday page hero image
   
   // Owner-controlled admin restrictions (allows owners to limit what admins can edit)
   restrictAdminSettingsEdit: boolean("restrict_admin_settings_edit").notNull().default(false), // When true, admins can view but not edit Settings

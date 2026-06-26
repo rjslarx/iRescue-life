@@ -32,6 +32,8 @@ interface DonationFormProps {
   campaignDescription?: string;
   /** Short encouragement shown beneath the frequency toggle (e.g. nudge to give monthly). */
   monthlyNudge?: string;
+  /** When true, the frequency selector offers One-Time / Weekly / Monthly instead of One-Time / Monthly. */
+  showWeeklyOption?: boolean;
 }
 
 const iconMap = {
@@ -44,7 +46,7 @@ const iconMap = {
   home: Home,
 } as const;
 
-export default function DonationForm({ sponsoredAnimalName, tenant, campaignTag, campaignAmounts, campaignDefaultAmount, campaignDefaultRecurring, campaignTitle, campaignDescription, monthlyNudge }: DonationFormProps) {
+export default function DonationForm({ sponsoredAnimalName, tenant, campaignTag, campaignAmounts, campaignDefaultAmount, campaignDefaultRecurring, campaignTitle, campaignDescription, monthlyNudge, showWeeklyOption }: DonationFormProps) {
   const { toast } = useToast();
   
   const donationSection = (tenant as any)?.donationSection || {};
@@ -64,6 +66,10 @@ export default function DonationForm({ sponsoredAnimalName, tenant, campaignTag,
   const [isRecurring, setIsRecurring] = useState(
     sponsoredAnimalName ? false : (campaignDefaultRecurring ?? true)
   ); // Monthly by default, one-time for sponsors; campaign can override
+  // Recurring cadence: weekly is only offered when the campaign enables it.
+  const [recurringInterval, setRecurringInterval] = useState<"week" | "month">("month");
+  const intervalWord = recurringInterval === "week" ? "week" : "month";
+  const recurringAdverb = recurringInterval === "week" ? "weekly" : "monthly";
   const [amount, setAmount] = useState<number | null>(sponsoredAnimalName ? 25 : (campaignDefaultAmount ?? 30));
   const [customAmount, setCustomAmount] = useState("");
   const [donorCoversFees, setDonorCoversFees] = useState(true); // Default checked
@@ -99,7 +105,7 @@ export default function DonationForm({ sponsoredAnimalName, tenant, campaignTag,
   );
 
   const stripeCheckoutMutation = useMutation({
-    mutationFn: async (params: { amount: number; email?: string; isRecurring?: boolean; donorCoversFees?: boolean; tribute?: TributeFormValue }) => {
+    mutationFn: async (params: { amount: number; email?: string; isRecurring?: boolean; interval?: "week" | "month"; donorCoversFees?: boolean; tribute?: TributeFormValue }) => {
       const tributeMeta: Record<string, string> = {};
       const t = params.tribute;
       if (t && t.enabled && t.kind && t.name.trim()) {
@@ -117,6 +123,7 @@ export default function DonationForm({ sponsoredAnimalName, tenant, campaignTag,
         currency: 'usd',
         customerEmail: params.email,
         isRecurring: params.isRecurring || false,
+        ...(params.isRecurring && params.interval ? { interval: params.interval } : {}),
         donorCoversFees: params.donorCoversFees || false,
         metadata: {
           sponsoredAnimalName: sponsoredAnimalName || '',
@@ -181,6 +188,7 @@ export default function DonationForm({ sponsoredAnimalName, tenant, campaignTag,
     stripeCheckoutMutation.mutate({
       amount: donationAmount,
       isRecurring: sponsoredAnimalName ? false : isRecurring,
+      interval: recurringInterval,
       donorCoversFees,
       tribute: oneTime ? tribute : undefined,
     });
@@ -240,9 +248,18 @@ export default function DonationForm({ sponsoredAnimalName, tenant, campaignTag,
               <div className="flex justify-center" data-testid="donation-frequency-toggle">
                 <ToggleGroup 
                   type="single" 
-                  value={isRecurring ? "monthly" : "one-time"}
+                  value={!isRecurring ? "one-time" : (recurringInterval === "week" ? "weekly" : "monthly")}
                   onValueChange={(value) => {
-                    if (value) setIsRecurring(value === "monthly");
+                    if (!value) return;
+                    if (value === "one-time") {
+                      setIsRecurring(false);
+                    } else if (value === "weekly") {
+                      setIsRecurring(true);
+                      setRecurringInterval("week");
+                    } else {
+                      setIsRecurring(true);
+                      setRecurringInterval("month");
+                    }
                   }}
                   size="sm"
                   className="border border-border rounded-lg p-1 bg-muted/30"
@@ -254,6 +271,15 @@ export default function DonationForm({ sponsoredAnimalName, tenant, campaignTag,
                   >
                     One-Time
                   </ToggleGroupItem>
+                  {showWeeklyOption && (
+                    <ToggleGroupItem 
+                      value="weekly" 
+                      className="data-[state=on]:bg-background data-[state=on]:shadow-sm"
+                      data-testid="button-weekly"
+                    >
+                      Weekly
+                    </ToggleGroupItem>
+                  )}
                   <ToggleGroupItem 
                     value="monthly" 
                     className="data-[state=on]:bg-background data-[state=on]:shadow-sm"
@@ -414,13 +440,13 @@ export default function DonationForm({ sponsoredAnimalName, tenant, campaignTag,
                   <Lock className="h-4 w-4 mr-2" />
                   {sponsoredAnimalName || !isRecurring 
                     ? `Donate $${donorCoversFees && feeData ? totalWithFeesDisplay : (amount || customAmount || '50')} Now`
-                    : `Give $${donorCoversFees && feeData ? totalWithFeesDisplay : (amount || customAmount || '50')}/month`
+                    : `Give $${donorCoversFees && feeData ? totalWithFeesDisplay : (amount || customAmount || '50')}/${intervalWord}`
                   }
                 </>
               )}
             </Button>
             <p className="text-xs text-muted-foreground text-center">
-              {sponsoredAnimalName || !isRecurring ? "Secure one-time payment" : "Secure monthly recurring payment"}
+              {sponsoredAnimalName || !isRecurring ? "Secure one-time payment" : `Secure ${recurringAdverb} recurring payment`}
             </p>
             <div className="flex justify-center pt-1">
               <Button

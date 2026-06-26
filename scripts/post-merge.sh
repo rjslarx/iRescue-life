@@ -49,5 +49,12 @@ ALTER TABLE tenants ADD COLUMN IF NOT EXISTS receipt_signature_name text;
 ALTER TABLE tenants ADD COLUMN IF NOT EXISTS receipt_signature_title text;
 SQL
 
+# Task #253: $5 Friday custom page image. Per-tenant object-storage path for the
+# hero image shown on the public /five-dollar-friday page. Idempotent —
+# ADD COLUMN IF NOT EXISTS is a no-op when already applied.
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' || echo "[post-merge] tenants five_dollar_friday_image_url column skipped (already applied or DB unreachable)."
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS five_dollar_friday_image_url text;
+SQL
+
 yes "" | timeout 60 npx drizzle-kit push --force || \
   echo "[post-merge] drizzle-kit push skipped (timeout or non-zero exit) — schema must be managed via SQL ALTER in the task."
