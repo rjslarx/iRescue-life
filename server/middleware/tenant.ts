@@ -114,6 +114,8 @@ export interface TenantContext {
   microchipClinicEnabled?: boolean | null;
   requireCompleteAddress?: boolean | null;
   fiveDollarFridayImageUrl?: string | null;
+  fiveDollarFridayStartsAt?: string | Date | null;
+  fiveDollarFridayEndsAt?: string | Date | null;
   // Organization Legal Settings
   orgLegalName?: string | null;
   orgAddressStreet?: string | null;
@@ -436,6 +438,8 @@ export async function resolveTenant(req: Request, res: Response, next: NextFunct
           microchipClinicEnabled: tenants.microchipClinicEnabled,
           requireCompleteAddress: tenants.requireCompleteAddress,
           fiveDollarFridayImageUrl: tenants.fiveDollarFridayImageUrl,
+          fiveDollarFridayStartsAt: tenants.fiveDollarFridayStartsAt,
+          fiveDollarFridayEndsAt: tenants.fiveDollarFridayEndsAt,
         })
         .from(tenants)
         .where(whereClause!)
@@ -533,6 +537,8 @@ export async function resolveTenant(req: Request, res: Response, next: NextFunct
         microchipClinicEnabled: tenant.microchipClinicEnabled,
         requireCompleteAddress: tenant.requireCompleteAddress,
         fiveDollarFridayImageUrl: tenant.fiveDollarFridayImageUrl,
+        fiveDollarFridayStartsAt: tenant.fiveDollarFridayStartsAt,
+        fiveDollarFridayEndsAt: tenant.fiveDollarFridayEndsAt,
       };
       
       // Set cookie for PWA manifest resolution on path-based tenants

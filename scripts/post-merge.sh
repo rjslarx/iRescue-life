@@ -56,5 +56,12 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' || echo "[post-merge] tenants fi
 ALTER TABLE tenants ADD COLUMN IF NOT EXISTS five_dollar_friday_image_url text;
 SQL
 
+# Task #253 follow-up: $5 Friday campaign schedule window. Optional start/end
+# timestamps; outside the window the public page redirects to /donate. Idempotent.
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' || echo "[post-merge] tenants five_dollar_friday schedule columns skipped (already applied or DB unreachable)."
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS five_dollar_friday_starts_at timestamp;
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS five_dollar_friday_ends_at timestamp;
+SQL
+
 yes "" | timeout 60 npx drizzle-kit push --force || \
   echo "[post-merge] drizzle-kit push skipped (timeout or non-zero exit) — schema must be managed via SQL ALTER in the task."

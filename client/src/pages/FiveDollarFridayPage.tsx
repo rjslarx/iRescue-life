@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { Redirect } from "wouter";
 import PublicHeader from "@/components/PublicHeader";
 import DonationForm from "@/components/DonationForm";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -24,6 +25,22 @@ export default function FiveDollarFridayPage() {
     description: `It's $5 Friday at ${rescueName}! Skip one coffee and give $5 to help animals in need. Make it a monthly gift and your $5 saves lives every month.`,
     siteName: rescueName,
   });
+
+  // Optional campaign window: if the rescue scheduled a start/end, send visitors
+  // to the general donation page when the page is viewed before it begins or
+  // after it ends. No schedule set means the page is always live.
+  const now = Date.now();
+  const startsAt = tenant?.fiveDollarFridayStartsAt
+    ? new Date(tenant.fiveDollarFridayStartsAt as string | Date).getTime()
+    : null;
+  const endsAt = tenant?.fiveDollarFridayEndsAt
+    ? new Date(tenant.fiveDollarFridayEndsAt as string | Date).getTime()
+    : null;
+  const beforeStart = startsAt !== null && !isNaN(startsAt) && now < startsAt;
+  const afterEnd = endsAt !== null && !isNaN(endsAt) && now > endsAt;
+  if (!isLoading && tenant && (beforeStart || afterEnd)) {
+    return <Redirect to="/donate" />;
+  }
 
   return (
     <div className="min-h-screen bg-background">

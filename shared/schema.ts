@@ -281,6 +281,8 @@ export const tenants = pgTable("tenants", {
   donationLandingMailingText: text("donation_landing_mailing_text"), // e.g., "Prefer to mail a check? Send to:"
   // $5 Friday campaign — optional custom hero image shown on the public /five-dollar-friday page
   fiveDollarFridayImageUrl: text("five_dollar_friday_image_url"), // Object storage path (/objects/...) for the $5 Friday page hero image
+  fiveDollarFridayStartsAt: timestamp("five_dollar_friday_starts_at"), // optional campaign window start; before this the public page redirects to /donate
+  fiveDollarFridayEndsAt: timestamp("five_dollar_friday_ends_at"), // optional campaign window end; after this the public page redirects to /donate
   
   // Owner-controlled admin restrictions (allows owners to limit what admins can edit)
   restrictAdminSettingsEdit: boolean("restrict_admin_settings_edit").notNull().default(false), // When true, admins can view but not edit Settings

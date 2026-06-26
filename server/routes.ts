@@ -27323,6 +27323,8 @@ Submitted: ${new Date().toLocaleString()}
         socialTiktok: z.string().url().optional().or(z.literal("")),
         sponsorLogos: z.array(sponsorLogoSchema).optional(),
         fiveDollarFridayImageUrl: z.string().optional().or(z.literal("")),
+        fiveDollarFridayStartsAt: z.string().optional().or(z.literal("")),
+        fiveDollarFridayEndsAt: z.string().optional().or(z.literal("")),
       });
 
       const settings = brandingSettingsSchema.parse(req.body);
@@ -27356,6 +27358,23 @@ Submitted: ${new Date().toLocaleString()}
       if (settings.fiveDollarFridayImageUrl !== undefined) {
         const v = settings.fiveDollarFridayImageUrl;
         updateData.fiveDollarFridayImageUrl = v && v.startsWith('/objects/') ? v : null;
+      }
+      if (settings.fiveDollarFridayStartsAt !== undefined) {
+        const v = settings.fiveDollarFridayStartsAt;
+        const d = v ? new Date(v) : null;
+        updateData.fiveDollarFridayStartsAt = d && !isNaN(d.getTime()) ? d : null;
+      }
+      if (settings.fiveDollarFridayEndsAt !== undefined) {
+        const v = settings.fiveDollarFridayEndsAt;
+        const d = v ? new Date(v) : null;
+        updateData.fiveDollarFridayEndsAt = d && !isNaN(d.getTime()) ? d : null;
+      }
+      if (
+        updateData.fiveDollarFridayStartsAt instanceof Date &&
+        updateData.fiveDollarFridayEndsAt instanceof Date &&
+        updateData.fiveDollarFridayEndsAt.getTime() <= updateData.fiveDollarFridayStartsAt.getTime()
+      ) {
+        return res.status(400).json({ error: "The $5 Friday end time must be after the start time." });
       }
       
       // Handle branding colors (stored in jsonb)

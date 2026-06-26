@@ -132,7 +132,7 @@ export default function FundraisingHubPage() {
         <TabsContent value="toolkit">
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-6">
             <GeneralDonationsCard donationUrl={donationUrl} tenantName={tenant?.name} isLoading={tenantLoading} />
-            <FiveDollarFridayCard fridayUrl={fiveDollarFridayUrl} tenantName={tenant?.name} fridayImageUrl={tenant?.fiveDollarFridayImageUrl || ""} isLoading={tenantLoading} />
+            <FiveDollarFridayCard fridayUrl={fiveDollarFridayUrl} tenantName={tenant?.name} fridayImageUrl={tenant?.fiveDollarFridayImageUrl || ""} fridayStartsAt={tenant?.fiveDollarFridayStartsAt} fridayEndsAt={tenant?.fiveDollarFridayEndsAt} isLoading={tenantLoading} />
             <AnimalCampaignsCard onNavigate={setLocation} />
             <SocialPostArchitectCard />
             <SocialMediaPlaybookCard />
@@ -715,7 +715,15 @@ function GeneralDonationsCard({ donationUrl, tenantName, isLoading }: { donation
   );
 }
 
-function FiveDollarFridayCard({ fridayUrl, tenantName, fridayImageUrl, isLoading }: { fridayUrl: string; tenantName?: string; fridayImageUrl: string; isLoading: boolean }) {
+function toDatetimeLocalValue(raw?: string | Date | null): string {
+  if (!raw) return "";
+  const d = new Date(raw);
+  if (isNaN(d.getTime())) return "";
+  const offset = d.getTimezoneOffset();
+  return new Date(d.getTime() - offset * 60000).toISOString().slice(0, 16);
+}
+
+function FiveDollarFridayCard({ fridayUrl, tenantName, fridayImageUrl, fridayStartsAt, fridayEndsAt, isLoading }: { fridayUrl: string; tenantName?: string; fridayImageUrl: string; fridayStartsAt?: string | Date | null; fridayEndsAt?: string | Date | null; isLoading: boolean }) {
   const { toast } = useToast();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [qrGenerated, setQrGenerated] = useState(false);
@@ -748,6 +756,60 @@ function FiveDollarFridayCard({ fridayUrl, tenantName, fridayImageUrl, isLoading
       });
     },
   });
+
+  const [startInput, setStartInput] = useState(() => toDatetimeLocalValue(fridayStartsAt));
+  const [endInput, setEndInput] = useState(() => toDatetimeLocalValue(fridayEndsAt));
+
+  useEffect(() => { setStartInput(toDatetimeLocalValue(fridayStartsAt)); }, [fridayStartsAt]);
+  useEffect(() => { setEndInput(toDatetimeLocalValue(fridayEndsAt)); }, [fridayEndsAt]);
+
+  const scheduleMutation = useMutation({
+    mutationFn: async (payload: { start: string; end: string }) => {
+      const response = await apiRequest('PATCH', '/api/tenant/settings/branding', {
+        fiveDollarFridayStartsAt: payload.start ? new Date(payload.start).toISOString() : "",
+        fiveDollarFridayEndsAt: payload.end ? new Date(payload.end).toISOString() : "",
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to save schedule');
+      }
+      return response.json();
+    },
+    onSuccess: (_data, payload) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/tenant"] });
+      toast({
+        title: payload.start || payload.end ? "Schedule saved" : "Schedule cleared",
+        description: payload.start || payload.end
+          ? "Your $5 Friday page will only be live during this window."
+          : "Your $5 Friday page is always live.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Could not save schedule",
+        description: error.message || "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleSaveSchedule = () => {
+    if (startInput && endInput && new Date(endInput).getTime() <= new Date(startInput).getTime()) {
+      toast({
+        title: "Invalid window",
+        description: "The end time must be after the start time.",
+        variant: "destructive",
+      });
+      return;
+    }
+    scheduleMutation.mutate({ start: startInput, end: endInput });
+  };
+
+  const handleClearSchedule = () => {
+    setStartInput("");
+    setEndInput("");
+    scheduleMutation.mutate({ start: "", end: "" });
+  };
 
   useEffect(() => {
     if (fridayUrl && canvasRef.current) {
@@ -847,6 +909,57 @@ function FiveDollarFridayCard({ fridayUrl, tenantName, fridayImageUrl, isLoading
                 buttonVariant="outline"
                 data-testid="button-upload-friday-image"
               />
+            </div>
+
+            <div className="space-y-3 border-t pt-4">
+              <label className="text-sm font-medium text-muted-foreground">Campaign schedule</label>
+              <p className="text-xs text-muted-foreground">
+                Optionally set a window for when your $5 Friday page is live. Outside this window, visitors are sent to your general donation page. Leave both empty to keep it always live.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label htmlFor="friday-starts-at" className="text-xs font-medium text-muted-foreground">Starts</label>
+                  <Input
+                    id="friday-starts-at"
+                    type="datetime-local"
+                    value={startInput}
+                    onChange={(e) => setStartInput(e.target.value)}
+                    data-testid="input-friday-starts-at"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label htmlFor="friday-ends-at" className="text-xs font-medium text-muted-foreground">Ends</label>
+                  <Input
+                    id="friday-ends-at"
+                    type="datetime-local"
+                    value={endInput}
+                    onChange={(e) => setEndInput(e.target.value)}
+                    data-testid="input-friday-ends-at"
+                  />
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSaveSchedule}
+                  disabled={scheduleMutation.isPending}
+                  data-testid="button-save-friday-schedule"
+                >
+                  Save schedule
+                </Button>
+                {(startInput || endInput) && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleClearSchedule}
+                    disabled={scheduleMutation.isPending}
+                    data-testid="button-clear-friday-schedule"
+                  >
+                    Clear
+                  </Button>
+                )}
+              </div>
             </div>
 
             <Button
