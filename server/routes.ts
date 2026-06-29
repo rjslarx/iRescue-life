@@ -17621,15 +17621,20 @@ ${renderedHtml}
       );
       if (!stripeCtx) return res.status(404).json({ error: 'Subscription not found in Stripe' });
       const { stripe, stripeArgs } = stripeCtx;
+      // stripe-node rejects an empty `{}` passed in the trailing options position
+      // ("Unknown arguments ([object Object])"). Only the connect context carries
+      // real options ({ stripeAccount }); tenant-key/platform contexts are empty,
+      // so collapse those to undefined before passing them positionally.
+      const opts = Object.keys(stripeArgs).length ? stripeArgs : undefined;
 
       let updated: Stripe.Subscription;
       if (immediate) {
-        updated = await stripe.subscriptions.cancel(sub.stripeSubscriptionId, undefined, stripeArgs);
+        updated = await stripe.subscriptions.cancel(sub.stripeSubscriptionId, undefined, opts);
       } else {
         updated = await stripe.subscriptions.update(
           sub.stripeSubscriptionId,
           { cancel_at_period_end: true, cancellation_details: reason ? { comment: reason.slice(0, 500) } : undefined },
-          stripeArgs,
+          opts,
         );
       }
 
@@ -17739,6 +17744,11 @@ ${renderedHtml}
       const stripeCtx = await stripeService.resolveStripeContext(tenant, refundProbe);
       if (!stripeCtx) return res.status(404).json({ error: 'Payment not found in Stripe' });
       const { stripe, stripeArgs } = stripeCtx;
+      // stripe-node rejects an empty `{}` passed in the trailing options position
+      // ("Unknown arguments ([object Object])"). Only the connect context carries
+      // real options ({ stripeAccount }); tenant-key/platform contexts are empty,
+      // so collapse those to undefined before passing them positionally.
+      const opts = Object.keys(stripeArgs).length ? stripeArgs : undefined;
 
       // Resolve a charge or payment_intent for the refund.
       const refundParams: Stripe.RefundCreateParams = { reason };
@@ -17746,7 +17756,7 @@ ${renderedHtml}
       if (payment.stripePaymentIntentId) {
         refundParams.payment_intent = payment.stripePaymentIntentId;
       } else if (payment.stripeInvoiceId) {
-        const invoice = await stripe.invoices.retrieve(payment.stripeInvoiceId, stripeArgs);
+        const invoice = await stripe.invoices.retrieve(payment.stripeInvoiceId, opts);
         // The Stripe TS types omit `charge` / `payment_intent` from the Invoice
         // object even though the API returns them; widen narrowly here.
         const invoiceWithIds = invoice as Stripe.Invoice & {
@@ -17766,7 +17776,7 @@ ${renderedHtml}
         return res.status(400).json({ error: 'No Stripe identifier available to refund this payment' });
       }
 
-      const refund: Stripe.Refund = await stripe.refunds.create(refundParams, stripeArgs);
+      const refund: Stripe.Refund = await stripe.refunds.create(refundParams, opts);
 
       const refundedAmount: number = refund.amount || amount || payment.amount;
 
@@ -17780,16 +17790,16 @@ ${renderedHtml}
           : refund.charge?.id;
         const chargeId = refundChargeId || (typeof refundParams.charge === 'string' ? refundParams.charge : undefined);
         if (chargeId) {
-          const charge = await stripe.charges.retrieve(chargeId, stripeArgs);
+          const charge = await stripe.charges.retrieve(chargeId, opts);
           cumulativeRefunded = charge.amount_refunded ?? refundedAmount;
         } else if (typeof refundParams.payment_intent === 'string') {
-          const pi = await stripe.paymentIntents.retrieve(refundParams.payment_intent, stripeArgs);
+          const pi = await stripe.paymentIntents.retrieve(refundParams.payment_intent, opts);
           const piWithCharge = pi as Stripe.PaymentIntent & { latest_charge?: string | Stripe.Charge | null };
           const piChargeId = typeof piWithCharge.latest_charge === 'string'
             ? piWithCharge.latest_charge
             : piWithCharge.latest_charge?.id;
           if (piChargeId) {
-            const charge = await stripe.charges.retrieve(piChargeId, stripeArgs);
+            const charge = await stripe.charges.retrieve(piChargeId, opts);
             cumulativeRefunded = charge.amount_refunded ?? refundedAmount;
           }
         }
