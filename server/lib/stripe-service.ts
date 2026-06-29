@@ -98,6 +98,48 @@ export class StripeService {
     this.stripeClients.delete(tenantId);
   }
 
+  /**
+   * Resolve the Stripe client + request options to operate on resources
+   * (subscriptions, charges, refunds, invoices) that belong to a tenant.
+   *
+   * Mirrors the client selection in createCheckoutSession so that operations
+   * on existing objects target the SAME account the objects were created on:
+   *   - Stripe Connect tenants: subscriptions/charges live on the PLATFORM
+   *     account, scoped to the connected account. Use the platform key with
+   *     { stripeAccount: connectedAccountId }.
+   *   - Tenants with their own Stripe key: use that key directly.
+   *
+   * Returns null when neither is configured (caller should surface a
+   * "Stripe is not configured" error).
+   */
+  getStripeContextForTenant(
+    tenant: Tenant,
+  ): { stripe: Stripe; stripeArgs: Stripe.RequestOptions } | null {
+    const platformKey = getPlatformStripeKey();
+
+    if (tenant.stripeConnectedAccountId && platformKey) {
+      let platformClient = this.stripeClients.get('__platform__');
+      if (!platformClient) {
+        platformClient = new Stripe(platformKey, {
+          apiVersion: '2025-09-30.clover',
+          typescript: true,
+        });
+        this.stripeClients.set('__platform__', platformClient);
+      }
+      return {
+        stripe: platformClient,
+        stripeArgs: { stripeAccount: tenant.stripeConnectedAccountId },
+      };
+    }
+
+    const tenantStripe = this.getStripeClient(tenant);
+    if (tenantStripe) {
+      return { stripe: tenantStripe, stripeArgs: {} };
+    }
+
+    return null;
+  }
+
   async validateApiKey(secretKey: string): Promise<boolean> {
     try {
       const testStripe = new Stripe(secretKey, {

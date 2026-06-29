@@ -17610,12 +17610,9 @@ ${renderedHtml}
       if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
 
       const { stripeService } = await import('./lib/stripe-service');
-      const stripe = stripeService.getStripeClient(tenant);
-      if (!stripe) return res.status(400).json({ error: 'Stripe is not configured for this rescue' });
-
-      const stripeArgs: Stripe.RequestOptions = tenant.stripeConnectedAccountId
-        ? { stripeAccount: tenant.stripeConnectedAccountId }
-        : {};
+      const stripeCtx = stripeService.getStripeContextForTenant(tenant);
+      if (!stripeCtx) return res.status(400).json({ error: 'Stripe is not configured for this rescue' });
+      const { stripe, stripeArgs } = stripeCtx;
 
       let updated: Stripe.Subscription;
       if (immediate) {
@@ -17719,12 +17716,9 @@ ${renderedHtml}
       if (payment.status === 'refunded') return res.status(409).json({ error: 'Payment already refunded' });
 
       const { stripeService } = await import('./lib/stripe-service');
-      const stripe = stripeService.getStripeClient(tenant);
-      if (!stripe) return res.status(400).json({ error: 'Stripe is not configured for this rescue' });
-
-      const stripeArgs: Stripe.RequestOptions = tenant.stripeConnectedAccountId
-        ? { stripeAccount: tenant.stripeConnectedAccountId }
-        : {};
+      const stripeCtx = stripeService.getStripeContextForTenant(tenant);
+      if (!stripeCtx) return res.status(400).json({ error: 'Stripe is not configured for this rescue' });
+      const { stripe, stripeArgs } = stripeCtx;
 
       // Resolve a charge or payment_intent for the refund.
       const refundParams: Stripe.RefundCreateParams = { reason };
