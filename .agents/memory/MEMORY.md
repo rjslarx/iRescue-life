@@ -7,3 +7,4 @@
 - [$5 Friday recurring-day model](five-dollar-campaign.md) — campaign runs all day on a per-tenant weekday (default Fri); client-side liveness in Central tz; old startsAt/endsAt columns kept intentionally, don't re-add datetime window.
 - [Schema changes & post-merge ALTERs](schema-changes-post-merge.md) — db:push hangs/prompts on this project; apply new columns via idempotent ALTER in scripts/post-merge.sh, not migrations.
 - [Reserved paths dual list](reserved-paths-dual-list.md) — new public top-level routes must be added to RESERVED_PATHS in BOTH TenantContext.tsx and lib/tenantApi.ts, or dev/path-based tenant resolution 404s.
+- [routes.ts schema imports](routes-schema-imports.md) — table referenced at module scope must be in routes.ts top-level @shared/schema import; missing one boots fine but throws "X is not defined" at request time (some handlers dynamic-import instead).
