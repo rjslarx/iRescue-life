@@ -5,6 +5,8 @@ import QRCode from "qrcode";
 import { useTenant } from "@/contexts/TenantContext";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
+import { usePagePermissions } from "@/hooks/usePagePermissions";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -60,6 +62,17 @@ export default function FundraisersPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const { basePath, tenantId } = useTenant();
+  const { user } = useAuth();
+  const { userPermissions } = usePagePermissions();
+
+  // Mirrors the backend write guard on /api/fundraiser-events: full management
+  // is available to admins/owners or anyone individually granted the
+  // "Fundraiser Events & Products" page. Others get a read-only view.
+  const canManage =
+    user?.activeRole === "admin" ||
+    user?.activeRole === "owner" ||
+    user?.activeRole === "platform_admin" ||
+    userPermissions.some((p) => p.pageId === "fundraiser-events");
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<EventWithSold | null>(null);
@@ -215,10 +228,12 @@ export default function FundraisersPage() {
                 Print All QR Codes
               </Button>
             )}
-            <Button data-testid="button-new-event" onClick={openCreate}>
-              <Plus className="h-4 w-4 mr-2" />
-              New Event
-            </Button>
+            {canManage && (
+              <Button data-testid="button-new-event" onClick={openCreate}>
+                <Plus className="h-4 w-4 mr-2" />
+                New Event
+              </Button>
+            )}
           </div>
         </div>
 
@@ -237,12 +252,18 @@ export default function FundraisersPage() {
               <TicketPercent className="h-12 w-12 text-muted-foreground" />
               <div>
                 <p className="font-medium">No events or products yet</p>
-                <p className="text-sm text-muted-foreground">Create your first event or product to start selling online</p>
+                <p className="text-sm text-muted-foreground">
+                  {canManage
+                    ? "Create your first event or product to start selling online"
+                    : "There are no events or products to show yet"}
+                </p>
               </div>
-              <Button onClick={openCreate} data-testid="button-new-event-empty">
-                <Plus className="h-4 w-4 mr-2" />
-                Create Event
-              </Button>
+              {canManage && (
+                <Button onClick={openCreate} data-testid="button-new-event-empty">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Event
+                </Button>
+              )}
             </CardContent>
           </Card>
         ) : (
@@ -318,12 +339,16 @@ export default function FundraisersPage() {
                         <QrCode className="h-3.5 w-3.5 mr-1.5" />
                         QR Code
                       </Button>
-                      <Button size="icon" variant="ghost" onClick={() => openEdit(evt)} data-testid={`button-edit-${evt.id}`}>
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button size="icon" variant="ghost" onClick={() => setDeleteTarget(evt)} data-testid={`button-deactivate-${evt.id}`}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
+                      {canManage && (
+                        <>
+                          <Button size="icon" variant="ghost" onClick={() => openEdit(evt)} data-testid={`button-edit-${evt.id}`}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button size="icon" variant="ghost" onClick={() => setDeleteTarget(evt)} data-testid={`button-deactivate-${evt.id}`}>
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </>
+                      )}
                     </div>
                   </CardContent>
                 </Card>

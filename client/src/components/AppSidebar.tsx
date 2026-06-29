@@ -561,7 +561,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
     '/dashboard/team': 'team',
     '/dashboard/finance': 'finance',
     '/dashboard/fundraising': 'finance',
-    '/dashboard/fundraisers': 'finance',
+    '/dashboard/fundraisers': 'fundraiser-events',
     '/dashboard/donation-links': 'finance',
     '/dashboard/grants': 'grants',
     '/dashboard/donors': 'donors',
@@ -659,6 +659,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
     'volunteer-pipeline': { title: "Volunteer Pipeline", url: "/dashboard/volunteer-pipeline", icon: Kanban },
     'foster-pipeline': { title: "Foster Pipeline", url: "/dashboard/foster-pipeline", icon: Kanban },
     'event-ticket-sales': { title: "Event Ticket Sales", url: "/dashboard/event-ticket-sales", icon: Ticket },
+    'fundraiser-events': { title: "Events & Products", url: "/dashboard/fundraisers", icon: TicketPercent },
     'tnr-log': { title: "TNR Log", url: "/dashboard/tnr-log", icon: Cat },
     'microchip-clinic-log': { title: "Microchip Clinic Log", url: "/dashboard/microchip-clinic-log", icon: ScanLine },
     'post-optimizer': { title: "Post Optimizer", url: "/dashboard/post-optimizer", icon: Sparkles },
@@ -690,7 +691,6 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
     finance: [
       { title: "Fundraising Hub", url: "/dashboard/fundraising", icon: Megaphone },
       { title: "Donation Links", url: "/dashboard/donation-links", icon: DollarSign },
-      { title: "Events & Products", url: "/dashboard/fundraisers", icon: TicketPercent },
       { title: "Finance", url: "/dashboard/finance", icon: DollarSign },
     ],
   };

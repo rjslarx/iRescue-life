@@ -305,8 +305,8 @@ function RouterSwitch() {
       <ProtectedRoute path="/dashboard/finance" pageId="finance" component={FinancePage} />
       <ProtectedRoute path="/dashboard/donation-links" pageId="finance" component={DonationLinksPage} />
       <ProtectedRoute path="/dashboard/fundraising" pageId="finance" component={FundraisingHubPage} />
-      <ProtectedRoute path="/dashboard/fundraisers/:eventId" pageId="finance" component={FundraiserFulfillmentPage} />
-      <ProtectedRoute path="/dashboard/fundraisers" pageId="finance" component={FundraisersPage} />
+      <ProtectedRoute path="/dashboard/fundraisers/:eventId" pageId="fundraiser-events" component={FundraiserFulfillmentPage} />
+      <ProtectedRoute path="/dashboard/fundraisers" pageId="fundraiser-events" component={FundraisersPage} />
       <ProtectedRoute path="/dashboard/grants" pageId="grants" component={GrantsPage} proOnly proFeatureName="Grants" />
       <ProtectedRoute path="/dashboard/donors" pageId="donors" component={DonorsPage} />
       <ProtectedRoute path="/dashboard/vip-club-members" pageId="donors" component={VipMembersPage} />
