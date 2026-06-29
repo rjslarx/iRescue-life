@@ -4,7 +4,7 @@
 - [Tenant settings data source](tenant-settings-data-source.md) — new tenants columns aren't in req.tenant/`/api/tenant`; read full row via `/api/tenant/settings`.
 - [In-kind donation receipt compliance](in-kind-donation-receipts.md) — IRS gating (no value on receipt; required fields) lives in 3 layers that must stay in lockstep: form, offline-donation route, receipt-service.
 - [Volunteer alert systems](volunteer-alert-systems.md) — two shortage-alert services; recruitment-sms dedup-history insert silently fails (bad FK values), relies on 24h SMS gate; no individual names in blast SMS.
-- [Stripe client resolution](stripe-connect-client-resolution.md) — operate on existing Stripe objects via getStripeContextForTenant (platform+stripeAccount for Connect), not getStripeClient(tenant) which is null for Connect-only tenants.
+- [Stripe client resolution](stripe-connect-client-resolution.md) — existing Stripe objects can live on tenant-key/connect/platform; PROBE via getStripeContextsForTenant + resolveStripeContext, don't guess (Connect subs are destination charges on the platform account).
 - [$5 Friday recurring-day model](five-dollar-campaign.md) — campaign runs all day on a per-tenant weekday (default Fri); client-side liveness in Central tz; old startsAt/endsAt columns kept intentionally, don't re-add datetime window.
 - [Schema changes & post-merge ALTERs](schema-changes-post-merge.md) — db:push hangs/prompts on this project; apply new columns via idempotent ALTER in scripts/post-merge.sh, not migrations.
 - [Reserved paths dual list](reserved-paths-dual-list.md) — new public top-level routes must be added to RESERVED_PATHS in BOTH TenantContext.tsx and lib/tenantApi.ts, or dev/path-based tenant resolution 404s.

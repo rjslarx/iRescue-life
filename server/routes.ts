@@ -17610,8 +17610,16 @@ ${renderedHtml}
       if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
 
       const { stripeService } = await import('./lib/stripe-service');
-      const stripeCtx = stripeService.getStripeContextForTenant(tenant);
-      if (!stripeCtx) return res.status(400).json({ error: 'Stripe is not configured for this rescue' });
+      if (stripeService.getStripeContextsForTenant(tenant).length === 0) {
+        return res.status(400).json({ error: 'Stripe is not configured for this rescue' });
+      }
+      // Subscriptions can live on the tenant's own account, the connected
+      // account, or the platform account directly (destination charges) — probe
+      // to find where this one actually is before mutating it.
+      const stripeCtx = await stripeService.resolveStripeContext(tenant, (s, args) =>
+        s.subscriptions.retrieve(sub.stripeSubscriptionId, args),
+      );
+      if (!stripeCtx) return res.status(404).json({ error: 'Subscription not found in Stripe' });
       const { stripe, stripeArgs } = stripeCtx;
 
       let updated: Stripe.Subscription;
@@ -17716,8 +17724,20 @@ ${renderedHtml}
       if (payment.status === 'refunded') return res.status(409).json({ error: 'Payment already refunded' });
 
       const { stripeService } = await import('./lib/stripe-service');
-      const stripeCtx = stripeService.getStripeContextForTenant(tenant);
-      if (!stripeCtx) return res.status(400).json({ error: 'Stripe is not configured for this rescue' });
+      if (stripeService.getStripeContextsForTenant(tenant).length === 0) {
+        return res.status(400).json({ error: 'Stripe is not configured for this rescue' });
+      }
+      // The charge/invoice can live on the tenant's own account, the connected
+      // account, or the platform account directly — probe to find where this
+      // payment actually is before issuing the refund.
+      const refundProbe = payment.stripePaymentIntentId
+        ? (s: Stripe, args: Stripe.RequestOptions) => s.paymentIntents.retrieve(payment.stripePaymentIntentId!, args)
+        : payment.stripeInvoiceId
+          ? (s: Stripe, args: Stripe.RequestOptions) => s.invoices.retrieve(payment.stripeInvoiceId!, args)
+          : null;
+      if (!refundProbe) return res.status(400).json({ error: 'No Stripe identifier available to refund this payment' });
+      const stripeCtx = await stripeService.resolveStripeContext(tenant, refundProbe);
+      if (!stripeCtx) return res.status(404).json({ error: 'Payment not found in Stripe' });
       const { stripe, stripeArgs } = stripeCtx;
 
       // Resolve a charge or payment_intent for the refund.

@@ -52,24 +52,12 @@ const stripeService = new StripeService();
 function getTenantStripeContexts(
   tenant: Pick<Tenant, "id" | "stripeEnabled" | "stripeSecretKeyEncrypted" | "stripeConnectedAccountId">,
 ): Array<{ stripe: Stripe; reqOpts: Stripe.RequestOptions; label: string }> {
-  const contexts: Array<{ stripe: Stripe; reqOpts: Stripe.RequestOptions; label: string }> = [];
-
-  const direct = stripeService.getStripeClient(tenant as Tenant);
-  if (direct) contexts.push({ stripe: direct, reqOpts: {}, label: "tenant-key" });
-
-  const platformKey = getPlatformStripeKey();
-  if (platformKey) {
-    const platformStripe = new Stripe(platformKey, { apiVersion: "2025-09-30.clover", typescript: true });
-    if (tenant.stripeConnectedAccountId) {
-      contexts.push({
-        stripe: platformStripe,
-        reqOpts: { stripeAccount: tenant.stripeConnectedAccountId },
-        label: "connect",
-      });
-    }
-    contexts.push({ stripe: platformStripe, reqOpts: {}, label: "platform" });
-  }
-  return contexts;
+  // Delegate to the shared resolver in stripe-service so the account-selection
+  // order (tenant-key -> connect -> platform) stays in lockstep across the
+  // reconciler and the VIP cancel/refund handlers.
+  return stripeService
+    .getStripeContextsForTenant(tenant)
+    .map((c) => ({ stripe: c.stripe, reqOpts: c.stripeArgs, label: c.label }));
 }
 
 async function reconcileForTenant(
@@ -236,6 +224,7 @@ export async function reconcileMissingSubscriptions(
       name: tenantsTable.name,
       stripeEnabled: tenantsTable.stripeEnabled,
       stripeSecretKeyEncrypted: tenantsTable.stripeSecretKeyEncrypted,
+      stripeConnectedAccountId: tenantsTable.stripeConnectedAccountId,
     })
     .from(tenantsTable)
     .where(where);

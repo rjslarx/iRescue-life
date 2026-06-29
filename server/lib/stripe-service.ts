@@ -99,25 +99,30 @@ export class StripeService {
   }
 
   /**
-   * Resolve the Stripe client + request options to operate on resources
-   * (subscriptions, charges, refunds, invoices) that belong to a tenant.
-   *
-   * Mirrors the client selection in createCheckoutSession so that operations
-   * on existing objects target the SAME account the objects were created on:
-   *   - Stripe Connect tenants: subscriptions/charges live on the PLATFORM
-   *     account, scoped to the connected account. Use the platform key with
-   *     { stripeAccount: connectedAccountId }.
-   *   - Tenants with their own Stripe key: use that key directly.
-   *
-   * Returns null when neither is configured (caller should surface a
-   * "Stripe is not configured" error).
+   * Build the ordered list of Stripe contexts to try when operating on a
+   * tenant's EXISTING Stripe objects (subscriptions, charges, refunds,
+   * invoices). Objects can live on different accounts depending on how they
+   * were created, so a single guess is unsafe:
+   *   - tenant-key: the tenant's own Stripe account (own-key tenants).
+   *   - connect: the platform account scoped to the connected account
+   *     (direct charges created with a { stripeAccount } header).
+   *   - platform: the platform account directly. This is where Connect
+   *     subscriptions created by createCheckoutSession actually live, because
+   *     they use destination charges (subscription_data.transfer_data) on the
+   *     platform account rather than the { stripeAccount } header.
+   * Order: tenant-key -> connect -> platform. Callers should probe each
+   * context (see resolveStripeContext) to find where the object really is.
    */
-  getStripeContextForTenant(
-    tenant: Tenant,
-  ): { stripe: Stripe; stripeArgs: Stripe.RequestOptions } | null {
-    const platformKey = getPlatformStripeKey();
+  getStripeContextsForTenant(
+    tenant: Pick<Tenant, 'id' | 'stripeEnabled' | 'stripeSecretKeyEncrypted' | 'stripeConnectedAccountId'>,
+  ): Array<{ stripe: Stripe; stripeArgs: Stripe.RequestOptions; label: string }> {
+    const contexts: Array<{ stripe: Stripe; stripeArgs: Stripe.RequestOptions; label: string }> = [];
 
-    if (tenant.stripeConnectedAccountId && platformKey) {
+    const direct = this.getStripeClient(tenant as Tenant);
+    if (direct) contexts.push({ stripe: direct, stripeArgs: {}, label: 'tenant-key' });
+
+    const platformKey = getPlatformStripeKey();
+    if (platformKey) {
       let platformClient = this.stripeClients.get('__platform__');
       if (!platformClient) {
         platformClient = new Stripe(platformKey, {
@@ -126,17 +131,46 @@ export class StripeService {
         });
         this.stripeClients.set('__platform__', platformClient);
       }
-      return {
-        stripe: platformClient,
-        stripeArgs: { stripeAccount: tenant.stripeConnectedAccountId },
-      };
+      if (tenant.stripeConnectedAccountId) {
+        contexts.push({
+          stripe: platformClient,
+          stripeArgs: { stripeAccount: tenant.stripeConnectedAccountId },
+          label: 'connect',
+        });
+      }
+      contexts.push({ stripe: platformClient, stripeArgs: {}, label: 'platform' });
     }
+    return contexts;
+  }
 
-    const tenantStripe = this.getStripeClient(tenant);
-    if (tenantStripe) {
-      return { stripe: tenantStripe, stripeArgs: {} };
+  /**
+   * Resolve the single Stripe context where a tenant's object actually lives by
+   * probing each candidate context in order. `probe` should attempt a cheap
+   * retrieve and throw if the object is not on that account. Returns the first
+   * context whose probe succeeds, or null if none match (or none configured —
+   * callers can disambiguate via getStripeContextsForTenant().length).
+   */
+  async resolveStripeContext(
+    tenant: Pick<Tenant, 'id' | 'stripeEnabled' | 'stripeSecretKeyEncrypted' | 'stripeConnectedAccountId'>,
+    probe: (stripe: Stripe, stripeArgs: Stripe.RequestOptions) => Promise<unknown>,
+  ): Promise<{ stripe: Stripe; stripeArgs: Stripe.RequestOptions } | null> {
+    const contexts = this.getStripeContextsForTenant(tenant);
+    for (const ctx of contexts) {
+      try {
+        await probe(ctx.stripe, ctx.stripeArgs);
+        return { stripe: ctx.stripe, stripeArgs: ctx.stripeArgs };
+      } catch (err) {
+        // Only treat "the object isn't on this account" as a miss and try the
+        // next context. StripeInvalidRequestError (resource_missing / "No such
+        // ...") and StripePermissionError mean wrong account; anything else
+        // (auth, connection, rate-limit, API errors) is operational and must
+        // surface to the caller rather than being misreported as not-found.
+        const type = (err as { type?: string } | undefined)?.type;
+        const isWrongAccount =
+          type === 'StripeInvalidRequestError' || type === 'StripePermissionError';
+        if (!isWrongAccount) throw err;
+      }
     }
-
     return null;
   }
 
