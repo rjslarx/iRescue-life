@@ -775,7 +775,7 @@ export default function Home() {
       />
 
       <Dialog open={donationDialogOpen} onOpenChange={setDonationDialogOpen}>
-        <DialogContent className="max-w-2xl" aria-describedby={undefined}>
+        <DialogContent className="max-w-2xl max-h-[90dvh] overflow-y-auto" aria-describedby={undefined}>
           <DonationForm 
             tenant={tenant}
             sponsoredAnimalName={sponsorAnimalName || undefined}
