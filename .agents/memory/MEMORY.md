@@ -9,4 +9,5 @@
 - [Schema changes & post-merge ALTERs](schema-changes-post-merge.md) — db:push hangs/prompts on this project; apply new columns via idempotent ALTER in scripts/post-merge.sh, not migrations.
 - [Reserved paths dual list](reserved-paths-dual-list.md) — new public top-level routes must be added to RESERVED_PATHS in BOTH TenantContext.tsx and lib/tenantApi.ts, or dev/path-based tenant resolution 404s.
 - [routes.ts schema imports](routes-schema-imports.md) — table referenced at module scope must be in routes.ts top-level @shared/schema import; missing one boots fine but throws "X is not defined" at request time (some handlers dynamic-import instead).
+- [Radix Sheet scroll-lock on SPA nav](radix-sheet-scroll-lock-spa-nav.md) — modal Sheet/Dialog can leave destination page unscrollable on mobile Safari when a nav link inside it navigates while closing; use modal={false} for nav menus.
 - [Page-gate vs write-guard asymmetry](page-permission-gate-vs-write.md) — "view but 403 on save" trap: gate the route/sidebar by the SAME pageId the write API guards; frontend canAccessPage honors role-based access but backend requireRoleOrPageAccess only honors individual grants.

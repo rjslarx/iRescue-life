@@ -245,8 +245,14 @@ export default function PublicHeader({ rescueName, logoUrl }: PublicHeaderProps)
           </Link>
         </nav>
 
-        {/* Mobile Navigation */}
-        <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+        {/* Mobile Navigation
+            modal={false} intentionally: as a modal, Radix locks <body> scroll
+            (overflow:hidden + pointer-events:none) and only releases it after the
+            close animation finishes. When a nav link navigates (SPA) while the
+            Sheet is still closing, mobile browsers (notably iOS Safari) can skip
+            that cleanup, leaving the destination page unscrollable. Non-modal
+            avoids the body lock entirely, so there is nothing to leak. */}
+        <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen} modal={false}>
           <SheetTrigger asChild className="md:hidden flex-shrink-0">
             <Button variant="ghost" size="icon" data-testid="button-mobile-menu">
               <Menu className="h-5 w-5" />
