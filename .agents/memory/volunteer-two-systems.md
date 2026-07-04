@@ -1,36 +1,34 @@
 ---
 name: Two isolated volunteer systems
-description: calendar_events shifts vs volunteer_opportunities/signups — not linked; any volunteer-wide feature must cover both
+description: calendar_events shifts vs volunteer_opportunities/signups — not linked; know which one a "volunteer shift" feature actually means
 ---
 
-There are TWO unlinked volunteer scheduling systems. Any feature that must reach
-"all scheduled volunteers" (reminders, digests, notifications) has to query BOTH,
-or it silently misses whole categories of volunteers.
+There are TWO unlinked volunteer scheduling systems. They are NOT the same thing,
+and a request about "volunteers signing up for shifts on the calendars" means
+system 1, not system 2. Confirm which one the user means before building.
 
 1. **Internal calendar shifts** — `calendar_events` where the joined
    `calendars.type = 'volunteer'`. `startTime`/`endTime` are real timestamps.
-   Volunteer identity is either `volunteerContactId` (FK → `users`, has email) or
-   `manualVolunteerName` (free text, NO email — unreachable). "{Name} - Signup"
-   titles come from CalendarViewPage "Simplified Mode" self-created shifts and can
-   have neither a contact id nor a manual name (name only in the title → no email).
+   Volunteer identity, in priority order of how to reach an email:
+   - `volunteerContactId` (FK → `users`, has email) — explicitly assigned volunteer.
+   - **Self-signup**: `createdBy` (FK → `users`) IS the volunteer for
+     "{Name} - Signup" events created via CalendarViewPage "Simplified Mode".
+     These frequently have NO `volunteerContactId` and NO `manualVolunteerName`
+     (name lives only in the title). Resolve email via `createdBy` **only when the
+     title names the creator** (strict normalized equality after stripping a
+     trailing " - Signup"). Do NOT prefix-match — a coordinator (e.g. Courtney
+     Pettigrew at Haseya) creates many "{OtherName} - Signup" events, and
+     prefix/loose matching would email the coordinator instead of the volunteer.
+   - `manualVolunteerName` (free text, NO email) → unreachable, skip.
 
-2. **Public opportunity signups** — `volunteer_opportunities` (has `date` as
-   **plain YYYY-MM-DD text**, `time` as free-form text, `calendar_id`,
-   slots_total/filled) + `volunteer_signups` (`applicantEmail` notNull,
-   `applicantName`, `opportunityId`, optional `userId`). This is where public
-   signup emails live.
+2. **Public opportunity signups** — `volunteer_opportunities` (`date` as plain
+   YYYY-MM-DD text, `time` free-form, `calendar_id`) + `volunteer_signups`
+   (`applicantEmail` notNull). Separate public flow. **No linkage** to system 1.
 
-**No linkage between them:** signing up for an opportunity does NOT create a
-calendar_event, and calendar_events has no opportunity_id.
-
-**Why it matters:** the pre-existing weekly volunteer digest
-(`volunteer-schedule-digest.ts`) only reads system 1, so it misses all public
-opportunity signups. When building the day-before shift reminder, only covering
-system 1 emailed almost nobody for tenants (like Haseya) whose volunteers use the
-opportunity signup flow. The reminder service now covers both.
-
-**How to apply:** because opportunity `date` is timezone-less text, match it
-directly against the tenant-local "tomorrow" YYYY-MM-DD string (no timestamp
-conversion). For calendar_events, pull a UTC window and filter by formatting
-`startTime` into the tenant tz. Dedupe with a `reminder_email_sent_at` column on
-EACH source table (calendar_events + volunteer_signups).
+**How to apply:** the day-before shift reminder
+(`server/services/volunteer-shift-reminders.ts`) is calendar-only (system 1) by
+design — the opportunity path was intentionally removed after the user clarified
+scope. Dedupe with `calendar_events.reminder_email_sent_at`. For the tenant-local
+"tomorrow": pull a UTC window on `startTime` and filter by formatting into the
+tenant tz. If a future feature needs opportunity signups too, add system 2 back
+as a separate source; don't assume one covers the other.

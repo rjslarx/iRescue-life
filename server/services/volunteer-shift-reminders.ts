@@ -4,11 +4,9 @@ import {
   calendars,
   calendarEvents,
   users,
-  volunteerOpportunities,
-  volunteerSignups,
   type Tenant,
 } from "@shared/schema";
-import { eq, and, gte, lte, inArray, isNull, isNotNull } from "drizzle-orm";
+import { eq, and, gte, lte, inArray, isNull } from "drizzle-orm";
 import { EmailService } from "../lib/email-service";
 import { format } from "date-fns";
 
@@ -108,6 +106,29 @@ function localTimeString(timezone: string, when: Date): string {
   }
 }
 
+/**
+ * A volunteer self-signup on the calendar creates an event titled
+ * "{Their Name} - Signup" with `createdBy` = their own user id but often no
+ * `volunteerContactId`. To reach them we fall back to the creator's email — but
+ * ONLY when the title actually names the creator, so we never email a
+ * coordinator who typed someone else's name into a bare "{Name} - Signup" event.
+ */
+function titleNamesCreator(title: string, creatorFullName: string): boolean {
+  if (!title || !creatorFullName) return false;
+  // Normalize: lowercase and collapse internal/trailing whitespace so cosmetic
+  // spacing differences don't cause misses.
+  const normalize = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
+  const normalizedCreator = normalize(creatorFullName);
+  if (!normalizedCreator) return false;
+  // Strip a trailing " - Signup" (with flexible spacing) to get the named person.
+  const titleName = normalize(title.replace(/\s*-\s*signup\s*$/i, ""));
+  if (!titleName) return false;
+  // Strict equality only: prefix matching risks emailing a coordinator who typed
+  // a short name that happens to prefix their own (e.g. creator "Ann Marie",
+  // title "Ann - Signup").
+  return titleName === normalizedCreator;
+}
+
 /** Friendly long date (e.g. "Monday, July 6") for a YYYY-MM-DD string. */
 function friendlyDate(dateStr: string): string {
   const [y, m, d] = dateStr.split("-").map(Number);
@@ -130,9 +151,7 @@ export interface ShiftReminderResult {
 }
 
 interface ShiftForReminder {
-  // Which table to stamp for dedupe after a successful send.
-  source: "event" | "signup";
-  recordId: string;
+  eventId: string;
   calendarName: string;
   timeLabel: string;
   location: string;
@@ -146,12 +165,13 @@ interface ShiftForReminder {
  * email that hasn't already been reminded, email each volunteer, and stamp a
  * `reminderEmailSentAt` dedupe column so we never double-send.
  *
- * Covers BOTH volunteer systems:
- *   1. Internal calendar shifts (calendars.type='volunteer') linked to a user
- *      (calendarEvents.volunteerContactId → users.email). Manual-name-only
- *      events are skipped (no email on file).
- *   2. Public volunteer-opportunity signups (volunteerSignups.applicantEmail)
- *      whose opportunity.date matches the target local date.
+ * Targets volunteer calendar shifts (calendars.type='volunteer'). A volunteer's
+ * email is resolved from the event in this priority order:
+ *   1. An explicitly assigned volunteer: calendarEvents.volunteerContactId → users.email.
+ *   2. A self-signup: the creator's own "{Name} - Signup" event
+ *      (calendarEvents.createdBy → users.email), only when the title names the
+ *      creator, so a coordinator who typed someone else's name is never emailed.
+ * Events with only a manual name / bare title (no reachable email) are skipped.
  *
  * Shared by the hourly cron and the manual "Send test reminder" button.
  */
@@ -186,6 +206,9 @@ async function sendRemindersForTenantDate(
     const now = new Date();
     const windowEnd = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
 
+    // No volunteerContactId filter here: we also want volunteer self-signups,
+    // which set `createdBy` (the volunteer) but frequently leave
+    // `volunteerContactId` null (identity lives in the "{Name} - Signup" title).
     const events = await db
       .select()
       .from(calendarEvents)
@@ -195,7 +218,6 @@ async function sendRemindersForTenantDate(
           inArray(calendarEvents.calendarId, calendarIds),
           gte(calendarEvents.startTime, now),
           lte(calendarEvents.startTime, windowEnd),
-          isNotNull(calendarEvents.volunteerContactId),
           isNull(calendarEvents.reminderEmailSentAt),
         ),
       );
@@ -205,12 +227,12 @@ async function sendRemindersForTenantDate(
     );
 
     if (dueEvents.length > 0) {
-      result.shiftsFound += dueEvents.length;
-
+      // Look up both the assigned volunteer (volunteerContactId) and the event
+      // creator (createdBy, for self-signups) so we can resolve either to an email.
       const userIds = [
         ...new Set(
           dueEvents
-            .map((e) => e.volunteerContactId)
+            .flatMap((e) => [e.volunteerContactId, e.createdBy])
             .filter((id): id is string => !!id),
         ),
       ];
@@ -230,16 +252,35 @@ async function sendRemindersForTenantDate(
 
       for (const event of dueEvents) {
         const cal = calendarMap.get(event.calendarId);
-        const volunteer = event.volunteerContactId
+        if (!cal) continue;
+
+        // Priority 1: an explicitly assigned volunteer with an email on file.
+        let volunteer = event.volunteerContactId
           ? userMap.get(event.volunteerContactId)
           : undefined;
-        if (!cal || !volunteer) continue; // no email / manual-only volunteer
 
+        // Priority 2: a self-signup — the creator's own "{Name} - Signup" event.
+        // Guard with titleNamesCreator so a coordinator who typed someone else's
+        // name into a bare signup event never receives the reminder themselves.
+        if (
+          !volunteer &&
+          !event.volunteerContactId &&
+          !event.manualVolunteerName?.trim() &&
+          event.createdBy
+        ) {
+          const creator = userMap.get(event.createdBy);
+          if (creator && titleNamesCreator(event.title, creator.name)) {
+            volunteer = creator;
+          }
+        }
+
+        if (!volunteer) continue; // no reachable email (manual-only / bare name)
+
+        result.shiftsFound += 1;
         const start = localTimeString(timezone, event.startTime);
         const end = event.endTime ? localTimeString(timezone, event.endTime) : "";
         shifts.push({
-          source: "event",
-          recordId: event.id,
+          eventId: event.id,
           calendarName: cal.name,
           timeLabel: end ? `${start} – ${end}` : start,
           location: event.location || "",
@@ -247,51 +288,6 @@ async function sendRemindersForTenantDate(
           volunteerName: volunteer.name,
         });
       }
-    }
-  }
-
-  // ---- Source 2: public volunteer-opportunity signups. Opportunity `date` is a
-  // plain YYYY-MM-DD text value (no timezone), so we match it directly against
-  // the tenant-local target date. Each signup carries its own applicant email.
-  const dueOpportunities = await db
-    .select()
-    .from(volunteerOpportunities)
-    .where(
-      and(
-        eq(volunteerOpportunities.tenantId, tenant.id),
-        eq(volunteerOpportunities.date, targetDateStr),
-      ),
-    );
-
-  if (dueOpportunities.length > 0) {
-    const opportunityMap = new Map(dueOpportunities.map((o) => [o.id, o]));
-    const opportunityIds = dueOpportunities.map((o) => o.id);
-
-    const signups = await db
-      .select()
-      .from(volunteerSignups)
-      .where(
-        and(
-          eq(volunteerSignups.tenantId, tenant.id),
-          inArray(volunteerSignups.opportunityId, opportunityIds),
-          isNull(volunteerSignups.reminderEmailSentAt),
-        ),
-      );
-
-    result.shiftsFound += signups.length;
-
-    for (const signup of signups) {
-      const opp = opportunityMap.get(signup.opportunityId);
-      if (!opp || !signup.applicantEmail) continue;
-      shifts.push({
-        source: "signup",
-        recordId: signup.id,
-        calendarName: opp.title,
-        timeLabel: opp.time || "the scheduled time",
-        location: opp.location || "",
-        volunteerEmail: signup.applicantEmail.toLowerCase(),
-        volunteerName: signup.applicantName || "",
-      });
     }
   }
 
@@ -312,27 +308,15 @@ async function sendRemindersForTenantDate(
         html,
       });
 
-      if (shift.source === "event") {
-        await db
-          .update(calendarEvents)
-          .set({ reminderEmailSentAt: new Date() })
-          .where(
-            and(
-              eq(calendarEvents.id, shift.recordId),
-              eq(calendarEvents.tenantId, tenant.id),
-            ),
-          );
-      } else {
-        await db
-          .update(volunteerSignups)
-          .set({ reminderEmailSentAt: new Date() })
-          .where(
-            and(
-              eq(volunteerSignups.id, shift.recordId),
-              eq(volunteerSignups.tenantId, tenant.id),
-            ),
-          );
-      }
+      await db
+        .update(calendarEvents)
+        .set({ reminderEmailSentAt: new Date() })
+        .where(
+          and(
+            eq(calendarEvents.id, shift.eventId),
+            eq(calendarEvents.tenantId, tenant.id),
+          ),
+        );
 
       result.emailsSent++;
     } catch (error: any) {

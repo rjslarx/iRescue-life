@@ -75,7 +75,6 @@ SQL
 # Idempotent — ADD COLUMN IF NOT EXISTS is a no-op when already applied.
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' || echo "[post-merge] volunteer reminder_email_sent_at columns skipped (already applied or DB unreachable)."
 ALTER TABLE calendar_events ADD COLUMN IF NOT EXISTS reminder_email_sent_at timestamp;
-ALTER TABLE volunteer_signups ADD COLUMN IF NOT EXISTS reminder_email_sent_at timestamp;
 SQL
 
 yes "" | timeout 60 npx drizzle-kit push --force || \

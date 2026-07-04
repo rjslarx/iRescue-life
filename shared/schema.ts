@@ -1306,7 +1306,6 @@ export const volunteerSignups = pgTable("volunteer_signups", {
   applicantEmail: text("applicant_email").notNull(),
   applicantPhone: text("applicant_phone").notNull(),
   customResponses: jsonb("custom_responses").$type<Record<string, any>>(), // Stores answers to custom form fields
-  reminderEmailSentAt: timestamp("reminder_email_sent_at"), // Dedupe: day-before shift reminder email
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (table) => ({
   uniqueSignup: unique().on(table.opportunityId, table.applicantEmail),
