@@ -272,6 +272,9 @@ export const tenants = pgTable("tenants", {
     sendTime?: string; // Time to send (HH:mm format, default: "08:00")
     includeUpcomingDays?: number; // How many days ahead to include (default: 7)
     lastSentAt?: string; // ISO date of last digest sent
+    // Day-before shift reminders (separate from the weekly digest above)
+    shiftReminderEnabled?: boolean; // Email each volunteer the day before an assigned shift
+    shiftReminderHour?: number; // Local hour (0-23) to send the day-before reminder (default: 17 = 5 PM)
   }>(),
 
   // Volunteer Recruitment SMS — weekly digest + urgent last-minute alerts
@@ -1303,6 +1306,7 @@ export const volunteerSignups = pgTable("volunteer_signups", {
   applicantEmail: text("applicant_email").notNull(),
   applicantPhone: text("applicant_phone").notNull(),
   customResponses: jsonb("custom_responses").$type<Record<string, any>>(), // Stores answers to custom form fields
+  reminderEmailSentAt: timestamp("reminder_email_sent_at"), // Dedupe: day-before shift reminder email
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (table) => ({
   uniqueSignup: unique().on(table.opportunityId, table.applicantEmail),
@@ -1802,6 +1806,8 @@ export const calendarEvents = pgTable("calendar_events", {
   // Volunteer assignment
   volunteerContactId: uuid("volunteer_contact_id").references(() => users.id, { onDelete: 'set null' }), // Assigned volunteer for this event
   manualVolunteerName: text("manual_volunteer_name"), // For volunteers not yet registered in the system
+  // Day-before shift reminder dedupe (stamped when the reminder email is sent)
+  reminderEmailSentAt: timestamp("reminder_email_sent_at"),
   // Audit fields
   createdBy: uuid("created_by").notNull().references(() => users.id, { onDelete: 'cascade' }),
   createdAt: timestamp("created_at").notNull().defaultNow(),

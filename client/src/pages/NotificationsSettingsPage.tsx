@@ -24,6 +24,7 @@ import NotificationSettings from "@/components/NotificationSettings";
 import NotificationPreferencesSettings from "@/components/NotificationPreferencesSettings";
 import VolunteerAlertSettings, { VolunteerRecruitmentSmsSettings } from "@/components/VolunteerAlertSettings";
 import VolunteerDigestSettings from "@/components/VolunteerDigestSettings";
+import VolunteerShiftReminderSettings from "@/components/VolunteerShiftReminderSettings";
 import type { Tenant } from "@shared/schema";
 
 function EmailCopyRecipientsManager({ tenant }: { tenant?: Tenant }) {
@@ -461,6 +462,21 @@ export default function NotificationsSettingsPage() {
             </CardHeader>
             <CardContent>
               <VolunteerDigestSettings />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Mail className="h-5 w-5" />
+                <CardTitle>Day-Before Shift Reminders</CardTitle>
+              </div>
+              <CardDescription>
+                Email each volunteer a reminder the day before their scheduled shift
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <VolunteerShiftReminderSettings />
             </CardContent>
           </Card>
         </div>

@@ -70,5 +70,13 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' || echo "[post-merge] tenants fi
 ALTER TABLE tenants ADD COLUMN IF NOT EXISTS five_dollar_friday_day_of_week integer;
 SQL
 
+# Day-before volunteer shift reminders: dedupe stamp on calendar_events so the
+# hourly reminder cron never emails the same volunteer twice for one shift.
+# Idempotent — ADD COLUMN IF NOT EXISTS is a no-op when already applied.
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' || echo "[post-merge] volunteer reminder_email_sent_at columns skipped (already applied or DB unreachable)."
+ALTER TABLE calendar_events ADD COLUMN IF NOT EXISTS reminder_email_sent_at timestamp;
+ALTER TABLE volunteer_signups ADD COLUMN IF NOT EXISTS reminder_email_sent_at timestamp;
+SQL
+
 yes "" | timeout 60 npx drizzle-kit push --force || \
   echo "[post-merge] drizzle-kit push skipped (timeout or non-zero exit) — schema must be managed via SQL ALTER in the task."

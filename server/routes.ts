@@ -44840,7 +44840,7 @@ The user asking is a tenant administrator or staff member.`;
   app.patch('/api/tenant/settings/volunteer-digest', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
     try {
       const tenantId = req.session.tenantId!;
-      const { enabled, dayOfWeek, sendTime, includeUpcomingDays } = req.body;
+      const { enabled, dayOfWeek, sendTime, includeUpcomingDays, shiftReminderEnabled, shiftReminderHour } = req.body;
 
       // Get existing settings
       const [currentTenant] = await db
@@ -44849,13 +44849,20 @@ The user asking is a tenant administrator or staff member.`;
         .where(eq(tenants.id, tenantId));
 
       const currentSettings = currentTenant?.volunteerDigestSettings || {};
-      
+
+      const normalizedHour =
+        typeof shiftReminderHour === "number" && shiftReminderHour >= 0 && shiftReminderHour <= 23
+          ? shiftReminderHour
+          : undefined;
+
       const updatedSettings = {
         ...currentSettings,
         ...(enabled !== undefined && { enabled }),
         ...(dayOfWeek !== undefined && { dayOfWeek }),
         ...(sendTime !== undefined && { sendTime }),
         ...(includeUpcomingDays !== undefined && { includeUpcomingDays }),
+        ...(shiftReminderEnabled !== undefined && { shiftReminderEnabled }),
+        ...(normalizedHour !== undefined && { shiftReminderHour: normalizedHour }),
       };
 
       await db.update(tenants)
@@ -44883,6 +44890,28 @@ The user asking is a tenant administrator or staff member.`;
           totalCommitments: result.totalCommitments,
           errors: result.errors,
         }
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Day-before shift reminder test: emails volunteers assigned to tomorrow's
+  // shifts immediately (bypasses the local-hour gate; still dedupes per event).
+  app.post('/api/tenant/settings/volunteer-digest/shift-reminder-test', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+    try {
+      const tenantId = req.session.tenantId!;
+      const { triggerManualShiftReminders } = await import('./services/volunteer-shift-reminders');
+
+      const result = await triggerManualShiftReminders(tenantId);
+
+      res.json({
+        success: true,
+        result: {
+          emailsSent: result.emailsSent,
+          shiftsFound: result.shiftsFound,
+          errors: result.errors,
+        },
       });
     } catch (error) {
       next(error);

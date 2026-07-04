@@ -524,6 +524,33 @@ export function initializeScheduler() {
 
   console.log(`✓ Surgery day reminders scheduled for: ${surgeryDayReminderSchedule} (UTC)`);
 
+  // Schedule volunteer day-before shift reminders hourly so the per-tenant gate
+  // inside runVolunteerShiftRemindersForAllTenants can honor each tenant's local
+  // timezone (firing at the tenant's configured hour, default 5 PM, the evening
+  // before the shift). The per-event reminder_email_sent_at dedupe column
+  // prevents double-sends across hourly runs.
+  const volunteerShiftReminderSchedule = process.env.VOLUNTEER_SHIFT_REMINDER_SCHEDULE || "0 * * * *";
+
+  cron.schedule(volunteerShiftReminderSchedule, async () => {
+    console.log("📅 Running volunteer shift reminder emails...");
+    try {
+      const { runVolunteerShiftRemindersForAllTenants } = await import("../services/volunteer-shift-reminders");
+      const result = await runVolunteerShiftRemindersForAllTenants();
+      if (result.remindersSent > 0) {
+        console.log(`✓ Volunteer shift reminders: ${result.tenantsProcessed} tenants processed, ${result.remindersSent} emails sent`);
+      }
+      if (result.errors.length > 0) {
+        console.warn(`⚠️ Volunteer shift reminder errors: ${result.errors.slice(0, 5).join('; ')}${result.errors.length > 5 ? ` (+${result.errors.length - 5} more)` : ''}`);
+      }
+    } catch (error) {
+      console.error(`❌ Volunteer shift reminders failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }, {
+    timezone: "UTC"
+  });
+
+  console.log(`✓ Volunteer shift reminders scheduled for: ${volunteerShiftReminderSchedule} (UTC)`);
+
   // Schedule foster compliance escalation hourly
   // "0 * * * *" means: at minute 0, every hour
   // This escalates overdue reminders (24h → overdue, 48h → requires_intervention)
