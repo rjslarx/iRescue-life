@@ -16,9 +16,9 @@ system 1, not system 2. Confirm which one the user means before building.
      These frequently have NO `volunteerContactId` and NO `manualVolunteerName`
      (name lives only in the title). Resolve email via `createdBy` **only when the
      title names the creator** (strict normalized equality after stripping a
-     trailing " - Signup"). Do NOT prefix-match — a coordinator (e.g. Courtney
-     Pettigrew at Haseya) creates many "{OtherName} - Signup" events, and
-     prefix/loose matching would email the coordinator instead of the volunteer.
+     trailing " - Signup"). Do NOT prefix-match — a coordinator can create many
+     "{OtherName} - Signup" events on behalf of others, and prefix/loose matching
+     would email the coordinator instead of the actual volunteer.
    - `manualVolunteerName` (free text, NO email) → unreachable, skip.
 
 2. **Public opportunity signups** — `volunteer_opportunities` (`date` as plain

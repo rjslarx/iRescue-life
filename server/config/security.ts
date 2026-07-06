@@ -172,7 +172,7 @@ export const helmetConfig = helmet({
       fontSrc: ["'self'", "data:", "https://fonts.gstatic.com"],
       objectSrc: ["'none'"],
       mediaSrc: ["'self'"],
-      frameSrc: ["'self'", "https://*.stripe.com", "https://connect-js.stripe.com", "https://docs.google.com", "https://drive.google.com", "https://www.googletagmanager.com"],
+      frameSrc: ["'self'", "https://*.stripe.com", "https://connect-js.stripe.com", "https://docs.google.com", "https://drive.google.com", "https://www.googletagmanager.com", "https://www.youtube.com", "https://www.youtube-nocookie.com", "https://player.vimeo.com", "https://www.loom.com"],
       workerSrc: ["'self'", "blob:"],
       upgradeInsecureRequests: [],
     },
