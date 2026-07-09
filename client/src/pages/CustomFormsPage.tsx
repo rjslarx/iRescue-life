@@ -77,6 +77,7 @@ interface CustomFormSubmission {
   signerName: string;
   signerEmail: string | null;
   signerPhone?: string | null;
+  formData?: Record<string, string> | null;
   signedAt?: string;
   pdfUrl?: string;
   emailedAt?: string;
@@ -817,6 +818,21 @@ export default function CustomFormsPage() {
                       </span>
                     )}
                   </div>
+                  {form.isPublic && form.publicSlug && (
+                    <div className="mt-3 flex items-center gap-2 rounded-md border p-2">
+                      <p className="text-xs text-muted-foreground truncate flex-1" data-testid={`text-public-link-${form.id}`}>
+                        {`${window.location.origin}${basePath || ''}/f/${form.publicSlug}`}
+                      </p>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => copyToClipboard(`${window.location.origin}${basePath || ''}/f/${form.publicSlug}`)}
+                        data-testid={`button-copy-public-link-${form.id}`}
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
                 </CardContent>
                 <CardFooter className="flex flex-wrap gap-2">
                   <Button
@@ -1124,6 +1140,33 @@ export default function CustomFormsPage() {
                           )}
                         </div>
                       </div>
+                      {submission.formData && Object.keys(submission.formData).length > 0 && (
+                        <div className="mt-2 space-y-1 border-t pt-2">
+                          {Object.entries(submission.formData).map(([key, value]) => {
+                            const label = key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+                            const strValue = String(value ?? '');
+                            const isFileUrl = /^(https?:\/\/|\/)/.test(strValue) && /(upload|file|photo|document|objects|storage)/i.test(strValue);
+                            return (
+                              <p key={key} className="text-xs" data-testid={`text-formdata-${submission.id}-${key}`}>
+                                <span className="text-muted-foreground">{label}:</span>{' '}
+                                {isFileUrl ? (
+                                  <a
+                                    href={strValue}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-primary underline"
+                                    data-testid={`link-formdata-file-${submission.id}-${key}`}
+                                  >
+                                    View uploaded file
+                                  </a>
+                                ) : (
+                                  strValue
+                                )}
+                              </p>
+                            );
+                          })}
+                        </div>
+                      )}
                     </Card>
                   ))}
                 </div>

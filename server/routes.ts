@@ -14280,6 +14280,243 @@ ${renderedHtml}
   // ============================================================================
 
   /**
+   * GET /api/public/custom-forms/by-slug/:slug
+   * Self-serve public form access via shareable link (no token/auth required).
+   * Only returns forms marked isPublic + isActive for this tenant.
+   */
+  app.get('/api/public/custom-forms/by-slug/:slug', requireTenant, async (req, res, next) => {
+    try {
+      const { getFormBySlug } = await import('./services/custom-form');
+      const form = await getFormBySlug(req.params.slug, req.tenant!.id);
+
+      if (!form) {
+        return res.status(404).json({ error: 'Form not found or is no longer available' });
+      }
+
+      const [tenant] = await db
+        .select()
+        .from(tenants)
+        .where(eq(tenants.id, req.tenant!.id))
+        .limit(1);
+
+      res.json({
+        form: {
+          id: form.id,
+          name: form.name,
+          description: form.description,
+          requiresSignature: form.requiresSignature,
+          htmlTemplate: form.htmlTemplate,
+          formFields: form.formFields || [],
+        },
+        tenant: {
+          name: tenant?.name || 'Organization',
+          logo: tenant?.logoUrl || null,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/public/custom-forms/by-slug/:slug/submit
+   * Self-serve submission of a public form: contact info + custom fields + signature.
+   * Generates the signed PDF and emails copies to the org and the signer.
+   */
+  app.post('/api/public/custom-forms/by-slug/:slug/submit', requireTenant, async (req, res, next) => {
+    try {
+      const tenantId = req.tenant!.id;
+      const { getFormBySlug, createSubmission, updateSubmission, renderFormHtml } = await import('./services/custom-form');
+
+      const form = await getFormBySlug(req.params.slug, tenantId);
+      if (!form) {
+        return res.status(404).json({ error: 'Form not found or is no longer available' });
+      }
+
+      const { signerName, signerEmail, signerPhone, signatureData, formData: extraFormData } = req.body || {};
+
+      if (!signerName || typeof signerName !== 'string' || !signerName.trim()) {
+        return res.status(400).json({ error: 'Name is required' });
+      }
+      if (!signerEmail || typeof signerEmail !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(signerEmail.trim())) {
+        return res.status(400).json({ error: 'A valid email address is required' });
+      }
+      if (!signerPhone || typeof signerPhone !== 'string' || !signerPhone.trim()) {
+        return res.status(400).json({ error: 'Phone number is required' });
+      }
+      if (form.requiresSignature && !signatureData) {
+        return res.status(400).json({ error: 'Signature is required' });
+      }
+      if (signatureData && (typeof signatureData !== 'string' || !signatureData.startsWith('data:image/') || signatureData.length > 500000)) {
+        return res.status(400).json({ error: 'Invalid signature data' });
+      }
+
+      // Validate custom fields against the form's field definitions
+      const fieldDefs = (form.formFields || []) as { key: string; label: string; type: string; required?: boolean }[];
+      const cleanFormData: Record<string, string> = {};
+      for (const def of fieldDefs) {
+        const raw = extraFormData?.[def.key];
+        const value = raw == null ? '' : String(raw).trim();
+        if (def.required && !value) {
+          return res.status(400).json({ error: `${def.label} is required` });
+        }
+        if (value.length > 5000) {
+          return res.status(400).json({ error: `${def.label} is too long` });
+        }
+        if (def.type === 'number' && value && isNaN(Number(value))) {
+          return res.status(400).json({ error: `${def.label} must be a number` });
+        }
+        if (def.type === 'file' && value && !value.startsWith(`/objects/${tenantId}/`)) {
+          // File values must be paths produced by this tenant's own public
+          // upload endpoint — reject arbitrary strings or cross-tenant paths.
+          return res.status(400).json({ error: `${def.label} must be uploaded using the form's file upload` });
+        }
+        cleanFormData[def.key] = value;
+      }
+
+      const ipAddress = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket.remoteAddress || '';
+
+      const submission = await createSubmission({
+        tenantId,
+        formId: form.id,
+        signerName: signerName.trim(),
+        signerEmail: signerEmail.trim().toLowerCase(),
+        signerPhone: signerPhone?.trim() || null,
+        formData: Object.keys(cleanFormData).length > 0 ? cleanFormData : null,
+        signatureData: signatureData || null,
+        signedAt: new Date(),
+        signerIpAddress: ipAddress,
+        status: 'completed',
+      });
+
+      const [tenant] = await db
+        .select()
+        .from(tenants)
+        .where(eq(tenants.id, tenantId))
+        .limit(1);
+
+      const renderedHtml = await renderFormHtml(form, submission, tenant?.name || 'Organization');
+      await updateSubmission(submission.id, tenantId, { renderedHtml });
+
+      const pdfAttachments: { filename: string; content: Buffer; contentType: string }[] = [];
+      if (renderedHtml) {
+        try {
+          const { generateCustomFormPDF } = await import('./services/custom-form-pdf');
+          const { objectPath, pdfBuffer } = await generateCustomFormPDF(renderedHtml, 'custom-forms', {
+            ipAddress,
+            signedAt: new Date(),
+            sessionId: submission.id,
+          });
+
+          const signerNameSlug = (signerName || 'unknown').replace(/\s+/g, '-').toLowerCase().replace(/[^a-z0-9-]/g, '');
+          pdfAttachments.push({
+            filename: `${form.name.replace(/\s+/g, '-').toLowerCase().replace(/[^a-z0-9-]/g, '')}-${signerNameSlug}.pdf`,
+            content: pdfBuffer,
+            contentType: 'application/pdf',
+          });
+
+          await updateSubmission(submission.id, tenantId, { pdfUrl: objectPath });
+        } catch (pdfError) {
+          console.error('[Public Custom Form] Failed to generate PDF:', pdfError);
+        }
+      }
+
+      const escapeHtml = (str: string) => str
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+
+      // Notify the organization
+      if (tenant?.contactEmail && renderedHtml) {
+        try {
+          const { EmailService } = await import('./lib/email-service');
+          const emailService = await EmailService.forTenant(tenantId);
+          if (emailService) {
+            const fieldRows = fieldDefs
+              .map((def) => {
+                const value = cleanFormData[def.key];
+                if (!value) return '';
+                const isLink = def.type === 'file' && /^(https?:\/\/|\/)/.test(value);
+                const display = isLink
+                  ? `<a href="${escapeHtml(value)}">View uploaded file</a>`
+                  : escapeHtml(value);
+                return `<p><strong>${escapeHtml(def.label)}:</strong> ${display}</p>`;
+              })
+              .join('');
+
+            await emailService.send({
+              to: tenant.contactEmail,
+              subject: `New Submission: ${form.name} — ${signerName}`,
+              html: `
+<h2>${escapeHtml(form.name)} — New Submission</h2>
+<p><strong>Name:</strong> ${escapeHtml(signerName)}</p>
+<p><strong>Email:</strong> ${escapeHtml(signerEmail)}</p>
+${signerPhone ? `<p><strong>Phone:</strong> ${escapeHtml(signerPhone)}</p>` : ''}
+${fieldRows}
+<p><strong>Submitted:</strong> ${new Date().toLocaleString()}</p>
+<hr>
+<h3>Signed Document</h3>
+${renderedHtml}
+<p style="color:#888;font-size:12px;">This is an automated notification from your iRescue platform.</p>
+              `.trim(),
+              attachments: pdfAttachments.length > 0 ? pdfAttachments : undefined,
+            });
+          }
+        } catch (emailError) {
+          console.error('[Public Custom Form] Error sending org email:', emailError);
+        }
+      }
+
+      // Send the signer a copy
+      if (renderedHtml) {
+        try {
+          const { EmailService } = await import('./lib/email-service');
+          const emailService = await EmailService.forTenant(tenantId);
+          if (emailService) {
+            const safeTenantName = tenant?.name ? escapeHtml(tenant.name) : 'the organization';
+            await emailService.send({
+              to: signerEmail.trim().toLowerCase(),
+              subject: `Your signed copy: ${form.name}`,
+              html: `
+<p>Hi ${escapeHtml(signerName)},</p>
+<p>Thank you for completing <strong>${escapeHtml(form.name)}</strong> with ${safeTenantName}. A copy of your signed document is below${pdfAttachments.length > 0 ? ' and attached as a PDF' : ''}.</p>
+<hr>
+${renderedHtml}
+              `.trim(),
+              attachments: pdfAttachments.length > 0 ? pdfAttachments : undefined,
+            });
+          }
+        } catch (emailError) {
+          console.error('[Public Custom Form] Error sending signer email:', emailError);
+        }
+      }
+
+      try {
+        const { logActivity } = await import('./lib/activity-logger');
+        await logActivity({
+          tenantId,
+          userId: null,
+          action: 'custom_form_submitted_public',
+          category: 'user',
+          entityType: 'custom_form_submission',
+          entityId: submission.id,
+          description: `${signerName} (${signerEmail}) submitted "${form.name}" via public form link`,
+          metadata: { formId: form.id, signerName, signerEmail },
+        });
+      } catch (logError) {
+        console.error('[Public Custom Form] Failed to log activity:', logError);
+      }
+
+      res.json({
+        success: true,
+        message: 'Form submitted successfully',
+        submissionId: submission.id,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * GET /api/public/forms/:token
    * Get form for public signing
    */

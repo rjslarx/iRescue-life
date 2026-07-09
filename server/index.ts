@@ -17,6 +17,7 @@ import { backfillTerminalAnimalMedicalCleanup } from "./scripts/backfill-termina
 import { backfillComplianceObligationsSync } from "./scripts/backfill-compliance-obligations-sync";
 import { backfillAdoptionsFromApplications } from "./scripts/backfill-adoptions-from-applications";
 import { backfillRtoSignedAgreements } from "./scripts/backfill-rto-signed-agreements";
+import { seedTrapLoanForm } from "./scripts/seed-trap-loan-form";
 import { db } from "./db";
 import { medicalCatalog, medicalPrescriptions, medicalDoses } from "@shared/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
@@ -344,5 +345,9 @@ app.use((req, res, next) => {
     // that only have the bare signature image on file. Going forward the
     // POST /api/animals/:id/reclaim endpoint stores the full signed PDF live.
     backfillRtoSignedAgreements();
+
+    // One-time: seed the public CNR Trap Loan Agreement form for southernpets
+    // (idempotent — skips if the form already exists).
+    seedTrapLoanForm();
   });
 })();

@@ -77,5 +77,11 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' || echo "[post-merge] volunteer 
 ALTER TABLE calendar_events ADD COLUMN IF NOT EXISTS reminder_email_sent_at timestamp;
 SQL
 
+# CNR/TNR Trap Loan public form: custom field definitions (address, trap count,
+# loan duration, ID upload) rendered on the public /f/:slug form page. Idempotent.
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' || echo "[post-merge] custom_forms form_fields column skipped (already applied or DB unreachable)."
+ALTER TABLE custom_forms ADD COLUMN IF NOT EXISTS form_fields jsonb;
+SQL
+
 yes "" | timeout 60 npx drizzle-kit push --force || \
   echo "[post-merge] drizzle-kit push skipped (timeout or non-zero exit) — schema must be managed via SQL ALTER in the task."

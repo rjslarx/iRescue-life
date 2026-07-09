@@ -5242,6 +5242,15 @@ export type HelpDocument = typeof helpDocuments.$inferSelect;
 // ============================================
 
 // Custom Forms - Flexible form templates with optional e-signature
+// Custom field definitions rendered as inputs on the public form page
+export type CustomFormField = {
+  key: string; // merge-field key, e.g. "address" -> {{address}}
+  label: string; // e.g. "Home Address"
+  type: 'text' | 'textarea' | 'number' | 'file';
+  required?: boolean;
+  helpText?: string;
+};
+
 export const customForms = pgTable("custom_forms", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
@@ -5253,6 +5262,7 @@ export const customForms = pgTable("custom_forms", {
   isActive: boolean("is_active").notNull().default(true),
   isPublic: boolean("is_public").notNull().default(false), // Can be accessed via public link
   publicSlug: text("public_slug"), // URL-friendly slug for public access
+  formFields: jsonb("form_fields").$type<CustomFormField[]>(), // Custom input fields shown on the public form page
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
   createdBy: uuid("created_by").references(() => users.id),
