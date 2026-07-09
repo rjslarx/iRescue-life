@@ -14431,13 +14431,19 @@ ${renderedHtml}
           const { EmailService } = await import('./lib/email-service');
           const emailService = await EmailService.forTenant(tenantId);
           if (emailService) {
+            // Links in emails must be absolute — relative /objects/... paths
+            // render as invalid http:/// URLs in mail clients.
+            const emailOrigin = tenant?.customDomain && tenant?.customDomainVerified
+              ? `https://${tenant.customDomain}`
+              : (process.env.BASE_URL || 'https://irescue.life');
             const fieldRows = fieldDefs
               .map((def) => {
                 const value = cleanFormData[def.key];
                 if (!value) return '';
                 const isLink = def.type === 'file' && /^(https?:\/\/|\/)/.test(value);
+                const absoluteUrl = value.startsWith('/') ? `${emailOrigin}${value}` : value;
                 const display = isLink
-                  ? `<a href="${escapeHtml(value)}">View uploaded file</a>`
+                  ? `<a href="${escapeHtml(absoluteUrl)}">View uploaded file</a>`
                   : escapeHtml(value);
                 return `<p><strong>${escapeHtml(def.label)}:</strong> ${display}</p>`;
               })
