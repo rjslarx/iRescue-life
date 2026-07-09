@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CheckCircle2, AlertCircle, FileSignature, Loader2, Upload, X } from "lucide-react";
-import SignaturePad from "signature_pad";
+import { SignatureCanvas } from "@/components/SignatureCanvas";
 import DOMPurify from "dompurify";
 import { apiRequest } from "@/lib/queryClient";
 import { buildTenantUrl } from "@/lib/tenantApi";
@@ -87,8 +87,7 @@ export default function PublicCustomFormPage() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [isComplete, setIsComplete] = useState(false);
   const [signatureError, setSignatureError] = useState(false);
-  const signatureCanvasRef = useRef<HTMLCanvasElement>(null);
-  const signaturePadRef = useRef<SignaturePad | null>(null);
+  const [signatureImage, setSignatureImage] = useState<string | null>(null);
 
   const { data, isLoading, error } = useQuery<PublicFormData>({
     queryKey: ['/api/public/custom-forms/by-slug', slug],
@@ -103,30 +102,6 @@ export default function PublicCustomFormPage() {
     enabled: !!slug,
     retry: false,
   });
-
-  useEffect(() => {
-    if (signatureCanvasRef.current && !signaturePadRef.current && data?.form.requiresSignature) {
-      signaturePadRef.current = new SignaturePad(signatureCanvasRef.current, {
-        backgroundColor: 'rgb(255, 255, 255)',
-        penColor: 'rgb(0, 0, 0)',
-      });
-
-      const resizeCanvas = () => {
-        const canvas = signatureCanvasRef.current;
-        if (canvas) {
-          const ratio = Math.max(window.devicePixelRatio || 1, 1);
-          canvas.width = canvas.offsetWidth * ratio;
-          canvas.height = canvas.offsetHeight * ratio;
-          canvas.getContext("2d")?.scale(ratio, ratio);
-          signaturePadRef.current?.clear();
-        }
-      };
-
-      resizeCanvas();
-      window.addEventListener('resize', resizeCanvas);
-      return () => window.removeEventListener('resize', resizeCanvas);
-    }
-  }, [data]);
 
   const handleFileUpload = async (field: CustomFormField, file: File) => {
     setFileUploads(prev => ({ ...prev, [field.key]: { url: '', name: file.name, uploading: true } }));
@@ -207,14 +182,14 @@ export default function PublicCustomFormPage() {
       return;
     }
 
-    if (data?.form.requiresSignature && (!signaturePadRef.current || signaturePadRef.current.isEmpty())) {
+    if (data?.form.requiresSignature && !signatureImage) {
       setSignatureError(true);
       return;
     }
     setSignatureError(false);
 
     const signatureData = data?.form.requiresSignature
-      ? signaturePadRef.current?.toDataURL('image/png') || ''
+      ? signatureImage || ''
       : '';
 
     submitMutation.mutate({
@@ -482,32 +457,19 @@ export default function PublicCustomFormPage() {
                 <CardDescription>Please sign below to complete the form</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="border-2 border-dashed border-muted-foreground/25 rounded-md p-2 bg-white">
-                  <canvas
-                    ref={signatureCanvasRef}
-                    className="w-full h-40 touch-none"
-                    data-testid="public-form-signature-canvas"
-                  />
-                </div>
+                <SignatureCanvas
+                  onSignatureChange={(sig) => {
+                    setSignatureImage(sig);
+                    if (sig) setSignatureError(false);
+                  }}
+                  description="Your signature will be included in the signed agreement"
+                />
                 {signatureError && (
                   <Alert variant="destructive" data-testid="alert-signature-required">
                     <AlertCircle className="h-4 w-4" />
                     <AlertDescription>Please sign the form before submitting</AlertDescription>
                   </Alert>
                 )}
-                <div className="flex justify-between flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => signaturePadRef.current?.clear()}
-                    data-testid="button-clear-signature"
-                  >
-                    Clear Signature
-                  </Button>
-                  <p className="text-xs text-muted-foreground self-center">
-                    Draw your signature above using your finger or mouse
-                  </p>
-                </div>
               </CardContent>
             </Card>
           )}

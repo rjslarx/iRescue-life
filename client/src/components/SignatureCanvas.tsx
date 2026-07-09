@@ -46,6 +46,8 @@ export function SignatureCanvas({ onSignatureChange, disabled = false, descripti
 
       if (pad) {
         pad.clear();
+        onSignatureChange(null);
+        setIsEmpty(true);
       }
     };
 
