@@ -4686,6 +4686,10 @@ Crawl-delay: 1
           status: applications.stage,
           createdAt: applications.createdAt,
           animalId: applications.animalId,
+          address: applications.address,
+          city: applications.city,
+          state: applications.state,
+          zip: applications.zip,
           customResponses: applications.customResponses,
           notes: applications.notes,
         })
@@ -4856,6 +4860,10 @@ Crawl-delay: 1
           createdAt: app.createdAt?.toISOString() || new Date().toISOString(),
           animalName: app.animalId ? animalsMap.get(app.animalId) : undefined,
           animalId: app.animalId,
+          address: app.address,
+          city: app.city,
+          state: app.state,
+          zip: app.zip,
           formData: {
             notes: app.notes,
             ...(app.customResponses || {}),
@@ -10891,6 +10899,25 @@ Crawl-delay: 1
       }
       
       res.json({ success: true, application });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/applications/:id
+   * Fetch a single adoption application (staff only). Used by
+   * ViewApplicationDialog to enrich partial rows with full details
+   * (including applicant address).
+   */
+  app.get('/api/applications/:id', requireTenant, requireAuth, requireRoleOrPageAccess('applications', 'admin', 'staff'), async (req, res, next) => {
+    try {
+      const { getApplicationById } = await import('./services/applications');
+      const application = await getApplicationById(req.tenant!.id, req.params.id);
+      if (!application) {
+        return res.status(404).json({ error: 'Application not found' });
+      }
+      res.json({ application });
     } catch (error) {
       next(error);
     }

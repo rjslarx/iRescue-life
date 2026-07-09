@@ -34,6 +34,10 @@ export interface PendingApplication {
   createdAt: string;
   animalName?: string;
   animalId?: string;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zip?: string | null;
   formData?: Record<string, any>;
   formName?: string;
 }

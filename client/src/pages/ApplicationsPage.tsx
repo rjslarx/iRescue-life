@@ -225,6 +225,10 @@ export default function ApplicationsPage() {
         createdAt: fullApp.createdAt,
         animalName: fullApp.animalName || animals.find(a => a.id === fullApp.animalId)?.name,
         animalId: fullApp.animalId,
+        address: fullApp.address,
+        city: fullApp.city,
+        state: fullApp.state,
+        zip: fullApp.zip,
         formData: fullApp.customResponses as Record<string, any> | undefined,
       };
       setApplicationToView(pendingApp);

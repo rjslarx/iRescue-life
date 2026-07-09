@@ -16,6 +16,7 @@ import {
   Users, 
   Mail, 
   Phone,
+  MapPin,
   Calendar,
   PawPrint,
   Loader2,
@@ -423,6 +424,21 @@ export function ViewApplicationDialog({
                   {phone}
                 </a>
               </div>
+              {applicationType === 'adoption' && (() => {
+                const app = fullApplication as Record<string, unknown>;
+                const parts = [
+                  app.address,
+                  [app.city, app.state].filter(Boolean).join(', '),
+                  app.zip,
+                ].filter((p) => p && String(p).trim().length > 0);
+                if (parts.length === 0) return null;
+                return (
+                  <div className="flex items-center gap-2 text-sm">
+                    <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <span data-testid="text-applicant-address">{parts.join(' \u2022 ')}</span>
+                  </div>
+                );
+              })()}
               {application.createdAt && (
                 <div className="flex items-center gap-2 text-sm">
                   <Calendar className="h-4 w-4 text-muted-foreground" />

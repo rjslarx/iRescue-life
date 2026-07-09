@@ -18,6 +18,7 @@ import {
   Users, 
   Mail, 
   Phone,
+  MapPin,
   MessageSquare,
   Calendar,
   PawPrint,
@@ -279,6 +280,20 @@ export function ApplicationDetailsDialog({ application, open, onOpenChange }: Ap
                     </a>
                   </div>
                 )}
+                {(() => {
+                  const parts = [
+                    application.address,
+                    [application.city, application.state].filter(Boolean).join(', '),
+                    application.zip,
+                  ].filter((p) => p && String(p).trim().length > 0);
+                  if (parts.length === 0) return null;
+                  return (
+                    <div className="flex items-center gap-2 text-sm">
+                      <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <span data-testid="text-applicant-address">{parts.join(' \u2022 ')}</span>
+                    </div>
+                  );
+                })()}
                 <div className="flex items-center gap-2 text-sm">
                   <Calendar className="h-4 w-4 text-muted-foreground" />
                   <span data-testid="text-created-date">{format(new Date(application.createdAt), 'PPP')}</span>
