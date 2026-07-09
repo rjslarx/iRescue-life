@@ -5,6 +5,26 @@ import { eq, and, desc } from 'drizzle-orm';
 import fs from 'fs';
 import path from 'path';
 
+// In development, Vite's @vitejs/plugin-react normally injects a "preamble"
+// script into index.html via transformIndexHtml. Because this middleware
+// serves the raw client/index.html directly (to inject OG/SEO tags), that
+// preamble is missing, which makes React refuse to render ("can't detect
+// preamble" error → blank page). Inject the standard preamble ourselves.
+// Production reads the built index.html and does not need this.
+const VITE_REACT_PREAMBLE = `<script type="module">
+import RefreshRuntime from "/@react-refresh";
+RefreshRuntime.injectIntoGlobalHook(window);
+window.$RefreshReg$ = () => {};
+window.$RefreshSig$ = () => (type) => type;
+window.__vite_plugin_react_preamble_installed__ = true;
+</script>`;
+
+function injectDevVitePreamble(html: string): string {
+  if (process.env.NODE_ENV === 'production') return html;
+  if (html.includes('__vite_plugin_react_preamble_installed__')) return html;
+  return html.replace('<script type="module" src="/src/main.tsx">', `${VITE_REACT_PREAMBLE}\n    <script type="module" src="/src/main.tsx">`);
+}
+
 const CRAWLERS = [
   // Social / messaging bots
   'facebookexternalhit',
@@ -442,6 +462,7 @@ async function serveInjectedHtml(
     const devPath = path.resolve(import.meta.dirname, '..', '..', 'client', 'index.html');
     try {
       html = await fs.promises.readFile(devPath, 'utf-8');
+      html = injectDevVitePreamble(html);
     } catch (err) {
       console.error(`[OG-TAGS] Failed to read development index.html:`, err);
       return next();
@@ -1192,6 +1213,7 @@ export async function injectOGTags(req: Request, res: Response, next: NextFuncti
       const devPath = path.resolve(import.meta.dirname, "..", "..", "client", "index.html");
       try {
         html = await fs.promises.readFile(devPath, 'utf-8');
+        html = injectDevVitePreamble(html);
       } catch (err) {
         console.error(`[OG-TAGS] Failed to read development index.html:`, err);
         return next();

@@ -384,14 +384,11 @@ export default function PublicAnimalProfilePage() {
         </div>
       </main>
 
-      <Dialog open={adoptionDialogOpen} onOpenChange={setAdoptionDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <PublicAdoptionDialog
-            animal={animal}
-            onClose={() => setAdoptionDialogOpen(false)}
-          />
-        </DialogContent>
-      </Dialog>
+      <PublicAdoptionDialog
+        animal={animal}
+        open={adoptionDialogOpen}
+        onOpenChange={setAdoptionDialogOpen}
+      />
 
       <Dialog open={donationDialogOpen} onOpenChange={setDonationDialogOpen}>
         <DialogContent className="max-w-md max-h-[90dvh] overflow-y-auto">

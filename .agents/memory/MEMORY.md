@@ -13,4 +13,5 @@
 - [Radix Sheet scroll-lock on SPA nav](radix-sheet-scroll-lock-spa-nav.md) — modal Sheet/Dialog can leave destination page unscrollable on mobile Safari when a nav link inside it navigates while closing; use modal={false} for nav menus.
 - [Volunteer scheduling audit](volunteer-scheduling-audit.md) — two separate systems (calendar_events "{Name} - Signup" vs volunteer_signups); who-scheduled-whom = calendar_events.created_by + created_at; one creator across many volunteers = coordinator, not self-signup.
 - [Page-gate vs write-guard asymmetry](page-permission-gate-vs-write.md) — "view but 403 on save" trap: gate the route/sidebar by the SAME pageId the write API guards; frontend canAccessPage honors role-based access but backend requireRoleOrPageAccess only honors individual grants.
+- [Dev HTML middleware preamble](dev-html-middleware-preamble.md) — middleware serving raw index.html in dev must inject the Vite React-refresh preamble or pages render blank (dev only).
 - [Application detail dialogs](application-detail-dialogs.md) — three separate staff dialogs render application details; new applications columns must be plumbed into each plus two server selects.

@@ -100,6 +100,98 @@ export function PublicAdoptionDialog({ animal, open, onOpenChange }: PublicAdopt
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [missingFieldLabels, setMissingFieldLabels] = useState<string[]>([]);
 
+  // ---------------------------------------------------------------------
+  // Draft auto-save: adopters often take a long time to fill this form out
+  // (especially on mobile, where switching apps to find a photo can cause
+  // the browser to reload the page and wipe the dialog state). Persist a
+  // draft to localStorage as they type so nothing is lost, restore it when
+  // the dialog reopens, and clear it after a successful submission.
+  // ---------------------------------------------------------------------
+  const draftKey = animal ? `adoption-app-draft-${animal.id}` : null;
+  const draftRestoredRef = useRef(false);
+  const draftSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearDraft = () => {
+    if (!draftKey) return;
+    try { localStorage.removeItem(draftKey); } catch {}
+  };
+
+  // Restore a saved draft when the dialog opens.
+  useEffect(() => {
+    if (!open || !draftKey || draftRestoredRef.current) return;
+    try {
+      const raw = localStorage.getItem(draftKey);
+      if (!raw) return;
+      const draft = JSON.parse(raw);
+      if (!draft || typeof draft !== 'object' || !draft.values) return;
+      const hasContent = Object.entries(draft.values).some(([key, val]) => {
+        if (key === 'smsConsent' || key === 'customResponses') return false;
+        return typeof val === 'string' && val.trim().length > 0;
+      }) || Object.keys(draft.values.customResponses || {}).length > 0;
+      if (!hasContent) return;
+      form.reset({
+        applicantName: draft.values.applicantName || "",
+        applicantEmail: draft.values.applicantEmail || "",
+        applicantPhone: draft.values.applicantPhone || "",
+        address: draft.values.address || "",
+        city: draft.values.city || "",
+        state: draft.values.state || "",
+        zip: draft.values.zip || "",
+        smsConsent: draft.values.smsConsent === true ? true : (false as any),
+        notes: draft.values.notes || "",
+        customResponses: draft.values.customResponses || {},
+      });
+      if (draft.photoUploads && typeof draft.photoUploads === 'object') {
+        const restoredUploads: Record<string, { url: string; name: string; uploading: boolean }> = {};
+        for (const [fieldId, up] of Object.entries<any>(draft.photoUploads)) {
+          if (up && typeof up.url === 'string' && up.url && !up.uploading) {
+            restoredUploads[fieldId] = { url: up.url, name: up.name || 'Uploaded file', uploading: false };
+          }
+        }
+        setPhotoUploads(restoredUploads);
+      }
+      draftRestoredRef.current = true;
+      toast({
+        title: "Welcome back!",
+        description: "We restored the application you started earlier. Your progress is saved on this device as you type.",
+      });
+    } catch {
+      // Ignore storage errors (private browsing, etc.)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, draftKey]);
+
+  // Save the draft (debounced) whenever any field changes while the dialog is open.
+  useEffect(() => {
+    if (!open || !draftKey) return;
+    const subscription = form.watch((values) => {
+      if (draftSaveTimerRef.current) clearTimeout(draftSaveTimerRef.current);
+      draftSaveTimerRef.current = setTimeout(() => {
+        try {
+          localStorage.setItem(draftKey, JSON.stringify({ values, photoUploads, savedAt: Date.now() }));
+        } catch {}
+      }, 400);
+    });
+    return () => {
+      subscription.unsubscribe();
+      if (draftSaveTimerRef.current) clearTimeout(draftSaveTimerRef.current);
+    };
+  }, [open, draftKey, form, photoUploads]);
+
+  // Also persist immediately when photo uploads change (they aren't form fields).
+  useEffect(() => {
+    if (!open || !draftKey) return;
+    try {
+      localStorage.setItem(draftKey, JSON.stringify({ values: form.getValues(), photoUploads, savedAt: Date.now() }));
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [photoUploads]);
+
+  // Allow the restore effect to run again the next time the dialog opens.
+  useEffect(() => {
+    if (!open) draftRestoredRef.current = false;
+  }, [open]);
+
   // Map built-in form field names -> friendly labels and DOM data-testids so we can
   // build named missing-field lists, scroll to them, and outline them in red.
   const BUILT_IN_FIELD_META: Record<string, { label: string; testId: string }> = {
@@ -290,6 +382,8 @@ export function PublicAdoptionDialog({ animal, open, onOpenChange }: PublicAdopt
       });
       
       clearGclid();
+      clearDraft();
+      setPhotoUploads({});
       form.reset();
       onOpenChange(false);
     },
@@ -314,7 +408,10 @@ export function PublicAdoptionDialog({ animal, open, onOpenChange }: PublicAdopt
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent
+        className="max-w-lg max-h-[90vh] overflow-y-auto"
+        onInteractOutside={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Heart className="h-5 w-5 text-primary" />
@@ -750,6 +847,10 @@ export function PublicAdoptionDialog({ animal, open, onOpenChange }: PublicAdopt
                 </Button>
               </Alert>
             )}
+
+            <p className="text-xs text-muted-foreground" data-testid="text-draft-autosave-hint">
+              Your progress is automatically saved on this device, so you can safely come back and finish later.
+            </p>
 
             <div className="flex gap-2 pt-4">
               <Button
