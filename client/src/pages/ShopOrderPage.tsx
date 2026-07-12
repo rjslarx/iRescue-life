@@ -25,7 +25,7 @@ type OrderWithItems = ShopOrder & {
 
 export default function ShopOrderPage() {
   const { basePath } = useTenant();
-  const [, params] = useRoute(`${basePath}/shop/order/:orderNumber`);
+  const [, params] = useRoute("/shop/order/:orderNumber");
   const orderNumber = params?.orderNumber;
 
   const { data: tenantData } = useQuery<{ tenant: Tenant }>({

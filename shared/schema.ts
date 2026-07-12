@@ -3824,6 +3824,11 @@ export const shopProducts = pgTable("shop_products", {
   // Raffle-specific fields
   raffleDrawDate: timestamp("raffle_draw_date"), // When the raffle will be drawn
   rafflePrizeDescription: text("raffle_prize_description"), // What the winner gets
+  // Bundle (bulk-discount) pricing, primarily for raffle tickets:
+  // e.g. [{ quantity: 5, price: "20.00" }, { quantity: 15, price: "50.00" }].
+  // Single tickets still use basePrice. Checkout computes the cheapest
+  // combination of bundles + singles for any quantity (server-authoritative).
+  bundlePricing: jsonb("bundle_pricing").$type<{ quantity: number; price: string }[]>(),
   // Display settings
   featured: boolean("featured").notNull().default(false),
   displayOrder: integer("display_order").notNull().default(0),
@@ -3833,10 +3838,17 @@ export const shopProducts = pgTable("shop_products", {
   uniqueSlug: unique().on(table.tenantId, table.slug),
 }));
 
+export const bundlePricingTierSchema = z.object({
+  quantity: z.number().int().min(2, "Bundle quantity must be at least 2"),
+  price: z.string().regex(/^\d+(\.\d{1,2})?$/, "Price must be a valid amount like 20.00"),
+});
+
 export const insertShopProductSchema = createInsertSchema(shopProducts).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+}).extend({
+  bundlePricing: z.array(bundlePricingTierSchema).max(10).nullable().optional(),
 });
 export type InsertShopProduct = z.infer<typeof insertShopProductSchema>;
 export type ShopProduct = typeof shopProducts.$inferSelect;

@@ -17,6 +17,7 @@ import {
 import { eq, and, desc, asc, sql, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import Stripe from 'stripe';
+import { computeBundledPrice } from '@shared/raffle-pricing';
 
 const router = Router();
 
@@ -233,27 +234,22 @@ router.post('/checkout', requireTenant, async (req, res, next) => {
         }
       }
 
-      const itemTotal = unitPrice * item.quantity;
+      // Apply bundle (bulk-discount) pricing when configured — the server is
+      // authoritative: it computes the cheapest combination of bundles +
+      // singles for the requested quantity (e.g. 5 for $20, 15 for $50).
+      let itemTotal = unitPrice * item.quantity;
+      if (
+        product.productType === 'raffle' &&
+        !item.variantId &&
+        product.bundlePricing &&
+        product.bundlePricing.length > 0
+      ) {
+        itemTotal = computeBundledPrice(item.quantity, product.basePrice, product.bundlePricing);
+      }
       subtotal += itemTotal;
 
       if (product.productType === 'physical') {
         hasPhysicalProduct = true;
-      }
-
-      // Generate raffle ticket numbers if this is a raffle
-      let raffleTicketNumbers: string[] | undefined;
-      if (product.productType === 'raffle') {
-        // Generate unique ticket numbers
-        const ticketCount = await db
-          .select({ count: sql<number>`count(*)::int` })
-          .from(shopOrderItems)
-          .where(eq(shopOrderItems.productId, product.id));
-        
-        const startNumber = (ticketCount[0]?.count || 0) + 1;
-        raffleTicketNumbers = Array.from(
-          { length: item.quantity }, 
-          (_, i) => String(startNumber + i).padStart(6, '0')
-        );
       }
 
       orderItems.push({
@@ -263,9 +259,10 @@ router.post('/checkout', requireTenant, async (req, res, next) => {
         variantName,
         productType: product.productType,
         quantity: item.quantity,
-        unitPrice: unitPrice.toFixed(2),
+        // Effective per-unit price so "qty x unitPrice" matches the (possibly
+        // bundle-discounted) total on receipts and order views.
+        unitPrice: (itemTotal / item.quantity).toFixed(2),
         totalPrice: itemTotal.toFixed(2),
-        raffleTicketNumbers,
       });
     }
 
@@ -285,40 +282,68 @@ router.post('/checkout', requireTenant, async (req, res, next) => {
     // Calculate totals (no tax/shipping for now - can be added later)
     const totalAmount = subtotal;
 
-    // Create order in database
-    const [order] = await db.insert(shopOrders).values({
-      tenantId: tenant.id,
-      orderNumber,
-      customerEmail: data.customerEmail,
-      customerName: data.customerName,
-      customerPhone: data.customerPhone,
-      shippingAddress: data.shippingAddress,
-      subtotal: subtotal.toFixed(2),
-      shippingAmount: '0',
-      taxAmount: '0',
-      totalAmount: totalAmount.toFixed(2),
-      paymentStatus: 'pending',
-      paymentMethod: data.paymentMethod,
-      customerNotes: data.customerNotes,
-      fulfillmentStatus: hasPhysicalProduct ? 'unfulfilled' : 'delivered',
-    }).returning();
-
-    // Create order items
-    for (const item of orderItems) {
-      await db.insert(shopOrderItems).values({
-        orderId: order.id,
-        productId: item.productId,
-        variantId: item.variantId,
+    // Create the order and its items atomically. Raffle ticket numbers are
+    // allocated inside the transaction while holding a row lock on the
+    // product, so concurrent checkouts for the same raffle can never read
+    // the same ticket count and assign overlapping numbers.
+    const order = await db.transaction(async (tx) => {
+      const [createdOrder] = await tx.insert(shopOrders).values({
         tenantId: tenant.id,
-        productName: item.productName,
-        variantName: item.variantName,
-        productType: item.productType,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
-        totalPrice: item.totalPrice,
-        raffleTicketNumbers: item.raffleTicketNumbers,
-      });
-    }
+        orderNumber,
+        customerEmail: data.customerEmail,
+        customerName: data.customerName,
+        customerPhone: data.customerPhone,
+        shippingAddress: data.shippingAddress,
+        subtotal: subtotal.toFixed(2),
+        shippingAmount: '0',
+        taxAmount: '0',
+        totalAmount: totalAmount.toFixed(2),
+        paymentStatus: 'pending',
+        paymentMethod: data.paymentMethod,
+        customerNotes: data.customerNotes,
+        fulfillmentStatus: hasPhysicalProduct ? 'unfulfilled' : 'delivered',
+      }).returning();
+
+      for (const item of orderItems) {
+        let raffleTicketNumbers: string[] | undefined;
+        if (item.productType === 'raffle') {
+          // Serialize ticket allocation per product: lock the product row so
+          // only one checkout at a time can count existing tickets.
+          await tx.execute(
+            sql`SELECT id FROM shop_products WHERE id = ${item.productId} FOR UPDATE`
+          );
+
+          // Sum quantities (each order item row can contain many tickets) so
+          // numbers never collide across orders.
+          const ticketCount = await tx
+            .select({ count: sql<number>`coalesce(sum(${shopOrderItems.quantity}), 0)::int` })
+            .from(shopOrderItems)
+            .where(eq(shopOrderItems.productId, item.productId));
+
+          const startNumber = (ticketCount[0]?.count || 0) + 1;
+          raffleTicketNumbers = Array.from(
+            { length: item.quantity },
+            (_, i) => String(startNumber + i).padStart(6, '0')
+          );
+        }
+
+        await tx.insert(shopOrderItems).values({
+          orderId: createdOrder.id,
+          productId: item.productId,
+          variantId: item.variantId,
+          tenantId: tenant.id,
+          productName: item.productName,
+          variantName: item.variantName,
+          productType: item.productType,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          totalPrice: item.totalPrice,
+          raffleTicketNumbers,
+        });
+      }
+
+      return createdOrder;
+    });
 
     // Handle payment based on method
     if (data.paymentMethod === 'stripe') {
@@ -570,6 +595,11 @@ router.post('/admin/products', requireTenant, requireAuth, async (req, res, next
       tenantId: req.tenant!.id,
     });
 
+    // Bundle (bulk-discount) pricing is a raffle-only feature
+    if (productData.productType !== 'raffle') {
+      productData.bundlePricing = null;
+    }
+
     // Generate slug if not provided
     if (!productData.slug) {
       productData.slug = productData.name
@@ -613,7 +643,14 @@ router.patch('/admin/products/:id', requireTenant, requireAuth, async (req, res,
     }
 
     const updateData = insertShopProductSchema.partial().parse(req.body);
-    
+
+    // Bundle (bulk-discount) pricing is a raffle-only feature — clear any
+    // tiers when the product is (or becomes) a non-raffle type.
+    const effectiveType = updateData.productType ?? existing.productType;
+    if (effectiveType !== 'raffle') {
+      updateData.bundlePricing = null;
+    }
+
     const [product] = await db
       .update(shopProducts)
       .set({ ...updateData, updatedAt: new Date() })

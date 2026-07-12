@@ -26,6 +26,7 @@ import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { apiRequest } from "@/lib/queryClient";
 import type { ShopProduct, ShopProductVariant, Tenant } from "@shared/schema";
+import { computeBundledPrice } from "@shared/raffle-pricing";
 
 type ProductWithVariants = ShopProduct & {
   variants: ShopProductVariant[];
@@ -221,13 +222,20 @@ export default function ShopCheckoutPage() {
     const variant = product?.variants.find(v => v.id === item.variantId);
     const unitPrice = product ? 
       parseFloat(product.basePrice) + (variant ? parseFloat(variant.priceAdjustment) : 0) : 0;
-    
+
+    // Bundle (bulk-discount) pricing for raffle tickets — mirrors the
+    // server's authoritative cheapest-combination calculation.
+    let totalPrice = unitPrice * item.quantity;
+    if (product && product.productType === 'raffle' && !variant && product.bundlePricing && product.bundlePricing.length > 0) {
+      totalPrice = computeBundledPrice(item.quantity, product.basePrice, product.bundlePricing);
+    }
+
     return {
       ...item,
       product,
       variant,
-      unitPrice,
-      totalPrice: unitPrice * item.quantity,
+      unitPrice: item.quantity > 0 ? totalPrice / item.quantity : unitPrice,
+      totalPrice,
     };
   }).filter(item => item.product);
 

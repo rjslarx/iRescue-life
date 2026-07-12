@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { SiFacebook, SiX } from "react-icons/si";
 import type { ShopProduct, ShopProductVariant, Tenant } from "@shared/schema";
+import { computeBundledPrice, bundleSavingsPercent } from "@shared/raffle-pricing";
 
 type ProductWithVariants = ShopProduct & {
   variants: ShopProductVariant[];
@@ -30,7 +31,7 @@ type ProductWithVariants = ShopProduct & {
 
 export default function PublicProductPage() {
   const { basePath, subdomain } = useTenant();
-  const [, params] = useRoute(`${basePath}/shop/:slug`);
+  const [, params] = useRoute("/shop/:slug");
   const slug = params?.slug;
 
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
@@ -70,6 +71,21 @@ export default function PublicProductPage() {
     }
     return base;
   }, [product, selectedVariant]);
+
+  const bundleTiers = useMemo(() => {
+    if (!product || product.productType !== 'raffle' || !product.bundlePricing) return [];
+    return [...product.bundlePricing].sort((a, b) => a.quantity - b.quantity);
+  }, [product]);
+
+  // Total for the selected quantity, applying the cheapest combination of
+  // bundles + single tickets (mirrors the server's authoritative calculation).
+  const orderTotal = useMemo(() => {
+    if (!product) return 0;
+    if (bundleTiers.length > 0 && !selectedVariant) {
+      return computeBundledPrice(quantity, product.basePrice, bundleTiers);
+    }
+    return currentPrice * quantity;
+  }, [product, bundleTiers, selectedVariant, quantity, currentPrice]);
 
   const isOutOfStock = useMemo(() => {
     if (!product || !product.trackInventory) return false;
@@ -360,6 +376,43 @@ export default function PublicProductPage() {
               </div>
             )}
 
+            {bundleTiers.length > 0 && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Ticket Bundles</label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setQuantity(1)}
+                    className={`rounded-md border p-3 text-left hover-elevate active-elevate-2 ${quantity === 1 ? 'border-primary bg-primary/5' : ''}`}
+                    data-testid="button-bundle-single"
+                  >
+                    <div className="font-semibold">1 Ticket</div>
+                    <div className="text-sm text-muted-foreground">{formatPrice(parseFloat(product.basePrice))}</div>
+                  </button>
+                  {bundleTiers.map((tier) => {
+                    const savings = bundleSavingsPercent(tier.quantity, product.basePrice, tier.price);
+                    return (
+                      <button
+                        key={tier.quantity}
+                        type="button"
+                        onClick={() => setQuantity(Math.min(maxQuantity, tier.quantity))}
+                        className={`rounded-md border p-3 text-left hover-elevate active-elevate-2 ${quantity === tier.quantity ? 'border-primary bg-primary/5' : ''}`}
+                        data-testid={`button-bundle-${tier.quantity}`}
+                      >
+                        <div className="font-semibold flex items-center gap-2 flex-wrap">
+                          {tier.quantity} Tickets
+                          {savings > 0 && (
+                            <Badge variant="secondary" className="text-xs">Save {savings}%</Badge>
+                          )}
+                        </div>
+                        <div className="text-sm text-muted-foreground">{formatPrice(parseFloat(tier.price))}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             <div className="space-y-2">
               <label className="text-sm font-medium">Quantity</label>
               <div className="flex items-center gap-2">
@@ -408,8 +461,8 @@ export default function PublicProductPage() {
               >
                 <ShoppingBag className="h-4 w-4 mr-2" />
                 {isOutOfStock ? 'Sold Out' : 
-                 product.productType === 'raffle' ? `Buy ${quantity} Ticket${quantity > 1 ? 's' : ''} - ${formatPrice(currentPrice * quantity)}` : 
-                 `Buy Now - ${formatPrice(currentPrice * quantity)}`}
+                 product.productType === 'raffle' ? `Buy ${quantity} Ticket${quantity > 1 ? 's' : ''} - ${formatPrice(orderTotal)}` : 
+                 `Buy Now - ${formatPrice(orderTotal)}`}
               </Button>
 
               {product.variants.length > 0 && !selectedVariantId && (

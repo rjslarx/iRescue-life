@@ -69,8 +69,17 @@ export default function ShopManagementPage() {
     rafflePrizeDescription: '',
     raffleDrawDate: '',
     imageUrls: [] as string[],
+    bundleTiers: [] as { quantity: string; price: string }[],
   });
   const [uploadingImage, setUploadingImage] = useState(false);
+
+  const buildBundlePricing = (tiers: { quantity: string; price: string }[]) => {
+    const cleaned = tiers
+      .map(t => ({ quantity: parseInt(t.quantity), price: parseFloat(t.price) }))
+      .filter(t => Number.isInteger(t.quantity) && t.quantity >= 2 && Number.isFinite(t.price) && t.price >= 0)
+      .map(t => ({ quantity: t.quantity, price: t.price.toFixed(2) }));
+    return cleaned.length > 0 ? cleaned : null;
+  };
 
   const [variantForm, setVariantForm] = useState({
     name: '',
@@ -122,13 +131,15 @@ export default function ShopManagementPage() {
 
   const createProductMutation = useMutation({
     mutationFn: async (data: typeof productForm) => {
+      const { bundleTiers, ...rest } = data;
       const response = await apiRequest('POST', '/api/shop/admin/products', {
-        ...data,
+        ...rest,
         basePrice: data.basePrice || '0',
         totalInventory: data.trackInventory ? parseInt(data.totalInventory) || 0 : null,
         maxPerOrder: data.maxPerOrder ? parseInt(data.maxPerOrder) : null,
         raffleDrawDate: data.raffleDrawDate ? new Date(data.raffleDrawDate) : null,
         imageUrls: data.imageUrls,
+        bundlePricing: data.productType === 'raffle' ? buildBundlePricing(bundleTiers) : null,
       });
       if (!response.ok) {
         const error = await response.json();
@@ -150,13 +161,15 @@ export default function ShopManagementPage() {
 
   const updateProductMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: typeof productForm }) => {
+      const { bundleTiers, ...rest } = data;
       const response = await apiRequest('PATCH', `/api/shop/admin/products/${id}`, {
-        ...data,
+        ...rest,
         basePrice: data.basePrice || '0',
         totalInventory: data.trackInventory ? parseInt(data.totalInventory) || 0 : null,
         maxPerOrder: data.maxPerOrder ? parseInt(data.maxPerOrder) : null,
         raffleDrawDate: data.raffleDrawDate ? new Date(data.raffleDrawDate) : null,
         imageUrls: data.imageUrls,
+        bundlePricing: data.productType === 'raffle' ? buildBundlePricing(bundleTiers) : null,
       });
       if (!response.ok) {
         const error = await response.json();
@@ -254,6 +267,7 @@ export default function ShopManagementPage() {
       rafflePrizeDescription: '',
       raffleDrawDate: '',
       imageUrls: [],
+      bundleTiers: [],
     });
   };
 
@@ -319,6 +333,7 @@ export default function ShopManagementPage() {
       rafflePrizeDescription: product.rafflePrizeDescription || '',
       raffleDrawDate: product.raffleDrawDate ? new Date(product.raffleDrawDate).toISOString().split('T')[0] : '',
       imageUrls: product.imageUrls || [],
+      bundleTiers: (product.bundlePricing || []).map(t => ({ quantity: String(t.quantity), price: t.price })),
     });
     setProductDialogOpen(true);
   };
@@ -653,6 +668,12 @@ export default function ShopManagementPage() {
                           </div>
                           <p className="text-sm text-muted-foreground">
                             ${raffle.basePrice} per ticket
+                            {raffle.bundlePricing && raffle.bundlePricing.length > 0 && (
+                              <span className="text-muted-foreground">
+                                {' '}&middot;{' '}
+                                {raffle.bundlePricing.map(t => `${t.quantity} for $${t.price}`).join(', ')}
+                              </span>
+                            )}
                           </p>
                           {raffle.raffleDrawDate && (
                             <p className="text-sm">
@@ -877,6 +898,69 @@ export default function ShopManagementPage() {
                         rows={2}
                         data-testid="input-prize-description"
                       />
+                    </div>
+                    <div className="space-y-2">
+                      <div>
+                        <Label>Bundle Pricing (optional)</Label>
+                        <p className="text-sm text-muted-foreground">
+                          Offer bulk discounts, e.g. 5 tickets for $20. Single tickets use the base price above.
+                        </p>
+                      </div>
+                      {productForm.bundleTiers.map((tier, index) => (
+                        <div key={index} className="flex items-center gap-2 flex-wrap">
+                          <Input
+                            type="number"
+                            min={2}
+                            placeholder="Qty"
+                            value={tier.quantity}
+                            onChange={(e) => setProductForm(prev => ({
+                              ...prev,
+                              bundleTiers: prev.bundleTiers.map((t, i) => i === index ? { ...t, quantity: e.target.value } : t),
+                            }))}
+                            className="w-24"
+                            data-testid={`input-bundle-qty-${index}`}
+                          />
+                          <span className="text-sm text-muted-foreground">tickets for $</span>
+                          <Input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            placeholder="Price"
+                            value={tier.price}
+                            onChange={(e) => setProductForm(prev => ({
+                              ...prev,
+                              bundleTiers: prev.bundleTiers.map((t, i) => i === index ? { ...t, price: e.target.value } : t),
+                            }))}
+                            className="w-28"
+                            data-testid={`input-bundle-price-${index}`}
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setProductForm(prev => ({
+                              ...prev,
+                              bundleTiers: prev.bundleTiers.filter((_, i) => i !== index),
+                            }))}
+                            data-testid={`button-remove-bundle-${index}`}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setProductForm(prev => ({
+                          ...prev,
+                          bundleTiers: [...prev.bundleTiers, { quantity: '', price: '' }],
+                        }))}
+                        data-testid="button-add-bundle-tier"
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Bundle
+                      </Button>
                     </div>
                   </div>
                 </>

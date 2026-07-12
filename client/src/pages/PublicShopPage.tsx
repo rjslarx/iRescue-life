@@ -187,6 +187,11 @@ export default function PublicShopPage() {
                         <span>Drawing: {new Date(product.raffleDrawDate).toLocaleDateString()}</span>
                       </div>
                     )}
+                    {product.productType === 'raffle' && product.bundlePricing && product.bundlePricing.length > 0 && (
+                      <div className="text-sm text-muted-foreground" data-testid={`text-bundle-hint-${product.id}`}>
+                        Bundle deals: {product.bundlePricing.map(t => `${t.quantity} for $${t.price}`).join(', ')}
+                      </div>
+                    )}
                   </CardContent>
 
                   <CardFooter className="p-4 pt-0 flex items-center justify-between gap-2">

@@ -85,3 +85,10 @@ SQL
 
 yes "" | timeout 60 npx drizzle-kit push --force || \
   echo "[post-merge] drizzle-kit push skipped (timeout or non-zero exit) — schema must be managed via SQL ALTER in the task."
+
+# Raffle bundle pricing: optional jsonb tiers on shop_products
+# (e.g. [{"quantity":5,"price":"20.00"}]) so raffles can offer bulk-discount
+# ticket bundles. Idempotent — ADD COLUMN IF NOT EXISTS is a no-op when applied.
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' || echo "[post-merge] shop_products bundle_pricing column skipped (already applied or DB unreachable)."
+ALTER TABLE shop_products ADD COLUMN IF NOT EXISTS bundle_pricing jsonb;
+SQL
