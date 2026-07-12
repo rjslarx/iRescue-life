@@ -30581,18 +30581,17 @@ Submitted: ${new Date().toLocaleString()}
             // yearly sub could spoof itself as monthly. Instead we use
             // session.mode (Stripe-controlled, never user-set) as the trust
             // signal: when retrieval fails on a known subscription-mode
-            // session, fall back to monthly tagging because every recurring
-            // checkout endpoint in this app creates monthly prices today.
-            // Yearly subs would only be misclassified if a future endpoint
-            // begins creating year prices AND Stripe.retrieve happens to be
+            // session, fall back to monthly tagging because monthly is the
+            // dominant recurring interval in this app. Weekly/yearly subs
+            // would only be misclassified if Stripe.retrieve happens to be
             // failing at the same moment.
-            let actualInterval: 'month' | 'year' | null = null;
+            let actualInterval: 'week' | 'month' | 'year' | null = null;
             let intervalFetchFailed = false;
             if (session.subscription && stripe) {
               try {
                 const stripeSub = await stripe.subscriptions.retrieve(session.subscription as string);
                 const interval = stripeSub.items?.data?.[0]?.price?.recurring?.interval;
-                if (interval === 'month' || interval === 'year') {
+                if (interval === 'week' || interval === 'month' || interval === 'year') {
                   actualInterval = interval;
                 }
               } catch (subFetchErr) {

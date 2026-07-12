@@ -1141,7 +1141,7 @@ export const subscriptions = pgTable("subscriptions", {
   stripePriceId: text("stripe_price_id"), // Stripe price ID for the plan
   amount: integer("amount").notNull(), // Monthly amount in cents
   currency: text("currency").notNull().default("usd"),
-  interval: text("interval").notNull().default("month").$type<"month" | "year">(),
+  interval: text("interval").notNull().default("month").$type<"week" | "month" | "year">(),
   status: text("status").notNull().$type<"active" | "canceled" | "past_due" | "incomplete">(),
   currentPeriodStart: timestamp("current_period_start"),
   currentPeriodEnd: timestamp("current_period_end"),

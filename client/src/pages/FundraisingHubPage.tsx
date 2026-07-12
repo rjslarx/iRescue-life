@@ -45,6 +45,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { ObjectUploader } from "@/components/ObjectUploader";
 import {
@@ -717,6 +718,10 @@ function GeneralDonationsCard({ donationUrl, tenantName, isLoading }: { donation
 
 function FiveDollarFridayCard({ fridayUrl, tenantName, fridayImageUrl, fridayDayOfWeek, isLoading }: { fridayUrl: string; tenantName?: string; fridayImageUrl: string; fridayDayOfWeek?: number | null; isLoading: boolean }) {
   const { toast } = useToast();
+  const { user } = useAuth();
+  // The image/day settings save via the admin-only branding endpoint, so only
+  // show these controls to roles that will actually pass that check.
+  const canManageCampaignSettings = ["admin", "owner", "platform_admin"].includes(user?.activeRole || "");
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [qrGenerated, setQrGenerated] = useState(false);
   const dayName = fiveDollarDayName(fridayDayOfWeek);
@@ -864,6 +869,7 @@ function FiveDollarFridayCard({ fridayUrl, tenantName, fridayImageUrl, fridayDay
               </div>
             </div>
 
+            {canManageCampaignSettings && (
             <div className="space-y-2 border-t pt-4">
               <label className="text-sm font-medium text-muted-foreground">Page image</label>
               <p className="text-xs text-muted-foreground">
@@ -878,7 +884,9 @@ function FiveDollarFridayCard({ fridayUrl, tenantName, fridayImageUrl, fridayDay
                 data-testid="button-upload-friday-image"
               />
             </div>
+            )}
 
+            {canManageCampaignSettings && (
             <div className="space-y-3 border-t pt-4">
               <label className="text-sm font-medium text-muted-foreground">Campaign day</label>
               <p className="text-xs text-muted-foreground">
@@ -901,6 +909,7 @@ function FiveDollarFridayCard({ fridayUrl, tenantName, fridayImageUrl, fridayDay
                 </SelectContent>
               </Select>
             </div>
+            )}
 
             <Button
               variant="ghost"
