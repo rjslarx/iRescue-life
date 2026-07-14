@@ -19,6 +19,7 @@ import {
   Heart,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import DashboardLayout from "@/components/DashboardLayout";
 import NotificationSettings from "@/components/NotificationSettings";
 import NotificationPreferencesSettings from "@/components/NotificationPreferencesSettings";
@@ -331,6 +332,161 @@ function ImpactLoopToggle({ tenant }: { tenant?: Tenant }) {
   );
 }
 
+interface FrequencyOption {
+  value: number;
+  label: string;
+}
+
+function FrequencySelect({
+  id,
+  label,
+  description,
+  value,
+  options,
+  onChange,
+  disabled,
+}: {
+  id: string;
+  label: string;
+  description: string;
+  value: number;
+  options: FrequencyOption[];
+  onChange: (v: number) => void;
+  disabled: boolean;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex-1 min-w-[220px]">
+        <Label htmlFor={id}>{label}</Label>
+        <p className="text-sm text-muted-foreground">{description}</p>
+      </div>
+      <Select
+        value={String(value)}
+        onValueChange={(v) => onChange(Number(v))}
+        disabled={disabled}
+      >
+        <SelectTrigger id={id} className="w-[180px]" data-testid={`select-${id}`}>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((opt) => (
+            <SelectItem key={opt.value} value={String(opt.value)} data-testid={`option-${id}-${opt.value}`}>
+              {opt.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+function ReminderFrequencySettings({ tenant }: { tenant?: Tenant }) {
+  const { toast } = useToast();
+
+  const updateMutation = useMutation({
+    mutationFn: async (payload: Record<string, number>) => {
+      const response = await apiRequest('PATCH', '/api/tenant/settings', payload);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/tenant/settings'] });
+      toast({
+        title: "Reminder frequency updated",
+        description: "The new schedule takes effect on the next reminder run.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to update setting",
+        description: error.message || "Please try again later.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const adopterFreq = tenant?.adopterReminderFrequencyDays ?? 1;
+  const heartwormFreq = tenant?.heartwormWarningFrequencyDays ?? 30;
+  const fosterLead = tenant?.fosterReminderLeadDays ?? 3;
+  const medicalFreq = tenant?.medicalDigestFrequencyDays ?? 1;
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <Mail className="h-5 w-5" />
+          <CardTitle>Pet Care Reminder Frequency</CardTitle>
+        </div>
+        <CardDescription>
+          Control how often automated pet care reminder emails go out to adopters, fosters, and staff. Changes apply the next time each reminder job runs.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <FrequencySelect
+          id="adopter-reminder-frequency"
+          label="Adopter pet care reminders"
+          description="How often an adopter is re-emailed about the same due or overdue care item."
+          value={adopterFreq}
+          disabled={updateMutation.isPending}
+          onChange={(v) => updateMutation.mutate({ adopterReminderFrequencyDays: v })}
+          options={[
+            { value: 0, label: "Paused" },
+            { value: 1, label: "Daily" },
+            { value: 2, label: "Every 2 days" },
+            { value: 3, label: "Every 3 days" },
+            { value: 7, label: "Weekly" },
+            { value: 14, label: "Every 2 weeks" },
+          ]}
+        />
+        <FrequencySelect
+          id="heartworm-warning-frequency"
+          label="Heartworm compliance warnings"
+          description="How often an adopter can receive a repeat contract-enforcement warning for the same overdue item."
+          value={heartwormFreq}
+          disabled={updateMutation.isPending}
+          onChange={(v) => updateMutation.mutate({ heartwormWarningFrequencyDays: v })}
+          options={[
+            { value: 0, label: "Paused" },
+            { value: 7, label: "Weekly" },
+            { value: 14, label: "Every 2 weeks" },
+            { value: 30, label: "Monthly" },
+            { value: 60, label: "Every 2 months" },
+          ]}
+        />
+        <FrequencySelect
+          id="foster-reminder-lead"
+          label="Foster care reminder lead time"
+          description="How many days before a care task is due that fosters get their advance warning email."
+          value={fosterLead}
+          disabled={updateMutation.isPending}
+          onChange={(v) => updateMutation.mutate({ fosterReminderLeadDays: v })}
+          options={[
+            { value: 1, label: "1 day before" },
+            { value: 2, label: "2 days before" },
+            { value: 3, label: "3 days before" },
+            { value: 5, label: "5 days before" },
+            { value: 7, label: "1 week before" },
+          ]}
+        />
+        <FrequencySelect
+          id="medical-digest-frequency"
+          label="Staff medical reminder digest"
+          description="How often staff and fosters receive the upcoming/overdue medical care digest email."
+          value={medicalFreq}
+          disabled={updateMutation.isPending}
+          onChange={(v) => updateMutation.mutate({ medicalDigestFrequencyDays: v })}
+          options={[
+            { value: 0, label: "Paused" },
+            { value: 1, label: "Daily" },
+            { value: 2, label: "Every 2 days" },
+            { value: 3, label: "Every 3 days" },
+            { value: 7, label: "Weekly" },
+          ]}
+        />
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function NotificationsSettingsPage() {
   const { user } = useAuth();
 
@@ -400,6 +556,8 @@ export default function NotificationsSettingsPage() {
           <AutoSendTaxReceiptsToggle tenant={data?.tenant} />
 
           <ImpactLoopToggle tenant={data?.tenant} />
+
+          <ReminderFrequencySettings tenant={data?.tenant} />
 
           <Card>
             <CardHeader>

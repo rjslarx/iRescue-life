@@ -82,6 +82,17 @@ export async function processConfirmation(token: string, confirmedVia: 'magic_li
   }
 }
 
+async function getFosterReminderLeadDays(tenantId: string): Promise<number> {
+  const [tenantLead] = await db
+    .select({ fosterReminderLeadDays: tenants.fosterReminderLeadDays })
+    .from(tenants)
+    .where(eq(tenants.id, tenantId))
+    .limit(1);
+  return tenantLead?.fosterReminderLeadDays && tenantLead.fosterReminderLeadDays > 0
+    ? tenantLead.fosterReminderLeadDays
+    : 3;
+}
+
 export async function createRemindersForDuePreventativeCare(tenantId: string): Promise<{ created: number; errors: string[] }> {
   const errors: string[] = [];
   let created = 0;
@@ -89,9 +100,12 @@ export async function createRemindersForDuePreventativeCare(tenantId: string): P
   try {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
+
+    // Reminder rows must exist far enough ahead to cover the tenant's
+    // configured advance-warning lead time.
+    const leadDays = await getFosterReminderLeadDays(tenantId);
     const threeDaysFromNow = new Date(today);
-    threeDaysFromNow.setDate(threeDaysFromNow.getDate() + 3);
+    threeDaysFromNow.setDate(threeDaysFromNow.getDate() + leadDays);
 
     const fosterAnimalsList = await db
       .select({
@@ -199,9 +213,13 @@ export async function send3DayWarningEmails(tenantId: string): Promise<{ sent: n
   try {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
+
+    // Tenant-configurable lead time (days before the due date to send the
+    // advance warning email); defaults to the original 3 days.
+    const leadDays = await getFosterReminderLeadDays(tenantId);
+
     const threeDaysFromNow = new Date(today);
-    threeDaysFromNow.setDate(threeDaysFromNow.getDate() + 3);
+    threeDaysFromNow.setDate(threeDaysFromNow.getDate() + leadDays);
     const threeDaysStr = threeDaysFromNow.toISOString().split('T')[0];
 
     const reminders = await db

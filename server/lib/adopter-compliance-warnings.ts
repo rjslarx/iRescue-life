@@ -253,8 +253,20 @@ export async function findEligibleHeartwormWarnings(
   const cutoff = new Date(today);
   cutoff.setDate(cutoff.getDate() - OVERDUE_THRESHOLD_DAYS);
 
+  // Tenant-configurable re-warn cadence (falls back to the 30-day default;
+  // a paused tenant — 0 — still uses the default window for dashboard display,
+  // and the cron runner skips sending entirely).
+  const [tenantFreq] = await db
+    .select({ heartwormWarningFrequencyDays: tenants.heartwormWarningFrequencyDays })
+    .from(tenants)
+    .where(eq(tenants.id, tenantId))
+    .limit(1);
+  const dedupDays = tenantFreq?.heartwormWarningFrequencyDays && tenantFreq.heartwormWarningFrequencyDays > 0
+    ? tenantFreq.heartwormWarningFrequencyDays
+    : WARNING_DEDUP_DAYS;
+
   const dedupSince = new Date();
-  dedupSince.setDate(dedupSince.getDate() - WARNING_DEDUP_DAYS);
+  dedupSince.setDate(dedupSince.getDate() - dedupDays);
 
   // Pull every parasite_prevention record overdue ≥14 days for an adopted animal.
   // The adoption join also returns adoptionDate so we can pick the most recent
@@ -1379,6 +1391,16 @@ export async function runComplianceWarningsForTenant(
 ): Promise<RunWarningsResult> {
   const result: RunWarningsResult = { tenantId, candidatesEvaluated: 0, warningsSent: 0, errors: [] };
   try {
+    // Tenant-configurable pause: 0 = automatic warnings off for this tenant.
+    const [tenantFreq] = await db
+      .select({ heartwormWarningFrequencyDays: tenants.heartwormWarningFrequencyDays })
+      .from(tenants)
+      .where(eq(tenants.id, tenantId))
+      .limit(1);
+    if (tenantFreq?.heartwormWarningFrequencyDays === 0) {
+      return result;
+    }
+
     const candidates = await findEligibleHeartwormWarnings(tenantId);
     result.candidatesEvaluated = candidates.length;
 

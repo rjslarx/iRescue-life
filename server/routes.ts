@@ -26211,6 +26211,10 @@ Submitted: ${new Date().toLocaleString()}
         autoSendTaxReceipts: z.boolean().optional(),
         shopEnabled: z.boolean().optional(),
         impactLoopEnabled: z.boolean().optional(),
+        adopterReminderFrequencyDays: z.number().int().min(0).max(90).optional(),
+        heartwormWarningFrequencyDays: z.number().int().min(0).max(180).optional(),
+        fosterReminderLeadDays: z.number().int().min(1).max(30).optional(),
+        medicalDigestFrequencyDays: z.number().int().min(0).max(90).optional(),
       });
 
       const parsedSettings = settingsSchema.parse(req.body);
@@ -26223,6 +26227,10 @@ Submitted: ${new Date().toLocaleString()}
       if (parsedSettings.autoSendTaxReceipts !== undefined) settingsToUpdate.autoSendTaxReceipts = parsedSettings.autoSendTaxReceipts;
       if (parsedSettings.shopEnabled !== undefined) settingsToUpdate.shopEnabled = parsedSettings.shopEnabled;
       if (parsedSettings.impactLoopEnabled !== undefined) settingsToUpdate.impactLoopEnabled = parsedSettings.impactLoopEnabled;
+      if (parsedSettings.adopterReminderFrequencyDays !== undefined) settingsToUpdate.adopterReminderFrequencyDays = parsedSettings.adopterReminderFrequencyDays;
+      if (parsedSettings.heartwormWarningFrequencyDays !== undefined) settingsToUpdate.heartwormWarningFrequencyDays = parsedSettings.heartwormWarningFrequencyDays;
+      if (parsedSettings.fosterReminderLeadDays !== undefined) settingsToUpdate.fosterReminderLeadDays = parsedSettings.fosterReminderLeadDays;
+      if (parsedSettings.medicalDigestFrequencyDays !== undefined) settingsToUpdate.medicalDigestFrequencyDays = parsedSettings.medicalDigestFrequencyDays;
 
       const [updatedTenant] = await db
         .update(tenants)

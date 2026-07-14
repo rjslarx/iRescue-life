@@ -165,9 +165,9 @@ async function getComplianceItemsForAnimal(tenantId: string, animalId: string, a
   return items;
 }
 
-async function wasRecentlyNotified(tenantId: string, userId: string, itemId: string, type: string): Promise<boolean> {
+async function wasRecentlyNotified(tenantId: string, userId: string, itemId: string, type: string, frequencyDays: number = 1): Promise<boolean> {
   const oneDayAgo = new Date();
-  oneDayAgo.setDate(oneDayAgo.getDate() - 1);
+  oneDayAgo.setDate(oneDayAgo.getDate() - Math.max(1, frequencyDays));
 
   const [existing] = await db
     .select({ id: adopterNotificationLogs.id })
@@ -281,6 +281,7 @@ export async function runAdopterComplianceNotifications(tenantId: string): Promi
         name: tenants.name,
         subdomain: tenants.subdomain,
         customDomain: tenants.customDomain,
+        adopterReminderFrequencyDays: tenants.adopterReminderFrequencyDays,
       })
       .from(tenants)
       .where(eq(tenants.id, tenantId))
@@ -288,6 +289,14 @@ export async function runAdopterComplianceNotifications(tenantId: string): Promi
 
     if (!tenant) {
       result.errors.push('Tenant not found');
+      return result;
+    }
+
+    // Tenant-configurable cadence: 0 = paused, N = min days between repeat
+    // reminders for the same item (default 1 = daily while due/overdue).
+    const reminderFrequencyDays = tenant.adopterReminderFrequencyDays ?? 1;
+    if (reminderFrequencyDays === 0) {
+      result.tenantName = tenant.name;
       return result;
     }
 
@@ -352,7 +361,7 @@ export async function runAdopterComplianceNotifications(tenantId: string): Promi
 
         const newItems: ComplianceItem[] = [];
         for (const item of allItems) {
-          const alreadyNotified = await wasRecentlyNotified(tenantId, userId, item.itemId, item.type);
+          const alreadyNotified = await wasRecentlyNotified(tenantId, userId, item.itemId, item.type, reminderFrequencyDays);
           if (!alreadyNotified) {
             newItems.push(item);
           }

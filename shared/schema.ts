@@ -302,6 +302,12 @@ export const tenants = pgTable("tenants", {
   fiveDollarFridayStartsAt: timestamp("five_dollar_friday_starts_at"), // optional campaign window start; before this the public page redirects to /donate
   fiveDollarFridayEndsAt: timestamp("five_dollar_friday_ends_at"), // optional campaign window end; after this the public page redirects to /donate
   fiveDollarFridayDayOfWeek: integer("five_dollar_friday_day_of_week"), // 0=Sun..6=Sat; the weekday the $5 campaign runs all day, every week (defaults to Friday when null)
+
+  // Reminder email frequency controls (all nullable; defaults applied in code)
+  adopterReminderFrequencyDays: integer("adopter_reminder_frequency_days"), // min days between "Pet Care Reminder" emails per adopter item (default 1; 0 = paused)
+  heartwormWarningFrequencyDays: integer("heartworm_warning_frequency_days"), // min days between repeat heartworm contract-enforcement warnings per item (default 30; 0 = paused)
+  fosterReminderLeadDays: integer("foster_reminder_lead_days"), // days before due date for foster compliance warning email (default 3)
+  medicalDigestFrequencyDays: integer("medical_digest_frequency_days"), // min days between staff/foster medical reminder digests (default 1; 0 = paused)
   
   // Owner-controlled admin restrictions (allows owners to limit what admins can edit)
   restrictAdminSettingsEdit: boolean("restrict_admin_settings_edit").notNull().default(false), // When true, admins can view but not edit Settings

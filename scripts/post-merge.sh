@@ -123,3 +123,13 @@ SQL
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' || echo "[post-merge] shop_products bundle_pricing column skipped (already applied or DB unreachable)."
 ALTER TABLE shop_products ADD COLUMN IF NOT EXISTS bundle_pricing jsonb;
 SQL
+
+# Reminder email frequency controls (tenant-configurable cadence for adopter
+# pet-care reminders, heartworm warnings, foster compliance lead time, and the
+# staff medical digest). Idempotent.
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' || echo "[post-merge] reminder frequency columns skipped (already applied or DB unreachable)."
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS adopter_reminder_frequency_days integer;
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS heartworm_warning_frequency_days integer;
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS foster_reminder_lead_days integer;
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS medical_digest_frequency_days integer;
+SQL

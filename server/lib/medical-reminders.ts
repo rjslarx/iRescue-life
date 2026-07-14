@@ -14,7 +14,7 @@ import {
   type MedicalReminderSettings,
   type MedicalReminder,
 } from "@shared/schema";
-import { eq, and, lte, lt, isNull, isNotNull, or, inArray, desc } from "drizzle-orm";
+import { eq, and, lte, lt, gte, isNull, isNotNull, or, inArray, desc } from "drizzle-orm";
 import { sendCommunication } from "./unified-comms";
 
 interface MedicalItem {
@@ -511,6 +511,37 @@ export async function sendMedicalReminders(tenantId: string): Promise<{
     // If settings don't exist or reminders are disabled, skip
     if (!settings || !settings.isEnabled) {
       return { success: true, emailsSent: 0, errors: [] };
+    }
+
+    // Tenant-configurable digest cadence: 0 = paused, N = at most one digest
+    // every N days (default 1 = daily). The per-day unique constraint below
+    // still guards against same-day double sends.
+    const [tenantFreq] = await db
+      .select({ medicalDigestFrequencyDays: tenants.medicalDigestFrequencyDays })
+      .from(tenants)
+      .where(eq(tenants.id, tenantId))
+      .limit(1);
+    const digestFrequencyDays = tenantFreq?.medicalDigestFrequencyDays ?? 1;
+    if (digestFrequencyDays === 0) {
+      return { success: true, emailsSent: 0, errors: [] };
+    }
+    if (digestFrequencyDays > 1) {
+      const cadenceSince = new Date();
+      cadenceSince.setDate(cadenceSince.getDate() - (digestFrequencyDays - 1));
+      cadenceSince.setHours(0, 0, 0, 0);
+      const [recentDigest] = await db
+        .select({ id: medicalReminderLogs.id })
+        .from(medicalReminderLogs)
+        .where(and(
+          eq(medicalReminderLogs.tenantId, tenantId),
+          eq(medicalReminderLogs.emailType, "digest"),
+          eq(medicalReminderLogs.status, "sent"),
+          gte(medicalReminderLogs.sentAt, cadenceSince),
+        ))
+        .limit(1);
+      if (recentDigest) {
+        return { success: true, emailsSent: 0, errors: [] };
+      }
     }
     
     const digest = await getMedicalDigest(tenantId);
