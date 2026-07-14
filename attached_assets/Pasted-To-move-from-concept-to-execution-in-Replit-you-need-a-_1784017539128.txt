@@ -1,0 +1,22 @@
+To move from concept to execution in Replit, you need a prompt that forces the AI to structure this as a "Function-Calling" agent rather than just a simple chatbot.
+You can copy and paste the following prompt directly into your Replit Agent interface. It is designed to set the technical parameters for the iRescue.life environment.
+The Replit Agent Prompt
+> "I want to build an AI-driven chat interface for iRescue.life, a platform for animal rescue volunteers.
+> Goal: Create an 'Action-Based' chat agent that allows users to perform tasks via natural language (e.g., 'Chart that I administered Buddy’s heartworm medication') instead of navigating through the dashboard.
+> Technical Requirements:
+>  * Framework: Use a modern tech stack (e.g., Next.js with the AI SDK) that supports 'Tool Calling' or 'Function Calling'.
+>  * Intent Parsing: Configure the system to identify user intent (e.g., logging medication, updating feeding times) and extract relevant entities (Animal Name, Medication Name, Time).
+>  * Tool Definition: Create a mock function structure for log_medical_entry(animal_id, task_name, timestamp).
+>  * Safety Layer: Include a 'human-in-the-loop' confirmation step—where the agent asks for verification (e.g., 'I am about to log heartworm medication for Buddy. Does this look correct?') before executing the database write.
+> First Step: Please outline the file structure needed to separate the conversational UI from the backend 'Tool' definitions, and draft the initial prompt/system instruction that would define the behavior of this agent."
+> 
+What to expect from the output
+When Replit processes this, it should provide you with:
+ * A "Tool" schema: Code that maps "Buddy" and "Heartworm Meds" to specific database IDs.
+ * A Confirmation Workflow: It will likely suggest using a React state to hold the "pending action" while waiting for the user to click "Confirm."
+ * The AI SDK Logic: It will show you how to pass these tools into the LLM (like GPT-4o or Claude 3.5 Sonnet) so the model knows it has permission to do things rather than just answer questions.
+A Tip for your specific use case
+Since you are a pharmacist and likely appreciate the importance of data integrity, mention to the Replit agent that you want the "Source of Truth" to be your existing database.
+Ask it: "How do I ensure this agent validates the input against the existing animals table before saving a log entry, so that no typos (like 'Buddyy' instead of 'Buddy') corrupt the record?"
+This will lead the AI to suggest a "Lookup Tool" (a tool that asks the database, "Does an animal named 'Buddy' exist?") before it ever attempts to write an entry.
+Does this prompt structure feel aligned with how you want to approach the initial build, or would you like to refine the "Safety Layer" requirements first?
