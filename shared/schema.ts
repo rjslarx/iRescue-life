@@ -3217,6 +3217,55 @@ export const insertGrantDocumentSchema = createInsertSchema(grantDocuments).omit
 export type InsertGrantDocument = z.infer<typeof insertGrantDocumentSchema>;
 export type GrantDocument = typeof grantDocuments.$inferSelect;
 
+// Grant Application Drafts - AI-assisted question/answer pairs saved per grant
+export const grantApplicationDrafts = pgTable("grant_application_drafts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  grantId: uuid("grant_id").notNull().references(() => grants.id, { onDelete: 'cascade' }),
+  question: text("question").notNull(), // The application question being answered
+  answer: text("answer"), // Staff-editable answer text (AI-drafted, then edited)
+  sortOrder: integer("sort_order").notNull().default(0),
+  generationMeta: jsonb("generation_meta").$type<{
+    model?: string; // Model used for the last AI generation
+    generatedAt?: string; // ISO timestamp of last AI generation
+    edited?: boolean; // True once staff manually edit the AI draft
+  }>(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  grantIdx: index("grant_application_drafts_grant_idx").on(table.tenantId, table.grantId),
+}));
+
+export const insertGrantApplicationDraftSchema = createInsertSchema(grantApplicationDrafts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertGrantApplicationDraft = z.infer<typeof insertGrantApplicationDraftSchema>;
+export type GrantApplicationDraft = typeof grantApplicationDrafts.$inferSelect;
+
+// Grant Answer Library - reusable boilerplate blocks (org history, programs, financials, contact)
+export const grantAnswerLibrary = pgTable("grant_answer_library", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  title: text("title").notNull(), // e.g. "Organization History"
+  category: text("category").notNull().default("other").$type<"org_history" | "programs_overview" | "financial" | "contact" | "other">(),
+  content: text("content").notNull(),
+  aiSeeded: boolean("ai_seeded").notNull().default(false), // True when the initial draft came from AI seeding
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  tenantIdx: index("grant_answer_library_tenant_idx").on(table.tenantId),
+}));
+
+export const insertGrantAnswerLibrarySchema = createInsertSchema(grantAnswerLibrary).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertGrantAnswerLibraryBlock = z.infer<typeof insertGrantAnswerLibrarySchema>;
+export type GrantAnswerLibraryBlock = typeof grantAnswerLibrary.$inferSelect;
+
 // ============================================================================
 // Smart Adoption Workflow Tables
 // ============================================================================

@@ -18344,7 +18344,12 @@ ${renderedHtml}
     try {
       const { grants, insertGrantSchema } = await import('@shared/schema');
       
-      const data = insertGrantSchema.omit({ tenantId: true }).parse(req.body);
+      const dateCoerce = z.preprocess((v) => (typeof v === 'string' && v ? new Date(v) : v), z.date()).nullable().optional();
+      const data = insertGrantSchema.omit({ tenantId: true }).extend({
+        applicationDeadline: dateCoerce,
+        awardDate: dateCoerce,
+        finalReportDeadline: dateCoerce,
+      }).parse(req.body);
       const [grant] = await db.insert(grants).values({
         ...data,
         tenantId: req.tenant!.id,
@@ -18395,6 +18400,12 @@ ${renderedHtml}
       const updateData = { ...req.body };
       if ('amountRequested' in updateData) updateData.amountRequested = updateData.amountRequested && String(updateData.amountRequested).trim() ? updateData.amountRequested : null;
       if ('amountAwarded' in updateData) updateData.amountAwarded = updateData.amountAwarded && String(updateData.amountAwarded).trim() ? updateData.amountAwarded : null;
+      // Coerce date strings to Date objects for timestamp columns
+      for (const dateField of ['applicationDeadline', 'awardDate', 'finalReportDeadline'] as const) {
+        if (dateField in updateData) {
+          updateData[dateField] = updateData[dateField] ? new Date(updateData[dateField]) : null;
+        }
+      }
 
       const [grant] = await db
         .update(grants)
@@ -18437,6 +18448,236 @@ ${renderedHtml}
     } catch (error) {
       next(error);
     }
+  });
+
+  // ============================================================================
+  // AI Grant Writing Assistant (drafts, answer library, funder suggestions)
+  // ============================================================================
+
+  /**
+   * GET /api/grants/answer-library
+   * List the tenant's reusable answer library blocks
+   */
+  app.get('/api/grants/answer-library', requireTenant, requireAuth, requireRoleOrPageAccess('finance', 'admin', 'board_member', 'staff'), async (req, res, next) => {
+    try {
+      const { grantAnswerLibrary } = await import('@shared/schema');
+      const blocks = await db.select().from(grantAnswerLibrary)
+        .where(eq(grantAnswerLibrary.tenantId, req.tenant!.id))
+        .orderBy(grantAnswerLibrary.createdAt);
+      res.json({ blocks });
+    } catch (error) { next(error); }
+  });
+
+  /**
+   * POST /api/grants/answer-library
+   * Create a library block manually
+   */
+  app.post('/api/grants/answer-library', requireTenant, requireAuth, requireRole('admin', 'board_member', 'staff'), async (req, res, next) => {
+    try {
+      const { grantAnswerLibrary, insertGrantAnswerLibrarySchema } = await import('@shared/schema');
+      const data = insertGrantAnswerLibrarySchema.omit({ tenantId: true, aiSeeded: true }).parse(req.body);
+      const [block] = await db.insert(grantAnswerLibrary)
+        .values({ ...data, tenantId: req.tenant!.id })
+        .returning();
+      res.json({ block });
+    } catch (error) { next(error); }
+  });
+
+  /**
+   * POST /api/grants/answer-library/seed
+   * AI-seed initial library blocks from real tenant data (skips categories that already exist)
+   */
+  app.post('/api/grants/answer-library/seed', requireTenant, requireAuth, requireRole('admin', 'board_member', 'staff'), async (req, res, next) => {
+    try {
+      const { grantAnswerLibrary } = await import('@shared/schema');
+      const { buildOrgContext, seedAnswerLibrary } = await import('./services/aiGrantWriting');
+      const existing = await db.select({ category: grantAnswerLibrary.category }).from(grantAnswerLibrary)
+        .where(eq(grantAnswerLibrary.tenantId, req.tenant!.id));
+      const existingCategories = new Set(existing.map(b => b.category));
+
+      const ctx = await buildOrgContext(req.tenant!);
+      const seeded = await seedAnswerLibrary(ctx);
+      const toInsert = seeded.filter(b => !existingCategories.has(b.category));
+      if (toInsert.length === 0) {
+        return res.json({ blocks: [], skipped: seeded.length, message: 'All standard categories already exist in your library.' });
+      }
+      const inserted = await db.insert(grantAnswerLibrary)
+        .values(toInsert.map(b => ({ ...b, tenantId: req.tenant!.id, aiSeeded: true })))
+        .returning();
+      res.json({ blocks: inserted, skipped: seeded.length - toInsert.length });
+    } catch (error) { next(error); }
+  });
+
+  /**
+   * PATCH /api/grants/answer-library/:blockId
+   */
+  app.patch('/api/grants/answer-library/:blockId', requireTenant, requireAuth, requireRole('admin', 'board_member', 'staff'), async (req, res, next) => {
+    try {
+      const { grantAnswerLibrary } = await import('@shared/schema');
+      const updates: any = { updatedAt: new Date() };
+      if (typeof req.body.title === 'string' && req.body.title.trim()) updates.title = req.body.title.trim();
+      if (typeof req.body.content === 'string') updates.content = req.body.content;
+      if (typeof req.body.category === 'string' && ['org_history', 'programs_overview', 'financial', 'contact', 'other'].includes(req.body.category)) updates.category = req.body.category;
+      const [block] = await db.update(grantAnswerLibrary).set(updates)
+        .where(and(eq(grantAnswerLibrary.id, req.params.blockId), eq(grantAnswerLibrary.tenantId, req.tenant!.id)))
+        .returning();
+      if (!block) return res.status(404).json({ error: 'Library block not found' });
+      res.json({ block });
+    } catch (error) { next(error); }
+  });
+
+  /**
+   * DELETE /api/grants/answer-library/:blockId
+   */
+  app.delete('/api/grants/answer-library/:blockId', requireTenant, requireAuth, requireRole('admin', 'board_member', 'staff'), async (req, res, next) => {
+    try {
+      const { grantAnswerLibrary } = await import('@shared/schema');
+      await db.delete(grantAnswerLibrary)
+        .where(and(eq(grantAnswerLibrary.id, req.params.blockId), eq(grantAnswerLibrary.tenantId, req.tenant!.id)));
+      res.json({ success: true });
+    } catch (error) { next(error); }
+  });
+
+  /**
+   * POST /api/grants/suggestions
+   * AI grant-discovery helper — proposes candidate funders (model knowledge only, staff verify)
+   */
+  app.post('/api/grants/suggestions', requireTenant, requireAuth, requireRole('admin', 'board_member', 'staff'), async (req, res, next) => {
+    try {
+      const { buildOrgContext, suggestGrants } = await import('./services/aiGrantWriting');
+      const lookingFor = typeof req.body?.lookingFor === 'string' && req.body.lookingFor.trim()
+        ? req.body.lookingFor.trim().slice(0, 500)
+        : undefined;
+      const ctx = await buildOrgContext(req.tenant!);
+      const suggestions = await suggestGrants(ctx, lookingFor);
+      res.json({ suggestions });
+    } catch (error) { next(error); }
+  });
+
+  /**
+   * GET /api/grants/:id/drafts
+   * List saved application draft Q&A pairs for a grant
+   */
+  app.get('/api/grants/:id/drafts', requireTenant, requireAuth, requireRoleOrPageAccess('finance', 'admin', 'board_member', 'staff'), async (req, res, next) => {
+    try {
+      const { grantApplicationDrafts } = await import('@shared/schema');
+      const drafts = await db.select().from(grantApplicationDrafts)
+        .where(and(eq(grantApplicationDrafts.tenantId, req.tenant!.id), eq(grantApplicationDrafts.grantId, req.params.id)))
+        .orderBy(grantApplicationDrafts.sortOrder, grantApplicationDrafts.createdAt);
+      res.json({ drafts });
+    } catch (error) { next(error); }
+  });
+
+  /**
+   * POST /api/grants/:id/drafts/generate
+   * AI-draft answers for a batch of application questions and save them
+   */
+  app.post('/api/grants/:id/drafts/generate', requireTenant, requireAuth, requireRole('admin', 'board_member', 'staff'), async (req, res, next) => {
+    try {
+      const { grants, grantApplicationDrafts } = await import('@shared/schema');
+      const questions: string[] = Array.isArray(req.body?.questions)
+        ? req.body.questions.map((q: any) => String(q).trim()).filter((q: string) => q.length > 0).slice(0, 20)
+        : [];
+      if (questions.length === 0) return res.status(400).json({ error: 'At least one question is required' });
+
+      const [grant] = await db.select().from(grants)
+        .where(and(eq(grants.id, req.params.id), eq(grants.tenantId, req.tenant!.id))).limit(1);
+      if (!grant) return res.status(404).json({ error: 'Grant not found' });
+
+      const { buildOrgContext, draftGrantAnswers } = await import('./services/aiGrantWriting');
+      const ctx = await buildOrgContext(req.tenant!);
+      const { answers, model } = await draftGrantAnswers(ctx, grant, questions);
+
+      const [{ maxOrder }] = await db.select({ maxOrder: sql<number>`coalesce(max(sort_order), -1)::int` })
+        .from(grantApplicationDrafts)
+        .where(and(eq(grantApplicationDrafts.tenantId, req.tenant!.id), eq(grantApplicationDrafts.grantId, grant.id)));
+
+      const inserted = await db.insert(grantApplicationDrafts).values(
+        questions.map((question, i) => ({
+          tenantId: req.tenant!.id,
+          grantId: grant.id,
+          question,
+          answer: answers[i],
+          sortOrder: maxOrder + 1 + i,
+          generationMeta: { model, generatedAt: new Date().toISOString(), edited: false },
+        }))
+      ).returning();
+      res.json({ drafts: inserted });
+    } catch (error) { next(error); }
+  });
+
+  /**
+   * POST /api/grants/:id/drafts/:draftId/regenerate
+   * Re-draft a single answer without touching the rest
+   */
+  app.post('/api/grants/:id/drafts/:draftId/regenerate', requireTenant, requireAuth, requireRole('admin', 'board_member', 'staff'), async (req, res, next) => {
+    try {
+      const { grants, grantApplicationDrafts } = await import('@shared/schema');
+      const [grant] = await db.select().from(grants)
+        .where(and(eq(grants.id, req.params.id), eq(grants.tenantId, req.tenant!.id))).limit(1);
+      if (!grant) return res.status(404).json({ error: 'Grant not found' });
+      const [draft] = await db.select().from(grantApplicationDrafts)
+        .where(and(
+          eq(grantApplicationDrafts.id, req.params.draftId),
+          eq(grantApplicationDrafts.tenantId, req.tenant!.id),
+          eq(grantApplicationDrafts.grantId, grant.id),
+        )).limit(1);
+      if (!draft) return res.status(404).json({ error: 'Draft not found' });
+
+      const { buildOrgContext, draftGrantAnswers } = await import('./services/aiGrantWriting');
+      const ctx = await buildOrgContext(req.tenant!);
+      const { answers, model } = await draftGrantAnswers(ctx, grant, [draft.question]);
+
+      const [updated] = await db.update(grantApplicationDrafts).set({
+        answer: answers[0],
+        generationMeta: { model, generatedAt: new Date().toISOString(), edited: false },
+        updatedAt: new Date(),
+      }).where(eq(grantApplicationDrafts.id, draft.id)).returning();
+      res.json({ draft: updated });
+    } catch (error) { next(error); }
+  });
+
+  /**
+   * PATCH /api/grants/:id/drafts/:draftId
+   * Save staff edits to a draft question/answer
+   */
+  app.patch('/api/grants/:id/drafts/:draftId', requireTenant, requireAuth, requireRole('admin', 'board_member', 'staff'), async (req, res, next) => {
+    try {
+      const { grantApplicationDrafts } = await import('@shared/schema');
+      const [draft] = await db.select().from(grantApplicationDrafts)
+        .where(and(
+          eq(grantApplicationDrafts.id, req.params.draftId),
+          eq(grantApplicationDrafts.tenantId, req.tenant!.id),
+          eq(grantApplicationDrafts.grantId, req.params.id),
+        )).limit(1);
+      if (!draft) return res.status(404).json({ error: 'Draft not found' });
+
+      const updates: any = { updatedAt: new Date() };
+      if (typeof req.body.question === 'string' && req.body.question.trim()) updates.question = req.body.question.trim();
+      if (typeof req.body.answer === 'string') {
+        updates.answer = req.body.answer;
+        updates.generationMeta = { ...(draft.generationMeta || {}), edited: true };
+      }
+      const [updated] = await db.update(grantApplicationDrafts).set(updates)
+        .where(eq(grantApplicationDrafts.id, draft.id)).returning();
+      res.json({ draft: updated });
+    } catch (error) { next(error); }
+  });
+
+  /**
+   * DELETE /api/grants/:id/drafts/:draftId
+   */
+  app.delete('/api/grants/:id/drafts/:draftId', requireTenant, requireAuth, requireRole('admin', 'board_member', 'staff'), async (req, res, next) => {
+    try {
+      const { grantApplicationDrafts } = await import('@shared/schema');
+      await db.delete(grantApplicationDrafts)
+        .where(and(
+          eq(grantApplicationDrafts.id, req.params.draftId),
+          eq(grantApplicationDrafts.tenantId, req.tenant!.id),
+          eq(grantApplicationDrafts.grantId, req.params.id),
+        ));
+      res.json({ success: true });
+    } catch (error) { next(error); }
   });
 
   /**

@@ -16,3 +16,4 @@
 - [Wouter base double-prefix](wouter-base-double-prefix.md) — useRoute patterns inside the based Router must be relative; basePath-prefixed patterns never match in dev path-based mode (silent "not found").
 - [Dev HTML middleware preamble](dev-html-middleware-preamble.md) — middleware serving raw index.html in dev must inject the Vite React-refresh preamble or pages render blank (dev only).
 - [Application detail dialogs](application-detail-dialogs.md) — three separate staff dialogs render application details; new applications columns must be plumbed into each plus two server selects.
+- [Insert-schema form/date traps](grant-form-insert-schema-dates.md) — raw createInsertSchema in zodResolver silently blocks submit (tenantId required); timestamp cols reject ISO strings server-side, need coercion.

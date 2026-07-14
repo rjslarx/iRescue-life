@@ -92,8 +92,16 @@ import {
   CheckCircle2,
   XCircle,
   ClipboardCheck,
+  Sparkles,
+  BookOpen,
 } from "lucide-react";
 import { format } from "date-fns";
+import {
+  GrantDeadlineAlerts,
+  GrantDraftWorkspace,
+  GrantAnswerLibraryTab,
+  GrantFindGrantsTab,
+} from "@/components/GrantAiTools";
 
 const documentTypeLabels: Record<string, string> = {
   "501c3_letter": "501(c)(3) Letter",
@@ -198,6 +206,8 @@ export default function GrantsPage() {
   const [activeTab, setActiveTab] = useState("overview");
   const [createGrantOpen, setCreateGrantOpen] = useState(false);
   const [editingGrant, setEditingGrant] = useState<Grant | null>(null);
+  const [aiDraftGrant, setAiDraftGrant] = useState<Grant | null>(null);
+  const [aiWorkspaceOpen, setAiWorkspaceOpen] = useState(false);
   const [uploadDocumentOpen, setUploadDocumentOpen] = useState(false);
   const [selectedGrantForDoc, setSelectedGrantForDoc] = useState<string | null>(null);
   const [storyTagFilter, setStoryTagFilter] = useState<string>("all");
@@ -523,8 +533,9 @@ export default function GrantsPage() {
     },
   });
 
-  const form = useForm<z.infer<typeof insertGrantSchema>>({
-    resolver: zodResolver(insertGrantSchema),
+  const grantFormSchema = insertGrantSchema.omit({ tenantId: true });
+  const form = useForm<z.infer<typeof grantFormSchema>>({
+    resolver: zodResolver(grantFormSchema),
     defaultValues: {
       funderName: "",
       programName: "",
@@ -537,7 +548,7 @@ export default function GrantsPage() {
 
   // Create grant mutation
   const createGrantMutation = useMutation({
-    mutationFn: async (data: z.infer<typeof insertGrantSchema>) => {
+    mutationFn: async (data: Omit<z.infer<typeof insertGrantSchema>, 'tenantId'>) => {
       const response = await apiRequest('POST', '/api/grants', data);
       return response.json();
     },
@@ -816,7 +827,7 @@ export default function GrantsPage() {
   };
 
 
-  const onSubmit = (data: z.infer<typeof insertGrantSchema>) => {
+  const onSubmit = (data: Omit<z.infer<typeof insertGrantSchema>, 'tenantId'>) => {
     if (editingGrant) {
       updateGrantMutation.mutate({ id: editingGrant.id, data });
     } else {
@@ -865,7 +876,8 @@ export default function GrantsPage() {
       title="Grant Management"
       description="Track grant applications, reporting metrics, and success stories"
     >
-      <div className="flex-1 overflow-auto p-6">
+      <div className="flex-1 overflow-auto p-6 space-y-6">
+        <GrantDeadlineAlerts grants={grants} />
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList data-testid="tabs-grants">
             <TabsTrigger value="overview" data-testid="tab-overview">
@@ -895,6 +907,14 @@ export default function GrantsPage() {
             <TabsTrigger value="data-matrix" data-testid="tab-data-matrix">
               <BarChart3 className="h-4 w-4 mr-2" />
               Data Matrix
+            </TabsTrigger>
+            <TabsTrigger value="answer-library" data-testid="tab-answer-library">
+              <BookOpen className="h-4 w-4 mr-2" />
+              Answer Library
+            </TabsTrigger>
+            <TabsTrigger value="find-grants" data-testid="tab-find-grants">
+              <Search className="h-4 w-4 mr-2" />
+              Find Grants
             </TabsTrigger>
           </TabsList>
 
@@ -1155,6 +1175,18 @@ export default function GrantsPage() {
                             {grant.programArea ? programAreaLabels[grant.programArea] : '-'}
                           </TableCell>
                           <TableCell className="text-right space-x-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setAiDraftGrant(grant);
+                                setAiWorkspaceOpen(true);
+                              }}
+                              data-testid={`button-ai-draft-${grant.id}`}
+                            >
+                              <Sparkles className="h-4 w-4 mr-1" />
+                              Draft with AI
+                            </Button>
                             <Button
                               variant="ghost"
                               size="sm"
@@ -1584,7 +1616,27 @@ export default function GrantsPage() {
               onGenerateSummary={() => refetchMatrix()}
             />
           </TabsContent>
+
+          {/* Answer Library Tab */}
+          <TabsContent value="answer-library" className="space-y-4">
+            <GrantAnswerLibraryTab />
+          </TabsContent>
+
+          {/* Find Grants Tab */}
+          <TabsContent value="find-grants" className="space-y-4">
+            <GrantFindGrantsTab canAddToPipeline={['admin', 'board_member'].includes((user as any)?.activeRole ?? '') || ((user as any)?.roles ?? []).some((r: string) => ['admin', 'board_member'].includes(r))} />
+          </TabsContent>
         </Tabs>
+
+        {/* Draft with AI Workspace */}
+        <GrantDraftWorkspace
+          grant={aiDraftGrant}
+          open={aiWorkspaceOpen}
+          onOpenChange={(open) => {
+            setAiWorkspaceOpen(open);
+            if (!open) setAiDraftGrant(null);
+          }}
+        />
 
         {/* Create/Edit Grant Dialog */}
         <Dialog open={createGrantOpen} onOpenChange={setCreateGrantOpen}>

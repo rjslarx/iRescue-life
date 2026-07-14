@@ -86,6 +86,37 @@ SQL
 yes "" | timeout 60 npx drizzle-kit push --force || \
   echo "[post-merge] drizzle-kit push skipped (timeout or non-zero exit) — schema must be managed via SQL ALTER in the task."
 
+# AI Grant Writing Assistant: per-grant application drafts (question/answer
+# pairs with generation metadata) and the tenant-scoped reusable Answer Library.
+# Idempotent — CREATE TABLE/INDEX IF NOT EXISTS are no-ops when already applied.
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' || echo "[post-merge] grant AI assistant tables skipped (already applied or DB unreachable)."
+CREATE TABLE IF NOT EXISTS grant_application_drafts (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  grant_id uuid NOT NULL REFERENCES grants(id) ON DELETE CASCADE,
+  question text NOT NULL,
+  answer text,
+  sort_order integer NOT NULL DEFAULT 0,
+  generation_meta jsonb,
+  created_at timestamp NOT NULL DEFAULT now(),
+  updated_at timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS grant_application_drafts_grant_idx
+  ON grant_application_drafts (tenant_id, grant_id);
+CREATE TABLE IF NOT EXISTS grant_answer_library (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  title text NOT NULL,
+  category text NOT NULL DEFAULT 'other',
+  content text NOT NULL,
+  ai_seeded boolean NOT NULL DEFAULT false,
+  created_at timestamp NOT NULL DEFAULT now(),
+  updated_at timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS grant_answer_library_tenant_idx
+  ON grant_answer_library (tenant_id);
+SQL
+
 # Raffle bundle pricing: optional jsonb tiers on shop_products
 # (e.g. [{"quantity":5,"price":"20.00"}]) so raffles can offer bulk-discount
 # ticket bundles. Idempotent — ADD COLUMN IF NOT EXISTS is a no-op when applied.
