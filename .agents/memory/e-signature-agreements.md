@@ -30,3 +30,6 @@ must be idempotent across BOTH.
 ## Environment gotcha
 - **Full `npx tsc --noEmit` is killed by the sandbox (exit -1).** Scoped `tsc` on single server files reports false `@shared/schema` / es6-target errors because it ignores the project tsconfig path aliases — ignore those. Rely on the running `tsx` dev server + LSP instead.
 - **`npm run db:push` is interactive and gets killed (exit -1).** For an empty/new table, create the index directly with `psql "$DATABASE_URL" -c "CREATE UNIQUE INDEX IF NOT EXISTS ..."` so it matches the drizzle definition. Dev URLs are path-based: `/{subdomain}/...`; hitting a route without the tenant prefix makes the app treat the first path segment as the tenant (404).
+
+## Signature pad on iPad/mobile (fixed once — don't regress)
+- The shared `SignatureCanvas` originally cleared the canvas on EVERY window resize. On iOS, opening/closing the on-screen keyboard fires a resize, so signing then tapping a text field silently wiped the signature ("it won't let me sign"). The fix: skip resizes where container width is unchanged (keyboard = height-only) and preserve/restore the signature via toDataURL/fromDataURL when width really changes. Any new signature canvas must follow the same rule.

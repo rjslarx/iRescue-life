@@ -27,12 +27,24 @@ export function SignatureCanvas({ onSignatureChange, disabled = false, descripti
     let cancelled = false;
     let rafId: number | null = null;
 
+    let lastWidth = 0;
+
     const resizeCanvas = () => {
       const ratio = Math.max(window.devicePixelRatio || 1, 1);
       const width = container.offsetWidth;
       const height = Math.min(200, window.innerHeight * 0.3);
 
       if (width === 0 || height === 0) return;
+
+      // Ignore height-only changes (e.g. the iOS on-screen keyboard opening
+      // fires a window resize). Re-sizing the canvas wipes its bitmap, so we
+      // only do it when the available width actually changed.
+      if (width === lastWidth && canvas.width > 0) return;
+      lastWidth = width;
+
+      // Preserve any existing signature across the resize instead of
+      // silently erasing it.
+      const existing = pad && !pad.isEmpty() ? pad.toDataURL("image/png") : null;
 
       canvas.width = width * ratio;
       canvas.height = height * ratio;
@@ -46,8 +58,21 @@ export function SignatureCanvas({ onSignatureChange, disabled = false, descripti
 
       if (pad) {
         pad.clear();
-        onSignatureChange(null);
-        setIsEmpty(true);
+        if (existing) {
+          pad.fromDataURL(existing, { width, height }).then(() => {
+            if (pad && !cancelled) {
+              const dataUrl = pad.toDataURL("image/png");
+              onSignatureChange(dataUrl);
+              setIsEmpty(false);
+            }
+          }).catch(() => {
+            onSignatureChange(null);
+            setIsEmpty(true);
+          });
+        } else {
+          onSignatureChange(null);
+          setIsEmpty(true);
+        }
       }
     };
 
