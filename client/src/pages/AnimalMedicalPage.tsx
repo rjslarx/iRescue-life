@@ -154,6 +154,7 @@ export default function AnimalMedicalPage() {
   const [billDialogOpen, setBillDialogOpen] = useState(false);
   const [editingBill, setEditingBill] = useState<any>(null);
   const [documentDialogOpen, setDocumentDialogOpen] = useState(false);
+  const [viewingFile, setViewingFile] = useState<MedicalFileItem | null>(null);
   const [microchipDialogOpen, setMicrochipDialogOpen] = useState(false);
   const [editingMicrochip, setEditingMicrochip] = useState<any>(null);
   const [preventativeCareDialogOpen, setPreventativeCareDialogOpen] = useState(false);
@@ -2888,7 +2889,7 @@ export default function AnimalMedicalPage() {
                           <Button
                             variant="outline"
                             size="icon"
-                            onClick={() => window.open(file.fileUrl, '_blank')}
+                            onClick={() => setViewingFile(file)}
                             title="View document"
                             data-testid={`button-view-${file.id}`}
                           >
@@ -3191,6 +3192,58 @@ export default function AnimalMedicalPage() {
               queryClient.invalidateQueries({ queryKey: ['/api/animals', animalId, 'files'] });
             }}
           />
+          <Dialog open={!!viewingFile} onOpenChange={(open) => { if (!open) setViewingFile(null); }}>
+            <DialogContent className="max-w-4xl w-[95vw] h-[90vh] flex flex-col p-0 gap-0">
+              <DialogHeader className="flex-row items-center justify-between gap-2 space-y-0 border-b p-4">
+                <div className="min-w-0">
+                  <DialogTitle className="truncate text-base" data-testid="text-viewing-file-name">
+                    {viewingFile?.fileName}
+                  </DialogTitle>
+                  <DialogDescription className="sr-only">Document preview</DialogDescription>
+                </div>
+                <div className="flex items-center gap-2 shrink-0 mr-8">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => viewingFile && window.open(viewingFile.fileUrl, '_blank')}
+                    title="Open in new tab"
+                    data-testid="button-open-document-new-tab"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setViewingFile(null)}
+                    data-testid="button-close-document-viewer"
+                  >
+                    <X className="h-4 w-4 mr-2" />
+                    Close
+                  </Button>
+                </div>
+              </DialogHeader>
+              <div className="flex-1 min-h-0 bg-muted">
+                {viewingFile && (
+                  viewingFile.mimeType?.startsWith('image/') ? (
+                    <div className="h-full w-full overflow-auto flex items-center justify-center p-4">
+                      <img
+                        src={viewingFile.fileUrl}
+                        alt={viewingFile.fileName}
+                        className="max-w-full max-h-full object-contain"
+                        data-testid="img-document-preview"
+                      />
+                    </div>
+                  ) : (
+                    <iframe
+                      src={viewingFile.fileUrl}
+                      title={viewingFile.fileName}
+                      className="h-full w-full border-0"
+                      data-testid="iframe-document-preview"
+                    />
+                  )
+                )}
+              </div>
+            </DialogContent>
+          </Dialog>
         </>
       )}
 
