@@ -59,16 +59,27 @@ export function SignatureCanvas({ onSignatureChange, disabled = false, descripti
       if (pad) {
         pad.clear();
         if (existing) {
-          pad.fromDataURL(existing, { width, height }).then(() => {
+          const finishRestore = () => {
             if (pad && !cancelled) {
               const dataUrl = pad.toDataURL("image/png");
               onSignatureChange(dataUrl);
               setIsEmpty(false);
             }
-          }).catch(() => {
+          };
+          const failRestore = () => {
             onSignatureChange(null);
             setIsEmpty(true);
-          });
+          };
+          try {
+            const result: unknown = pad.fromDataURL(existing, { width, height });
+            if (result && typeof (result as Promise<void>).then === "function") {
+              (result as Promise<void>).then(finishRestore).catch(failRestore);
+            } else {
+              finishRestore();
+            }
+          } catch {
+            failRestore();
+          }
         } else {
           onSignatureChange(null);
           setIsEmpty(true);

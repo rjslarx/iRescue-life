@@ -350,10 +350,11 @@ export function initializeScheduler() {
 
   console.log(`✓ Storage backup scheduled for: ${storageBackupSchedule} (UTC)`);
 
-  // Schedule bio/photo compliance task generation daily at 6:00 AM UTC
-  // "0 6 * * *" means: at minute 0, hour 6, every day
-  // Inserts bi-weekly 'bio_photo' compliance reminders for foster animals at days 14, 28, 42…
-  cron.schedule("0 6 * * *", async () => {
+  // Schedule bio/photo compliance task generation daily at 3:00 PM UTC (9:00 AM CST)
+  // Must run during US daytime: this job sends SMS to fosters, and the quiet-hours
+  // gate (8 PM – 6 AM local) silently blocks texts sent overnight.
+  const bioPhotoComplianceSchedule = process.env.BIO_PHOTO_COMPLIANCE_SCHEDULE || "0 15 * * *";
+  cron.schedule(bioPhotoComplianceSchedule, async () => {
     console.log("📸 Running bio/photo compliance task generation...");
     try {
       const { generateBioPhotoComplianceTasks, sendBioPhotoSmsToFosters } = await import("./foster-compliance-reminders");
@@ -382,7 +383,7 @@ export function initializeScheduler() {
     timezone: "UTC"
   });
 
-  console.log(`✓ Bio/photo compliance task generation scheduled for: 0 6 * * * (UTC)`);
+  console.log(`✓ Bio/photo compliance task generation scheduled for: ${bioPhotoComplianceSchedule} (UTC)`);
 
   // Schedule database backup daily at 9:00 AM UTC (3:00 AM CST)
   // "0 9 * * *" means: at minute 0, hour 9, every day
@@ -413,10 +414,10 @@ export function initializeScheduler() {
 
   console.log(`✓ Database backup scheduled for: ${databaseBackupSchedule} (UTC)`);
 
-  // Schedule foster compliance reminders daily at 7:00 AM UTC
-  // "0 7 * * *" means: at minute 0, hour 7, every day
-  // This creates new reminders and sends 3-day warning emails
-  const fosterComplianceSchedule = process.env.FOSTER_COMPLIANCE_SCHEDULE || "0 7 * * *";
+  // Schedule foster compliance reminders daily at 3:30 PM UTC (9:30 AM CST)
+  // This creates new reminders and sends warning emails/SMS. Must run during US
+  // daytime: SMS sent overnight are blocked by the quiet-hours gate (8 PM – 6 AM local).
+  const fosterComplianceSchedule = process.env.FOSTER_COMPLIANCE_SCHEDULE || "30 15 * * *";
   
   cron.schedule(fosterComplianceSchedule, async () => {
     console.log("📋 Running foster compliance reminders job...");
