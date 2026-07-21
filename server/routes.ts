@@ -49916,6 +49916,65 @@ ${section('Metadata', metaRows)}
         accentColor: data.accentColor || null,
       }).returning();
 
+      // Send confirmation email to the fundraiser creator (non-blocking; failure never affects creation)
+      try {
+        const { EmailService } = await import('./lib/email-service');
+        let campaignUrl: string;
+        if (req.tenant!.customDomain) {
+          campaignUrl = `https://${req.tenant!.customDomain}/fundraise/${campaign.slug}`;
+        } else {
+          const isProduction = process.env.REPLIT_DEPLOYMENT === '1';
+          const baseUrl = isProduction
+            ? 'https://irescue.life'
+            : process.env.REPLIT_DEV_DOMAIN
+              ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+              : 'http://localhost:5000';
+          campaignUrl = `${baseUrl}/${req.tenant!.subdomain}/fundraise/${campaign.slug}`;
+        }
+        const goalDisplay = campaign.goalType === 'units' && campaign.goalTarget
+          ? `${campaign.goalTarget.toLocaleString()} ${campaign.goalUnitLabel || 'units'}`
+          : `$${(campaign.goalAmount / 100).toLocaleString()}`;
+        const endsDisplay = campaign.endsAt
+          ? new Date(campaign.endsAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+          : null;
+        const emailService = await EmailService.forTenant(req.tenant!.id);
+        if (emailService) {
+          const safeSubjectTitle = campaign.campaignTitle.replace(/[\r\n]+/g, ' ').trim();
+          const sendResult = await emailService.send({
+            to: campaign.creatorEmail,
+            subject: `Your fundraiser "${safeSubjectTitle}" is live!`,
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2>Your fundraiser is live!</h2>
+                <p>Hi ${escapeHtml(campaign.creatorName)},</p>
+                <p>Thank you for creating a fundraiser to support ${escapeHtml(req.tenant!.name)}. Here are your campaign details:</p>
+                <div style="background-color: #f9fafb; border-radius: 8px; padding: 16px 20px; margin: 20px 0;">
+                  <p style="margin: 6px 0;"><strong>Campaign:</strong> ${escapeHtml(campaign.campaignTitle)}</p>
+                  <p style="margin: 6px 0;"><strong>Goal:</strong> ${escapeHtml(goalDisplay)}</p>
+                  ${endsDisplay ? `<p style="margin: 6px 0;"><strong>Ends:</strong> ${escapeHtml(endsDisplay)}</p>` : ''}
+                </div>
+                <p style="text-align: center; margin: 30px 0;">
+                  <a href="${campaignUrl}" style="display: inline-block; background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">View Your Fundraiser</a>
+                </p>
+                <p style="color: #6b7280; font-size: 14px;">Share this link with friends and family to start collecting donations:</p>
+                <p style="font-size: 14px; word-break: break-all;"><a href="${campaignUrl}" style="color: #2563eb;">${campaignUrl}</a></p>
+                <p>Every share helps animals in need. Thank you for making a difference!</p>
+                <p>Best regards,<br/>${escapeHtml(req.tenant!.name)}</p>
+              </div>
+            `,
+          });
+          if (sendResult?.success) {
+            console.log(`[PEER CAMPAIGN] Confirmation email sent to ${campaign.creatorEmail} for campaign ${campaign.slug} (tenant ${req.tenant!.subdomain})`);
+          } else {
+            console.warn(`[PEER CAMPAIGN] Confirmation email FAILED for campaign ${campaign.slug} (tenant ${req.tenant!.subdomain}):`, (sendResult as any)?.error || 'unknown error');
+          }
+        } else {
+          console.warn(`[PEER CAMPAIGN] No email service available for tenant ${req.tenant!.subdomain} - confirmation email not sent`);
+        }
+      } catch (emailError) {
+        console.error(`[PEER CAMPAIGN] Failed to send confirmation email for campaign ${campaign.slug}:`, emailError);
+      }
+
       res.json({ campaign });
     } catch (error) {
       next(error);
