@@ -40,6 +40,7 @@ export function ObjectUploader({
   const [previews, setPreviews] = useState<string[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const selectionVersionRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -53,8 +54,12 @@ export function ObjectUploader({
   // Clear selected files when modal closes
   useEffect(() => {
     if (!showModal) {
+      selectionVersionRef.current += 1;
       setSelectedFiles([]);
-      setPreviews([]);
+      setPreviews(prev => {
+        prev.forEach(p => { if (p.startsWith('blob:')) URL.revokeObjectURL(p); });
+        return [];
+      });
     }
   }, [showModal]);
 
@@ -174,6 +179,15 @@ export function ObjectUploader({
     setSelectedFiles(prev => [...prev, ...filesToAdd]);
 
     const docExtensions = ['.pdf', '.doc', '.docx', '.txt', '.rtf'];
+    const HEIC_PLACEHOLDER = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMDAiIGhlaWdodD0iMjAwIiB2aWV3Qm94PSIwIDAgMjAwIDIwMCI+PHJlY3QgZmlsbD0iI2U1ZTdlYiIgd2lkdGg9IjIwMCIgaGVpZ2h0PSIyMDAiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZG9taW5hbnQtYmFzZWxpbmU9Im1pZGRsZSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzZiNzI4MCIgZm9udC1mYW1pbHk9InN5c3RlbS11aSIgZm9udC1zaXplPSIxNCI+SEVJQyBJbWFnZTwvdGV4dD48L3N2Zz4=';
+    const version = selectionVersionRef.current;
+    const addPreview = (p: string) => {
+      if (selectionVersionRef.current !== version) {
+        if (p.startsWith('blob:')) URL.revokeObjectURL(p);
+        return;
+      }
+      setPreviews(prev => [...prev, p]);
+    };
     filesToAdd.forEach(async (file) => {
       const fileName = file.name.toLowerCase();
       const isHeic = fileName.endsWith('.heic') || fileName.endsWith('.heif') || 
@@ -184,7 +198,7 @@ export function ObjectUploader({
                          file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
       if (isDocument) {
-        setPreviews(prev => [...prev, `__doc__:${file.name}`]);
+        addPreview(`__doc__:${file.name}`);
         return;
       }
       
@@ -192,39 +206,44 @@ export function ObjectUploader({
         let previewBlob: Blob = file;
         
         if (isHeic) {
+          // Converting large HEIC photos in the browser can exhaust memory and
+          // crash mobile Safari (blank screen). Skip conversion for big files
+          // and show a placeholder — the actual upload is unaffected.
+          if (file.size > 3 * 1024 * 1024) {
+            addPreview(HEIC_PLACEHOLDER);
+            return;
+          }
           try {
             const convertedBlob = await heic2any({
               blob: file,
               toType: 'image/jpeg',
-              quality: 0.8,
+              quality: 0.6,
             });
             previewBlob = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
           } catch (heicError) {
             console.warn('HEIC preview conversion failed, using placeholder:', heicError);
-            setPreviews(prev => [...prev, 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMDAiIGhlaWdodD0iMjAwIiB2aWV3Qm94PSIwIDAgMjAwIDIwMCI+PHJlY3QgZmlsbD0iI2U1ZTdlYiIgd2lkdGg9IjIwMCIgaGVpZ2h0PSIyMDAiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZG9taW5hbnQtYmFzZWxpbmU9Im1pZGRsZSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzZiNzI4MCIgZm9udC1mYW1pbHk9InN5c3RlbS11aSIgZm9udC1zaXplPSIxNCI+SEVJQyBJbWFnZTwvdGV4dD48L3N2Zz4=']);
+            addPreview(HEIC_PLACEHOLDER);
             return;
           }
         }
         
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          setPreviews(prev => [...prev, reader.result as string]);
-        };
-        reader.readAsDataURL(previewBlob);
+        // Object URLs avoid loading the whole file into memory as a base64
+        // string (FileReader data URLs), which crashed iOS Safari on large photos.
+        addPreview(URL.createObjectURL(previewBlob));
       } catch (error) {
         console.error('Error generating preview:', error);
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          setPreviews(prev => [...prev, reader.result as string]);
-        };
-        reader.readAsDataURL(file);
+        addPreview(URL.createObjectURL(file));
       }
     });
   };
 
   const handleRemoveFile = (index: number) => {
     setSelectedFiles(prev => prev.filter((_, i) => i !== index));
-    setPreviews(prev => prev.filter((_, i) => i !== index));
+    setPreviews(prev => {
+      const removed = prev[index];
+      if (removed && removed.startsWith('blob:')) URL.revokeObjectURL(removed);
+      return prev.filter((_, i) => i !== index);
+    });
   };
 
   const handleRemoveExisting = (url: string) => {

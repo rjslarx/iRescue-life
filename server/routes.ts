@@ -49958,11 +49958,32 @@ ${section('Metadata', metaRows)}
           const uploadedPaths: string[] = [];
 
           for (const file of files) {
-            const ext = file.originalname.split('.').pop() || 'jpg';
+            let fileBuffer = file.buffer;
+            let contentType = file.mimetype;
+            let ext = (file.originalname.toLowerCase().split('.').pop() || 'jpg');
+            if (ext === 'heic' || ext === 'heif' || file.mimetype === 'image/heic' || file.mimetype === 'image/heif') {
+              try {
+                const heicConvert = (await import('heic-convert')).default;
+                const converted = await heicConvert({ buffer: file.buffer, format: 'JPEG', quality: 0.9 });
+                fileBuffer = Buffer.from(converted);
+                contentType = 'image/jpeg';
+                ext = 'jpg';
+              } catch { /* keep original */ }
+            }
             const fileName = `campaign-cover-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-            const filePath = `campaigns/${fileName}`;
-            const objectPath = await storage.uploadFile(filePath, file.buffer, file.mimetype);
-            uploadedPaths.push(objectPath);
+            const result = await storage.uploadFile({
+              tenantId,
+              userId: 'public', // No user for public uploads
+              category: 'fundraiser-images',
+              visibility: 'public',
+              fileName,
+              mimeType: contentType,
+              content: fileBuffer,
+            });
+            if (!result.success) {
+              return res.status(500).json({ error: result.error || 'Upload failed' });
+            }
+            uploadedPaths.push(result.fileUrl);
           }
 
           res.json({ uploadedPaths });
