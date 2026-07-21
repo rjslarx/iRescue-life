@@ -37,7 +37,10 @@ import {
   Settings as SettingsIcon,
   Shield,
   Stethoscope,
+  Upload,
 } from "lucide-react";
+import { ObjectUploader } from "@/components/ObjectUploader";
+import { todayLocalISO } from "@/lib/utils";
 import { HeartwormTreatmentModal } from "@/components/HeartwormTreatmentModal";
 import { HeartwormWatchHelp } from "@/components/dashboard/HeartwormWatchHelp";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -137,9 +140,18 @@ function formatDate(iso: string | null): string {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
+interface LogProofItem {
+  animalId: string;
+  itemId: string;
+  animalName: string;
+  careName: string;
+  adopterName: string;
+}
+
 export default function HeartwormWatchTab() {
   const [templateOpen, setTemplateOpen] = useState(false);
   const [confirmingCandidate, setConfirmingCandidate] = useState<WarningCandidate | null>(null);
+  const [loggingItem, setLoggingItem] = useState<LogProofItem | null>(null);
 
   const { data, isLoading } = useQuery<WarningsResponse>({ queryKey: QUERY_KEY });
 
@@ -224,6 +236,15 @@ export default function HeartwormWatchTab() {
                       key={`${c.animalId}-${c.itemId}`}
                       candidate={c}
                       onSend={() => setConfirmingCandidate(c)}
+                      onLogProof={() =>
+                        setLoggingItem({
+                          animalId: c.animalId,
+                          itemId: c.itemId,
+                          animalName: c.animalName,
+                          careName: c.careName,
+                          adopterName: c.adopterName,
+                        })
+                      }
                     />
                   ))}
                 </div>
@@ -235,7 +256,19 @@ export default function HeartwormWatchTab() {
                     Recently warned ({recentlyWarned.length})
                   </p>
                   {recentlyWarned.map((w) => (
-                    <RecentlyWarnedRow key={w.warningId} item={w} />
+                    <RecentlyWarnedRow
+                      key={w.warningId}
+                      item={w}
+                      onLogProof={() =>
+                        setLoggingItem({
+                          animalId: w.animalId,
+                          itemId: w.itemId,
+                          animalName: w.animalName,
+                          careName: w.careName,
+                          adopterName: w.adopterName,
+                        })
+                      }
+                    />
                   ))}
                 </div>
               )}
@@ -248,6 +281,8 @@ export default function HeartwormWatchTab() {
         candidate={confirmingCandidate}
         onClose={() => setConfirmingCandidate(null)}
       />
+
+      <LogProofDialog item={loggingItem} onClose={() => setLoggingItem(null)} />
     </div>
   );
 }
@@ -282,7 +317,7 @@ const ENGAGEMENT_BADGE: Record<
   },
 };
 
-function RecentlyWarnedRow({ item }: { item: RecentlyWarnedItem }) {
+function RecentlyWarnedRow({ item, onLogProof }: { item: RecentlyWarnedItem; onLogProof: () => void }) {
   const sentDaysAgo = daysSince(item.sentAt);
   const daysUntilDeadline = item.deadlineDate
     ? Math.max(
@@ -360,7 +395,18 @@ function RecentlyWarnedRow({ item }: { item: RecentlyWarnedItem }) {
           )}
         </div>
       </div>
-      <div className="flex items-center gap-2 shrink-0">
+      <div className="flex items-center gap-2 shrink-0 flex-wrap">
+        {item.engagementStatus !== "proof_uploaded" && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onLogProof}
+            data-testid={`button-log-proof-${item.animalId}-${item.itemId}`}
+          >
+            <Upload className="h-4 w-4 mr-2" />
+            Log Proof
+          </Button>
+        )}
         <p
           className="text-xs text-muted-foreground italic max-w-[14rem] text-right"
           data-testid={`text-warning-locked-${item.animalId}-${item.itemId}`}
@@ -376,10 +422,12 @@ function CandidateRow({
   candidate,
   onSend,
   recentlyWarned,
+  onLogProof,
 }: {
   candidate: WarningCandidate;
   onSend: () => void;
   recentlyWarned?: boolean;
+  onLogProof?: () => void;
 }) {
   const lastWarnedDays = daysSince(candidate.lastWarningAt);
   const daysUntilDeadline = candidate.lastWarningDeadline
@@ -437,7 +485,7 @@ function CandidateRow({
           )}
         </div>
       </div>
-      <div className="flex items-center gap-2 shrink-0">
+      <div className="flex items-center gap-2 shrink-0 flex-wrap">
         {recentlyWarned ? (
           <p
             className="text-xs text-muted-foreground italic max-w-[14rem] text-right"
@@ -448,15 +496,28 @@ function CandidateRow({
               : "Locked for 30 days after last warning"}
           </p>
         ) : (
-          <Button
-            size="sm"
-            variant="default"
-            onClick={onSend}
-            data-testid={`button-send-warning-${candidate.animalId}-${candidate.itemId}`}
-          >
-            <Eye className="h-4 w-4 mr-2" />
-            Review &amp; Send
-          </Button>
+          <>
+            {onLogProof && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={onLogProof}
+                data-testid={`button-log-proof-${candidate.animalId}-${candidate.itemId}`}
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                Log Proof
+              </Button>
+            )}
+            <Button
+              size="sm"
+              variant="default"
+              onClick={onSend}
+              data-testid={`button-send-warning-${candidate.animalId}-${candidate.itemId}`}
+            >
+              <Eye className="h-4 w-4 mr-2" />
+              Review &amp; Send
+            </Button>
+          </>
         )}
       </div>
     </div>
@@ -1322,5 +1383,145 @@ function TreatmentRow({
         </div>
       </div>
     </div>
+  );
+}
+
+function LogProofDialog({
+  item,
+  onClose,
+}: {
+  item: LogProofItem | null;
+  onClose: () => void;
+}) {
+  const { toast } = useToast();
+  const [dateAdministered, setDateAdministered] = useState(todayLocalISO());
+  const [clinicName, setClinicName] = useState("");
+  const [notes, setNotes] = useState("");
+  const [fileUrl, setFileUrl] = useState("");
+
+  useEffect(() => {
+    if (item) {
+      setDateAdministered(todayLocalISO());
+      setClinicName("");
+      setNotes("");
+      setFileUrl("");
+    }
+  }, [item?.animalId, item?.itemId]);
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest(
+        "POST",
+        "/api/dashboard/adopter-compliance/heartworm-warnings/log-proof",
+        {
+          animalId: item!.animalId,
+          itemId: item!.itemId,
+          dateAdministered,
+          clinicName: clinicName.trim() || undefined,
+          notes: notes.trim() || undefined,
+          fileUrl: fileUrl || undefined,
+        },
+      );
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+      toast({
+        title: "Proof logged",
+        description: `${item?.careName} for ${item?.animalName} is now marked as resolved. No further warnings will be sent for this item.`,
+      });
+      onClose();
+    },
+    onError: (err: Error) => {
+      toast({
+        title: "Could not log proof",
+        description: err.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  return (
+    <Dialog open={!!item} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Log Prevention Proof</DialogTitle>
+          <DialogDescription>
+            {item
+              ? `Record that ${item.animalName}'s ${item.careName} was given. This resolves the overdue item and stops warnings to ${item.adopterName}.`
+              : ""}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="log-proof-date">Date given</Label>
+            <Input
+              id="log-proof-date"
+              type="date"
+              value={dateAdministered}
+              onChange={(e) => setDateAdministered(e.target.value)}
+              data-testid="input-log-proof-date"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="log-proof-clinic">Clinic (optional)</Label>
+            <Input
+              id="log-proof-clinic"
+              value={clinicName}
+              onChange={(e) => setClinicName(e.target.value)}
+              placeholder="e.g. Banfield Pet Hospital"
+              data-testid="input-log-proof-clinic"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="log-proof-notes">Notes (optional)</Label>
+            <Textarea
+              id="log-proof-notes"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="e.g. Adopter texted a photo of the receipt"
+              rows={2}
+              data-testid="input-log-proof-notes"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Proof document (optional)</Label>
+            <ObjectUploader
+              value={[]}
+              onChange={(urls) => setFileUrl(urls[urls.length - 1] || "")}
+              maxFiles={1}
+              accept="image/*,.pdf,.heic,.heif"
+              uploadEndpoint="/api/documents/upload?category=compliance-proof"
+              buttonText="Upload proof document"
+              showPreview={false}
+              data-testid="button-upload-log-proof"
+            />
+            {fileUrl && (
+              <p className="text-xs text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
+                <CheckCircle2 className="h-3 w-3" />
+                Document attached
+              </p>
+            )}
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} data-testid="button-cancel-log-proof">
+            Cancel
+          </Button>
+          <Button
+            onClick={() => mutation.mutate()}
+            disabled={mutation.isPending || !dateAdministered}
+            data-testid="button-submit-log-proof"
+          >
+            {mutation.isPending ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <CheckCircle2 className="h-4 w-4 mr-2" />
+            )}
+            Log Proof
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

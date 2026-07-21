@@ -781,6 +781,26 @@ export async function findRecentlyWarnedItems(
       inArray(adopterComplianceConfirmations.status, ['approved', 'pending_review']),
     ));
 
+  // Obligation-driven warnings (itemId = complianceObligations.id) are
+  // resolved by completing the obligation itself, not by a confirmation row.
+  // Pull any completed/waived obligations matching the warned itemIds so the
+  // engagement status can show "Proof uploaded" (resolved) instead of leaving
+  // the row looking unresolved after staff log proof.
+  const warnedItemIds = Array.from(new Set(latestPerKey.map(w => w.itemId)));
+  const resolvedObligations = warnedItemIds.length === 0 ? [] : await db
+    .select({
+      id: complianceObligations.id,
+      status: complianceObligations.status,
+      completedAt: complianceObligations.completedAt,
+    })
+    .from(complianceObligations)
+    .where(and(
+      eq(complianceObligations.tenantId, tenantId),
+      inArray(complianceObligations.id, warnedItemIds),
+      inArray(complianceObligations.status, ['completed', 'waived']),
+    ));
+  const resolvedObligationById = new Map(resolvedObligations.map(o => [o.id, o]));
+
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
@@ -799,8 +819,10 @@ export async function findRecentlyWarnedItems(
       return c.preventativeCareRecordId === null && c.careName === w.careName;
     });
 
+    const resolvedObligation = resolvedObligationById.get(w.itemId);
+
     let engagementStatus: RecentlyWarnedItem['engagementStatus'] = 'no_response';
-    if (proof) engagementStatus = 'proof_uploaded';
+    if (proof || resolvedObligation) engagementStatus = 'proof_uploaded';
     else if (w.linkClickedAt) engagementStatus = 'link_clicked';
     else if (w.emailOpenedAt) engagementStatus = 'email_opened';
 
@@ -824,7 +846,11 @@ export async function findRecentlyWarnedItems(
       deadlineDate: w.deadlineDate,
       emailOpenedAt: w.emailOpenedAt ? w.emailOpenedAt.toISOString() : null,
       linkClickedAt: w.linkClickedAt ? w.linkClickedAt.toISOString() : null,
-      proofUploadedAt: proof ? new Date(proof.createdAt).toISOString() : null,
+      proofUploadedAt: proof
+        ? new Date(proof.createdAt).toISOString()
+        : resolvedObligation?.completedAt
+          ? new Date(resolvedObligation.completedAt).toISOString()
+          : null,
       engagementStatus,
     };
   });

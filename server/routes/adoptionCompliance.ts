@@ -13,6 +13,8 @@ import {
   adopterHelpRequests,
   adopterComplianceWarningTemplates,
   adopterComplianceWarnings,
+  adopterComplianceConfirmations,
+  preventativeCareRecords,
   users,
   COMPLIANCE_OBLIGATION_TYPES,
 } from '@shared/schema';
@@ -888,6 +890,139 @@ router.post(
         sms: result.sms,
       });
     } catch (error) {
+      next(error);
+    }
+  }
+);
+
+const logProofSchema = z.object({
+  animalId: z.string().uuid(),
+  itemId: z.string().min(1),
+  dateAdministered: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD'),
+  clinicName: z.string().max(200).optional(),
+  notes: z.string().max(2000).optional(),
+  fileUrl: z.string().max(1000).optional(),
+});
+
+// POST /api/adoption-compliance/heartworm-warnings/log-proof
+// Staff-side resolution for a Heartworm Watch item. Handles BOTH candidate
+// flavors: obligation-driven (itemId = complianceObligations.id → mark the
+// obligation completed) and record-driven (itemId = preventativeCareRecords.id
+// → insert an APPROVED adopter_compliance_confirmation covering the record,
+// which findCoveringProof() picks up so no further warnings are sent).
+router.post(
+  '/heartworm-warnings/log-proof',
+  requireTenant,
+  requireAuth,
+  requireRole('admin', 'staff', 'owner', 'manager'),
+  async (req, res, next) => {
+    try {
+      const tenantId = req.tenant!.id;
+      const staffUserId = req.user!.id;
+      const parsed = logProofSchema.parse(req.body);
+      const administeredDate = new Date(`${parsed.dateAdministered}T12:00:00Z`);
+      if (Number.isNaN(administeredDate.getTime())) {
+        return res.status(400).json({ error: 'Invalid date administered' });
+      }
+
+      // Path 1: obligation-driven item — itemId is a complianceObligations.id
+      const [obligation] = await db
+        .select()
+        .from(complianceObligations)
+        .where(
+          and(
+            eq(complianceObligations.id, parsed.itemId),
+            eq(complianceObligations.tenantId, tenantId),
+          ),
+        )
+        .limit(1);
+
+      if (obligation) {
+        if (obligation.status !== 'pending') {
+          return res.status(409).json({ error: 'This obligation is already resolved.' });
+        }
+        const updateData: Record<string, unknown> = {
+          status: 'completed' as const,
+          completedAt: new Date(),
+          updatedAt: new Date(),
+        };
+        if (parsed.fileUrl) updateData.proofDocumentUrl = parsed.fileUrl;
+        if (parsed.notes) updateData.notes = parsed.notes;
+        const [updated] = await db
+          .update(complianceObligations)
+          .set(updateData)
+          .where(eq(complianceObligations.id, obligation.id))
+          .returning();
+        return res.json({ resolved: 'obligation', obligation: updated });
+      }
+
+      // Path 2: record-driven item — itemId is a preventativeCareRecords.id
+      const [record] = await db
+        .select({
+          id: preventativeCareRecords.id,
+          animalId: preventativeCareRecords.animalId,
+          careName: preventativeCareRecords.careName,
+          careCategory: preventativeCareRecords.careCategory,
+        })
+        .from(preventativeCareRecords)
+        .where(
+          and(
+            eq(preventativeCareRecords.id, parsed.itemId),
+            eq(preventativeCareRecords.tenantId, tenantId),
+            eq(preventativeCareRecords.animalId, parsed.animalId),
+          ),
+        )
+        .limit(1);
+
+      if (!record) {
+        return res.status(404).json({ error: 'Care item not found for this animal.' });
+      }
+
+      // Dedup: a pending/approved confirmation already covers this record
+      const [existing] = await db
+        .select({ id: adopterComplianceConfirmations.id })
+        .from(adopterComplianceConfirmations)
+        .where(
+          and(
+            eq(adopterComplianceConfirmations.tenantId, tenantId),
+            eq(adopterComplianceConfirmations.preventativeCareRecordId, record.id),
+            sql`${adopterComplianceConfirmations.status} IN ('pending_review', 'approved')`,
+          ),
+        )
+        .limit(1);
+      if (existing) {
+        return res.status(409).json({
+          error: 'Proof is already on file for this item — no further warnings will be sent.',
+        });
+      }
+
+      const [confirmation] = await db
+        .insert(adopterComplianceConfirmations)
+        .values({
+          tenantId,
+          userId: staffUserId,
+          animalId: parsed.animalId,
+          preventativeCareRecordId: record.id,
+          careCategory: record.careCategory,
+          careName: record.careName,
+          dateAdministered: administeredDate,
+          clinicName: parsed.clinicName || null,
+          notes: parsed.notes
+            ? `[Logged by staff] ${parsed.notes}`
+            : '[Logged by staff]',
+          fileUrl: parsed.fileUrl || null,
+          status: 'approved',
+          reviewedBy: staffUserId,
+          reviewedAt: new Date(),
+          reviewNotes: 'Staff-logged proof from Heartworm Watch',
+        })
+        .returning();
+
+      res.json({ resolved: 'record', confirmation });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors[0]?.message || 'Invalid request' });
+      }
       next(error);
     }
   }
