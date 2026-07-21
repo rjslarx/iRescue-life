@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction, Router } from 'express';
 import { db } from '../db';
-import { animals, calendars, tenants, donationLinks, shopProducts, customPages, type PageBlock } from '@shared/schema';
+import { animals, calendars, tenants, donationLinks, shopProducts, customPages, peerCampaigns, type PageBlock } from '@shared/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import fs from 'fs';
 import path from 'path';
@@ -326,6 +326,7 @@ function isKnownPublicTenantRoute(cleanUrl: string): boolean {
   if (/^\/campaigns?\/[^/?]/.test(cleanUrl)) return true;
   if (/^\/campaign\/[^/?]/.test(cleanUrl)) return true;
   if (/^\/shop\/[^/?]/.test(cleanUrl)) return true;
+  if (/^\/fundraise\/[^/?]/.test(cleanUrl)) return true;
   return false;
 }
 
@@ -672,6 +673,48 @@ export async function injectOGTags(req: Request, res: Response, next: NextFuncti
               `<p>Support ${escapeHtml(tenant.name)} with a secure online donation through this fundraising page.</p>`
             );
           }
+        }
+      }
+    }
+
+    if (!ogData) {
+      const fundraiseMatch = cleanUrl.match(/^\/fundraise\/([a-zA-Z0-9-]+)$/);
+      if (fundraiseMatch) {
+        const slug = fundraiseMatch[1];
+        console.log(`[OG-TAGS] Processing peer campaign: tenant=${tenant.subdomain}, slug=${slug}`);
+        const campaignData = await db.select({
+          campaignTitle: peerCampaigns.campaignTitle,
+          campaignStory: peerCampaigns.campaignStory,
+          coverImageUrl: peerCampaigns.coverImageUrl,
+          creatorName: peerCampaigns.creatorName,
+          goalAmount: peerCampaigns.goalAmount,
+          amountRaised: peerCampaigns.amountRaised,
+        })
+        .from(peerCampaigns)
+        .where(and(
+          eq(peerCampaigns.slug, slug),
+          eq(peerCampaigns.tenantId, tenant.id),
+          eq(peerCampaigns.isActive, true)
+        ))
+        .limit(1);
+
+        if (campaignData.length > 0) {
+          const campaign = campaignData[0];
+          const image = resolveImageUrl(campaign.coverImageUrl) || defaultImage;
+          const storyDesc = campaign.campaignStory
+            ? campaign.campaignStory.slice(0, 200) + (campaign.campaignStory.length > 200 ? '...' : '')
+            : `${campaign.creatorName} is fundraising for ${tenant.name}. Every donation helps animals in need.`;
+          ogData = {
+            title: `${campaign.campaignTitle} | ${tenant.name}`,
+            description: storyDesc,
+            image,
+          };
+          tenantNoscriptBody = buildTenantNoscript(
+            `<h1>${escapeHtml(campaign.campaignTitle)}</h1>` +
+            `<p>${escapeHtml(storyDesc)}</p>` +
+            `<p>This fundraiser by ${escapeHtml(campaign.creatorName)} supports ${escapeHtml(tenant.name)}. Every donation helps animals in need.</p>`
+          );
+          console.log(`[OG-TAGS] Peer campaign found: ${campaign.campaignTitle}, image=${image}`);
         }
       }
     }
