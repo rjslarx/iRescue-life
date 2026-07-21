@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { todayLocalISO } from "@/lib/utils";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -62,7 +63,7 @@ export function AddMedicalBillDialog({ animalId, open, onOpenChange, bill }: Add
   const form = useForm<BillFormData>({
     resolver: zodResolver(billSchema),
     defaultValues: {
-      billDate: new Date().toISOString().split('T')[0],
+      billDate: todayLocalISO(),
       vendor: "",
       amount: "",
       description: "",
@@ -78,7 +79,7 @@ export function AddMedicalBillDialog({ animalId, open, onOpenChange, bill }: Add
   useEffect(() => {
     if (bill && open) {
       reset({
-        billDate: bill.billDate ? new Date(bill.billDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+        billDate: bill.billDate ? new Date(bill.billDate).toISOString().split('T')[0] : todayLocalISO(),
         vendor: bill.vendor || "",
         amount: String(bill.amount) || "",
         description: bill.description || "",
@@ -90,7 +91,7 @@ export function AddMedicalBillDialog({ animalId, open, onOpenChange, bill }: Add
       });
     } else if (!bill && open) {
       reset({
-        billDate: new Date().toISOString().split('T')[0],
+        billDate: todayLocalISO(),
         vendor: "",
         amount: "",
         description: "",

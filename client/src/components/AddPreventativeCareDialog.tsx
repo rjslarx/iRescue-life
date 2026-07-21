@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { todayLocalISO } from "@/lib/utils";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -79,7 +80,7 @@ export function AddPreventativeCareDialog({
     resolver: zodResolver(preventativeCareSchema),
     defaultValues: {
       careTypeId: "",
-      dateAdministered: new Date().toISOString().split('T')[0],
+      dateAdministered: todayLocalISO(),
       nextDueDate: "",
       administeredBy: "",
       notes: "",
@@ -132,7 +133,7 @@ export function AddPreventativeCareDialog({
     if (record && open) {
       form.reset({
         careTypeId: record.careTypeId,
-        dateAdministered: record.dateAdministered?.split('T')[0] || new Date().toISOString().split('T')[0],
+        dateAdministered: record.dateAdministered?.split('T')[0] || todayLocalISO(),
         nextDueDate: record.nextDueDate?.split('T')[0] || "",
         administeredBy: record.administeredBy || "",
         notes: record.notes || "",
@@ -143,7 +144,7 @@ export function AddPreventativeCareDialog({
     } else if (!record && open) {
       form.reset({
         careTypeId: "",
-        dateAdministered: new Date().toISOString().split('T')[0],
+        dateAdministered: todayLocalISO(),
         nextDueDate: "",
         administeredBy: "",
         notes: "",
@@ -224,7 +225,7 @@ export function AddPreventativeCareDialog({
 
   const createMutation = useMutation({
     mutationFn: async (data: PreventativeCareFormData) => {
-      const today = new Date().toISOString().split('T')[0];
+      const today = todayLocalISO();
       const isFuture = data.dateAdministered > today;
 
       const selectedCareType = careTypes.find(t => t.id === data.careTypeId);
@@ -300,7 +301,7 @@ export function AddPreventativeCareDialog({
   const dateAdminValue = form.watch("dateAdministered");
   const isPrevFutureDate = (() => {
     if (!dateAdminValue) return false;
-    const today = new Date().toISOString().split('T')[0];
+    const today = todayLocalISO();
     return dateAdminValue > today;
   })();
 

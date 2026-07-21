@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { todayLocalISO } from "@/lib/utils";
 import { useMutation } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -58,7 +59,7 @@ export function AddDiagnosticDialog({ animalId, open, onOpenChange, diagnostic, 
     resolver: zodResolver(diagnosticSchema),
     defaultValues: {
       testName: "",
-      testDate: new Date().toISOString().split('T')[0],
+      testDate: todayLocalISO(),
       result: "",
       notes: "",
       billVendor: "",
@@ -75,7 +76,7 @@ export function AddDiagnosticDialog({ animalId, open, onOpenChange, diagnostic, 
     if (diagnostic && open) {
       reset({
         testName: diagnostic.testName || "",
-        testDate: diagnostic.testDate ? new Date(diagnostic.testDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+        testDate: diagnostic.testDate ? new Date(diagnostic.testDate).toISOString().split('T')[0] : todayLocalISO(),
         result: diagnostic.results || "",
         notes: diagnostic.notes || "",
         billVendor: diagnostic.billVendor || "",
@@ -88,7 +89,7 @@ export function AddDiagnosticDialog({ animalId, open, onOpenChange, diagnostic, 
     } else if (!diagnostic && open) {
       reset({
         testName: initialValues?.testName || "",
-        testDate: new Date().toISOString().split('T')[0],
+        testDate: todayLocalISO(),
         result: "",
         notes: "",
         billVendor: "",

@@ -1,4 +1,5 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { todayLocalISO } from "@/lib/utils";
 import { useParams, Link, useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTenant } from "@/contexts/TenantContext";
@@ -99,7 +100,7 @@ export default function FosterAnimalProfilePage() {
   const { toast } = useToast();
 
   const [showVetVisitDialog, setShowVetVisitDialog] = useState(false);
-  const [vetVisitDate, setVetVisitDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [vetVisitDate, setVetVisitDate] = useState(() => todayLocalISO());
   const [vetClinicName, setVetClinicName] = useState('');
   const [vetReason, setVetReason] = useState('');
   const [vetFiles, setVetFiles] = useState<File[]>([]);
@@ -148,7 +149,7 @@ export default function FosterAnimalProfilePage() {
     onSuccess: () => {
       toast({ title: "Vet visit submitted", description: "Your rescue team has been notified and will review the records." });
       setShowVetVisitDialog(false);
-      setVetVisitDate(new Date().toISOString().split('T')[0]);
+      setVetVisitDate(todayLocalISO());
       setVetClinicName('');
       setVetReason('');
       setVetFiles([]);

@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { todayLocalISO } from "@/lib/utils";
 import { useMutation } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -66,7 +67,7 @@ export function AddExamDialog({ animalId, open, onOpenChange, exam, initialValue
     resolver: zodResolver(examSchema),
     defaultValues: {
       examType: "",
-      examDate: new Date().toISOString().split('T')[0],
+      examDate: todayLocalISO(),
       performedBy: "",
       subjective: "",
       objective: "",
@@ -86,7 +87,7 @@ export function AddExamDialog({ animalId, open, onOpenChange, exam, initialValue
     if (exam && open) {
       reset({
         examType: exam.examType || "",
-        examDate: exam.examDate ? new Date(exam.examDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+        examDate: exam.examDate ? new Date(exam.examDate).toISOString().split('T')[0] : todayLocalISO(),
         performedBy: exam.veterinarian || "",
         subjective: exam.soapFields?.subjective || "",
         objective: exam.soapFields?.objective || "",
@@ -102,7 +103,7 @@ export function AddExamDialog({ animalId, open, onOpenChange, exam, initialValue
     } else if (!exam && open) {
       reset({
         examType: initialValues?.examType || "",
-        examDate: new Date().toISOString().split('T')[0],
+        examDate: todayLocalISO(),
         performedBy: "",
         subjective: "",
         objective: "",
@@ -171,7 +172,7 @@ export function AddExamDialog({ animalId, open, onOpenChange, exam, initialValue
   const examDateValue = form.watch("examDate");
   const isExamFutureDate = (() => {
     if (!examDateValue) return false;
-    const today = new Date().toISOString().split('T')[0];
+    const today = todayLocalISO();
     return examDateValue > today;
   })();
 

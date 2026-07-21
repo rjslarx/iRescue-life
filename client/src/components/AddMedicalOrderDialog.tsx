@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { todayLocalISO } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -565,7 +566,7 @@ export function AddMedicalOrderDialog({ animalId: propsAnimalId, animalSpecies: 
     try {
       const res = await apiRequest('POST', `/api/animals/${animalId}/preventative-care/apply-protocol`, {
         protocolName: selectedProtocol.key,
-        dateAdministered: new Date().toISOString().split('T')[0],
+        dateAdministered: todayLocalISO(),
         markInitialAsGiven: protocolMarkInitialAsGiven,
       });
       const result = await res.json();

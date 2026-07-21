@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { todayLocalISO } from "@/lib/utils";
 import { useMutation } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -103,7 +104,7 @@ export function AddMicrochipDialog({ animalId, open, onOpenChange, microchip }: 
     defaultValues: {
       microchipNumber: "",
       manufacturer: "",
-      implantDate: new Date().toISOString().split('T')[0],
+      implantDate: todayLocalISO(),
       implantLocation: "between_shoulder_blades",
       chipOrigin: "implanted_by_rescue",
       registrationStatus: "unregistered",
@@ -142,7 +143,7 @@ export function AddMicrochipDialog({ animalId, open, onOpenChange, microchip }: 
       form.reset({
         microchipNumber: "",
         manufacturer: "",
-        implantDate: new Date().toISOString().split('T')[0],
+        implantDate: todayLocalISO(),
         implantLocation: "between_shoulder_blades",
         chipOrigin: "implanted_by_rescue",
         registrationStatus: "unregistered",

@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { todayLocalISO } from "@/lib/utils";
 import { useMutation } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -67,7 +68,7 @@ export function AddVaccineDialog({ animalId, open, onOpenChange, vaccine, initia
     resolver: zodResolver(vaccineSchema),
     defaultValues: {
       itemName: "",
-      dateGiven: new Date().toISOString().split('T')[0],
+      dateGiven: todayLocalISO(),
       validDurationMonths: "",
       dateDue: "",
       administeredBy: "",
@@ -104,7 +105,7 @@ export function AddVaccineDialog({ animalId, open, onOpenChange, vaccine, initia
     if (vaccine && open) {
       reset({
         itemName: vaccine.vaccineName || "",
-        dateGiven: vaccine.dateGiven ? new Date(vaccine.dateGiven).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+        dateGiven: vaccine.dateGiven ? new Date(vaccine.dateGiven).toISOString().split('T')[0] : todayLocalISO(),
         validDurationMonths: vaccine.validDurationMonths ? String(vaccine.validDurationMonths) : "",
         dateDue: vaccine.dueDate ? new Date(vaccine.dueDate).toISOString().split('T')[0] : "",
         administeredBy: vaccine.veterinarian || "",
@@ -127,7 +128,7 @@ export function AddVaccineDialog({ animalId, open, onOpenChange, vaccine, initia
       }
       reset({
         itemName: initialValues?.itemName || "",
-        dateGiven: new Date().toISOString().split('T')[0],
+        dateGiven: todayLocalISO(),
         validDurationMonths: autoMonths || "",
         dateDue: "",
         administeredBy: "",

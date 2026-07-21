@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { todayLocalISO } from "@/lib/utils";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -27,7 +28,7 @@ const litterRowSchema = z.object({
 });
 
 const bulkIntakeFormSchema = z.object({
-  intakeDate: z.string().default(() => new Date().toISOString().split('T')[0]),
+  intakeDate: z.string().default(() => todayLocalISO()),
   intakeSource: z.enum(["stray", "owner_surrender", "transfer", "born_in_care", "other"]).default("stray"),
   petfinderType: z.string().default("Dog"),
   petfinderBreed: z.string().default(""),
@@ -56,7 +57,7 @@ export function BulkLitterIntakeWizard({ open, onOpenChange, onSuccess }: BulkLi
   const form = useForm<BulkIntakeFormData>({
     resolver: zodResolver(bulkIntakeFormSchema),
     defaultValues: {
-      intakeDate: new Date().toISOString().split('T')[0],
+      intakeDate: todayLocalISO(),
       intakeSource: "stray",
       petfinderType: "Dog",
       petfinderBreed: "",

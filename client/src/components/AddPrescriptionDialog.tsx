@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { todayLocalISO } from "@/lib/utils";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -106,7 +107,7 @@ export function AddPrescriptionDialog({ animalId, open, onOpenChange, prescripti
       dosage: "",
       frequency: "",
       route: "",
-      startDate: new Date().toISOString().split('T')[0],
+      startDate: todayLocalISO(),
       nextScheduledDose: "",
       endDate: "",
       durationDays: "",
@@ -128,7 +129,7 @@ export function AddPrescriptionDialog({ animalId, open, onOpenChange, prescripti
   const watchedStartDate = useWatch({
     control: form.control,
     name: "startDate",
-    defaultValue: new Date().toISOString().split('T')[0],
+    defaultValue: todayLocalISO(),
   });
   const watchedFrequency = useWatch({
     control: form.control,
@@ -150,7 +151,7 @@ export function AddPrescriptionDialog({ animalId, open, onOpenChange, prescripti
     name: "endDate",
     defaultValue: "",
   });
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayLocalISO();
   const isStartDateInPast = watchedStartDate && watchedStartDate < today;
   const isOneTime = watchedFrequency === "ONCE";
   const isDailyDosingFreq = DAILY_DOSING_FREQS.has(watchedFrequency || "");
@@ -165,7 +166,7 @@ export function AddPrescriptionDialog({ animalId, open, onOpenChange, prescripti
         dosage: prescription.dosage || "",
         frequency: prescription.frequency || "",
         route: prescription.route || "",
-        startDate: prescription.startDate ? new Date(prescription.startDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+        startDate: prescription.startDate ? new Date(prescription.startDate).toISOString().split('T')[0] : todayLocalISO(),
         nextScheduledDose: prescription.nextScheduledDose ? new Date(prescription.nextScheduledDose).toISOString().split('T')[0] : "",
         endDate: prescription.endDate ? new Date(prescription.endDate).toISOString().split('T')[0] : "",
         durationDays: "",
@@ -186,7 +187,7 @@ export function AddPrescriptionDialog({ animalId, open, onOpenChange, prescripti
         dosage: initialValues?.dosage || "",
         frequency: initialValues?.frequency || "",
         route: initialValues?.route || "",
-        startDate: initialValues?.startDate || new Date().toISOString().split('T')[0],
+        startDate: initialValues?.startDate || todayLocalISO(),
         nextScheduledDose: "",
         endDate: "",
         durationDays: "",

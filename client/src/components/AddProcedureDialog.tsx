@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { todayLocalISO } from "@/lib/utils";
 import { useMutation } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -60,7 +61,7 @@ export function AddProcedureDialog({ animalId, open, onOpenChange, procedure, in
     resolver: zodResolver(procedureSchema),
     defaultValues: {
       procedureName: "",
-      procedureDate: new Date().toISOString().split('T')[0],
+      procedureDate: todayLocalISO(),
       veterinarian: "",
       notes: "",
       billVendor: "",
@@ -77,7 +78,7 @@ export function AddProcedureDialog({ animalId, open, onOpenChange, procedure, in
     if (procedure && open) {
       reset({
         procedureName: procedure.procedureName || "",
-        procedureDate: procedure.procedureDate ? new Date(procedure.procedureDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+        procedureDate: procedure.procedureDate ? new Date(procedure.procedureDate).toISOString().split('T')[0] : todayLocalISO(),
         veterinarian: procedure.veterinarian || "",
         notes: procedure.outcome || procedure.notes || "",
         billVendor: procedure.billVendor || "",
@@ -90,7 +91,7 @@ export function AddProcedureDialog({ animalId, open, onOpenChange, procedure, in
     } else if (!procedure && open) {
       reset({
         procedureName: initialValues?.procedureName || "",
-        procedureDate: new Date().toISOString().split('T')[0],
+        procedureDate: todayLocalISO(),
         veterinarian: "",
         notes: "",
         billVendor: "",
@@ -156,7 +157,7 @@ export function AddProcedureDialog({ animalId, open, onOpenChange, procedure, in
   const procDateValue = form.watch("procedureDate");
   const isProcFutureDate = (() => {
     if (!procDateValue) return false;
-    const today = new Date().toISOString().split('T')[0];
+    const today = todayLocalISO();
     return procDateValue > today;
   })();
 

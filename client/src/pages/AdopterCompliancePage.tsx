@@ -48,6 +48,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import DashboardLayout from "@/components/DashboardLayout";
+import { ObjectUploader } from "@/components/ObjectUploader";
 import HeartwormWatchTab from "@/components/compliance/HeartwormWatchTab";
 
 const OBLIGATION_LABELS: Record<string, string> = {
@@ -532,6 +533,16 @@ export default function AdopterCompliancePage() {
                       onChange={(e) => setProofUrl(e.target.value)}
                       className="w-48 text-sm"
                       data-testid={`input-proof-url-${obligation.id}`}
+                    />
+                    <ObjectUploader
+                      value={[]}
+                      onChange={(urls) => setProofUrl(urls[urls.length - 1] || "")}
+                      maxFiles={1}
+                      accept="image/*,.pdf,.heic,.heif"
+                      uploadEndpoint="/api/documents/upload?category=compliance-proof"
+                      buttonText="Upload proof document"
+                      showPreview={false}
+                      data-testid={`button-upload-proof-${obligation.id}`}
                     />
                     <div className="flex gap-1">
                       <Button

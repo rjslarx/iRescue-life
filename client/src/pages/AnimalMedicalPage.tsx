@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { todayLocalISO } from "@/lib/utils";
 import { useParams, useLocation, useSearch } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -144,7 +145,7 @@ export default function AnimalMedicalPage() {
   const [completingProcedure, setCompletingProcedure] = useState<any>(null);
   const [completingExam, setCompletingExam] = useState<any>(null);
   const [completionForm, setCompletionForm] = useState({
-    completedDate: new Date().toISOString().split('T')[0],
+    completedDate: todayLocalISO(),
     actualCost: "",
     notes: "",
   });
@@ -471,7 +472,7 @@ export default function AnimalMedicalPage() {
     mutationFn: async (recordId: string) => {
       await apiRequest('PATCH', `/api/medical/preventative-care/records/${recordId}`, {
         status: 'given',
-        dateAdministered: new Date().toISOString().split('T')[0],
+        dateAdministered: todayLocalISO(),
       });
     },
     onSuccess: () => {
@@ -1462,7 +1463,7 @@ export default function AnimalMedicalPage() {
                             onClick={() => {
                               setCompletingExam(exam);
                               setCompletionForm({
-                                completedDate: new Date().toISOString().split('T')[0],
+                                completedDate: todayLocalISO(),
                                 actualCost: "",
                                 notes: "",
                               });
@@ -1848,7 +1849,7 @@ export default function AnimalMedicalPage() {
                             onClick={() => {
                               setCompletingProcedure(proc);
                               setCompletionForm({
-                                completedDate: new Date().toISOString().split('T')[0],
+                                completedDate: todayLocalISO(),
                                 actualCost: proc.billAmount || "",
                                 notes: "",
                               });
@@ -2054,7 +2055,7 @@ export default function AnimalMedicalPage() {
                             variant="outline"
                             size="sm"
                             onClick={() => {
-                              let newStartDate = new Date().toISOString().split('T')[0];
+                              let newStartDate = todayLocalISO();
                               if (rx.lastGivenAt) {
                                 const lastDate = new Date(rx.lastGivenAt);
                                 const freqDaysMap: Record<string, number> = { SID: 1, BID: 1, TID: 1, QID: 1, 'Every 12 hours': 1, 'Every 8 hours': 1, 'Every 6 hours': 1, ONCE: 0 };
@@ -2469,7 +2470,7 @@ export default function AnimalMedicalPage() {
                         try {
                           const res = await apiRequest('POST', `/api/animals/${animalId}/preventative-care/apply-protocol`, { 
                             protocolName: selectedProtocol,
-                            dateAdministered: new Date().toISOString().split('T')[0],
+                            dateAdministered: todayLocalISO(),
                             markInitialAsGiven,
                           });
                           const response = await res.json();
@@ -2549,7 +2550,7 @@ export default function AnimalMedicalPage() {
                 const dueDateNorm = record.nextDueDate 
                   ? new Date(new Date(record.nextDueDate).toISOString().split('T')[0] + 'T12:00:00')
                   : null;
-                const todayNorm = new Date(new Date().toISOString().split('T')[0] + 'T12:00:00');
+                const todayNorm = new Date(todayLocalISO() + 'T12:00:00');
                 const isPending = record.status === 'pending';
                 const isOverdue = !isPending && dueDateNorm && dueDateNorm < todayNorm;
                 const daysUntilDue = dueDateNorm
