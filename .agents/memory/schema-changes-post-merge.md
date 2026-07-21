@@ -26,3 +26,5 @@ A new `tenants.*` column is NOT automatically visible to the app. Public pages a
 Otherwise the column is saved in the DB but never reaches the client (image/setting silently fails to render). Note: some heavier/rarely-changed columns are instead exposed only via `GET /api/tenant/settings` (full row) — check which endpoint a page actually queries before deciding where to add the field.
 
 **Why:** `req.tenant` is a hand-maintained allow-list projection, not a `SELECT *`.
+
+**Deploy-time gotcha:** never run `drizzle-kit push` in the deployment start script either — it saturates the Neon pool during boot, session/tenant DB lookups fail, healthcheck on `/` returns 500 and the publish fails. deploy-start.sh must only start the server.
