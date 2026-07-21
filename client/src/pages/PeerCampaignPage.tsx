@@ -43,6 +43,30 @@ function timeAgo(dateStr: string): string {
   return date.toLocaleDateString();
 }
 
+function pickContrastText(hex: string): string {
+  const m = /^#([0-9a-fA-F]{6})$/.exec(hex);
+  if (!m) return "#fff";
+  const r = parseInt(m[1].slice(0, 2), 16);
+  const g = parseInt(m[1].slice(2, 4), 16);
+  const b = parseInt(m[1].slice(4, 6), 16);
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.6 ? "#1f2937" : "#fff";
+}
+
+function ThemedProgress({ value, heightClass, themePrimary, testId }: { value: number; heightClass: string; themePrimary?: string | null; testId?: string }) {
+  if (!themePrimary) {
+    return <Progress value={value} className={heightClass} data-testid={testId} />;
+  }
+  return (
+    <div className={`${heightClass} w-full rounded-full bg-primary/20 overflow-hidden`} data-testid={testId}>
+      <div
+        className="h-full rounded-full transition-all"
+        style={{ width: `${Math.min(100, value)}%`, backgroundColor: themePrimary }}
+      />
+    </div>
+  );
+}
+
 function CountdownTimer({ endsAt }: { endsAt: string }) {
   const [now, setNow] = useState(new Date());
 
@@ -214,6 +238,12 @@ export default function PeerCampaignPage() {
   const campaignEnded = campaign.endsAt && new Date(campaign.endsAt).getTime() < Date.now();
   const canDonate = campaign.isActive && !campaignEnded;
 
+  const themePrimary = campaign.primaryColor || null;
+  const themeAccent = campaign.accentColor || null;
+  const accentButtonStyle = themeAccent
+    ? { backgroundColor: themeAccent, borderColor: themeAccent, color: pickContrastText(themeAccent) }
+    : undefined;
+
   return (
     <div className="min-h-screen bg-background">
       <PublicHeader rescueName={rescueName} logoUrl={tenant?.logoUrl || undefined} />
@@ -226,7 +256,11 @@ export default function PeerCampaignPage() {
             className="w-full h-full object-cover"
             data-testid="img-campaign-cover"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />
+          {themePrimary ? (
+            <div className="absolute inset-0" style={{ background: `linear-gradient(to top, ${themePrimary}cc, ${themePrimary}4d, transparent)` }} />
+          ) : (
+            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />
+          )}
           <div className="absolute bottom-0 left-0 right-0 p-6 md:p-10">
             <div className="max-w-4xl mx-auto">
               <h1
@@ -298,7 +332,7 @@ export default function PeerCampaignPage() {
                         raised of ${goalDollars.toLocaleString()} goal
                       </span>
                     </div>
-                    <Progress value={progressPercentage} className="h-3" data-testid="progress-bar" />
+                    <ThemedProgress value={progressPercentage} heightClass="h-3" themePrimary={themePrimary} testId="progress-bar" />
                     <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
                       <span>{progressPercentage.toFixed(0)}% funded</span>
                       <span className="flex items-center gap-1">
@@ -392,6 +426,7 @@ export default function PeerCampaignPage() {
                       <Button
                         size="lg"
                         className="w-full gap-2"
+                        style={accentButtonStyle}
                         onClick={handleDonate}
                         disabled={
                           checkoutMutation.isPending ||
@@ -469,11 +504,14 @@ export default function PeerCampaignPage() {
               <p className="font-bold text-lg truncate" data-testid="sticky-raised">
                 ${raisedDollars.toLocaleString()} raised
               </p>
-              <Progress value={progressPercentage} className="h-2 mt-1" />
+              <div className="mt-1">
+                <ThemedProgress value={progressPercentage} heightClass="h-2" themePrimary={themePrimary} />
+              </div>
             </div>
             <Button
               size="lg"
               className="gap-2 shrink-0"
+              style={accentButtonStyle}
               onClick={() => {
                 const el = document.querySelector('[data-testid="card-donate-action"]');
                 el?.scrollIntoView({ behavior: "smooth", block: "center" });
