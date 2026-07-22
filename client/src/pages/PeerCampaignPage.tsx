@@ -12,7 +12,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Heart, Users, Clock, Share2, Copy, Loader2 } from "lucide-react";
-import { SiFacebook } from "react-icons/si";
 import type { Tenant, PeerCampaign, PeerCampaignDonation } from "@shared/schema";
 import { getThemeBackgroundStyle } from "@/lib/campaignThemes";
 
@@ -474,8 +473,8 @@ export default function PeerCampaignPage() {
                   </h3>
                   <div className="flex flex-wrap gap-2">
                     <Button variant="outline" onClick={handleShareFacebook} data-testid="button-share-facebook">
-                      <SiFacebook className="h-4 w-4 mr-2" />
-                      Facebook
+                      <Share2 className="h-4 w-4 mr-2" />
+                      Share
                     </Button>
                     <Button variant="outline" onClick={handleCopyLink} data-testid="button-copy-link">
                       <Copy className="h-4 w-4 mr-2" />

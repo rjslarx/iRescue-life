@@ -27,7 +27,6 @@ import {
   X,
   Building2,
 } from "lucide-react";
-import { SiFacebook } from "react-icons/si";
 import type { Tenant, PeerCampaign, PeerCampaignDonation, PeerCampaignUpdate, CampaignParticipant } from "@shared/schema";
 import { getAvatarIcon, getAvatarColor } from "@/lib/participant-avatars";
 import { Trophy } from "lucide-react";
@@ -172,7 +171,7 @@ function ShareSection({ campaignUrl, compact }: { campaignUrl: string; compact?:
             Copy Link
           </Button>
           <Button variant="outline" onClick={handleShareFacebook} data-testid="button-share-facebook-social">
-            <SiFacebook className="h-4 w-4 mr-2" />
+            <Share2 className="h-4 w-4 mr-2" />
             Share
           </Button>
           <Button variant="outline" onClick={handleGenerateQr} disabled={qrLoading} data-testid="button-generate-qr">
@@ -198,8 +197,8 @@ function ShareSection({ campaignUrl, compact }: { campaignUrl: string; compact?:
         </h3>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={handleShareFacebook} data-testid="button-share-facebook">
-            <SiFacebook className="h-4 w-4 mr-2" />
-            Facebook
+            <Share2 className="h-4 w-4 mr-2" />
+            Share
           </Button>
           <Button variant="outline" onClick={handleCopyLink} data-testid="button-copy-link">
             <Copy className="h-4 w-4 mr-2" />

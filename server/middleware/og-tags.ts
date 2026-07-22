@@ -1377,19 +1377,25 @@ ogImageRouter.get('/api/og/vip-club/:tenantId.png', async (req, res) => {
 });
 
 
-const OG_PATTERN_COLOR = '#8B7355';
+const OG_THEME_COLORS: Record<string, { bg: string; pattern: string; opacity: number }> = {
+  birthday: { bg: '#ffffff', pattern: '#ec4899', opacity: 0.35 },
+  confetti: { bg: '#ffffff', pattern: '#f59e0b', opacity: 0.35 },
+  hearts: { bg: '#ffffff', pattern: '#ef4444', opacity: 0.3 },
+  stars: { bg: '#ffffff', pattern: '#eab308', opacity: 0.35 },
+  paws: { bg: '#f0ece4', pattern: '#8B7355', opacity: 0.18 },
+};
 
 const OG_THEME_TILES: Record<string, { size: number; content: string }> = {
   birthday: {
     size: 120,
     content: `
-      <g fill="none" stroke="${OG_PATTERN_COLOR}" stroke-width="2">
+      <g fill="none" stroke="__C__" stroke-width="2">
         <ellipse cx="24" cy="26" rx="10" ry="13"/>
-        <path d="M24 39 l-3 5 h6 z M24 44 q4 8 -2 16" fill="${OG_PATTERN_COLOR}" stroke="none"/>
+        <path d="M24 39 l-3 5 h6 z M24 44 q4 8 -2 16" fill="__C__" stroke="none"/>
         <ellipse cx="88" cy="80" rx="9" ry="12"/>
-        <path d="M88 92 l-3 5 h6 z M88 97 q-4 8 2 14" fill="${OG_PATTERN_COLOR}" stroke="none"/>
+        <path d="M88 92 l-3 5 h6 z M88 97 q-4 8 2 14" fill="__C__" stroke="none"/>
       </g>
-      <g fill="${OG_PATTERN_COLOR}">
+      <g fill="__C__">
         <rect x="60" y="18" width="6" height="3" transform="rotate(30 63 19)"/>
         <rect x="100" y="34" width="6" height="3" transform="rotate(-20 103 35)"/>
         <rect x="14" y="76" width="6" height="3" transform="rotate(45 17 77)"/>
@@ -1402,7 +1408,7 @@ const OG_THEME_TILES: Record<string, { size: number; content: string }> = {
   confetti: {
     size: 100,
     content: `
-      <g fill="${OG_PATTERN_COLOR}">
+      <g fill="__C__">
         <rect x="10" y="12" width="8" height="3.5" transform="rotate(25 14 13)"/>
         <rect x="66" y="20" width="8" height="3.5" transform="rotate(-35 70 21)"/>
         <rect x="36" y="48" width="8" height="3.5" transform="rotate(60 40 49)"/>
@@ -1417,7 +1423,7 @@ const OG_THEME_TILES: Record<string, { size: number; content: string }> = {
   hearts: {
     size: 110,
     content: `
-      <g fill="${OG_PATTERN_COLOR}">
+      <g fill="__C__">
         <path d="M28 24 c-3-6 -12-5 -12 2 c0 5 7 9 12 13 c5-4 12-8 12-13 c0-7 -9-8 -12-2 z"/>
         <path d="M82 70 c-2.4-4.8 -9.6-4 -9.6 1.6 c0 4 5.6 7.2 9.6 10.4 c4-3.2 9.6-6.4 9.6-10.4 c0-5.6 -7.2-6.4 -9.6-1.6 z"/>
         <path d="M60 34 c-1.5-3 -6-2.5 -6 1 c0 2.5 3.5 4.5 6 6.5 c2.5-2 6-4 6-6.5 c0-3.5 -4.5-4 -6-1 z" opacity="0.7"/>
@@ -1426,7 +1432,7 @@ const OG_THEME_TILES: Record<string, { size: number; content: string }> = {
   paws: {
     size: 110,
     content: `
-      <g fill="${OG_PATTERN_COLOR}">
+      <g fill="__C__">
         <g transform="translate(22,24)">
           <ellipse cx="0" cy="4" rx="7" ry="6"/>
           <ellipse cx="-8" cy="-4" rx="3" ry="4"/>
@@ -1446,7 +1452,7 @@ const OG_THEME_TILES: Record<string, { size: number; content: string }> = {
   stars: {
     size: 110,
     content: `
-      <g fill="${OG_PATTERN_COLOR}">
+      <g fill="__C__">
         <path d="M26 14 l3 7 7 1 -5 5 1 7 -6-3.5 -6 3.5 1-7 -5-5 7-1 z"/>
         <path d="M82 62 l2.4 5.6 5.6 0.8 -4 4 0.8 5.6 -4.8-2.8 -4.8 2.8 0.8-5.6 -4-4 5.6-0.8 z"/>
         <circle cx="60" cy="30" r="2"/>
@@ -1458,15 +1464,18 @@ const OG_THEME_TILES: Record<string, { size: number; content: string }> = {
 };
 
 function buildOgBackgroundSvg(theme: string, w: number, h: number): string {
-  const tile = OG_THEME_TILES[theme] || OG_THEME_TILES.paws;
+  const key = OG_THEME_TILES[theme] ? theme : 'paws';
+  const tile = OG_THEME_TILES[key];
+  const colors = OG_THEME_COLORS[key];
+  const content = tile.content.replace(/__C__/g, colors.pattern);
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">
     <defs>
       <pattern id="bgtile" width="${tile.size}" height="${tile.size}" patternUnits="userSpaceOnUse">
-        ${tile.content}
+        ${content}
       </pattern>
     </defs>
-    <rect width="100%" height="100%" fill="#f0ece4"/>
-    <rect width="100%" height="100%" fill="url(#bgtile)" opacity="0.18"/>
+    <rect width="100%" height="100%" fill="${colors.bg}"/>
+    <rect width="100%" height="100%" fill="url(#bgtile)" opacity="${colors.opacity}"/>
   </svg>`;
 }
 
