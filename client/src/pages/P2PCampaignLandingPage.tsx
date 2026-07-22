@@ -464,7 +464,7 @@ function QuickPledgeLayout({
   return (
     <div className="min-h-screen bg-background flex flex-col relative" style={hasTheme ? themeStyle : undefined} data-testid="quick-pledge-layout">
       {(() => { const bg = getThemeBackgroundStyle((campaign as any).themeBackground, themePrimary || null); return bg ? (
-        <div className="absolute inset-0 pointer-events-none opacity-[0.08] dark:opacity-[0.12]" style={bg} aria-hidden="true" data-testid="theme-background-pattern-quick" />
+        <div className="absolute inset-0 pointer-events-none opacity-[0.22] dark:opacity-[0.28]" style={bg} aria-hidden="true" data-testid="theme-background-pattern-quick" />
       ) : null; })()}
       <div className="flex-1 flex flex-col max-w-lg mx-auto w-full">
         {heroMedia && (
@@ -841,7 +841,7 @@ export default function P2PCampaignLandingPage() {
   return (
     <div className="min-h-screen bg-background relative" style={hasTheme ? themeStyle : undefined}>
       {themeBackgroundStyle && (
-        <div className="absolute inset-0 pointer-events-none opacity-[0.08] dark:opacity-[0.12]" style={themeBackgroundStyle} aria-hidden="true" data-testid="theme-background-pattern" />
+        <div className="absolute inset-0 pointer-events-none opacity-[0.22] dark:opacity-[0.28]" style={themeBackgroundStyle} aria-hidden="true" data-testid="theme-background-pattern" />
       )}
       <div className="relative">
       <PublicHeader rescueName={rescueName} logoUrl={tenant?.logoUrl || undefined} />

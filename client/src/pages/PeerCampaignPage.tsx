@@ -250,7 +250,7 @@ export default function PeerCampaignPage() {
     <div className="min-h-screen bg-background relative">
       {themeBackgroundStyle && (
         <div
-          className="absolute inset-0 pointer-events-none opacity-[0.08] dark:opacity-[0.12]"
+          className="absolute inset-0 pointer-events-none opacity-[0.22] dark:opacity-[0.28]"
           style={themeBackgroundStyle}
           aria-hidden="true"
           data-testid="theme-background-pattern"
