@@ -132,8 +132,11 @@ function ShareSection({ campaignUrl, compact }: { campaignUrl: string; compact?:
   };
 
   const handleShareFacebook = () => {
-    const url = encodeURIComponent(socialUrl);
-    window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}`, "_blank", "width=600,height=400");
+    if (navigator.share) {
+      navigator.share({ url: socialUrl }).catch(() => {});
+      return;
+    }
+    window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(socialUrl)}`, "_blank", "width=600,height=400");
   };
 
   const handleGenerateQr = async () => {

@@ -167,8 +167,12 @@ export default function PeerCampaignPage() {
   };
 
   const handleShareFacebook = () => {
-    const url = encodeURIComponent(window.location.href);
-    window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}`, "_blank", "width=600,height=400");
+    const shareUrl = window.location.href;
+    if (navigator.share) {
+      navigator.share({ url: shareUrl }).catch(() => {});
+      return;
+    }
+    window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`, "_blank", "width=600,height=400");
   };
 
   const tenant = tenantData?.tenant;
