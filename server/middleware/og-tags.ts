@@ -595,7 +595,7 @@ export async function injectOGTags(req: Request, res: Response, next: NextFuncti
   const tenantImage = resolveImageUrl(tenant.logoUrl) || resolveImageUrl(tenant.heroImageUrl);
   const defaultImage = tenantImage || `${baseUrl}/icon-512.png`;
 
-  let ogData: { title: string; description: string; image: string } | null = null;
+  let ogData: { title: string; description: string; image: string; imageTheme?: string | null } | null = null;
   let tenantNoscriptBody: string | undefined;
 
   try {
@@ -686,6 +686,7 @@ export async function injectOGTags(req: Request, res: Response, next: NextFuncti
           campaignTitle: peerCampaigns.campaignTitle,
           campaignStory: peerCampaigns.campaignStory,
           coverImageUrl: peerCampaigns.coverImageUrl,
+          themeBackground: peerCampaigns.themeBackground,
           creatorName: peerCampaigns.creatorName,
           goalAmount: peerCampaigns.goalAmount,
           amountRaised: peerCampaigns.amountRaised,
@@ -708,6 +709,7 @@ export async function injectOGTags(req: Request, res: Response, next: NextFuncti
             title: `${campaign.campaignTitle} | ${tenant.name}`,
             description: storyDesc,
             image,
+            imageTheme: campaign.themeBackground,
           };
           tenantNoscriptBody = buildTenantNoscript(
             `<h1>${escapeHtml(campaign.campaignTitle)}</h1>` +
@@ -1220,6 +1222,9 @@ export async function injectOGTags(req: Request, res: Response, next: NextFuncti
       const objectsPath = ogImage.includes('/objects/') ? ogImage.substring(ogImage.indexOf('/objects/')) : '';
       if (objectsPath) {
         ogImage = `${baseUrl}/api/og-image?url=${encodeURIComponent(objectsPath)}`;
+        if (ogData.imageTheme) {
+          ogImage += `&theme=${encodeURIComponent(ogData.imageTheme)}`;
+        }
       }
     }
 
@@ -1371,6 +1376,100 @@ ogImageRouter.get('/api/og/vip-club/:tenantId.png', async (req, res) => {
   }
 });
 
+
+const OG_PATTERN_COLOR = '#8B7355';
+
+const OG_THEME_TILES: Record<string, { size: number; content: string }> = {
+  birthday: {
+    size: 120,
+    content: `
+      <g fill="none" stroke="${OG_PATTERN_COLOR}" stroke-width="2">
+        <ellipse cx="24" cy="26" rx="10" ry="13"/>
+        <path d="M24 39 l-3 5 h6 z M24 44 q4 8 -2 16" fill="${OG_PATTERN_COLOR}" stroke="none"/>
+        <ellipse cx="88" cy="80" rx="9" ry="12"/>
+        <path d="M88 92 l-3 5 h6 z M88 97 q-4 8 2 14" fill="${OG_PATTERN_COLOR}" stroke="none"/>
+      </g>
+      <g fill="${OG_PATTERN_COLOR}">
+        <rect x="60" y="18" width="6" height="3" transform="rotate(30 63 19)"/>
+        <rect x="100" y="34" width="6" height="3" transform="rotate(-20 103 35)"/>
+        <rect x="14" y="76" width="6" height="3" transform="rotate(45 17 77)"/>
+        <rect x="48" y="98" width="6" height="3" transform="rotate(-40 51 99)"/>
+        <circle cx="72" cy="56" r="2.4"/>
+        <circle cx="36" cy="60" r="2"/>
+        <circle cx="106" cy="106" r="2.4"/>
+      </g>`,
+  },
+  confetti: {
+    size: 100,
+    content: `
+      <g fill="${OG_PATTERN_COLOR}">
+        <rect x="10" y="12" width="8" height="3.5" transform="rotate(25 14 13)"/>
+        <rect x="66" y="20" width="8" height="3.5" transform="rotate(-35 70 21)"/>
+        <rect x="36" y="48" width="8" height="3.5" transform="rotate(60 40 49)"/>
+        <rect x="82" y="66" width="8" height="3.5" transform="rotate(-15 86 67)"/>
+        <rect x="18" y="80" width="8" height="3.5" transform="rotate(40 22 81)"/>
+        <circle cx="52" cy="10" r="2.6"/>
+        <circle cx="90" cy="40" r="2.2"/>
+        <circle cx="8" cy="50" r="2.2"/>
+        <circle cx="58" cy="88" r="2.6"/>
+      </g>`,
+  },
+  hearts: {
+    size: 110,
+    content: `
+      <g fill="${OG_PATTERN_COLOR}">
+        <path d="M28 24 c-3-6 -12-5 -12 2 c0 5 7 9 12 13 c5-4 12-8 12-13 c0-7 -9-8 -12-2 z"/>
+        <path d="M82 70 c-2.4-4.8 -9.6-4 -9.6 1.6 c0 4 5.6 7.2 9.6 10.4 c4-3.2 9.6-6.4 9.6-10.4 c0-5.6 -7.2-6.4 -9.6-1.6 z"/>
+        <path d="M60 34 c-1.5-3 -6-2.5 -6 1 c0 2.5 3.5 4.5 6 6.5 c2.5-2 6-4 6-6.5 c0-3.5 -4.5-4 -6-1 z" opacity="0.7"/>
+      </g>`,
+  },
+  paws: {
+    size: 110,
+    content: `
+      <g fill="${OG_PATTERN_COLOR}">
+        <g transform="translate(22,24)">
+          <ellipse cx="0" cy="4" rx="7" ry="6"/>
+          <ellipse cx="-8" cy="-4" rx="3" ry="4"/>
+          <ellipse cx="-2.5" cy="-8" rx="3" ry="4"/>
+          <ellipse cx="4" cy="-7.5" rx="3" ry="4"/>
+          <ellipse cx="9" cy="-2.5" rx="3" ry="3.6"/>
+        </g>
+        <g transform="translate(78,76) rotate(-20)">
+          <ellipse cx="0" cy="4" rx="7" ry="6"/>
+          <ellipse cx="-8" cy="-4" rx="3" ry="4"/>
+          <ellipse cx="-2.5" cy="-8" rx="3" ry="4"/>
+          <ellipse cx="4" cy="-7.5" rx="3" ry="4"/>
+          <ellipse cx="9" cy="-2.5" rx="3" ry="3.6"/>
+        </g>
+      </g>`,
+  },
+  stars: {
+    size: 110,
+    content: `
+      <g fill="${OG_PATTERN_COLOR}">
+        <path d="M26 14 l3 7 7 1 -5 5 1 7 -6-3.5 -6 3.5 1-7 -5-5 7-1 z"/>
+        <path d="M82 62 l2.4 5.6 5.6 0.8 -4 4 0.8 5.6 -4.8-2.8 -4.8 2.8 0.8-5.6 -4-4 5.6-0.8 z"/>
+        <circle cx="60" cy="30" r="2"/>
+        <circle cx="18" cy="72" r="2"/>
+        <circle cx="98" cy="20" r="2"/>
+        <circle cx="52" cy="96" r="2"/>
+      </g>`,
+  },
+};
+
+function buildOgBackgroundSvg(theme: string, w: number, h: number): string {
+  const tile = OG_THEME_TILES[theme] || OG_THEME_TILES.paws;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">
+    <defs>
+      <pattern id="bgtile" width="${tile.size}" height="${tile.size}" patternUnits="userSpaceOnUse">
+        ${tile.content}
+      </pattern>
+    </defs>
+    <rect width="100%" height="100%" fill="#f0ece4"/>
+    <rect width="100%" height="100%" fill="url(#bgtile)" opacity="0.18"/>
+  </svg>`;
+}
+
 ogImageRouter.get('/api/og-image', async (req, res) => {
   try {
     const imageUrl = req.query.url as string;
@@ -1406,31 +1505,10 @@ ogImageRouter.get('/api/og-image', async (req, res) => {
           .jpeg({ quality: 85 })
           .toBuffer();
       } else {
-        const paw = (cx: number, cy: number, s: number, rot: number) => {
-          return `<g transform="translate(${cx},${cy}) rotate(${rot}) scale(${s})">
-            <ellipse cx="0" cy="5" rx="9" ry="10" fill="#8B7355"/>
-            <circle cx="-9" cy="-7" r="5" fill="#8B7355"/>
-            <circle cx="-3" cy="-12" r="4.5" fill="#8B7355"/>
-            <circle cx="3" cy="-12" r="4.5" fill="#8B7355"/>
-            <circle cx="9" cy="-7" r="5" fill="#8B7355"/>
-          </g>`;
-        };
-        const prints: string[] = [];
-        for (let row = 0; row < 6; row++) {
-          for (let col = 0; col < 10; col++) {
-            const ox = row % 2 === 0 ? 0 : 65;
-            const x = col * 130 + ox + 30;
-            const y = row * 115 + 40;
-            const rot = ((row * 7 + col * 13) % 40) - 20;
-            prints.push(paw(x, y, 1.0, rot));
-          }
-        }
-        const pawSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${targetW}" height="${targetH}">
-          <rect width="100%" height="100%" fill="#f0ece4"/>
-          <g opacity="0.13">${prints.join('')}</g>
-        </svg>`;
+        const theme = typeof req.query.theme === 'string' ? req.query.theme : '';
+        const bgSvg = buildOgBackgroundSvg(theme, targetW, targetH);
 
-        const background = await sharp(Buffer.from(pawSvg))
+        const background = await sharp(Buffer.from(bgSvg))
           .png()
           .toBuffer();
 
