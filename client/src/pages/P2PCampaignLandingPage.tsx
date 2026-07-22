@@ -4,6 +4,7 @@ import { useParams } from "wouter";
 import { useSEO } from "@/hooks/useSEO";
 import { apiRequest } from "@/lib/queryClient";
 import PublicHeader from "@/components/PublicHeader";
+import { getThemeBackgroundStyle } from "@/lib/campaignThemes";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -461,7 +462,10 @@ function QuickPledgeLayout({
   const campaignUrl = window.location.origin + window.location.pathname;
 
   return (
-    <div className="min-h-screen bg-background flex flex-col" style={hasTheme ? themeStyle : undefined} data-testid="quick-pledge-layout">
+    <div className="min-h-screen bg-background flex flex-col relative" style={hasTheme ? themeStyle : undefined} data-testid="quick-pledge-layout">
+      {(() => { const bg = getThemeBackgroundStyle((campaign as any).themeBackground, themePrimary || null); return bg ? (
+        <div className="absolute inset-0 pointer-events-none opacity-[0.08] dark:opacity-[0.12]" style={bg} aria-hidden="true" data-testid="theme-background-pattern-quick" />
+      ) : null; })()}
       <div className="flex-1 flex flex-col max-w-lg mx-auto w-full">
         {heroMedia && (
           <div className="relative w-full" style={{ aspectRatio: "9/16", maxHeight: "60vh" }}>
@@ -483,7 +487,7 @@ function QuickPledgeLayout({
                 data-testid="quick-pledge-hero-image"
               />
             )}
-            <div className="absolute inset-0 rounded-b-xl" style={themePrimary ? { background: `linear-gradient(to top, ${themePrimary}cc, transparent, transparent)` } : { background: "linear-gradient(to top, rgba(0,0,0,0.7), transparent, transparent)" }} />
+            <div className="absolute inset-0 rounded-b-xl" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.7), transparent, transparent)" }} />
             <div className="absolute bottom-0 left-0 right-0 p-4">
               {isUnitBased && (
                 <Badge variant="secondary" className="mb-2" data-testid="badge-quick-unit">
@@ -816,7 +820,7 @@ export default function P2PCampaignLandingPage() {
     return (
       <QuickPledgeLayout
         campaign={campaign}
-        animal={animal}
+        animal={animal ?? null}
         donations={donations}
         updates={updates}
         rescueName={rescueName}
@@ -832,22 +836,26 @@ export default function P2PCampaignLandingPage() {
   const campaignUrl = window.location.origin + window.location.pathname;
 
   const { hasTheme, themeStyle, primaryColor: themePrimary, accentColor: themeAccent } = useCampaignTheme(campaign);
+  const themeBackgroundStyle = getThemeBackgroundStyle((campaign as any).themeBackground, themePrimary || null);
 
   return (
-    <div className="min-h-screen bg-background" style={hasTheme ? themeStyle : undefined}>
+    <div className="min-h-screen bg-background relative" style={hasTheme ? themeStyle : undefined}>
+      {themeBackgroundStyle && (
+        <div className="absolute inset-0 pointer-events-none opacity-[0.08] dark:opacity-[0.12]" style={themeBackgroundStyle} aria-hidden="true" data-testid="theme-background-pattern" />
+      )}
+      <div className="relative">
       <PublicHeader rescueName={rescueName} logoUrl={tenant?.logoUrl || undefined} />
 
       {campaign.coverImageUrl && (
-        <div className="relative w-full h-[40vh] min-h-[280px] max-h-[450px]">
+        <div className="w-full max-w-4xl mx-auto md:px-4 md:pt-6">
+          <div className="relative overflow-hidden md:rounded-md">
           <img
             src={campaign.coverImageUrl}
             alt={campaign.campaignTitle}
-            className="w-full h-full object-cover"
+            className="w-full h-auto"
             data-testid="img-campaign-cover"
           />
-          <div className="absolute inset-0" style={themePrimary ? { background: `linear-gradient(to top, ${themePrimary}cc, ${themePrimary}4d, transparent)` } : undefined}>
-            {!themePrimary && <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />}
-          </div>
+          <div className="absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/70 to-transparent" />
           <div className="absolute bottom-0 left-0 right-0 p-6 md:p-10">
             <div className="max-w-4xl mx-auto">
               {isUnitBased && (
@@ -867,6 +875,7 @@ export default function P2PCampaignLandingPage() {
                 {animal && <span> for {animal.name}</span>}
               </p>
             </div>
+          </div>
           </div>
         </div>
       )}
@@ -1209,6 +1218,7 @@ export default function P2PCampaignLandingPage() {
           <strong>{rescueName}</strong>
         </p>
         <p className="mt-1">Donations are processed securely through Stripe.</p>
+      </div>
       </div>
     </div>
   );

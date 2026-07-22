@@ -23,6 +23,8 @@ import {
   FormDescription,
 } from "@/components/ui/form";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { CAMPAIGN_THEME_OPTIONS } from "@/lib/campaignThemes";
 import { Heart, Link as LinkIcon, Loader2, Target, DollarSign, Calendar, ChevronRight, ChevronDown, X } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import type { Tenant } from "@shared/schema";
@@ -85,6 +87,7 @@ export default function PeerCampaignCreatePage() {
   const [coverImages, setCoverImages] = useState<string[]>([]);
   const [primaryColor, setPrimaryColor] = useState("");
   const [accentColor, setAccentColor] = useState("");
+  const [themeBackground, setThemeBackground] = useState("");
   const [showColors, setShowColors] = useState(false);
 
   const { data, isLoading } = useQuery<TenantResponse>({
@@ -134,7 +137,7 @@ export default function PeerCampaignCreatePage() {
       };
 
       if (values.goalType === "units") {
-        payload.goalUnitLabel = values.goalUnitLabel;
+        payload.goalUnitLabel = values.goalUnitLabel || null;
         payload.goalTarget = parseInt(values.goalTarget || "0");
         if (values.animalName?.trim()) {
           payload.animalName = values.animalName.trim();
@@ -154,6 +157,9 @@ export default function PeerCampaignCreatePage() {
       }
       if (accentColor) {
         payload.accentColor = accentColor;
+      }
+      if (themeBackground) {
+        payload.themeBackground = themeBackground;
       }
 
       const res = await apiRequest("POST", "/api/peer-campaigns", payload);
@@ -482,7 +488,7 @@ export default function PeerCampaignCreatePage() {
                             {accentColor && <span className="w-3 h-3 rounded-full border" style={{ backgroundColor: accentColor }} />}
                           </span>
                         )}
-                        Campaign Colors (optional)
+                        Colors &amp; Theme (optional)
                       </span>
                       {showColors ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                     </Button>
@@ -503,6 +509,21 @@ export default function PeerCampaignCreatePage() {
                           <Input value={accentColor} onChange={(e) => setAccentColor(e.target.value)} placeholder="#f59e0b" className="font-mono text-xs" data-testid="input-accent-color-hex" />
                         </div>
                       </div>
+                    </div>
+                    <div>
+                      <Label className="text-xs">Themed Background</Label>
+                      <Select value={themeBackground || "none"} onValueChange={(v) => setThemeBackground(v === "none" ? "" : v)}>
+                        <SelectTrigger className="mt-1" data-testid="select-theme-background">
+                          <SelectValue placeholder="None" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          {CAMPAIGN_THEME_OPTIONS.map((o) => (
+                            <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground mt-1">Adds a fun, subtle pattern (balloons, hearts, paws...) behind your campaign page.</p>
                     </div>
                     {(primaryColor || accentColor) && (
                       <div className="flex items-center gap-3 p-3 rounded-md border" data-testid="color-preview">
