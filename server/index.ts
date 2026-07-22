@@ -22,6 +22,15 @@ import { db } from "./db";
 import { medicalCatalog, medicalPrescriptions, medicalDoses } from "@shared/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 
+async function ensurePeerCampaignThemeColumn() {
+  try {
+    await db.execute(sql`ALTER TABLE peer_campaigns ADD COLUMN IF NOT EXISTS theme_background text`);
+    console.log('[Startup] peer_campaigns theme_background column ensured');
+  } catch (err) {
+    console.error('[Startup] peer_campaigns theme_background column patch failed:', err);
+  }
+}
+
 async function patchBravectoPlusInterval() {
   try {
     const result = await db
@@ -304,6 +313,7 @@ app.use((req, res, next) => {
     seedPlatformPreventativeProtocols();
 
     // Patch Bravecto Plus interval from 60 → 56 days across all tenants
+    ensurePeerCampaignThemeColumn();
     patchBravectoPlusInterval();
 
     // Backfill stale nextScheduledDose for prescriptions where it's behind the last given dose

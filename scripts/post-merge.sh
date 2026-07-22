@@ -133,3 +133,9 @@ ALTER TABLE tenants ADD COLUMN IF NOT EXISTS heartworm_warning_frequency_days in
 ALTER TABLE tenants ADD COLUMN IF NOT EXISTS foster_reminder_lead_days integer;
 ALTER TABLE tenants ADD COLUMN IF NOT EXISTS medical_digest_frequency_days integer;
 SQL
+
+# Peer-campaign themed backgrounds (birthday, confetti, hearts, paws, stars)
+# for public /fundraise landing pages. Idempotent.
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' || echo "[post-merge] peer_campaigns theme_background column skipped (already applied or DB unreachable)."
+ALTER TABLE peer_campaigns ADD COLUMN IF NOT EXISTS theme_background text;
+SQL

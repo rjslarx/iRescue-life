@@ -49871,6 +49871,7 @@ ${section('Metadata', metaRows)}
         endsAt: z.string().optional(),
         primaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
         accentColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+        themeBackground: z.enum(['birthday', 'confetti', 'hearts', 'paws', 'stars']).nullable().optional(),
       });
 
       const data = createSchema.parse(req.body);
@@ -49914,6 +49915,7 @@ ${section('Metadata', metaRows)}
         endsAt: data.endsAt ? new Date(data.endsAt) : null,
         primaryColor: data.primaryColor || null,
         accentColor: data.accentColor || null,
+        themeBackground: data.themeBackground || null,
       }).returning();
 
       // Send confirmation email to the fundraiser creator (non-blocking; failure never affects creation)
@@ -50222,6 +50224,7 @@ ${section('Metadata', metaRows)}
         endsAt: z.string().optional(),
         primaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
         accentColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+        themeBackground: z.enum(['birthday', 'confetti', 'hearts', 'paws', 'stars']).nullable().optional(),
       });
 
       const data = createSchema.parse(req.body);
@@ -50262,6 +50265,7 @@ ${section('Metadata', metaRows)}
         createdByUserId: user?.id || null,
         primaryColor: data.primaryColor || null,
         accentColor: data.accentColor || null,
+        themeBackground: data.themeBackground || null,
       }).returning();
 
       res.json({ campaign });
@@ -50582,6 +50586,7 @@ ${section('Metadata', metaRows)}
         animalId: z.string().uuid().nullable().optional(),
         primaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
         accentColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
+        themeBackground: z.enum(['birthday', 'confetti', 'hearts', 'paws', 'stars']).nullable().optional(),
       });
 
       const data = updateSchema.parse(req.body);

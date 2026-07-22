@@ -5855,7 +5855,11 @@ export const peerCampaigns = pgTable("peer_campaigns", {
   createdByUserId: uuid("created_by_user_id").references(() => users.id),
   primaryColor: text("primary_color"),
   accentColor: text("accent_color"),
+  themeBackground: text("theme_background").$type<PeerCampaignTheme>(),
 });
+
+export const PEER_CAMPAIGN_THEMES = ['birthday', 'confetti', 'hearts', 'paws', 'stars'] as const;
+export type PeerCampaignTheme = typeof PEER_CAMPAIGN_THEMES[number];
 
 export const insertPeerCampaignSchema = createInsertSchema(peerCampaigns).omit({
   id: true,

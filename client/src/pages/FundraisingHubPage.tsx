@@ -89,6 +89,14 @@ import { getAvatarIcon, getAvatarColor, AVATAR_TYPES } from "@/lib/participant-a
 import { ExpenseCampaignsTab } from "@/components/fundraising/ExpenseCampaignsTab";
 import { fiveDollarDayName, FIVE_DOLLAR_DEFAULT_DAY, DAY_OF_WEEK_NAMES, type VotingContest, type VotingContestEntrant } from "@shared/schema";
 
+const THEME_OPTIONS: { value: string; label: string }[] = [
+  { value: "birthday", label: "Birthday" },
+  { value: "confetti", label: "Confetti" },
+  { value: "hearts", label: "Hearts" },
+  { value: "paws", label: "Paw Prints" },
+  { value: "stars", label: "Stars" },
+];
+
 export default function FundraisingHubPage() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
@@ -176,9 +184,10 @@ function CommunityFundraisersTab({ tenantSubdomain }: { tenantSubdomain?: string
   const { toast } = useToast();
   const [donationsDialogCampaignId, setDonationsDialogCampaignId] = useState<string | null>(null);
   const [donationsDialogTitle, setDonationsDialogTitle] = useState("");
-  const [editColorsCampaign, setEditColorsCampaign] = useState<{ id: string; title: string; primaryColor?: string | null; accentColor?: string | null } | null>(null);
+  const [editColorsCampaign, setEditColorsCampaign] = useState<{ id: string; title: string; primaryColor?: string | null; accentColor?: string | null; themeBackground?: string | null } | null>(null);
   const [editPrimary, setEditPrimary] = useState("");
   const [editAccent, setEditAccent] = useState("");
+  const [editTheme, setEditTheme] = useState("");
 
   const { data, isLoading } = useQuery<{ campaigns: any[] }>({
     queryKey: ["/api/peer-campaigns"],
@@ -201,8 +210,8 @@ function CommunityFundraisersTab({ tenantSubdomain }: { tenantSubdomain?: string
   });
 
   const updateColorsMutation = useMutation({
-    mutationFn: async ({ id, primaryColor, accentColor }: { id: string; primaryColor: string | null; accentColor: string | null }) => {
-      const res = await apiRequest("PATCH", `/api/peer-campaigns/${id}`, { primaryColor, accentColor });
+    mutationFn: async ({ id, primaryColor, accentColor, themeBackground }: { id: string; primaryColor: string | null; accentColor: string | null; themeBackground: string | null }) => {
+      const res = await apiRequest("PATCH", `/api/peer-campaigns/${id}`, { primaryColor, accentColor, themeBackground });
       return res.json();
     },
     onSuccess: () => {
@@ -420,9 +429,10 @@ function CommunityFundraisersTab({ tenantSubdomain }: { tenantSubdomain?: string
                               size="icon"
                               variant="ghost"
                               onClick={() => {
-                                setEditColorsCampaign({ id: campaign.id, title: campaign.campaignTitle, primaryColor: campaign.primaryColor, accentColor: campaign.accentColor });
+                                setEditColorsCampaign({ id: campaign.id, title: campaign.campaignTitle, primaryColor: campaign.primaryColor, accentColor: campaign.accentColor, themeBackground: (campaign as any).themeBackground });
                                 setEditPrimary(campaign.primaryColor || "");
                                 setEditAccent(campaign.accentColor || "");
+                                setEditTheme((campaign as any).themeBackground || "");
                               }}
                               title="Edit theme colors"
                               data-testid={`button-edit-colors-${campaign.id}`}
@@ -454,7 +464,7 @@ function CommunityFundraisersTab({ tenantSubdomain }: { tenantSubdomain?: string
         <Dialog open onOpenChange={() => setEditColorsCampaign(null)}>
           <DialogContent className="max-w-sm" data-testid="dialog-edit-campaign-colors">
             <DialogHeader>
-              <DialogTitle>Edit Theme Colors</DialogTitle>
+              <DialogTitle>Edit Page Theme</DialogTitle>
               <p className="text-sm text-muted-foreground">{editColorsCampaign.title}</p>
             </DialogHeader>
             <div className="space-y-4">
@@ -474,6 +484,21 @@ function CommunityFundraisersTab({ tenantSubdomain }: { tenantSubdomain?: string
                   {editAccent && <Button size="icon" variant="ghost" onClick={() => setEditAccent("")} data-testid="button-clear-edit-accent"><X className="h-4 w-4" /></Button>}
                 </div>
               </div>
+              <div className="space-y-2">
+                <Label>Themed Background</Label>
+                <Select value={editTheme || "none"} onValueChange={(v) => setEditTheme(v === "none" ? "" : v)}>
+                  <SelectTrigger data-testid="select-edit-theme-background">
+                    <SelectValue placeholder="None" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {THEME_OPTIONS.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">Adds a subtle decorative pattern behind the campaign page.</p>
+              </div>
               {(editPrimary || editAccent) && (
                 <div className="flex items-center gap-2 p-3 rounded-md bg-muted">
                   <span className="text-xs text-muted-foreground">Preview:</span>
@@ -484,8 +509,8 @@ function CommunityFundraisersTab({ tenantSubdomain }: { tenantSubdomain?: string
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setEditColorsCampaign(null)} data-testid="button-cancel-edit-colors">Cancel</Button>
-              <Button onClick={() => updateColorsMutation.mutate({ id: editColorsCampaign.id, primaryColor: editPrimary || null, accentColor: editAccent || null })} disabled={updateColorsMutation.isPending} data-testid="button-save-edit-colors">
-                {updateColorsMutation.isPending ? "Saving..." : "Save Colors"}
+              <Button onClick={() => updateColorsMutation.mutate({ id: editColorsCampaign.id, primaryColor: editPrimary || null, accentColor: editAccent || null, themeBackground: editTheme || null })} disabled={updateColorsMutation.isPending} data-testid="button-save-edit-colors">
+                {updateColorsMutation.isPending ? "Saving..." : "Save Theme"}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -2006,6 +2031,7 @@ function CreateCampaignDialog({ onClose }: { onClose: () => void }) {
   const [animalId, setAnimalId] = useState("");
   const [primaryColor, setPrimaryColor] = useState("");
   const [accentColor, setAccentColor] = useState("");
+  const [themeBackground, setThemeBackground] = useState("");
   const [showColors, setShowColors] = useState(false);
 
   const { data: animalsListData } = useQuery<{ animals: any[] }>({
@@ -2024,6 +2050,7 @@ function CreateCampaignDialog({ onClose }: { onClose: () => void }) {
         animalId: animalId && animalId !== "none" ? animalId : undefined,
         primaryColor: primaryColor || undefined,
         accentColor: accentColor || undefined,
+        themeBackground: themeBackground || undefined,
       };
       if (goalType === "units") {
         payload.goalTarget = parseInt(goalTarget);
@@ -2146,6 +2173,21 @@ function CreateCampaignDialog({ onClose }: { onClose: () => void }) {
                     <Input value={accentColor} onChange={(e) => setAccentColor(e.target.value)} placeholder="#f59e0b" className="font-mono text-xs" data-testid="input-accent-color-hex" />
                   </div>
                 </div>
+              </div>
+              <div>
+                <Label className="text-xs">Themed Background</Label>
+                <Select value={themeBackground || "none"} onValueChange={(v) => setThemeBackground(v === "none" ? "" : v)}>
+                  <SelectTrigger className="mt-1" data-testid="select-theme-background">
+                    <SelectValue placeholder="None" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {THEME_OPTIONS.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">Adds a subtle decorative pattern behind the campaign page.</p>
               </div>
               {(primaryColor || accentColor) && (
                 <div className="flex items-center gap-3 p-3 rounded-md border" data-testid="color-preview">
