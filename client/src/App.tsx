@@ -32,7 +32,6 @@ import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import AcceptInvitationPage from "@/pages/AcceptInvitationPage";
 import VolunteerManagementPage from "@/pages/VolunteerManagementPage";
 import ReportsPage from "@/pages/ReportsPage";
-import FosterApplicationPage from "@/pages/FosterApplicationPage";
 import MyFostersPage from "@/pages/MyFostersPage";
 import FosterAnimalProfilePage from "@/pages/FosterAnimalProfilePage";
 import FosterAnimalMedicalPage from "@/pages/FosterAnimalMedicalPage";
@@ -272,7 +271,9 @@ function RouterSwitch() {
       <Route path="/contest/:slug" component={VotingContestPage} />
       <Route path="/intake/:token" component={CampaignIntakePage} />
       <Route path="/fundraise" component={PeerCampaignCreatePage} />
-      <Route path="/foster" component={FosterApplicationPage} />
+      <Route path="/foster">
+        <Redirect to="/become-a-foster" replace />
+      </Route>
       <Route path="/login" component={Login} />
       <Route path="/forgot-password" component={ForgotPasswordPage} />
       <Route path="/reset-password" component={ResetPasswordPage} />
