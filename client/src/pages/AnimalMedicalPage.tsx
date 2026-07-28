@@ -424,6 +424,86 @@ export default function AnimalMedicalPage() {
     },
   });
 
+  const deleteVaccineMutation = useMutation({
+    mutationFn: async (vaccineId: number) => {
+      await apiRequest('DELETE', `/api/medical/vaccines/${vaccineId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}/medical/vaccines`] });
+      toast({
+        title: "Vaccine deleted",
+        description: "The vaccine record has been removed successfully.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to delete the vaccine record. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteExamMutation = useMutation({
+    mutationFn: async (examId: number) => {
+      await apiRequest('DELETE', `/api/medical/exams/${examId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}/medical/exams`] });
+      toast({
+        title: "Exam deleted",
+        description: "The exam record has been removed successfully.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to delete the exam record. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteDiagnosticMutation = useMutation({
+    mutationFn: async (diagnosticId: number) => {
+      await apiRequest('DELETE', `/api/medical/diagnostics/${diagnosticId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}/medical/diagnostics`] });
+      toast({
+        title: "Diagnostic deleted",
+        description: "The diagnostic record has been removed successfully.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to delete the diagnostic record. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteBillMutation = useMutation({
+    mutationFn: async (billId: number) => {
+      await apiRequest('DELETE', `/api/medical/bills/${billId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/animals/${animalId}/medical/bills`] });
+      toast({
+        title: "Bill deleted",
+        description: "The bill has been removed successfully.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to delete the bill. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const quarantineMutation = useMutation({
     mutationFn: async (data: { isQuarantined: boolean; quarantineReason?: string | null }) => {
       await apiRequest('PATCH', `/api/animals/${animalId}/quarantine`, data);
@@ -1485,7 +1565,17 @@ export default function AnimalMedicalPage() {
                         >
                           Edit
                         </Button>
-                        <Button variant="ghost" size="sm" data-testid={`button-delete-exam-${exam.id}`}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            if (window.confirm(`Are you sure you want to delete this exam record? This cannot be undone.`)) {
+                              deleteExamMutation.mutate(exam.id);
+                            }
+                          }}
+                          disabled={deleteExamMutation.isPending}
+                          data-testid={`button-delete-exam-${exam.id}`}
+                        >
                           Delete
                         </Button>
                       </div>
@@ -1584,7 +1674,17 @@ export default function AnimalMedicalPage() {
                         >
                           Edit
                         </Button>
-                        <Button variant="ghost" size="sm" data-testid={`button-delete-vaccine-${vaccine.id}`}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            if (window.confirm(`Are you sure you want to delete this vaccine record? This cannot be undone.`)) {
+                              deleteVaccineMutation.mutate(vaccine.id);
+                            }
+                          }}
+                          disabled={deleteVaccineMutation.isPending}
+                          data-testid={`button-delete-vaccine-${vaccine.id}`}
+                        >
                           Delete
                         </Button>
                       </div>
@@ -1699,7 +1799,17 @@ export default function AnimalMedicalPage() {
                         >
                           Edit
                         </Button>
-                        <Button variant="ghost" size="sm" data-testid={`button-delete-diagnostic-${test.id}`}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            if (window.confirm(`Are you sure you want to delete this diagnostic record? This cannot be undone.`)) {
+                              deleteDiagnosticMutation.mutate(test.id);
+                            }
+                          }}
+                          disabled={deleteDiagnosticMutation.isPending}
+                          data-testid={`button-delete-diagnostic-${test.id}`}
+                        >
                           Delete
                         </Button>
                       </div>
@@ -2224,7 +2334,17 @@ export default function AnimalMedicalPage() {
                         >
                           Edit
                         </Button>
-                        <Button variant="ghost" size="sm" data-testid={`button-delete-bill-${bill.id}`}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            if (window.confirm(`Are you sure you want to delete this bill? This cannot be undone.`)) {
+                              deleteBillMutation.mutate(bill.id);
+                            }
+                          }}
+                          disabled={deleteBillMutation.isPending}
+                          data-testid={`button-delete-bill-${bill.id}`}
+                        >
                           Delete
                         </Button>
                       </div>
