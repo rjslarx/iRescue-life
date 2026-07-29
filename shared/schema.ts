@@ -3962,7 +3962,7 @@ export const shopOrders = pgTable("shop_orders", {
   processingFee: text("processing_fee").notNull().default("0"), // Card processing fee added at checkout
   totalAmount: text("total_amount").notNull(),
   // Payment status
-  paymentStatus: text("payment_status").notNull().default("pending").$type<"pending" | "processing" | "paid" | "failed" | "refunded" | "partially_refunded">(),
+  paymentStatus: text("payment_status").notNull().default("pending").$type<"pending" | "processing" | "paid" | "failed" | "refunded" | "partially_refunded" | "cancelled">(),
   paymentMethod: text("payment_method").$type<"stripe">(),
   // Stripe payment tracking
   stripePaymentIntentId: text("stripe_payment_intent_id"),

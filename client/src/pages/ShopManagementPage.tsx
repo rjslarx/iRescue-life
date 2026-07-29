@@ -153,6 +153,18 @@ export default function ShopManagementPage() {
   const products = productsData?.products || [];
   const orders = ordersData?.orders || [];
 
+  // Separate paid orders from incomplete/abandoned checkouts so staff can see
+  // at a glance which orders actually completed payment. Raffle drawings only
+  // ever include paid orders' tickets.
+  const [orderPaymentFilter, setOrderPaymentFilter] = useState("paid");
+  const isIncomplete = (s: string) => s === 'pending' || s === 'processing' || s === 'failed';
+  const filteredOrders = orders.filter(o => {
+    if (orderPaymentFilter === 'all') return true;
+    if (orderPaymentFilter === 'paid') return !isIncomplete(o.paymentStatus) && o.paymentStatus !== 'cancelled';
+    if (orderPaymentFilter === 'incomplete') return isIncomplete(o.paymentStatus);
+    return o.paymentStatus === 'cancelled';
+  });
+
   const createProductMutation = useMutation({
     mutationFn: async (data: typeof productForm) => {
       const { bundleTiers, ...rest } = data;
@@ -586,6 +598,22 @@ export default function ShopManagementPage() {
           </TabsContent>
 
           <TabsContent value="orders" className="space-y-4">
+            <div className="flex items-center gap-2">
+              <Label htmlFor="order-payment-filter" className="text-sm text-muted-foreground whitespace-nowrap">
+                Show
+              </Label>
+              <Select value={orderPaymentFilter} onValueChange={setOrderPaymentFilter}>
+                <SelectTrigger id="order-payment-filter" className="w-52" data-testid="select-order-payment-filter">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="paid">Paid orders</SelectItem>
+                  <SelectItem value="incomplete">Incomplete checkouts</SelectItem>
+                  <SelectItem value="cancelled">Cancelled / abandoned</SelectItem>
+                  <SelectItem value="all">All orders</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             {isLoadingOrders ? (
               <div className="space-y-4">
                 {[1, 2, 3].map(i => (
@@ -596,31 +624,45 @@ export default function ShopManagementPage() {
                   </Card>
                 ))}
               </div>
-            ) : orders.length === 0 ? (
+            ) : filteredOrders.length === 0 ? (
               <Card>
                 <CardContent className="py-12 text-center">
                   <ClipboardList className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">No Orders Yet</h3>
+                  <h3 className="text-lg font-semibold mb-2">
+                    {orders.length === 0 ? "No Orders Yet" : "No Matching Orders"}
+                  </h3>
                   <p className="text-muted-foreground">
-                    Orders will appear here once customers make purchases.
+                    {orders.length === 0
+                      ? "Orders will appear here once customers make purchases."
+                      : "No orders match the selected filter."}
                   </p>
                 </CardContent>
               </Card>
             ) : (
               <div className="space-y-4">
-                {orders.map(order => (
+                {filteredOrders.map(order => (
                   <Card key={order.id} data-testid={`order-row-${order.id}`}>
                     <CardContent className="py-4">
                       <div className="flex flex-wrap gap-4 items-start justify-between">
                         <div className="space-y-1">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-semibold">{order.orderNumber}</span>
-                            <Badge variant={order.paymentStatus === 'paid' ? 'default' : order.paymentStatus === 'failed' ? 'outline' : 'secondary'}>
+                            <Badge
+                              variant={
+                                order.paymentStatus === 'paid'
+                                  ? 'default'
+                                  : order.paymentStatus === 'cancelled' || order.paymentStatus === 'failed'
+                                    ? 'destructive'
+                                    : 'secondary'
+                              }
+                              data-testid={`badge-payment-status-${order.id}`}
+                            >
                               {order.paymentStatus === 'paid' ? 'Paid'
                                 : order.paymentStatus === 'failed' ? 'Not completed'
+                                : order.paymentStatus === 'cancelled' ? 'Cancelled'
                                 : order.paymentStatus === 'refunded' ? 'Refunded'
                                 : order.paymentStatus === 'partially_refunded' ? 'Partially refunded'
-                                : 'Payment not finished'}
+                                : 'Incomplete'}
                             </Badge>
                             {order.items.some(i => i.productType === 'physical') && (
                               <Badge variant={order.fulfillmentStatus === 'delivered' ? 'default' : 'outline'}>

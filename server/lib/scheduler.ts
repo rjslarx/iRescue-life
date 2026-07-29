@@ -681,21 +681,22 @@ export function initializeScheduler() {
 
   console.log(`Calendar share cleanup scheduled for: ${calendarShareCleanupSchedule} (UTC)`);
 
-  // Abandoned shop checkout cleanup — hourly. Orders stuck in
-  // pending/processing for 24h+ (buyer never completed payment) are marked
-  // failed so staff order lists only show real purchases as active.
-  cron.schedule("15 * * * *", async () => {
+  // Shop order expiry — cancel abandoned unpaid checkouts (pending/processing
+  // for >24h). Raffle drawings already only include paid orders; this keeps
+  // the staff orders list clean. Runs hourly.
+  const shopOrderExpirySchedule = process.env.SHOP_ORDER_EXPIRY_SCHEDULE || "45 * * * *";
+  cron.schedule(shopOrderExpirySchedule, async () => {
     try {
-      const { cleanupAbandonedShopOrders } = await import("./shop-order-cleanup");
-      const result = await cleanupAbandonedShopOrders();
-      if (result.expired > 0) {
-        console.log(`✓ Shop order cleanup: ${result.expired} abandoned checkout(s) marked failed`);
+      const { expireAbandonedShopOrders } = await import("./shop-order-expiry");
+      const cancelled = await expireAbandonedShopOrders(24);
+      if (cancelled > 0) {
+        console.log(`🛒 Shop order expiry: cancelled ${cancelled} abandoned unpaid order(s)`);
       }
     } catch (error) {
-      console.error(`❌ Shop order cleanup failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error(`❌ Shop order expiry failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }, { timezone: "UTC" });
-  console.log("✓ Abandoned shop order cleanup scheduled: 15 * * * * (UTC)");
+  console.log(`✓ Shop order expiry scheduled: ${shopOrderExpirySchedule} (UTC)`);
 
   // Volunteer Recruitment SMS — weekly + urgent run sequentially to prevent race-condition duplicates
   cron.schedule('30 0 * * *', async () => {
