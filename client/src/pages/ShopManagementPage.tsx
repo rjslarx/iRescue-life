@@ -513,7 +513,7 @@ export default function ShopManagementPage() {
                   <p className="text-muted-foreground mb-4">
                     Start adding products to your fundraising shop.
                   </p>
-                  <Button onClick={() => setProductDialogOpen(true)}>
+                  <Button onClick={() => { resetProductForm(); setEditingProduct(null); setProductDialogOpen(true); }}>
                     <Plus className="h-4 w-4 mr-2" />
                     Add First Product
                   </Button>
@@ -670,7 +670,7 @@ export default function ShopManagementPage() {
                   <p className="text-muted-foreground mb-4">
                     Create a raffle product to start selling tickets.
                   </p>
-                  <Button onClick={() => { resetProductForm(); setProductForm(prev => ({ ...prev, productType: 'raffle' })); setProductDialogOpen(true); }}>
+                  <Button onClick={() => { resetProductForm(); setEditingProduct(null); setProductForm(prev => ({ ...prev, productType: 'raffle' })); setProductDialogOpen(true); }}>
                     <Plus className="h-4 w-4 mr-2" />
                     Create Raffle
                   </Button>
