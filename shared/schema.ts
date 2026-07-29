@@ -3959,6 +3959,7 @@ export const shopOrders = pgTable("shop_orders", {
   subtotal: text("subtotal").notNull(), // Before tax/fees
   shippingAmount: text("shipping_amount").notNull().default("0"),
   taxAmount: text("tax_amount").notNull().default("0"),
+  processingFee: text("processing_fee").notNull().default("0"), // Card processing fee added at checkout
   totalAmount: text("total_amount").notNull(),
   // Payment status
   paymentStatus: text("payment_status").notNull().default("pending").$type<"pending" | "processing" | "paid" | "failed" | "refunded" | "partially_refunded">(),

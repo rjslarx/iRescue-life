@@ -283,8 +283,12 @@ router.post('/checkout', requireTenant, async (req, res, next) => {
     
     const orderNumber = `ORD-${String((orderCount[0]?.count || 0) + 1).padStart(6, '0')}`;
 
-    // Calculate totals (no tax/shipping for now - can be added later)
-    const totalAmount = subtotal;
+    // Calculate totals (no tax/shipping for now - can be added later).
+    // The buyer covers card processing fees so the rescue nets the exact
+    // configured price: gross-up so total*(1-2.9%) - $0.30 = subtotal.
+    const grossTotal = subtotal > 0 ? Math.round(((subtotal + 0.30) / (1 - 0.029)) * 100) / 100 : 0;
+    const processingFee = Math.round((grossTotal - subtotal) * 100) / 100;
+    const totalAmount = subtotal + processingFee;
 
     // Create the order and its items atomically. Raffle ticket numbers are
     // allocated inside the transaction while holding a row lock on the
@@ -301,6 +305,7 @@ router.post('/checkout', requireTenant, async (req, res, next) => {
         subtotal: subtotal.toFixed(2),
         shippingAmount: '0',
         taxAmount: '0',
+        processingFee: processingFee.toFixed(2),
         totalAmount: totalAmount.toFixed(2),
         paymentStatus: 'pending',
         paymentMethod: data.paymentMethod,
@@ -384,6 +389,8 @@ router.post('/checkout', requireTenant, async (req, res, next) => {
         orderId: order.id,
         orderNumber: order.orderNumber,
         clientSecret: paymentIntent.client_secret,
+        subtotal: subtotal.toFixed(2),
+        processingFee: processingFee.toFixed(2),
         totalAmount: totalAmount.toFixed(2),
       });
     } else {

@@ -159,6 +159,7 @@ export default function ShopCheckoutPage() {
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [orderId, setOrderId] = useState<string | null>(null);
   const [orderNumber, setOrderNumber] = useState<string | null>(null);
+  const [serverTotals, setServerTotals] = useState<{ subtotal: string; processingFee: string; totalAmount: string } | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('stripe');
 
   const [customerInfo, setCustomerInfo] = useState({
@@ -246,7 +247,16 @@ export default function ShopCheckoutPage() {
   }).filter(item => item.product);
 
   const hasPhysicalProduct = cartDetails.some(item => item.product?.productType === 'physical');
-  const subtotal = cartDetails.reduce((sum, item) => sum + item.totalPrice, 0);
+  const estimatedSubtotal = cartDetails.reduce((sum, item) => sum + item.totalPrice, 0);
+  // Buyer covers card processing fees — mirrors the server's authoritative
+  // gross-up: total*(1-2.9%) - $0.30 = subtotal. Once the order is created,
+  // the server-returned amounts are authoritative and override the estimate.
+  const estimatedGross = estimatedSubtotal > 0 ? Math.round(((estimatedSubtotal + 0.30) / (1 - 0.029)) * 100) / 100 : 0;
+  const subtotal = serverTotals ? parseFloat(serverTotals.subtotal) : estimatedSubtotal;
+  const processingFee = serverTotals
+    ? parseFloat(serverTotals.processingFee)
+    : Math.round((estimatedGross - estimatedSubtotal) * 100) / 100;
+  const orderTotal = serverTotals ? parseFloat(serverTotals.totalAmount) : estimatedSubtotal + processingFee;
 
   const checkoutMutation = useMutation({
     mutationFn: async () => {
@@ -271,6 +281,13 @@ export default function ShopCheckoutPage() {
       setClientSecret(data.clientSecret);
       setOrderId(data.orderId);
       setOrderNumber(data.orderNumber);
+      if (data.totalAmount) {
+        setServerTotals({
+          subtotal: data.subtotal ?? data.totalAmount,
+          processingFee: data.processingFee ?? '0',
+          totalAmount: data.totalAmount,
+        });
+      }
     },
     onError: (error: Error) => {
       toast({
@@ -548,7 +565,7 @@ export default function ShopCheckoutPage() {
                     <StripeCheckoutForm 
                       orderId={orderId}
                       clientSecret={clientSecret}
-                      totalAmount={subtotal.toFixed(2)}
+                      totalAmount={orderTotal.toFixed(2)}
                       orderNumber={orderNumber!}
                       basePath={basePath}
                     />
@@ -612,6 +629,10 @@ export default function ShopCheckoutPage() {
                     <span>Subtotal</span>
                     <span>${subtotal.toFixed(2)}</span>
                   </div>
+                  <div className="flex justify-between text-sm">
+                    <span>Card processing fee</span>
+                    <span data-testid="checkout-processing-fee">${processingFee.toFixed(2)}</span>
+                  </div>
                   <div className="flex justify-between text-sm text-muted-foreground">
                     <span>Shipping</span>
                     <span>Calculated at checkout</span>
@@ -622,7 +643,7 @@ export default function ShopCheckoutPage() {
 
                 <div className="flex justify-between font-bold text-lg">
                   <span>Total</span>
-                  <span data-testid="checkout-total">${subtotal.toFixed(2)}</span>
+                  <span data-testid="checkout-total">${orderTotal.toFixed(2)}</span>
                 </div>
               </CardContent>
               <CardFooter className="text-xs text-muted-foreground">

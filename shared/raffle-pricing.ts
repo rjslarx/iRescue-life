@@ -4,10 +4,13 @@ export interface BundleTier {
 }
 
 /**
- * Compute the cheapest total price (in dollars) for `quantity` tickets given
- * a per-ticket base price and optional bundle tiers (e.g. 5 for $20, 15 for $50).
- * Uses dynamic programming over cost-in-cents so buyers always get the best
- * combination of bundles + single tickets (e.g. 20 tickets = 15-pack + 5-pack).
+ * Compute the total price (in dollars) for `quantity` tickets given a
+ * per-ticket base price and optional bundle tiers (e.g. 3 for $5, 10 for $20).
+ * Uses the tier prices EXACTLY as the rescue configured them: the quantity is
+ * decomposed greedily from the largest tier down (10 tickets = the 10-pack
+ * price; 13 tickets = 10-pack + 3-pack; leftovers at the single-ticket price).
+ * It never re-optimizes across tiers, so the price shown on each bundle card
+ * is always the price charged.
  * Shared by the server (authoritative checkout pricing) and the client (display).
  */
 export function computeBundledPrice(
@@ -17,30 +20,24 @@ export function computeBundledPrice(
 ): number {
   const baseCents = Math.round(Number(basePrice) * 100);
   if (!Number.isFinite(quantity) || quantity <= 0) return 0;
-  const tiers = (bundlePricing || []).filter(
-    (t) => Number.isInteger(t.quantity) && t.quantity >= 2 && Number.isFinite(Number(t.price)) && Number(t.price) >= 0,
-  );
+  const tiers = (bundlePricing || [])
+    .filter(
+      (t) => Number.isInteger(t.quantity) && t.quantity >= 2 && Number.isFinite(Number(t.price)) && Number(t.price) >= 0,
+    )
+    .sort((a, b) => b.quantity - a.quantity); // largest first
   if (tiers.length === 0) return (baseCents * quantity) / 100;
 
-  const options = [
-    { qty: 1, cents: baseCents },
-    ...tiers.map((t) => ({ qty: t.quantity, cents: Math.round(Number(t.price) * 100) })),
-  ];
-
-  // minCost[q] = cheapest cost in cents to buy AT LEAST... exactly q tickets.
-  // Buying more tickets than requested is never necessary for the buyer's own
-  // choice (the UI offers exact bundle quantities), so exact-quantity DP is fine.
-  const minCost: number[] = new Array(quantity + 1).fill(Infinity);
-  minCost[0] = 0;
-  for (let q = 1; q <= quantity; q++) {
-    for (const opt of options) {
-      if (opt.qty <= q && minCost[q - opt.qty] + opt.cents < minCost[q]) {
-        minCost[q] = minCost[q - opt.qty] + opt.cents;
-      }
+  let remaining = Math.floor(quantity);
+  let totalCents = 0;
+  for (const tier of tiers) {
+    const count = Math.floor(remaining / tier.quantity);
+    if (count > 0) {
+      totalCents += count * Math.round(Number(tier.price) * 100);
+      remaining -= count * tier.quantity;
     }
   }
-  const result = minCost[quantity];
-  return (Number.isFinite(result) ? result : baseCents * quantity) / 100;
+  totalCents += remaining * baseCents;
+  return totalCents / 100;
 }
 
 /**

@@ -465,6 +465,10 @@ export default function PublicProductPage() {
                  `Buy Now - ${formatPrice(orderTotal)}`}
               </Button>
 
+              <p className="text-xs text-muted-foreground text-center">
+                Card processing fee added at checkout
+              </p>
+
               {product.variants.length > 0 && !selectedVariantId && (
                 <p className="text-sm text-muted-foreground text-center">
                   Please select an option above

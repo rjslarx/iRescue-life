@@ -235,6 +235,12 @@ export default function ShopOrderPage() {
                   <span>${parseFloat(order.taxAmount).toFixed(2)}</span>
                 </div>
               )}
+              {parseFloat(order.processingFee || '0') > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span>Card processing fee</span>
+                  <span>${parseFloat(order.processingFee).toFixed(2)}</span>
+                </div>
+              )}
               <div className="flex justify-between font-bold text-lg">
                 <span>Total</span>
                 <span>${parseFloat(order.totalAmount).toFixed(2)}</span>
