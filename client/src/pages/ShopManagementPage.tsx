@@ -615,8 +615,12 @@ export default function ShopManagementPage() {
                         <div className="space-y-1">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-semibold">{order.orderNumber}</span>
-                            <Badge variant={order.paymentStatus === 'paid' ? 'default' : 'secondary'}>
-                              {order.paymentStatus}
+                            <Badge variant={order.paymentStatus === 'paid' ? 'default' : order.paymentStatus === 'failed' ? 'outline' : 'secondary'}>
+                              {order.paymentStatus === 'paid' ? 'Paid'
+                                : order.paymentStatus === 'failed' ? 'Not completed'
+                                : order.paymentStatus === 'refunded' ? 'Refunded'
+                                : order.paymentStatus === 'partially_refunded' ? 'Partially refunded'
+                                : 'Payment not finished'}
                             </Badge>
                             {order.items.some(i => i.productType === 'physical') && (
                               <Badge variant={order.fulfillmentStatus === 'delivered' ? 'default' : 'outline'}>

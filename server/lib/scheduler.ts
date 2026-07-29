@@ -681,6 +681,22 @@ export function initializeScheduler() {
 
   console.log(`Calendar share cleanup scheduled for: ${calendarShareCleanupSchedule} (UTC)`);
 
+  // Abandoned shop checkout cleanup — hourly. Orders stuck in
+  // pending/processing for 24h+ (buyer never completed payment) are marked
+  // failed so staff order lists only show real purchases as active.
+  cron.schedule("15 * * * *", async () => {
+    try {
+      const { cleanupAbandonedShopOrders } = await import("./shop-order-cleanup");
+      const result = await cleanupAbandonedShopOrders();
+      if (result.expired > 0) {
+        console.log(`✓ Shop order cleanup: ${result.expired} abandoned checkout(s) marked failed`);
+      }
+    } catch (error) {
+      console.error(`❌ Shop order cleanup failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }, { timezone: "UTC" });
+  console.log("✓ Abandoned shop order cleanup scheduled: 15 * * * * (UTC)");
+
   // Volunteer Recruitment SMS — weekly + urgent run sequentially to prevent race-condition duplicates
   cron.schedule('30 0 * * *', async () => {
     try {

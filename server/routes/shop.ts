@@ -18,6 +18,7 @@ import { eq, and, desc, asc, sql, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import Stripe from 'stripe';
 import { computeBundledPrice } from '@shared/raffle-pricing';
+import { sendShopOrderConfirmationEmail } from '../lib/shop-emails';
 
 const router = Router();
 
@@ -467,7 +468,9 @@ router.post('/checkout/confirm', requireTenant, async (req, res, next) => {
         })
         .where(and(
           eq(shopOrders.id, order.id),
-          sql`${shopOrders.paymentStatus} != 'paid'`
+          // Only pre-payment states may transition to paid. Refunded orders
+          // must never be flipped back by a replayed confirm call.
+          inArray(shopOrders.paymentStatus, ['pending', 'processing', 'failed'])
         ))
         .returning({ id: shopOrders.id });
 
@@ -487,6 +490,13 @@ router.post('/checkout/confirm', requireTenant, async (req, res, next) => {
               .where(eq(shopProductVariants.id, item.variantId));
           }
         }
+
+        // Email the buyer their receipt (with raffle ticket numbers when
+        // applicable). Fire-and-forget so email problems never block the
+        // payment confirmation response.
+        sendShopOrderConfirmationEmail(tenant.id, order.id).catch((err) => {
+          console.error(`[Shop] Order confirmation email failed for order ${order.orderNumber}:`, err);
+        });
       }
 
       // Get order items for response
