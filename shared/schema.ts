@@ -3904,6 +3904,8 @@ export const insertShopProductSchema = createInsertSchema(shopProducts).omit({
   updatedAt: true,
 }).extend({
   bundlePricing: z.array(bundlePricingTierSchema).max(10).nullable().optional(),
+  // Clients send the draw date as an ISO string over JSON; coerce it to a Date.
+  raffleDrawDate: z.coerce.date().nullable().optional(),
 });
 export type InsertShopProduct = z.infer<typeof insertShopProductSchema>;
 export type ShopProduct = typeof shopProducts.$inferSelect;
