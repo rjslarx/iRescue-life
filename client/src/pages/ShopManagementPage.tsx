@@ -693,6 +693,19 @@ export default function ShopManagementPage() {
                           <p className="text-sm">
                             {order.items.length} item{order.items.length !== 1 ? 's' : ''} - ${order.totalAmount}
                           </p>
+                          {order.items.filter(i => i.productType === 'raffle' && i.raffleTicketNumbers && i.raffleTicketNumbers.length > 0).map(item => (
+                            <div key={item.id} className="mt-1 rounded-md bg-muted px-3 py-2" data-testid={`ticket-numbers-${item.id}`}>
+                              <p className="text-xs font-medium">
+                                {item.productName} — {item.raffleTicketNumbers!.length} ticket{item.raffleTicketNumbers!.length !== 1 ? 's' : ''}
+                                {order.paymentStatus !== 'paid' && (
+                                  <span className="text-muted-foreground font-normal"> (not paid — excluded from drawing)</span>
+                                )}
+                              </p>
+                              <p className="font-mono text-sm tracking-wider break-words">
+                                {item.raffleTicketNumbers!.join(', ')}
+                              </p>
+                            </div>
+                          ))}
                           <p className="text-xs text-muted-foreground">
                             {new Date(order.createdAt).toLocaleDateString()}
                           </p>
