@@ -206,10 +206,16 @@ export default function ShopCheckoutPage() {
   }, []);
 
   useEffect(() => {
-    if (tenant?.stripePublishableKey) {
-      setStripePromise(loadStripe(tenant.stripePublishableKey));
+    // Own-key tenants use their own publishable key; Stripe Connect tenants
+    // pay via destination charges on the platform account, so use the
+    // platform publishable key.
+    const platformKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY as string | undefined;
+    const publishableKey = tenant?.stripePublishableKey
+      || (tenant?.stripeConnectedAccountId ? platformKey : undefined);
+    if (publishableKey) {
+      setStripePromise(loadStripe(publishableKey));
     }
-  }, [tenant?.stripePublishableKey]);
+  }, [tenant?.stripePublishableKey, tenant?.stripeConnectedAccountId]);
 
   const { data: productsData } = useQuery<{ products: ProductWithVariants[] }>({
     queryKey: ['/api/shop/products'],

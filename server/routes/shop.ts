@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { db } from '../db';
 import { requireTenant } from '../middleware/tenant';
 import { requireAuth, requireRole, requireRoleOrPageAccess } from '../middleware/auth';
-import { toStripeStatementDescriptor } from '../lib/stripe-service';
+import { toStripeStatementDescriptor, stripeService, getPlatformStripeKey } from '../lib/stripe-service';
 import { 
   shopProducts, 
   shopProductVariants, 
@@ -147,13 +147,17 @@ router.post('/checkout', requireTenant, async (req, res, next) => {
         country: z.string().min(1).default('US'),
       }).optional(),
       customerNotes: z.string().optional(),
+      paymentMethod: z.enum(['stripe']).default('stripe'),
     });
 
     const data = checkoutSchema.parse(req.body);
     const tenant = req.tenant!;
 
     // Check if Stripe is configured
-    const stripeAvailable = tenant.stripeEnabled && tenant.stripeSecretKeyEncrypted;
+    const stripeAvailable = tenant.stripeEnabled && (
+      tenant.stripeSecretKeyEncrypted ||
+      (tenant.stripeConnectedAccountId && getPlatformStripeKey())
+    );
 
     if (!stripeAvailable) {
       return res.status(400).json({ error: 'Stripe payments are not configured for this organization' });
@@ -347,22 +351,25 @@ router.post('/checkout', requireTenant, async (req, res, next) => {
 
     // Handle payment based on method
     if (data.paymentMethod === 'stripe') {
-      // Decrypt Stripe secret key and create PaymentIntent
-      const { decrypt } = await import('../lib/encryption');
-      const stripeSecretKey = decrypt(tenant.stripeSecretKeyEncrypted!);
-      const stripe = new Stripe(stripeSecretKey, { apiVersion: '2025-09-30.clover' });
+      // Create a PaymentIntent on the tenant's own Stripe account or, for
+      // Stripe Connect tenants, as a destination charge on the platform account.
+      const amountCents = Math.round(totalAmount * 100);
+      const useConnect = !tenant.stripeSecretKeyEncrypted && tenant.stripeConnectedAccountId;
+      const { calculatePlatformFee } = await import('../config/platform');
+      const platformFeeAmount = useConnect
+        ? calculatePlatformFee(amountCents, tenant.subscriptionTier || 'free', tenant.platformFeePercent)
+        : 0;
 
-      const paymentIntent = await stripe.paymentIntents.create({
-        amount: Math.round(totalAmount * 100), // Stripe uses cents
-        currency: 'usd',
+      const paymentIntent = await stripeService.createPaymentIntent(tenant as any, {
+        amount: amountCents,
+        description: `Order ${orderNumber} from ${tenant.name}`,
+        receiptEmail: data.customerEmail,
         metadata: {
           orderId: order.id,
           orderNumber: order.orderNumber,
-          tenantId: tenant.id,
         },
-        receipt_email: data.customerEmail,
-        description: `Order ${orderNumber} from ${tenant.name}`,
-        statement_descriptor_suffix: toStripeStatementDescriptor(tenant.name),
+        connectedAccountId: useConnect ? tenant.stripeConnectedAccountId! : undefined,
+        platformFeeAmount: platformFeeAmount > 0 ? platformFeeAmount : undefined,
       });
 
       // Update order with payment intent ID
@@ -427,39 +434,51 @@ router.post('/checkout/confirm', requireTenant, async (req, res, next) => {
 
     // Verify payment with Stripe
     const tenant = req.tenant!;
-    if (!tenant.stripeSecretKeyEncrypted) {
+    let stripe: Stripe;
+    if (tenant.stripeSecretKeyEncrypted) {
+      const { decrypt } = await import('../lib/encryption');
+      const stripeSecretKey = decrypt(tenant.stripeSecretKeyEncrypted);
+      stripe = new Stripe(stripeSecretKey, { apiVersion: '2025-09-30.clover' });
+    } else if (tenant.stripeConnectedAccountId && getPlatformStripeKey()) {
+      // Connect destination charges live on the platform account
+      stripe = new Stripe(getPlatformStripeKey()!, { apiVersion: '2025-09-30.clover' });
+    } else {
       return res.status(400).json({ error: 'Stripe not configured' });
     }
-
-    const { decrypt } = await import('../lib/encryption');
-    const stripeSecretKey = decrypt(tenant.stripeSecretKeyEncrypted);
-    const stripe = new Stripe(stripeSecretKey, { apiVersion: '2025-09-30.clover' });
 
     const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
 
     if (paymentIntent.status === 'succeeded') {
-      // Update order status
-      await db.update(shopOrders)
+      // Idempotent transition: only the first confirm call moves the order to
+      // 'paid' and decrements inventory. Repeated confirms (double-click,
+      // retries) return success without side effects.
+      const updated = await db.update(shopOrders)
         .set({ 
           paymentStatus: 'paid',
           stripeChargeId: paymentIntent.latest_charge as string,
           updatedAt: new Date(),
         })
-        .where(eq(shopOrders.id, order.id));
+        .where(and(
+          eq(shopOrders.id, order.id),
+          sql`${shopOrders.paymentStatus} != 'paid'`
+        ))
+        .returning({ id: shopOrders.id });
 
-      // Update inventory for variants
-      const orderItems = await db
-        .select()
-        .from(shopOrderItems)
-        .where(eq(shopOrderItems.orderId, order.id));
+      if (updated.length > 0) {
+        // Update inventory for variants (first successful confirm only)
+        const orderItems = await db
+          .select()
+          .from(shopOrderItems)
+          .where(eq(shopOrderItems.orderId, order.id));
 
-      for (const item of orderItems) {
-        if (item.variantId) {
-          await db.update(shopProductVariants)
-            .set({ 
-              inventory: sql`${shopProductVariants.inventory} - ${item.quantity}` 
-            })
-            .where(eq(shopProductVariants.id, item.variantId));
+        for (const item of orderItems) {
+          if (item.variantId) {
+            await db.update(shopProductVariants)
+              .set({ 
+                inventory: sql`${shopProductVariants.inventory} - ${item.quantity}` 
+              })
+              .where(eq(shopProductVariants.id, item.variantId));
+          }
         }
       }
 
