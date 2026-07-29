@@ -26,9 +26,10 @@ export const PAYABLE_ORDER_STATES = ['pending', 'processing', 'failed', 'cancell
  */
 export async function transitionShopOrderToPaid(
   orderId: string,
-  stripeChargeId: string | null
+  stripeChargeId: string | null,
+  tx: Pick<typeof db, 'update'> = db
 ): Promise<{ id: string }[]> {
-  return db
+  return tx
     .update(shopOrders)
     .set({
       paymentStatus: 'paid',

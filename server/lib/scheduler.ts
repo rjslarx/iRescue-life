@@ -688,9 +688,12 @@ export function initializeScheduler() {
   cron.schedule(shopOrderExpirySchedule, async () => {
     try {
       const { expireAbandonedShopOrders } = await import("./shop-order-expiry");
-      const cancelled = await expireAbandonedShopOrders(24);
-      if (cancelled > 0) {
-        console.log(`🛒 Shop order expiry: cancelled ${cancelled} abandoned unpaid order(s)`);
+      const result = await expireAbandonedShopOrders(24);
+      if (result.recoveredPaid > 0) {
+        console.log(`🛒 Shop order expiry: recovered ${result.recoveredPaid} order(s) that were paid on Stripe but never confirmed`);
+      }
+      if (result.cancelled > 0) {
+        console.log(`🛒 Shop order expiry: cancelled ${result.cancelled} abandoned unpaid order(s)`);
       }
     } catch (error) {
       console.error(`❌ Shop order expiry failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
