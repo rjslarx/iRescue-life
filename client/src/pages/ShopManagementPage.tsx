@@ -36,6 +36,8 @@ import {
   Upload,
   Share2,
   Copy,
+  Printer,
+  Download,
 } from "lucide-react";
 import { useTenant } from "@/contexts/TenantContext";
 import type { ShopProduct, ShopProductVariant, ShopOrder, ShopOrderItem, Tenant } from "@shared/schema";
@@ -46,6 +48,21 @@ type ProductWithVariants = ShopProduct & {
 
 type OrderWithItems = ShopOrder & {
   items: ShopOrderItem[];
+};
+
+type RaffleTicket = {
+  ticketNumber: string;
+  customerName: string;
+  customerEmail: string;
+  customerPhone: string | null;
+  orderNumber: string;
+  orderDate: string | null;
+};
+
+type RaffleTicketsResponse = {
+  raffle: { id: string; name: string; raffleDrawDate: string | null };
+  totalTickets: number;
+  tickets: RaffleTicket[];
 };
 
 export default function ShopManagementPage() {
@@ -72,6 +89,7 @@ export default function ShopManagementPage() {
     }
   };
   const [activeTab, setActiveTab] = useState("products");
+  const [viewTicketsRaffle, setViewTicketsRaffle] = useState<ProductWithVariants | null>(null);
   const [productDialogOpen, setProductDialogOpen] = useState(false);
   const [variantDialogOpen, setVariantDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<ProductWithVariants | null>(null);
@@ -128,6 +146,63 @@ export default function ShopManagementPage() {
   }>({
     queryKey: ['/api/shop/admin/stats'],
   });
+
+  const { data: ticketsData, isLoading: isLoadingTickets } = useQuery<RaffleTicketsResponse>({
+    queryKey: ['/api/shop/admin/raffles', viewTicketsRaffle?.id, 'tickets'],
+    enabled: !!viewTicketsRaffle,
+  });
+
+  const handleExportTicketsCsv = () => {
+    if (!ticketsData) return;
+    const escape = (v: string | null) => `"${(v ?? '').replace(/"/g, '""')}"`;
+    const rows = [
+      ['Ticket Number', 'Buyer Name', 'Email', 'Phone', 'Order Number', 'Order Date'],
+      ...ticketsData.tickets.map(t => [
+        t.ticketNumber,
+        t.customerName,
+        t.customerEmail,
+        t.customerPhone || '',
+        t.orderNumber,
+        t.orderDate ? new Date(t.orderDate).toLocaleDateString() : '',
+      ]),
+    ];
+    const csv = rows.map(r => r.map(escape).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${(ticketsData.raffle.name || 'raffle').replace(/[^a-zA-Z0-9-_ ]/g, '')} - tickets.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handlePrintTickets = () => {
+    if (!ticketsData) return;
+    const esc = (v: string | null) =>
+      (v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const w = window.open('', '_blank');
+    if (!w) {
+      toast({ title: "Couldn't open print view", description: "Please allow pop-ups for this site.", variant: "destructive" });
+      return;
+    }
+    w.document.write(`<!DOCTYPE html><html><head><title>${esc(ticketsData.raffle.name)} — Paid Tickets</title>
+      <style>
+        body { font-family: system-ui, sans-serif; margin: 24px; }
+        h1 { font-size: 20px; margin-bottom: 4px; }
+        p { color: #555; margin-top: 0; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }
+        th { background: #f3f3f3; }
+      </style></head><body>
+      <h1>${esc(ticketsData.raffle.name)} — Paid Raffle Tickets</h1>
+      <p>${ticketsData.totalTickets} paid ticket${ticketsData.totalTickets !== 1 ? 's' : ''} &middot; Generated ${new Date().toLocaleString()}</p>
+      <table><thead><tr><th>Ticket #</th><th>Buyer</th><th>Email</th><th>Phone</th><th>Order</th></tr></thead><tbody>
+      ${ticketsData.tickets.map(t => `<tr><td>${esc(t.ticketNumber)}</td><td>${esc(t.customerName)}</td><td>${esc(t.customerEmail)}</td><td>${esc(t.customerPhone)}</td><td>${esc(t.orderNumber)}</td></tr>`).join('')}
+      </tbody></table></body></html>`);
+    w.document.close();
+    w.focus();
+    w.print();
+  };
 
   const { data: tenantData } = useQuery<{ tenant: Tenant }>({
     queryKey: ['/api/tenant'],
@@ -800,6 +875,10 @@ export default function ShopManagementPage() {
                           )}
                         </div>
                         <div className="flex flex-wrap gap-2">
+                          <Button variant="outline" onClick={() => setViewTicketsRaffle(raffle)} data-testid={`button-view-tickets-${raffle.id}`}>
+                            <Ticket className="h-4 w-4 mr-2" />
+                            View Tickets
+                          </Button>
                           <Button variant="outline" onClick={() => handleShareProduct(raffle)} data-testid={`button-share-raffle-${raffle.id}`}>
                             <Share2 className="h-4 w-4 mr-2" />
                             Share
@@ -821,6 +900,70 @@ export default function ShopManagementPage() {
             )}
           </TabsContent>
         </Tabs>
+
+        <Dialog open={!!viewTicketsRaffle} onOpenChange={(open) => { if (!open) setViewTicketsRaffle(null); }}>
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Paid Raffle Tickets — {viewTicketsRaffle?.name}</DialogTitle>
+              <DialogDescription>
+                Every ticket from a paid order, for running your drawing. Incomplete or refunded orders are not included.
+              </DialogDescription>
+            </DialogHeader>
+            {isLoadingTickets ? (
+              <div className="space-y-2">
+                <Skeleton className="h-8 w-full" />
+                <Skeleton className="h-8 w-full" />
+                <Skeleton className="h-8 w-full" />
+              </div>
+            ) : !ticketsData || ticketsData.tickets.length === 0 ? (
+              <div className="py-8 text-center text-muted-foreground" data-testid="text-no-tickets">
+                No paid tickets yet for this raffle.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <p className="text-sm font-medium" data-testid="text-ticket-count">
+                    {ticketsData.totalTickets} paid ticket{ticketsData.totalTickets !== 1 ? 's' : ''}
+                  </p>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={handleExportTicketsCsv} data-testid="button-export-tickets-csv">
+                      <Download className="h-4 w-4 mr-2" />
+                      Export CSV
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={handlePrintTickets} data-testid="button-print-tickets">
+                      <Printer className="h-4 w-4 mr-2" />
+                      Print
+                    </Button>
+                  </div>
+                </div>
+                <div className="border rounded-md overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-muted/50 text-left">
+                        <th className="px-3 py-2 font-medium">Ticket #</th>
+                        <th className="px-3 py-2 font-medium">Buyer</th>
+                        <th className="px-3 py-2 font-medium">Email</th>
+                        <th className="px-3 py-2 font-medium">Phone</th>
+                        <th className="px-3 py-2 font-medium">Order</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {ticketsData.tickets.map((t) => (
+                        <tr key={t.ticketNumber} className="border-b last:border-0" data-testid={`row-ticket-${t.ticketNumber}`}>
+                          <td className="px-3 py-2 font-mono">{t.ticketNumber}</td>
+                          <td className="px-3 py-2">{t.customerName}</td>
+                          <td className="px-3 py-2">{t.customerEmail}</td>
+                          <td className="px-3 py-2">{t.customerPhone || '—'}</td>
+                          <td className="px-3 py-2">{t.orderNumber}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
 
         <Dialog open={productDialogOpen} onOpenChange={setProductDialogOpen}>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">

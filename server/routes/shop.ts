@@ -1035,6 +1035,83 @@ router.get('/admin/raffles', requireTenant, requireAuth, requireRoleOrPageAccess
 });
 
 /**
+ * GET /api/shop/admin/raffles/:id/tickets
+ * Consolidated read-only list of every PAID ticket for a raffle — used by
+ * staff to run a manual/live drawing. Same aggregation as the draw endpoint.
+ */
+router.get('/admin/raffles/:id/tickets', requireTenant, requireAuth, requireRoleOrPageAccess('shop', 'admin', 'staff'), async (req, res, next) => {
+  try {
+    const [raffle] = await db
+      .select()
+      .from(shopProducts)
+      .where(
+        and(
+          eq(shopProducts.id, req.params.id),
+          eq(shopProducts.tenantId, req.tenant!.id),
+          eq(shopProducts.productType, 'raffle')
+        )
+      );
+
+    if (!raffle) {
+      return res.status(404).json({ error: 'Raffle not found' });
+    }
+
+    // Only paid orders count toward the drawing
+    const rows = await db
+      .select({
+        orderItem: shopOrderItems,
+        order: shopOrders,
+      })
+      .from(shopOrderItems)
+      .innerJoin(shopOrders, eq(shopOrderItems.orderId, shopOrders.id))
+      .where(
+        and(
+          eq(shopOrderItems.productId, raffle.id),
+          eq(shopOrders.paymentStatus, 'paid')
+        )
+      );
+
+    const tickets: {
+      ticketNumber: string;
+      customerName: string;
+      customerEmail: string;
+      customerPhone: string | null;
+      orderNumber: string;
+      orderDate: string | null;
+    }[] = [];
+
+    for (const { orderItem, order } of rows) {
+      if (orderItem.raffleTicketNumbers) {
+        for (const ticketNumber of orderItem.raffleTicketNumbers) {
+          tickets.push({
+            ticketNumber,
+            customerName: order.customerName,
+            customerEmail: order.customerEmail,
+            customerPhone: order.customerPhone || null,
+            orderNumber: order.orderNumber,
+            orderDate: order.createdAt ? new Date(order.createdAt).toISOString() : null,
+          });
+        }
+      }
+    }
+
+    tickets.sort((a, b) => a.ticketNumber.localeCompare(b.ticketNumber));
+
+    res.json({
+      raffle: {
+        id: raffle.id,
+        name: raffle.name,
+        raffleDrawDate: raffle.raffleDrawDate,
+      },
+      totalTickets: tickets.length,
+      tickets,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * POST /api/shop/admin/raffles/:id/draw
  * Draw a winner for a raffle
  */
