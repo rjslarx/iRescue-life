@@ -34,7 +34,10 @@ import {
   ImagePlus,
   X,
   Upload,
+  Share2,
+  Copy,
 } from "lucide-react";
+import { useTenant } from "@/contexts/TenantContext";
 import type { ShopProduct, ShopProductVariant, ShopOrder, ShopOrderItem, Tenant } from "@shared/schema";
 
 type ProductWithVariants = ShopProduct & {
@@ -47,6 +50,27 @@ type OrderWithItems = ShopOrder & {
 
 export default function ShopManagementPage() {
   const { toast } = useToast();
+  const { basePath } = useTenant();
+
+  const getProductUrl = (slug: string) =>
+    `${window.location.origin}${basePath}/shop/${slug}`;
+
+  const handleCopyProductLink = (slug: string) => {
+    navigator.clipboard.writeText(getProductUrl(slug)).then(() => {
+      toast({ title: "Link copied to clipboard!" });
+    }).catch(() => {
+      toast({ title: "Couldn't copy link", variant: "destructive" });
+    });
+  };
+
+  const handleShareProduct = (product: ShopProduct) => {
+    const url = getProductUrl(product.slug);
+    if (navigator.share) {
+      navigator.share({ title: product.name, url }).catch(() => {});
+    } else {
+      handleCopyProductLink(product.slug);
+    }
+  };
   const [activeTab, setActiveTab] = useState("products");
   const [productDialogOpen, setProductDialogOpen] = useState(false);
   const [variantDialogOpen, setVariantDialogOpen] = useState(false);
@@ -681,10 +705,20 @@ export default function ShopManagementPage() {
                             </p>
                           )}
                         </div>
-                        <Button variant="outline" onClick={() => openEditProduct(raffle)}>
-                          <Pencil className="h-4 w-4 mr-2" />
-                          Edit
-                        </Button>
+                        <div className="flex flex-wrap gap-2">
+                          <Button variant="outline" onClick={() => handleShareProduct(raffle)} data-testid={`button-share-raffle-${raffle.id}`}>
+                            <Share2 className="h-4 w-4 mr-2" />
+                            Share
+                          </Button>
+                          <Button variant="outline" onClick={() => handleCopyProductLink(raffle.slug)} data-testid={`button-copy-link-raffle-${raffle.id}`}>
+                            <Copy className="h-4 w-4 mr-2" />
+                            Copy Link
+                          </Button>
+                          <Button variant="outline" onClick={() => openEditProduct(raffle)}>
+                            <Pencil className="h-4 w-4 mr-2" />
+                            Edit
+                          </Button>
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
@@ -716,13 +750,19 @@ export default function ShopManagementPage() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="slug">URL Slug</Label>
-                  <Input
-                    id="slug"
-                    value={productForm.slug}
-                    onChange={(e) => setProductForm(prev => ({ ...prev, slug: e.target.value }))}
-                    placeholder="auto-generated-from-name"
-                    data-testid="input-product-slug"
-                  />
+                  <div className="flex items-center gap-1">
+                    <span className="text-sm text-muted-foreground shrink-0">/shop/</span>
+                    <Input
+                      id="slug"
+                      value={productForm.slug}
+                      onChange={(e) => setProductForm(prev => ({ ...prev, slug: e.target.value }))}
+                      placeholder="auto-generated-from-name"
+                      data-testid="input-product-slug"
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    The page address will be yoursite.com/shop/{productForm.slug || "your-slug"}
+                  </p>
                 </div>
               </div>
 

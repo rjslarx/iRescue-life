@@ -473,24 +473,24 @@ async function serveInjectedHtml(
   // Inject / replace OG meta tags
   const ogRegex = /<meta property="og:type" content="website"\s*\/?>([\s\S]*?)<meta name="twitter:image"[^>]*\/?>/;
   if (ogRegex.test(html)) {
-    html = html.replace(ogRegex, ogMetaTags.trim());
+    html = html.replace(ogRegex, () => ogMetaTags.trim());
   } else {
-    html = html.replace('</head>', `${ogMetaTags}\n</head>`);
+    html = html.replace('</head>', () => `${ogMetaTags}\n</head>`);
   }
-  html = html.replace(/<title>[^<]*<\/title>/, `<title>${escapeHtml(title)}</title>`);
-  html = html.replace(/<meta name="description" content="[^"]*"\s*\/?>/, `<meta name="description" content="${escapeHtml(description)}" />`);
-  html = html.replace(/<link rel="canonical" href="[^"]*"\s*\/?>/, `<link rel="canonical" href="${escapeHtml(canonicalUrl)}" />`);
+  html = html.replace(/<title>[^<]*<\/title>/, () => `<title>${escapeHtml(title)}</title>`);
+  html = html.replace(/<meta name="description" content="[^"]*"\s*\/?>/, () => `<meta name="description" content="${escapeHtml(description)}" />`);
+  html = html.replace(/<link rel="canonical" href="[^"]*"\s*\/?>/, () => `<link rel="canonical" href="${escapeHtml(canonicalUrl)}" />`);
 
   // Inject JSON-LD structured data into <head> (visible to all crawlers)
   if (options?.jsonLd) {
     const jsonLdScript = `<script type="application/ld+json">${JSON.stringify(options.jsonLd)}</script>`;
-    html = html.replace('</head>', `${jsonLdScript}\n</head>`);
+    html = html.replace('</head>', () => `${jsonLdScript}\n</head>`);
   }
 
   // Inject noscript body content visible only to non-JS crawlers.
   // Placed before </body> so React's #root div is unaffected.
   if (options?.noscriptBody) {
-    html = html.replace('</body>', `<noscript id="server-page-content">${options.noscriptBody}</noscript>\n</body>`);
+    html = html.replace('</body>', () => `<noscript id="server-page-content">${options.noscriptBody}</noscript>\n</body>`);
   }
 
   res.status(200).set({ 'Content-Type': 'text/html' }).end(html);
@@ -1205,6 +1205,9 @@ export async function injectOGTags(req: Request, res: Response, next: NextFuncti
       console.log(`[OG-TAGS] Using tenant fallback for: ${url} (tenant=${tenant.subdomain})`);
     }
 
+    // Narrow for use inside replace callbacks (closures defeat TS narrowing on `let`).
+    const resolvedOgData = ogData;
+
     // Build canonical URL based on the resolved routing mode:
     // - Custom domain: canonical lives on the tenant's verified custom domain
     // - Legacy subdomain (demo.irescue.life): canonical is at the root of the subdomain host,
@@ -1272,30 +1275,30 @@ export async function injectOGTags(req: Request, res: Response, next: NextFuncti
     const regexMatched = ogRegex.test(html);
 
     if (regexMatched) {
-      html = html.replace(ogRegex, ogMetaTags.trim());
+      html = html.replace(ogRegex, () => ogMetaTags.trim());
       console.log(`[OG-TAGS] Replaced existing OG tags via regex`);
     } else {
-      html = html.replace('</head>', `${ogMetaTags}\n</head>`);
+      html = html.replace('</head>', () => `${ogMetaTags}\n</head>`);
       console.log(`[OG-TAGS] Injected OG tags before </head> (regex fallback)`);
     }
 
     html = html.replace(
       /<title>[^<]*<\/title>/,
-      `<title>${escapeHtml(ogData.title)}</title>`
+      () => `<title>${escapeHtml(resolvedOgData.title)}</title>`
     );
 
     html = html.replace(
       /<meta name="description" content="[^"]*"\s*\/?>/,
-      `<meta name="description" content="${escapeHtml(ogData.description)}" />`
+      () => `<meta name="description" content="${escapeHtml(resolvedOgData.description)}" />`
     );
 
     html = html.replace(
       /<link rel="canonical" href="[^"]*"\s*\/?>/,
-      `<link rel="canonical" href="${escapeHtml(canonicalUrl)}" />`
+      () => `<link rel="canonical" href="${escapeHtml(canonicalUrl)}" />`
     );
 
     if (tenantNoscriptBody) {
-      html = html.replace('</body>', `<noscript>${tenantNoscriptBody}</noscript>\n</body>`);
+      html = html.replace('</body>', () => `<noscript>${tenantNoscriptBody}</noscript>\n</body>`);
     }
 
     res.status(200).set({ 'Content-Type': 'text/html' }).end(html);
