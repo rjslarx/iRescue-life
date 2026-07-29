@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from '../db';
 import { requireTenant } from '../middleware/tenant';
-import { requireAuth, requireRole } from '../middleware/auth';
+import { requireAuth, requireRole, requireRoleOrPageAccess } from '../middleware/auth';
 import { toStripeStatementDescriptor } from '../lib/stripe-service';
 import { 
   shopProducts, 
@@ -534,12 +534,8 @@ router.get('/orders/:orderNumber', requireTenant, async (req, res, next) => {
  * GET /api/shop/admin/products
  * Get all products for admin (including drafts)
  */
-router.get('/admin/products', requireTenant, requireAuth, async (req, res, next) => {
+router.get('/admin/products', requireTenant, requireAuth, requireRoleOrPageAccess('shop', 'admin', 'staff'), async (req, res, next) => {
   try {
-    if (!['admin', 'staff'].includes(req.user!.activeRole)) {
-      return res.status(403).json({ error: 'Access denied' });
-    }
-
     const products = await db
       .select()
       .from(shopProducts)
@@ -584,12 +580,8 @@ router.get('/admin/products', requireTenant, requireAuth, async (req, res, next)
  * POST /api/shop/admin/products
  * Create a new product
  */
-router.post('/admin/products', requireTenant, requireAuth, async (req, res, next) => {
+router.post('/admin/products', requireTenant, requireAuth, requireRoleOrPageAccess('shop', 'admin', 'staff'), async (req, res, next) => {
   try {
-    if (!['admin', 'staff'].includes(req.user!.activeRole)) {
-      return res.status(403).json({ error: 'Access denied' });
-    }
-
     const productData = insertShopProductSchema.parse({
       ...req.body,
       tenantId: req.tenant!.id,
@@ -622,12 +614,8 @@ router.post('/admin/products', requireTenant, requireAuth, async (req, res, next
  * PATCH /api/shop/admin/products/:id
  * Update a product
  */
-router.patch('/admin/products/:id', requireTenant, requireAuth, async (req, res, next) => {
+router.patch('/admin/products/:id', requireTenant, requireAuth, requireRoleOrPageAccess('shop', 'admin', 'staff'), async (req, res, next) => {
   try {
-    if (!['admin', 'staff'].includes(req.user!.activeRole)) {
-      return res.status(403).json({ error: 'Access denied' });
-    }
-
     const [existing] = await db
       .select()
       .from(shopProducts)
@@ -670,12 +658,8 @@ router.patch('/admin/products/:id', requireTenant, requireAuth, async (req, res,
  * DELETE /api/shop/admin/products/:id
  * Delete a product (only if no orders exist)
  */
-router.delete('/admin/products/:id', requireTenant, requireAuth, async (req, res, next) => {
+router.delete('/admin/products/:id', requireTenant, requireAuth, requireRoleOrPageAccess('shop', 'admin'), async (req, res, next) => {
   try {
-    if (req.user!.activeRole !== 'admin') {
-      return res.status(403).json({ error: 'Access denied. Admin only.' });
-    }
-
     const [existing] = await db
       .select()
       .from(shopProducts)
@@ -713,12 +697,8 @@ router.delete('/admin/products/:id', requireTenant, requireAuth, async (req, res
  * POST /api/shop/admin/products/:id/variants
  * Add a variant to a product
  */
-router.post('/admin/products/:id/variants', requireTenant, requireAuth, async (req, res, next) => {
+router.post('/admin/products/:id/variants', requireTenant, requireAuth, requireRoleOrPageAccess('shop', 'admin', 'staff'), async (req, res, next) => {
   try {
-    if (!['admin', 'staff'].includes(req.user!.activeRole)) {
-      return res.status(403).json({ error: 'Access denied' });
-    }
-
     const [product] = await db
       .select()
       .from(shopProducts)
@@ -753,12 +733,8 @@ router.post('/admin/products/:id/variants', requireTenant, requireAuth, async (r
  * PATCH /api/shop/admin/variants/:id
  * Update a variant
  */
-router.patch('/admin/variants/:id', requireTenant, requireAuth, async (req, res, next) => {
+router.patch('/admin/variants/:id', requireTenant, requireAuth, requireRoleOrPageAccess('shop', 'admin', 'staff'), async (req, res, next) => {
   try {
-    if (!['admin', 'staff'].includes(req.user!.activeRole)) {
-      return res.status(403).json({ error: 'Access denied' });
-    }
-
     const [existing] = await db
       .select()
       .from(shopProductVariants)
@@ -794,12 +770,8 @@ router.patch('/admin/variants/:id', requireTenant, requireAuth, async (req, res,
  * DELETE /api/shop/admin/variants/:id
  * Delete a variant
  */
-router.delete('/admin/variants/:id', requireTenant, requireAuth, async (req, res, next) => {
+router.delete('/admin/variants/:id', requireTenant, requireAuth, requireRoleOrPageAccess('shop', 'admin', 'staff'), async (req, res, next) => {
   try {
-    if (!['admin', 'staff'].includes(req.user!.activeRole)) {
-      return res.status(403).json({ error: 'Access denied' });
-    }
-
     const [existing] = await db
       .select()
       .from(shopProductVariants)
@@ -825,12 +797,8 @@ router.delete('/admin/variants/:id', requireTenant, requireAuth, async (req, res
  * GET /api/shop/admin/orders
  * Get all orders for admin
  */
-router.get('/admin/orders', requireTenant, requireAuth, async (req, res, next) => {
+router.get('/admin/orders', requireTenant, requireAuth, requireRoleOrPageAccess('shop', 'admin', 'staff'), async (req, res, next) => {
   try {
-    if (!['admin', 'staff'].includes(req.user!.activeRole)) {
-      return res.status(403).json({ error: 'Access denied' });
-    }
-
     const orders = await db
       .select()
       .from(shopOrders)
@@ -869,12 +837,8 @@ router.get('/admin/orders', requireTenant, requireAuth, async (req, res, next) =
  * PATCH /api/shop/admin/orders/:id
  * Update order (fulfillment status, tracking, notes)
  */
-router.patch('/admin/orders/:id', requireTenant, requireAuth, async (req, res, next) => {
+router.patch('/admin/orders/:id', requireTenant, requireAuth, requireRoleOrPageAccess('shop', 'admin', 'staff'), async (req, res, next) => {
   try {
-    if (!['admin', 'staff'].includes(req.user!.activeRole)) {
-      return res.status(403).json({ error: 'Access denied' });
-    }
-
     const [existing] = await db
       .select()
       .from(shopOrders)
@@ -926,12 +890,8 @@ router.patch('/admin/orders/:id', requireTenant, requireAuth, async (req, res, n
  * GET /api/shop/admin/raffles
  * Get all raffle products for management
  */
-router.get('/admin/raffles', requireTenant, requireAuth, async (req, res, next) => {
+router.get('/admin/raffles', requireTenant, requireAuth, requireRoleOrPageAccess('shop', 'admin', 'staff'), async (req, res, next) => {
   try {
-    if (!['admin', 'staff'].includes(req.user!.activeRole)) {
-      return res.status(403).json({ error: 'Access denied' });
-    }
-
     const raffles = await db
       .select()
       .from(shopProducts)
@@ -997,12 +957,8 @@ router.get('/admin/raffles', requireTenant, requireAuth, async (req, res, next) 
  * POST /api/shop/admin/raffles/:id/draw
  * Draw a winner for a raffle
  */
-router.post('/admin/raffles/:id/draw', requireTenant, requireAuth, async (req, res, next) => {
+router.post('/admin/raffles/:id/draw', requireTenant, requireAuth, requireRoleOrPageAccess('shop', 'admin'), async (req, res, next) => {
   try {
-    if (req.user!.activeRole !== 'admin') {
-      return res.status(403).json({ error: 'Access denied. Admin only.' });
-    }
-
     const [raffle] = await db
       .select()
       .from(shopProducts)
@@ -1100,12 +1056,8 @@ router.post('/admin/raffles/:id/draw', requireTenant, requireAuth, async (req, r
  * GET /api/shop/admin/stats
  * Get shop statistics
  */
-router.get('/admin/stats', requireTenant, requireAuth, async (req, res, next) => {
+router.get('/admin/stats', requireTenant, requireAuth, requireRoleOrPageAccess('shop', 'admin', 'staff'), async (req, res, next) => {
   try {
-    if (!['admin', 'staff'].includes(req.user!.activeRole)) {
-      return res.status(403).json({ error: 'Access denied' });
-    }
-
     const tenantId = req.tenant!.id;
 
     // Total revenue
@@ -1159,12 +1111,8 @@ router.get('/admin/stats', requireTenant, requireAuth, async (req, res, next) =>
  * POST /api/shop/admin/products/images/upload
  * Upload a product image
  */
-router.post('/admin/products/images/upload', requireTenant, requireAuth, async (req, res, next) => {
+router.post('/admin/products/images/upload', requireTenant, requireAuth, requireRoleOrPageAccess('shop', 'admin', 'staff'), async (req, res, next) => {
   try {
-    if (!['admin', 'staff'].includes(req.user!.activeRole)) {
-      return res.status(403).json({ error: 'Access denied' });
-    }
-
     const multer = (await import('multer')).default;
     const { TenantFileStorage } = await import('../lib/tenantFileStorage');
 
