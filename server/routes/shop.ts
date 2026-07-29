@@ -460,19 +460,10 @@ router.post('/checkout/confirm', requireTenant, async (req, res, next) => {
       // Idempotent transition: only the first confirm call moves the order to
       // 'paid' and decrements inventory. Repeated confirms (double-click,
       // retries) return success without side effects.
-      const updated = await db.update(shopOrders)
-        .set({ 
-          paymentStatus: 'paid',
-          stripeChargeId: paymentIntent.latest_charge as string,
-          updatedAt: new Date(),
-        })
-        .where(and(
-          eq(shopOrders.id, order.id),
-          // Only pre-payment states may transition to paid. Refunded orders
-          // must never be flipped back by a replayed confirm call.
-          inArray(shopOrders.paymentStatus, ['pending', 'processing', 'failed'])
-        ))
-        .returning({ id: shopOrders.id });
+      // See PAYABLE_ORDER_STATES for exactly which states may transition to
+      // paid (includes sweep-cancelled orders; excludes refunded).
+      const { transitionShopOrderToPaid } = await import('../lib/shop-order-payment');
+      const updated = await transitionShopOrderToPaid(order.id, paymentIntent.latest_charge as string);
 
       if (updated.length > 0) {
         // Update inventory for variants (first successful confirm only)
@@ -918,6 +909,60 @@ router.patch('/admin/orders/:id', requireTenant, requireAuth, requireRoleOrPageA
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: 'Invalid order data', details: error.errors });
     }
+    next(error);
+  }
+});
+
+/**
+ * POST /api/shop/admin/orders/:id/resend-ticket-email
+ * Resend the raffle ticket / receipt email for a paid order containing
+ * raffle items (e.g. after a bounce, spam filtering, or a corrected email).
+ */
+router.post('/admin/orders/:id/resend-ticket-email', requireTenant, requireAuth, requireRoleOrPageAccess('shop', 'admin', 'staff'), async (req, res, next) => {
+  try {
+    const [order] = await db
+      .select()
+      .from(shopOrders)
+      .where(
+        and(
+          eq(shopOrders.id, req.params.id),
+          eq(shopOrders.tenantId, req.tenant!.id)
+        )
+      );
+
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    if (order.paymentStatus !== 'paid') {
+      return res.status(400).json({ error: 'Ticket emails can only be resent for paid orders' });
+    }
+
+    if (!order.customerEmail) {
+      return res.status(400).json({ error: 'This order has no customer email on file' });
+    }
+
+    const items = await db
+      .select()
+      .from(shopOrderItems)
+      .where(eq(shopOrderItems.orderId, order.id));
+
+    if (!items.some(i => i.productType === 'raffle')) {
+      return res.status(400).json({ error: 'This order does not contain raffle tickets' });
+    }
+
+    // Await the send so staff get a real success/failure signal (unlike the
+    // fire-and-forget initial send on payment confirmation).
+    const { EmailService } = await import('../lib/email-service');
+    const emailService = await EmailService.forTenant(req.tenant!.id);
+    if (!emailService) {
+      return res.status(400).json({ error: 'Email is not configured for this organization' });
+    }
+
+    await sendShopOrderConfirmationEmail(req.tenant!.id, order.id);
+
+    res.json({ success: true, sentTo: order.customerEmail });
+  } catch (error) {
     next(error);
   }
 });

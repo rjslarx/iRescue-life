@@ -286,6 +286,23 @@ export default function ShopManagementPage() {
     },
   });
 
+  const resendTicketEmailMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      const response = await apiRequest('POST', `/api/shop/admin/orders/${orderId}/resend-ticket-email`);
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to resend ticket email');
+      }
+      return response.json() as Promise<{ success: boolean; sentTo: string }>;
+    },
+    onSuccess: (data) => {
+      toast({ title: "Ticket email sent", description: `Resent to ${data.sentTo}` });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Couldn't resend ticket email", description: error.message, variant: "destructive" });
+    },
+  });
+
   const resetProductForm = () => {
     setProductForm({
       name: '',
@@ -680,6 +697,23 @@ export default function ShopManagementPage() {
                             {new Date(order.createdAt).toLocaleDateString()}
                           </p>
                         </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                        {order.items.some(i => i.productType === 'raffle') && order.paymentStatus === 'paid' && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => resendTicketEmailMutation.mutate(order.id)}
+                            disabled={resendTicketEmailMutation.isPending && resendTicketEmailMutation.variables === order.id}
+                            data-testid={`button-resend-ticket-email-${order.id}`}
+                          >
+                            {resendTicketEmailMutation.isPending && resendTicketEmailMutation.variables === order.id ? (
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            ) : (
+                              <Ticket className="h-4 w-4 mr-2" />
+                            )}
+                            Resend Ticket Email
+                          </Button>
+                        )}
                         {order.items.some(i => i.productType === 'physical') && order.paymentStatus === 'paid' && (
                           <Select
                             value={order.fulfillmentStatus}
@@ -699,6 +733,7 @@ export default function ShopManagementPage() {
                             </SelectContent>
                           </Select>
                         )}
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
