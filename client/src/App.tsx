@@ -280,9 +280,9 @@ function RouterSwitch() {
       <Route path="/accept-invitation" component={AcceptInvitationPage} />
       <Route path="/wishlist" component={PublicWishlist} />
       <Route path="/shop" component={PublicShopPage} />
-      <Route path="/shop/:slug" component={PublicProductPage} />
       <Route path="/shop/checkout" component={ShopCheckoutPage} />
       <Route path="/shop/order/:orderNumber" component={ShopOrderPage} />
+      <Route path="/shop/:slug" component={PublicProductPage} />
       <Route path="/event/:id" component={EventDetailPage} />
       <Route path="/adoption-checkout/:token" component={PublicAdoptionCheckoutPage} />
       <Route path="/foster-agreement/sign/:token" component={PublicFosterAgreementPage} />
