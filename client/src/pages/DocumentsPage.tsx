@@ -29,6 +29,13 @@ type FolderItem = {
   status: string;
   date: string | null;
   downloadUrl: string | null;
+  viewHtmlUrl?: string | null;
+};
+
+type AgreementViewerDoc = {
+  title: string;
+  html?: string;
+  pdfUrl?: string | null;
 };
 
 type ApplicationFolder = {
@@ -107,6 +114,8 @@ export default function DocumentsPage() {
   const [selectedFolder, setSelectedFolder] = useState<ApplicationFolder | null>(null);
   const [downloadingAppId, setDownloadingAppId] = useState<string | number | null>(null);
   const [applicationDetailsOpen, setApplicationDetailsOpen] = useState(false);
+  const [agreementViewerDoc, setAgreementViewerDoc] = useState<AgreementViewerDoc | null>(null);
+  const [loadingAgreementId, setLoadingAgreementId] = useState<string | number | null>(null);
   const [selectedApplication, setSelectedApplication] = useState<PendingApplication | null>(null);
   const [loadingApplicationId, setLoadingApplicationId] = useState<string | number | null>(null);
   
@@ -370,8 +379,23 @@ export default function DocumentsPage() {
   };
 
   const handleViewAgreement = async (item: FolderItem) => {
+    // Open documents inside the app (with a close button) instead of a new
+    // tab — new tabs can't be closed on iPad / in the installed app.
+    if (item.viewHtmlUrl) {
+      try {
+        setLoadingAgreementId(item.id);
+        const response = await apiRequest('GET', item.viewHtmlUrl);
+        const data = await response.json();
+        setAgreementViewerDoc({ title: data.title, html: data.html, pdfUrl: data.pdfUrl || item.downloadUrl });
+        return;
+      } catch {
+        // fall through to PDF viewer below
+      } finally {
+        setLoadingAgreementId(null);
+      }
+    }
     if (item.downloadUrl) {
-      window.open(item.downloadUrl, '_blank');
+      setAgreementViewerDoc({ title: item.title, pdfUrl: item.downloadUrl });
     } else {
       toast({
         title: "Not Available",
@@ -629,7 +653,7 @@ export default function DocumentsPage() {
                     if (loadingApplicationId) return;
                     if (selectedFolder?.type === 'applications') {
                       handleViewApplication(item.id, selectedFolder.id);
-                    } else if (item.downloadUrl) {
+                    } else if (item.downloadUrl || item.viewHtmlUrl) {
                       handleViewAgreement(item);
                     }
                   }}
@@ -712,6 +736,48 @@ export default function DocumentsPage() {
               onClick={() => setSelectedFolder(null)}
               className="w-full sm:w-auto"
               data-testid="button-close-folder-dialog"
+            >
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Signed Agreement Viewer Dialog (in-app so it can always be closed) */}
+      <Dialog open={!!agreementViewerDoc} onOpenChange={(open) => !open && setAgreementViewerDoc(null)}>
+        <DialogContent className="max-w-3xl h-[90vh] max-h-[90vh] overflow-hidden flex flex-col" data-testid="dialog-agreement-viewer">
+          <DialogHeader className="pr-8">
+            <DialogTitle className="truncate">{agreementViewerDoc?.title}</DialogTitle>
+            <DialogDescription>Signed document</DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto rounded-md border bg-white">
+            {agreementViewerDoc?.html ? (
+              <div
+                className="p-4 text-black [&_*]:max-w-full"
+                dangerouslySetInnerHTML={{ __html: agreementViewerDoc.html }}
+              />
+            ) : agreementViewerDoc?.pdfUrl ? (
+              <iframe
+                src={agreementViewerDoc.pdfUrl}
+                title={agreementViewerDoc.title}
+                className="w-full h-full min-h-[60vh]"
+              />
+            ) : null}
+          </div>
+          <DialogFooter className="flex-row gap-2 justify-end">
+            {agreementViewerDoc?.pdfUrl && (
+              <Button
+                variant="outline"
+                onClick={() => window.open(agreementViewerDoc.pdfUrl!, '_blank')}
+                data-testid="button-agreement-viewer-download"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Download PDF
+              </Button>
+            )}
+            <Button
+              onClick={() => setAgreementViewerDoc(null)}
+              data-testid="button-agreement-viewer-close"
             >
               Close
             </Button>

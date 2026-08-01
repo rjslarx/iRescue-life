@@ -13843,6 +13843,17 @@ Crawl-delay: 1
         }
       }
 
+      // Validate notification recipients: must be an array of valid emails
+      if (req.body.notificationEmails !== undefined && req.body.notificationEmails !== null) {
+        const raw = req.body.notificationEmails;
+        if (!Array.isArray(raw) || raw.length > 20 || raw.some((e: unknown) =>
+          typeof e !== 'string' || e.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim())
+        )) {
+          return res.status(400).json({ error: 'notificationEmails must be a list of up to 20 valid email addresses' });
+        }
+        req.body.notificationEmails = Array.from(new Set(raw.map((e: string) => e.trim().toLowerCase())));
+      }
+
       const form = await updateForm(req.params.id, req.tenant!.id, req.body);
       
       if (!form) {
@@ -14153,7 +14164,9 @@ Crawl-delay: 1
         }
       }
 
-      if (tenant?.contactEmail && renderedHtml) {
+      const { getFormNotificationRecipients: getWaiverRecipients } = await import('./services/custom-form');
+      const waiverOrgRecipients = getWaiverRecipients(form, tenant?.contactEmail);
+      if (waiverOrgRecipients.length > 0 && renderedHtml) {
         try {
           const { EmailService } = await import('./lib/email-service');
           const emailService = await EmailService.forTenant(tenantId);
@@ -14178,12 +14191,12 @@ ${renderedHtml}
             `.trim();
 
             await emailService.send({
-              to: tenant.contactEmail,
+              to: waiverOrgRecipients,
               subject: emailSubject,
               html: emailHtml,
               attachments: agreementPdfAttachments.length > 0 ? agreementPdfAttachments : undefined,
             });
-            console.log(`[Public Waiver] Emailed waiver to ${tenant.contactEmail}`);
+            console.log(`[Public Waiver] Emailed waiver to ${waiverOrgRecipients.join(', ')}`);
           }
         } catch (emailError) {
           console.error('[Public Waiver] Error sending org email:', emailError);
@@ -14452,8 +14465,11 @@ ${renderedHtml}
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 
-      // Notify the organization
-      if (tenant?.contactEmail && renderedHtml) {
+      // Notify the organization (form's notification emails, falling back to
+      // the tenant's contact email)
+      const { getFormNotificationRecipients: getSlugFormRecipients } = await import('./services/custom-form');
+      const slugFormOrgRecipients = getSlugFormRecipients(form, tenant?.contactEmail);
+      if (slugFormOrgRecipients.length > 0 && renderedHtml) {
         try {
           const { EmailService } = await import('./lib/email-service');
           const emailService = await EmailService.forTenant(tenantId);
@@ -14477,7 +14493,7 @@ ${renderedHtml}
               .join('');
 
             await emailService.send({
-              to: tenant.contactEmail,
+              to: slugFormOrgRecipients,
               subject: `New Submission: ${form.name} — ${signerName}`,
               html: `
 <h2>${escapeHtml(form.name)} — New Submission</h2>
@@ -14996,9 +15012,12 @@ ${renderedHtml}
       }
 
       // ========================================================================
-      // EMAIL: Send copy of submitted form to tenant's contact email
+      // EMAIL: Send copy of submitted form to the form's notification emails
+      // (falls back to the tenant's contact email)
       // ========================================================================
-      if (tenant?.contactEmail && renderedHtml) {
+      const { getFormNotificationRecipients: getTokenFormRecipients } = await import('./services/custom-form');
+      const tokenFormOrgRecipients = getTokenFormRecipients(form, tenant?.contactEmail);
+      if (tokenFormOrgRecipients.length > 0 && renderedHtml) {
         try {
           const { EmailService } = await import('./lib/email-service');
           const emailService = await EmailService.forTenant(submission.tenantId);
@@ -15035,13 +15054,13 @@ ${renderedHtml}
             `.trim();
             
             await emailService.send({
-              to: tenant.contactEmail,
+              to: tokenFormOrgRecipients,
               subject: emailSubject,
               html: emailHtml,
               attachments: agreementPdfAttachments.length > 0 ? agreementPdfAttachments : undefined,
             });
             
-            console.log(`[Form Submission] Emailed copy of "${form.name}" to ${tenant.contactEmail}`);
+            console.log(`[Form Submission] Emailed copy of "${form.name}" to ${tokenFormOrgRecipients.join(', ')}`);
           }
         } catch (emailError) {
           // Log error but don't fail the form submission
@@ -42156,6 +42175,44 @@ Email: ${application.applicantEmail || ''}`
    * GET /api/documents/applications-agreements
    * Get all applications and agreements organized into folders for the Documents page
    */
+  /**
+   * GET /api/custom-forms/submissions/:id/html
+   * Staff view of a completed custom-form submission (e.g. signed hold
+   * harmless) as HTML, so documents can be viewed in-app instead of opening
+   * a PDF in a new tab (which can't be closed on iPad/PWA).
+   */
+  app.get('/api/custom-forms/submissions/:id/html', requireTenant, requireAuth, requireRoleOrPageAccess('documents', 'admin', 'staff'), async (req, res, next) => {
+    try {
+      const [sub] = await db
+        .select({
+          renderedHtml: customFormSubmissions.renderedHtml,
+          pdfUrl: customFormSubmissions.pdfUrl,
+          signerName: customFormSubmissions.signerName,
+          status: customFormSubmissions.status,
+          formName: customForms.name,
+        })
+        .from(customFormSubmissions)
+        .innerJoin(customForms, eq(customFormSubmissions.formId, customForms.id))
+        .where(and(
+          eq(customFormSubmissions.id, req.params.id),
+          eq(customFormSubmissions.tenantId, req.tenant!.id)
+        ))
+        .limit(1);
+
+      if (!sub || sub.status !== 'completed' || !sub.renderedHtml) {
+        return res.status(404).json({ error: 'Signed document not found' });
+      }
+
+      res.json({
+        title: `${sub.formName} — ${sub.signerName}`,
+        html: sub.renderedHtml,
+        pdfUrl: sub.pdfUrl || null,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.get('/api/documents/applications-agreements', requireTenant, requireAuth, async (req, res, next) => {
     try {
       const tenantId = req.tenant!.id;
@@ -42273,6 +42330,7 @@ Email: ${application.applicantEmail || ''}`
         status: 'signed',
         date: (sub.signedAt || sub.createdAt) ? new Date((sub.signedAt || sub.createdAt)).toISOString() : null,
         downloadUrl: sub.pdfUrl || null,
+        viewHtmlUrl: `/api/custom-forms/submissions/${sub.id}/html`,
       }));
 
       const folders = [

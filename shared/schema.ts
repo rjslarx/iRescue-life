@@ -5333,6 +5333,8 @@ export const customForms = pgTable("custom_forms", {
   isPublic: boolean("is_public").notNull().default(false), // Can be accessed via public link
   publicSlug: text("public_slug"), // URL-friendly slug for public access
   formFields: jsonb("form_fields").$type<CustomFormField[]>(), // Custom input fields shown on the public form page
+  // Staff emails notified when this form is signed (falls back to tenant contactEmail when empty)
+  notificationEmails: text("notification_emails").array(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
   createdBy: uuid("created_by").references(() => users.id),

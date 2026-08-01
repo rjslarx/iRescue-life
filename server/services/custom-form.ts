@@ -449,23 +449,35 @@ export async function renderFormHtml(
     replacements['{{animal_weight}}'] = animal.weight ? `${animal.weight} lbs` : '';
   }
   
-  // Handle signature image
-  if (submission.signatureData) {
-    replacements['{{signature_image_url}}'] = submission.signatureData;
-  } else {
-    replacements['{{signature_image_url}}'] = '';
-  }
-  
+  // Escape all signer/animal-provided values before merging into the
+  // sanitized template — the template is sanitized at creation, but merged
+  // data is untrusted and could otherwise inject markup (stored XSS in the
+  // staff viewer / emails).
+  const escapeMergeValue = (value: string) =>
+    value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+
+  // Handle signature image: only a validated inline data-URL image may be
+  // used unescaped (it goes into an img src attribute).
+  const sig = submission.signatureData || '';
+  replacements['{{signature_image_url}}'] =
+    /^data:image\/(png|jpe?g|webp);base64,[A-Za-z0-9+/=]+$/.test(sig) ? sig : '';
+
   // Apply all replacements
   for (const [placeholder, value] of Object.entries(replacements)) {
-    html = html.replace(new RegExp(placeholder.replace(/[{}]/g, '\\$&'), 'g'), value);
+    const safeValue = placeholder === '{{signature_image_url}}' ? value : escapeMergeValue(value);
+    html = html.replace(new RegExp(placeholder.replace(/[{}]/g, '\\$&'), 'g'), safeValue);
   }
   
   // Replace any custom form data fields
   if (submission.formData) {
     for (const [key, value] of Object.entries(submission.formData)) {
       const placeholder = `{{${key}}}`;
-      html = html.replace(new RegExp(placeholder.replace(/[{}]/g, '\\$&'), 'g'), String(value));
+      html = html.replace(new RegExp(placeholder.replace(/[{}]/g, '\\$&'), 'g'), escapeMergeValue(String(value)));
     }
   }
   
@@ -482,4 +494,17 @@ export function generateSecureToken(): { token: string; hash: string } {
 // Hash a token for lookup
 export function hashToken(token: string): string {
   return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+// Staff recipients to notify when a form is signed: the form's configured
+// notification emails, falling back to the tenant's contact email.
+export function getFormNotificationRecipients(
+  form: { notificationEmails?: string[] | null },
+  tenantContactEmail?: string | null
+): string[] {
+  const configured = (Array.isArray(form.notificationEmails) ? form.notificationEmails : [])
+    .map((e) => (e || '').trim().toLowerCase())
+    .filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
+  if (configured.length > 0) return Array.from(new Set(configured));
+  return tenantContactEmail ? [tenantContactEmail] : [];
 }

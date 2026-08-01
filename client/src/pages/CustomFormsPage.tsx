@@ -65,6 +65,7 @@ interface CustomForm {
   isActive: boolean;
   isPublic: boolean;
   publicSlug?: string;
+  notificationEmails?: string[] | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -104,6 +105,7 @@ const formSchema = z.object({
   requiresSignature: z.boolean().default(true),
   isActive: z.boolean().default(true),
   isPublic: z.boolean().default(false),
+  notificationEmailsText: z.string().optional(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -143,6 +145,7 @@ export default function CustomFormsPage() {
       requiresSignature: true,
       isActive: true,
       isPublic: false,
+      notificationEmailsText: "",
     },
   });
 
@@ -156,6 +159,7 @@ export default function CustomFormsPage() {
       requiresSignature: true,
       isActive: true,
       isPublic: false,
+      notificationEmailsText: "",
     },
   });
 
@@ -352,6 +356,7 @@ export default function CustomFormsPage() {
       requiresSignature: form.requiresSignature,
       isActive: form.isActive,
       isPublic: form.isPublic,
+      notificationEmailsText: (form.notificationEmails || []).join(", "),
     });
     setIsEditDialogOpen(true);
   };
@@ -409,13 +414,21 @@ export default function CustomFormsPage() {
     });
   };
 
+  const toApiPayload = ({ notificationEmailsText, ...rest }: FormData) => ({
+    ...rest,
+    notificationEmails: (notificationEmailsText || "")
+      .split(/[,;\n]/)
+      .map((e) => e.trim())
+      .filter((e) => e.length > 0),
+  });
+
   const onSubmitCreate = (data: FormData) => {
-    createMutation.mutate(data);
+    createMutation.mutate(toApiPayload(data) as any);
   };
 
   const onSubmitEdit = (data: FormData) => {
     if (selectedForm) {
-      updateMutation.mutate({ id: selectedForm.id, data });
+      updateMutation.mutate({ id: selectedForm.id, data: toApiPayload(data) as any });
     }
   };
 
@@ -561,6 +574,28 @@ export default function CustomFormsPage() {
             )}
           />
         </div>
+
+        <FormField
+          control={form.control}
+          name="notificationEmailsText"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Notify these emails when signed</FormLabel>
+              <FormControl>
+                <Input
+                  placeholder="admin@yourrescue.org, director@yourrescue.org"
+                  {...field}
+                  data-testid="input-notification-emails"
+                />
+              </FormControl>
+              <FormDescription>
+                When someone signs this form, a copy of the signed document (with PDF attached) is emailed to
+                these addresses. Separate multiple emails with commas. Leave blank to use your rescue's contact email.
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
 
         <Collapsible open={isFieldsPanelOpen} onOpenChange={setIsFieldsPanelOpen}>
           <CollapsibleTrigger asChild>

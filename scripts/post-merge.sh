@@ -144,3 +144,8 @@ SQL
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' || echo "[post-merge] shop_orders processing_fee column skipped (already applied or DB unreachable)."
 ALTER TABLE shop_orders ADD COLUMN IF NOT EXISTS processing_fee text NOT NULL DEFAULT '0';
 SQL
+
+# Per-form notification recipients for custom form signatures. Idempotent.
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' || echo "[post-merge] custom_forms notification_emails column skipped (already applied or DB unreachable)."
+ALTER TABLE custom_forms ADD COLUMN IF NOT EXISTS notification_emails text[];
+SQL
