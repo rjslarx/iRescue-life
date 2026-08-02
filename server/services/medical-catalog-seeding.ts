@@ -129,6 +129,8 @@ const DEFAULT_CATALOG_ITEMS: CatalogSeedItem[] = [
   { name: 'Sentinel Spectrum', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30, speciesTarget: 'Dog', defaultRoute: 'PO', manufacturer: 'Virbac' },
   { name: 'K9 Advantix II', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30, speciesTarget: 'Dog', defaultRoute: 'Topical', manufacturer: 'Elanco' },
   { name: 'Advantage Multi (Dog)', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30, speciesTarget: 'Dog', defaultRoute: 'Topical', manufacturer: 'Elanco' },
+  { name: 'Barrier Flea & Heartworm (Dog)', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30, speciesTarget: 'Dog', defaultRoute: 'Topical', manufacturer: 'Aurora Pharmaceutical' },
+  { name: 'Barrier Flea & Heartworm (Cat)', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30, speciesTarget: 'Cat', defaultRoute: 'Topical', manufacturer: 'Aurora Pharmaceutical' },
   { name: 'Trifexis', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30, speciesTarget: 'Dog', defaultRoute: 'PO', manufacturer: 'Elanco' },
   { name: 'Credelio', category: 'Preventative', defaultFrequency: 'Monthly', defaultIntervalDays: 30, speciesTarget: 'Dog', defaultRoute: 'PO', manufacturer: 'Elanco' },
   { name: 'Seresto Collar (Dog)', category: 'Preventative', defaultFrequency: 'Every 8 months', defaultIntervalDays: 240, speciesTarget: 'Dog', defaultRoute: 'Collar', manufacturer: 'Elanco' },
@@ -361,4 +363,26 @@ export async function seedMedicalCatalog(tenantId: string): Promise<{ catalogCre
   }
 
   return { catalogCreated: createdItems.length, catalogSkipped: skippedCount, orderSetsCreated };
+}
+
+/**
+ * Idempotent startup helper: insert newly-added default catalog items for
+ * tenants that already seeded their catalog before those items existed.
+ * Only tenants that have at least one catalog row get the new items
+ * (tenants with an intentionally empty catalog are left alone).
+ */
+export async function ensureNewDefaultCatalogItems(itemNames: string[]): Promise<void> {
+  const items = DEFAULT_CATALOG_ITEMS.filter(i => itemNames.includes(i.name));
+  for (const item of items) {
+    await db.execute(sql`
+      INSERT INTO medical_catalog (tenant_id, name, category, default_dose, default_frequency, default_interval_days, species_target, default_route, manufacturer)
+      SELECT t.tenant_id, ${item.name}, ${item.category}, ${item.defaultDose ?? null}, ${item.defaultFrequency ?? null}, ${item.defaultIntervalDays ?? null}, ${item.speciesTarget ?? null}, ${item.defaultRoute ?? null}, ${item.manufacturer ?? null}
+      FROM (SELECT DISTINCT tenant_id FROM medical_catalog) t
+      WHERE NOT EXISTS (
+        SELECT 1 FROM medical_catalog mc
+        WHERE mc.tenant_id = t.tenant_id AND LOWER(mc.name) = LOWER(${item.name})
+      )
+    `);
+  }
+  console.log(`[MedicalCatalog] Ensured new default items for existing tenants: ${items.map(i => i.name).join(', ')}`);
 }

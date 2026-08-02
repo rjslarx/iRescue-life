@@ -316,6 +316,15 @@ app.use((req, res, next) => {
     ensurePeerCampaignThemeColumn();
     patchBravectoPlusInterval();
 
+    // Add newly-introduced default catalog items to tenants that seeded
+    // their catalog before these items existed (idempotent).
+    import('./services/medical-catalog-seeding')
+      .then(m => m.ensureNewDefaultCatalogItems([
+        'Barrier Flea & Heartworm (Dog)',
+        'Barrier Flea & Heartworm (Cat)',
+      ]))
+      .catch(err => console.error('[Startup] New catalog item backfill failed:', err));
+
     // Backfill stale nextScheduledDose for prescriptions where it's behind the last given dose
     backfillStaleNextScheduledDose();
 
