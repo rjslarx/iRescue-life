@@ -8130,6 +8130,41 @@ Crawl-delay: 1
   });
 
   /**
+   * GET /api/animals/:id/adopter-updates
+   * Get adopter/alumni updates (happy tails, incl. SMS photo replies) for an animal
+   */
+  app.get('/api/animals/:id/adopter-updates', requireTenant, requireAuth, requireRoleOrPageAccess('animals', 'admin', 'staff'), async (req, res, next) => {
+    try {
+      const { happyTails } = await import('@shared/schema');
+
+      const updates = await db
+        .select({
+          id: happyTails.id,
+          animalId: happyTails.animalId,
+          animalName: happyTails.animalName,
+          adopterName: happyTails.adopterName,
+          story: happyTails.story,
+          photoUrl: happyTails.photoUrl,
+          date: happyTails.date,
+          isPublished: happyTails.isPublished,
+          createdAt: happyTails.createdAt,
+        })
+        .from(happyTails)
+        .where(
+          and(
+            eq(happyTails.animalId, req.params.id),
+            eq(happyTails.tenantId, req.tenant!.id)
+          )
+        )
+        .orderBy(desc(happyTails.createdAt));
+
+      res.json({ adopterUpdates: updates });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * GET /api/animals/:id/audit-log
    * Get status/location audit history for an animal (admin/staff only)
    */

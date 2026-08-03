@@ -4495,8 +4495,20 @@ export const smsMessageLogs = pgTable("sms_message_logs", {
   recipientUserId: uuid("recipient_user_id").references(() => users.id, { onDelete: 'set null' }), // The user receiving this message
   relatedAnimalId: uuid("related_animal_id").references(() => animals.id, { onDelete: 'set null' }), // Animal this message concerns
   relatedTaskIds: uuid("related_task_id").array(), // Task UUIDs in a medication digest batch
+  // Alumni-routing lifecycle for unmatched inbound messages: 'pending' (not
+  // yet attempted), 'processing' (claimed), 'routed', 'no_match', 'failed'
+  // (retryable on webhook redelivery).
+  alumniRoutingStatus: text("alumni_routing_status"),
+  alumniRoutingClaimedAt: timestamp("alumni_routing_claimed_at"), // lease start; stale 'processing' claims are recoverable
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (table) => ({
+  // Atomic idempotency for unmatched inbound webhook redeliveries — the
+  // insert (ON CONFLICT DO NOTHING) is the single source of truth for
+  // whether downstream routing (e.g. alumni updates) should run.
+  unmatchedInboundSidUnique: uniqueIndex("sms_message_logs_unmatched_inbound_sid_unique")
+    .on(table.twilioMessageSid)
+    .where(sql`message_type = 'unmatched_inbound' AND twilio_message_sid IS NOT NULL`),
+}));
 
 export const insertSmsMessageLogSchema = createInsertSchema(smsMessageLogs).omit({
   id: true,

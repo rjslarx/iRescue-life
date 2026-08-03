@@ -56,6 +56,18 @@ interface FosterUpdateItem {
   updatedAt: string;
 }
 
+interface AdopterUpdateItem {
+  id: string;
+  animalId: string | null;
+  animalName: string;
+  adopterName: string;
+  story: string;
+  photoUrl: string | null;
+  date: string;
+  isPublished: boolean;
+  createdAt: string;
+}
+
 interface FosterMatch {
   id: string;
   fullName: string;
@@ -100,6 +112,11 @@ export function AnimalDetailsDialog({ animal, open, onOpenChange }: AnimalDetail
 
   const { data: fosterUpdatesData, isLoading: isLoadingUpdates } = useQuery<{ fosterUpdates: FosterUpdateItem[] }>({
     queryKey: ['/api/animals', animal.id, 'foster-updates'],
+    enabled: open,
+  });
+
+  const { data: adopterUpdatesData, isLoading: isLoadingAdopterUpdates } = useQuery<{ adopterUpdates: AdopterUpdateItem[] }>({
+    queryKey: ['/api/animals', animal.id, 'adopter-updates'],
     enabled: open,
   });
 
@@ -148,6 +165,7 @@ export function AnimalDetailsDialog({ animal, open, onOpenChange }: AnimalDetail
   const fosterHistory = fosterHistoryData?.fosterHistory || [];
   const supplyRequests = supplyRequestsData?.supplyRequests || [];
   const fosterUpdates = fosterUpdatesData?.fosterUpdates || [];
+  const adopterUpdates = adopterUpdatesData?.adopterUpdates || [];
   const fosterMatches = fosterMatchesData?.matches || [];
 
   const calculateDaysInFoster = (startDate: string, endDate: string | null): number => {
@@ -527,6 +545,53 @@ export function AnimalDetailsDialog({ animal, open, onOpenChange }: AnimalDetail
                 ))}
               </div>
             )}
+
+            {/* Adopter / Alumni Updates */}
+            <div className="pt-4 border-t">
+              <h3 className="text-sm font-semibold mb-3" data-testid="heading-adopter-updates">Adopter Updates</h3>
+              {isLoadingAdopterUpdates ? (
+                <div className="flex justify-center py-4" data-testid="loading-adopter-updates">
+                  <Loader2 className="h-6 w-6 animate-spin" />
+                </div>
+              ) : adopterUpdates.length === 0 ? (
+                <div className="text-center py-4 text-muted-foreground text-sm" data-testid="no-adopter-updates">
+                  No adopter updates for this animal
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {adopterUpdates.map((update) => (
+                    <Card key={update.id} data-testid={`card-adopter-update-${update.id}`}>
+                      <CardHeader>
+                        <div className="flex items-start justify-between flex-wrap gap-2">
+                          <div className="flex-1">
+                            <CardTitle className="text-base">Alumni Update</CardTitle>
+                            <CardDescription className="text-xs mt-1">
+                              By {update.adopterName || 'Adopter'} • {format(new Date(update.createdAt), 'MMM d, yyyy h:mm a')}
+                            </CardDescription>
+                          </div>
+                          <Badge className={`${update.isPublished ? 'bg-green-500' : 'bg-yellow-500'} shrink-0`}>
+                            {update.isPublished ? 'published' : 'unpublished'}
+                          </Badge>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        <p className="text-sm whitespace-pre-wrap" data-testid={`text-adopter-update-story-${update.id}`}>
+                          {update.story}
+                        </p>
+                        {update.photoUrl && (
+                          <img
+                            src={update.photoUrl}
+                            alt="Adopter update photo"
+                            className="w-full max-w-xs h-48 object-cover rounded-md"
+                            data-testid={`img-adopter-update-photo-${update.id}`}
+                          />
+                        )}
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
           </TabsContent>
 
         </Tabs>

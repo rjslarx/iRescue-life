@@ -1,6 +1,6 @@
 import twilio from 'twilio';
 import { db } from '../db';
-import { tenants, smsMessageLogs, smsProxySessions, transportEvents, users, fosterAnimals, supplyRequests, fosterUpdates, medicationTasks, complianceReminders, animals, contacts, adoptionCheckoutSessions, adopterHelpRequests, calendars, calendarEvents } from '@shared/schema';
+import { tenants, smsMessageLogs, smsProxySessions, transportEvents, users, fosterAnimals, supplyRequests, fosterUpdates, medicationTasks, complianceReminders, animals, contacts, adoptionCheckoutSessions, adopterHelpRequests, calendars, calendarEvents, adoptions, happyTails } from '@shared/schema';
 import { eq, and, desc, gte, lte, isNotNull, inArray, or, sql } from 'drizzle-orm';
 import { startOfDay, endOfDay, eachDayOfInterval, addDays, format, parseISO } from 'date-fns';
 import { decrypt, encrypt } from './encryption';
@@ -436,18 +436,8 @@ async function logUnmatchedInboundSms(
   body: string,
   mediaUrls: string[] = [],
   messageSid?: string,
-): Promise<void> {
+): Promise<{ tenantId: string | null; isNew: boolean }> {
   try {
-    // Dedupe on Twilio MessageSid so webhook redeliveries don't create
-    // duplicate feed items.
-    if (messageSid) {
-      const [existing] = await db
-        .select({ id: smsMessageLogs.id })
-        .from(smsMessageLogs)
-        .where(eq(smsMessageLogs.twilioMessageSid, messageSid))
-        .limit(1);
-      if (existing) return;
-    }
     const [tenant] = await db
       .select({ id: tenants.id })
       .from(tenants)
@@ -456,14 +446,18 @@ async function logUnmatchedInboundSms(
 
     if (!tenant) {
       console.warn(`[TWILIO] Unmatched inbound SMS from ${fromNumber} to unknown number ${toNumber} — not logged (no tenant match)`);
-      return;
+      return { tenantId: null, isNew: false };
     }
 
     const mediaNote = mediaUrls.length > 0
       ? `\n[${mediaUrls.length} attachment${mediaUrls.length > 1 ? 's' : ''}] ${mediaUrls.join(' ')}`
       : '';
 
-    await db.insert(smsMessageLogs).values({
+    // Atomic idempotency: a partial unique index on twilio_message_sid
+    // (message_type = 'unmatched_inbound') makes this insert the single
+    // arbiter of "new vs redelivery" — concurrent webhook retries can't
+    // both win, so downstream routing runs exactly once per MessageSid.
+    const inserted = await db.insert(smsMessageLogs).values({
       tenantId: tenant.id,
       twilioMessageSid: messageSid,
       direction: 'inbound',
@@ -472,10 +466,361 @@ async function logUnmatchedInboundSms(
       body: `${body}${mediaNote}`.slice(0, 4000),
       messageType: 'unmatched_inbound',
       status: 'received',
-    });
+      alumniRoutingStatus: 'pending',
+    })
+      .onConflictDoNothing()
+      .returning({ id: smsMessageLogs.id });
+
+    if (inserted.length === 0) {
+      // Lost the race / redelivery — another insert already recorded this SID
+      return { tenantId: tenant.id, isNew: false };
+    }
     console.log(`[TWILIO] Logged unmatched inbound SMS from ${fromNumber} for tenant ${tenant.id}`);
+    return { tenantId: tenant.id, isNew: true };
   } catch (err) {
     console.error('[TWILIO] Failed to log unmatched inbound SMS:', err);
+    return { tenantId: null, isNew: false };
+  }
+}
+
+// Only media types we expect from MMS; anything else is refused.
+const ALLOWED_MMS_CONTENT_TYPES: Record<string, string> = {
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+  'image/gif': '.gif',
+  'image/webp': '.webp',
+  'image/heic': '.heic',
+  'video/mp4': '.mp4',
+  'video/3gpp': '.3gp',
+};
+const MAX_MMS_MEDIA_BYTES = 10 * 1024 * 1024; // 10 MB per item
+
+/**
+ * A URL is only fetched with the tenant's Twilio credentials when it is a
+ * canonical Twilio Media API URL for THIS account. Prevents forwarding
+ * Basic-auth credentials to arbitrary hosts (SSRF / credential leak).
+ * Exported for tests.
+ */
+export function isAllowedTwilioMediaUrl(rawUrl: string, accountSid: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    return false;
+  }
+  return (
+    url.protocol === 'https:' &&
+    url.hostname === 'api.twilio.com' &&
+    url.pathname.startsWith(`/2010-04-01/Accounts/${accountSid}/Messages/`) &&
+    url.pathname.includes('/Media/')
+  );
+}
+
+/**
+ * Stream the response body, aborting as soon as the byte cap is exceeded —
+ * never buffers an unbounded response (Content-Length can lie or be absent).
+ */
+async function readCappedBody(response: Response, cap: number): Promise<Buffer | null> {
+  const declared = Number(response.headers.get('content-length') || '0');
+  if (declared > cap) return null;
+  if (!response.body) return null;
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) {
+        total += value.byteLength;
+        if (total > cap) {
+          await reader.cancel();
+          return null;
+        }
+        chunks.push(value);
+      }
+    }
+  } catch {
+    return null;
+  }
+  if (total === 0) return null;
+  return Buffer.concat(chunks.map(c => Buffer.from(c)));
+}
+
+/**
+ * Download Twilio MMS media (Basic-auth protected, URLs expire) and persist
+ * each item into tenant object storage. Returns the persisted /objects/...
+ * paths. Hardened:
+ *  - credentials are only sent to canonical api.twilio.com media URLs for
+ *    this account
+ *  - redirects are followed manually (max 1, https only) WITHOUT the
+ *    Authorization header, so credentials never leave Twilio
+ *  - strict content-type allowlist and a per-item size cap
+ */
+async function persistTwilioMediaToStorage(
+  tenantId: string,
+  animalId: string,
+  mediaUrls: string[],
+  config: TwilioConfig,
+): Promise<string[]> {
+  const persisted: string[] = [];
+  const { ObjectStorageService } = await import('../objectStorage');
+  const objectStorage = new ObjectStorageService();
+  const authHeader = 'Basic ' + Buffer.from(`${config.accountSid}:${config.authToken}`).toString('base64');
+
+  for (const url of mediaUrls) {
+    try {
+      if (!isAllowedTwilioMediaUrl(url, config.accountSid)) {
+        console.error(`[TWILIO] Refusing to fetch non-Twilio media URL: ${url}`);
+        continue;
+      }
+
+      // Step 1: authenticated request to Twilio, redirects handled manually
+      let response = await fetch(url, {
+        headers: { Authorization: authHeader },
+        redirect: 'manual',
+      });
+
+      // Step 2: Twilio typically 307-redirects to its media CDN. Follow at
+      // most one redirect, https-only, WITHOUT credentials.
+      if (response.status >= 300 && response.status < 400) {
+        const location = response.headers.get('location');
+        if (!location) continue;
+        const redirectUrl = new URL(location, url);
+        if (redirectUrl.protocol !== 'https:') {
+          console.error(`[TWILIO] Refusing non-https media redirect: ${redirectUrl.href}`);
+          continue;
+        }
+        response = await fetch(redirectUrl.href, { redirect: 'error' });
+      }
+
+      if (!response.ok) {
+        console.error(`[TWILIO] Failed to download MMS media (${response.status}): ${url}`);
+        continue;
+      }
+
+      const contentType = (response.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+      const ext = ALLOWED_MMS_CONTENT_TYPES[contentType];
+      if (!ext) {
+        console.error(`[TWILIO] Refusing disallowed media content-type "${contentType}" from ${url}`);
+        continue;
+      }
+
+      const buffer = await readCappedBody(response, MAX_MMS_MEDIA_BYTES);
+      if (!buffer) {
+        console.error(`[TWILIO] Media from ${url} empty or exceeds ${MAX_MMS_MEDIA_BYTES} bytes — skipped`);
+        continue;
+      }
+
+      const { randomUUID } = await import('crypto');
+      const result = await objectStorage.uploadTenantFile(
+        tenantId,
+        `alumni-updates/${animalId}`,
+        buffer,
+        contentType,
+        `${randomUUID()}${ext}`,
+      );
+      persisted.push(result.objectPath);
+    } catch (err) {
+      console.error('[TWILIO] Error persisting MMS media:', err);
+    }
+  }
+  return persisted;
+}
+
+/**
+ * Match an unmatched inbound SMS/MMS sender against known adopters
+ * (adoptions.adopterPhone, falling back to contacts.phone -> adoption by
+ * email) and, on match, save the reply as an alumni update (happy tail,
+ * unpublished) on the adopted animal's record. MMS media is downloaded into
+ * object storage because Twilio media URLs expire.
+ * Returns 'routed' when attached, 'no_match' when the sender isn't a known
+ * adopter, and THROWS on transient failures (media persistence, DB errors)
+ * so the caller can mark the message retryable for webhook redeliveries.
+ */
+async function routeAdopterAlumniReply(
+  tenantId: string,
+  fromNumber: string,
+  body: string,
+  mediaUrls: string[] = [],
+  logId?: string,
+): Promise<'routed' | 'no_match'> {
+    const fromDigits = fromNumber.replace(/\D/g, '').slice(-10);
+    if (fromDigits.length < 7) return 'no_match';
+
+    // 1) Direct match on the phone recorded at adoption time
+    let [adoption] = await db
+      .select({
+        id: adoptions.id,
+        animalId: adoptions.animalId,
+        adopterName: adoptions.adopterName,
+        animalName: animals.name,
+      })
+      .from(adoptions)
+      .innerJoin(animals, eq(adoptions.animalId, animals.id))
+      .where(and(
+        eq(adoptions.tenantId, tenantId),
+        sql`regexp_replace(${adoptions.adopterPhone}, '\\D', '', 'g') LIKE ${'%' + fromDigits}`,
+      ))
+      .orderBy(desc(adoptions.adoptionDate))
+      .limit(1);
+
+    // 2) Fallback: contact with this phone -> their most recent adoption by email
+    if (!adoption) {
+      const [contact] = await db
+        .select({ email: contacts.email, name: contacts.name })
+        .from(contacts)
+        .where(and(
+          eq(contacts.tenantId, tenantId),
+          isNotNull(contacts.phone),
+          sql`regexp_replace(${contacts.phone}, '\\D', '', 'g') LIKE ${'%' + fromDigits}`,
+        ))
+        .limit(1);
+
+      if (contact?.email) {
+        [adoption] = await db
+          .select({
+            id: adoptions.id,
+            animalId: adoptions.animalId,
+            adopterName: adoptions.adopterName,
+            animalName: animals.name,
+          })
+          .from(adoptions)
+          .innerJoin(animals, eq(adoptions.animalId, animals.id))
+          .where(and(
+            eq(adoptions.tenantId, tenantId),
+            sql`lower(${adoptions.adopterEmail}) = ${contact.email.toLowerCase()}`,
+          ))
+          .orderBy(desc(adoptions.adoptionDate))
+          .limit(1);
+      }
+    }
+
+    if (!adoption) return 'no_match';
+
+    // Persist MMS media into object storage (Twilio URLs expire).
+    // Only URLs that pass the Twilio-canonical check count toward the
+    // "must persist" requirement — forged/off-host URLs are dropped.
+    let photoUrls: string[] = [];
+    if (mediaUrls.length > 0) {
+      const config = await getTwilioConfig(tenantId);
+      const eligible = config
+        ? mediaUrls.filter(u => isAllowedTwilioMediaUrl(u, config.accountSid))
+        : [];
+      if (eligible.length > 0 && config) {
+        photoUrls = await persistTwilioMediaToStorage(tenantId, adoption.animalId, eligible, config);
+        if (photoUrls.length === 0) {
+          // Genuine Twilio media we failed to persist — treat as transient
+          // so a webhook redelivery can retry instead of losing the photo.
+          throw new Error(`Alumni reply had ${eligible.length} Twilio media item(s) but none could be persisted`);
+        }
+      } else if (mediaUrls.length > 0) {
+        console.warn(`[TWILIO] Alumni reply media skipped (${config ? 'no canonical Twilio URLs' : 'Twilio not configured'})`);
+      }
+    }
+
+    const trimmedBody = body.trim();
+    const extraPhotos = photoUrls.slice(1);
+    const storyParts = [
+      trimmedBody || (photoUrls.length > 0 ? 'Photo update received via text message.' : 'Update received via text message.'),
+      ...(extraPhotos.length > 0 ? [`Additional photos: ${extraPhotos.join(' ')}`] : []),
+    ];
+
+    // Atomic completion: the happy-tail insert and the 'routed' status flip
+    // commit together, so there is no window where the update exists but the
+    // message is still retryable (would duplicate) or vice versa (would be
+    // lost). Media objects are uploaded before this point; a retry after a
+    // crash here may re-upload media but can never duplicate the record.
+    await db.transaction(async (tx) => {
+      await tx.insert(happyTails).values({
+        tenantId,
+        animalId: adoption.animalId,
+        animalName: adoption.animalName,
+        adopterName: adoption.adopterName,
+        story: storyParts.join('\n\n').slice(0, 4000),
+        photoUrl: photoUrls[0] ?? null,
+        date: new Date().toISOString().split('T')[0],
+        isPublished: false,
+      });
+      if (logId) {
+        await tx.update(smsMessageLogs)
+          .set({ alumniRoutingStatus: 'routed' })
+          .where(eq(smsMessageLogs.id, logId));
+      }
+    });
+
+    console.log(`[TWILIO] Routed alumni reply from ${fromNumber} to animal ${adoption.animalId} (${adoption.animalName}) with ${photoUrls.length} persisted photo(s)`);
+    return 'routed';
+}
+
+// How long a 'processing' claim is honored before a webhook redelivery may
+// steal it (protects against a crash between claim and completion).
+const ALUMNI_CLAIM_LEASE_MS = 10 * 60 * 1000;
+
+/**
+ * Atomically claim an unmatched inbound message for alumni routing and run
+ * it. The claim (UPDATE ... WHERE alumni_routing_status IN pending/failed)
+ * means: fresh messages route once, post-claim failures are marked 'failed'
+ * and become retryable on the next Twilio webhook redelivery, and completed
+ * messages ('routed'/'no_match') are never re-processed.
+ */
+async function claimAndRouteAlumniReply(
+  tenantId: string,
+  fromNumber: string,
+  body: string,
+  mediaUrls: string[],
+  messageSid?: string,
+): Promise<'routed' | 'no_match' | 'failed' | 'not_claimed'> {
+  if (!messageSid) return 'not_claimed';
+  try {
+    // Lease-based claim: fresh ('pending') and failed rows are claimable,
+    // and so are 'processing' rows whose lease expired — that recovers
+    // messages orphaned by a crash between claim and completion.
+    const leaseCutoff = new Date(Date.now() - ALUMNI_CLAIM_LEASE_MS);
+    const claimed = await db
+      .update(smsMessageLogs)
+      .set({ alumniRoutingStatus: 'processing', alumniRoutingClaimedAt: new Date() })
+      .where(and(
+        eq(smsMessageLogs.tenantId, tenantId),
+        eq(smsMessageLogs.twilioMessageSid, messageSid),
+        eq(smsMessageLogs.messageType, 'unmatched_inbound'),
+        or(
+          inArray(smsMessageLogs.alumniRoutingStatus, ['pending', 'failed']),
+          and(
+            eq(smsMessageLogs.alumniRoutingStatus, 'processing'),
+            or(
+              sql`${smsMessageLogs.alumniRoutingClaimedAt} IS NULL`,
+              lte(smsMessageLogs.alumniRoutingClaimedAt, leaseCutoff),
+            ),
+          ),
+        ),
+      ))
+      .returning({ id: smsMessageLogs.id });
+
+    if (claimed.length === 0) return 'not_claimed';
+    const logId = claimed[0].id;
+
+    let outcome: 'routed' | 'no_match' | 'failed';
+    try {
+      outcome = await routeAdopterAlumniReply(tenantId, fromNumber, body, mediaUrls, logId);
+    } catch (routeErr) {
+      console.error('[TWILIO] Alumni routing failed (will retry on redelivery):', routeErr);
+      outcome = 'failed';
+    }
+
+    if (outcome !== 'routed') {
+      // 'routed' is committed transactionally inside routeAdopterAlumniReply
+      await db
+        .update(smsMessageLogs)
+        .set({ alumniRoutingStatus: outcome })
+        .where(eq(smsMessageLogs.id, logId));
+    }
+
+    return outcome;
+  } catch (err) {
+    console.error('[TWILIO] Error claiming alumni routing:', err);
+    return 'failed';
   }
 }
 
@@ -485,7 +830,7 @@ export async function handleIncomingSms(
   body: string,
   mediaUrls: string[] = [],
   meta: { messageSid?: string; signatureValidated?: boolean } = {}
-): Promise<{ success: boolean; routedAs?: 'supply_request' | 'foster_update' | 'medication_confirmed' | 'fuzzy_done_hint' | 'adopter_help_request' | 'volunteer_signup' | 'volunteer_signup_full' | 'volunteer_signup_duplicate' | 'volunteer_signup_pick_number' | null; message?: string; signupDetails?: { calendarName: string; dayLabel: string } }> {
+): Promise<{ success: boolean; routedAs?: 'supply_request' | 'foster_update' | 'medication_confirmed' | 'fuzzy_done_hint' | 'adopter_help_request' | 'alumni_update' | 'volunteer_signup' | 'volunteer_signup_full' | 'volunteer_signup_duplicate' | 'volunteer_signup_pick_number' | null; message?: string; signupDetails?: { calendarName: string; dayLabel: string } }> {
   const normalizedBody = body.trim().toUpperCase();
   
   if (isDoneMatch(normalizedBody) || isFuzzyDoneMatch(normalizedBody)) {
@@ -908,7 +1253,17 @@ export async function handleIncomingSms(
       // when the Twilio signature was actually validated, so forged
       // requests can't spam the Communications feed.
       if (meta.signatureValidated) {
-        await logUnmatchedInboundSms(fromNumber, toNumber, body, mediaUrls, meta.messageSid);
+        const logged = await logUnmatchedInboundSms(fromNumber, toNumber, body, mediaUrls, meta.messageSid);
+        // If the sender is a known adopter (alumni), attach the reply to
+        // the adopted animal's record too — photos persisted to storage.
+        // The claim runs on redeliveries as well so a post-log failure
+        // ('failed') is retried instead of being lost forever.
+        if (logged.tenantId) {
+          const outcome = await claimAndRouteAlumniReply(logged.tenantId, fromNumber, body, mediaUrls, meta.messageSid);
+          if (outcome === 'routed') {
+            return { success: true, routedAs: 'alumni_update' };
+          }
+        }
       }
       return { success: false, routedAs: null, message: 'No active session found for this number' };
     }

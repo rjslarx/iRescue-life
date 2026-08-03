@@ -149,3 +149,23 @@ SQL
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' || echo "[post-merge] custom_forms notification_emails column skipped (already applied or DB unreachable)."
 ALTER TABLE custom_forms ADD COLUMN IF NOT EXISTS notification_emails text[];
 SQL
+
+# Atomic idempotency for unmatched inbound SMS (alumni photo routing) —
+# unique partial index on Twilio MessageSid so concurrent webhook
+# redeliveries can't double-log or double-route. Idempotent.
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' || echo "[post-merge] sms_message_logs unmatched-inbound unique index skipped (already applied or DB unreachable)."
+CREATE UNIQUE INDEX IF NOT EXISTS sms_message_logs_unmatched_inbound_sid_unique
+  ON sms_message_logs (twilio_message_sid)
+  WHERE message_type = 'unmatched_inbound' AND twilio_message_sid IS NOT NULL;
+SQL
+
+# Alumni routing lifecycle state for unmatched inbound SMS (retryable
+# routing after post-claim failures). Idempotent.
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' || echo "[post-merge] sms_message_logs alumni_routing_status column skipped (already applied or DB unreachable)."
+ALTER TABLE sms_message_logs ADD COLUMN IF NOT EXISTS alumni_routing_status text;
+SQL
+
+# Lease timestamp for alumni-routing claims (stale 'processing' recovery). Idempotent.
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' || echo "[post-merge] sms_message_logs alumni_routing_claimed_at column skipped (already applied or DB unreachable)."
+ALTER TABLE sms_message_logs ADD COLUMN IF NOT EXISTS alumni_routing_claimed_at timestamp;
+SQL
