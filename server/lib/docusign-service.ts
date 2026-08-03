@@ -354,6 +354,15 @@ export async function handleWebhook(
         .update(animals)
         .set({ status: 'adopted', updatedAt: new Date() })
         .where(eq(animals.id, envelope.animalId));
+
+      // Close out any lingering active foster placements so foster
+      // check-in reminders stop for this animal.
+      try {
+        const { completeActiveFosterPlacements } = await import('../services/adoptions');
+        await completeActiveFosterPlacements(tenantId, envelope.animalId);
+      } catch (fosterErr) {
+        console.error('[docusign] Failed to complete foster placements:', fosterErr);
+      }
     }
   }
 }

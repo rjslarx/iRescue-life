@@ -19,4 +19,5 @@
 - [Insert-schema form/date traps](grant-form-insert-schema-dates.md) — raw createInsertSchema in zodResolver silently blocks submit (tenantId required); timestamp cols reject ISO strings server-side, need coercion.
 - [Raffle bundle pricing](raffle-bundle-pricing.md) — charge EXACT configured tier prices (greedy largest-first, no cheapest-combo optimizer); buyer pays grossed-up card fee; server totals authoritative.
 - [Shop checkout confirm gap](shop-checkout-confirm-gap.md) — no shop webhook; paid-on-Stripe orders can stay pending; hourly sweep reconciles; manual fix via public confirm + x-tenant-id header.
+- [Inbound SMS routing & unmatched capture](inbound-sms-routing.md) — replies only match active fosters; unmatched now logged to feed; Twilio webhook must stay fail-closed on signature.
 - [UTC "today" date-shift](utc-today-date-shift.md) — never default date inputs with toISOString() (UTC = tomorrow in the evening); use todayLocalISO() in client/src/lib/utils.ts.

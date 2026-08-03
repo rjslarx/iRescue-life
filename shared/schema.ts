@@ -4483,7 +4483,7 @@ export const smsMessageLogs = pgTable("sms_message_logs", {
   toNumber: text("to_number").notNull(),
   body: text("body").notNull(),
   // Context
-  messageType: text("message_type").notNull().$type<"transport_alert" | "proxy_message" | "broadcast" | "reminder" | "other">(),
+  messageType: text("message_type").notNull().$type<"transport_alert" | "proxy_message" | "broadcast" | "reminder" | "unmatched_inbound" | "other">(),
   transportId: uuid("transport_id").references(() => transportEvents.id, { onDelete: 'set null' }),
   proxySessionId: uuid("proxy_session_id").references(() => smsProxySessions.id, { onDelete: 'set null' }),
   // Status

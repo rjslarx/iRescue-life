@@ -424,11 +424,67 @@ function isFuzzyDoneMatch(input: string): boolean {
   return false;
 }
 
+/**
+ * Store an inbound SMS/MMS that couldn't be routed to any known flow so
+ * staff can still see it in the Communications feed instead of it being
+ * dropped silently. Tenant is resolved from the Twilio number the message
+ * was sent to. Best-effort — never throws.
+ */
+async function logUnmatchedInboundSms(
+  fromNumber: string,
+  toNumber: string,
+  body: string,
+  mediaUrls: string[] = [],
+  messageSid?: string,
+): Promise<void> {
+  try {
+    // Dedupe on Twilio MessageSid so webhook redeliveries don't create
+    // duplicate feed items.
+    if (messageSid) {
+      const [existing] = await db
+        .select({ id: smsMessageLogs.id })
+        .from(smsMessageLogs)
+        .where(eq(smsMessageLogs.twilioMessageSid, messageSid))
+        .limit(1);
+      if (existing) return;
+    }
+    const [tenant] = await db
+      .select({ id: tenants.id })
+      .from(tenants)
+      .where(eq(tenants.twilioPhoneNumber, toNumber))
+      .limit(1);
+
+    if (!tenant) {
+      console.warn(`[TWILIO] Unmatched inbound SMS from ${fromNumber} to unknown number ${toNumber} — not logged (no tenant match)`);
+      return;
+    }
+
+    const mediaNote = mediaUrls.length > 0
+      ? `\n[${mediaUrls.length} attachment${mediaUrls.length > 1 ? 's' : ''}] ${mediaUrls.join(' ')}`
+      : '';
+
+    await db.insert(smsMessageLogs).values({
+      tenantId: tenant.id,
+      twilioMessageSid: messageSid,
+      direction: 'inbound',
+      fromNumber,
+      toNumber,
+      body: `${body}${mediaNote}`.slice(0, 4000),
+      messageType: 'unmatched_inbound',
+      status: 'received',
+    });
+    console.log(`[TWILIO] Logged unmatched inbound SMS from ${fromNumber} for tenant ${tenant.id}`);
+  } catch (err) {
+    console.error('[TWILIO] Failed to log unmatched inbound SMS:', err);
+  }
+}
+
 export async function handleIncomingSms(
   fromNumber: string,
   toNumber: string,
   body: string,
-  mediaUrls: string[] = []
+  mediaUrls: string[] = [],
+  meta: { messageSid?: string; signatureValidated?: boolean } = {}
 ): Promise<{ success: boolean; routedAs?: 'supply_request' | 'foster_update' | 'medication_confirmed' | 'fuzzy_done_hint' | 'adopter_help_request' | 'volunteer_signup' | 'volunteer_signup_full' | 'volunteer_signup_duplicate' | 'volunteer_signup_pick_number' | null; message?: string; signupDetails?: { calendarName: string; dayLabel: string } }> {
   const normalizedBody = body.trim().toUpperCase();
   
@@ -846,6 +902,14 @@ export async function handleIncomingSms(
       );
 
     if (!sessionAsPartyB) {
+      // Unmatched inbound message — capture it so staff can see it instead
+      // of it vanishing silently (e.g. an adopter replying to a check-in
+      // text from a phone number we couldn't match to a foster). Only log
+      // when the Twilio signature was actually validated, so forged
+      // requests can't spam the Communications feed.
+      if (meta.signatureValidated) {
+        await logUnmatchedInboundSms(fromNumber, toNumber, body, mediaUrls, meta.messageSid);
+      }
       return { success: false, routedAs: null, message: 'No active session found for this number' };
     }
 

@@ -1279,6 +1279,15 @@ export async function finalizeAdoption(sessionId: string): Promise<void> {
     })
     .where(eq(animals.id, session.animalId));
 
+  // Close out any lingering active foster placements so foster check-in
+  // reminders stop for this animal.
+  try {
+    const { completeActiveFosterPlacements } = await import('./adoptions');
+    await completeActiveFosterPlacements(session.tenantId, session.animalId);
+  } catch (fosterErr) {
+    console.error('[finalizeAdoption:checkout] Failed to complete foster placements:', fosterErr);
+  }
+
   // Get contract and payment for saving to multiple locations
   const [contract] = await db
     .select()

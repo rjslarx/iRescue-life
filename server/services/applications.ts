@@ -600,6 +600,17 @@ export async function syncAnimalStatusFromApplicationStage(
             eq(animals.tenantId, tenantId)
           ));
         console.log(`Animal ${animalId} status updated to ${newAnimalStatus} due to application stage ${newStage}`);
+
+        // Close out any lingering active foster placements when the animal
+        // is marked adopted so foster check-in reminders stop.
+        if (newAnimalStatus === 'adopted') {
+          try {
+            const { completeActiveFosterPlacements } = await import('./adoptions');
+            await completeActiveFosterPlacements(tenantId, animalId);
+          } catch (fosterErr) {
+            console.error('[syncAnimalStatusFromApplicationStage] Failed to complete foster placements:', fosterErr);
+          }
+        }
       }
     } else if (terminalStages.includes(newStage)) {
       // Application was denied or trial failed - check if there are other active applications

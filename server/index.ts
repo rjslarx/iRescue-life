@@ -331,6 +331,12 @@ app.use((req, res, next) => {
       ]))
       .catch(err => console.error('[Startup] New catalog item backfill failed:', err));
 
+    // Complete leftover 'active' foster placements for animals already
+    // adopted, so foster check-in texts stop going to adopters (idempotent).
+    import('./services/adoptions')
+      .then(m => m.backfillFosterPlacementsForAdoptedAnimals())
+      .catch(err => console.error('[Startup] Adopted-animal foster backfill failed:', err));
+
     // Backfill stale nextScheduledDose for prescriptions where it's behind the last given dose
     backfillStaleNextScheduledDose();
 

@@ -3,6 +3,7 @@ import {
   adoptions,
   animals,
   applications,
+  fosterAnimals,
   microchipRecords,
   type Adoption,
   type Animal,
@@ -32,6 +33,70 @@ import { logAnimalAudit } from '../lib/animal-audit-logger';
  *             override prompt regardless of which surface they used.
  */
 export type MicrochipPolicy = 'block' | 'warn' | 'skip';
+
+/**
+ * Close out any still-active foster placements for an animal that has just
+ * been adopted. Without this, the leftover 'active' foster_animals row keeps
+ * triggering foster check-in SMS ("Luna has been with you for N weeks!")
+ * long after the adoption. Idempotent and best-effort — a failure here must
+ * never break an otherwise-successful adoption.
+ */
+export async function completeActiveFosterPlacements(
+  tenantId: string,
+  animalId: string,
+  reason: string = 'Auto-completed: animal adopted',
+): Promise<void> {
+  try {
+    await db
+      .update(fosterAnimals)
+      .set({
+        status: 'completed' as const,
+        actualReturnDate: new Date(),
+        notes: sql`CASE WHEN ${fosterAnimals.notes} IS NULL OR ${fosterAnimals.notes} = '' THEN ${reason} ELSE ${fosterAnimals.notes} || ' | ' || ${reason} END`,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(fosterAnimals.tenantId, tenantId),
+          eq(fosterAnimals.animalId, animalId),
+          eq(fosterAnimals.status, 'active'),
+        ),
+      );
+  } catch (err) {
+    console.error(
+      `[completeActiveFosterPlacements] Failed for animal ${animalId}:`,
+      err,
+    );
+  }
+}
+
+/**
+ * One-time/idempotent startup backfill: complete any 'active' foster
+ * placements whose animal is already marked adopted (all tenants). These
+ * leftover rows keep triggering foster check-in SMS for adopted animals.
+ */
+export async function backfillFosterPlacementsForAdoptedAnimals(): Promise<void> {
+  try {
+    const result = await db.execute(sql`
+      UPDATE foster_animals fa
+      SET status = 'completed',
+          actual_return_date = COALESCE(fa.actual_return_date, NOW()),
+          notes = CASE WHEN fa.notes IS NULL OR fa.notes = '' THEN 'Auto-completed: animal adopted' ELSE fa.notes || ' | Auto-completed: animal adopted' END,
+          updated_at = NOW()
+      FROM animals a
+      WHERE a.id = fa.animal_id
+        AND a.tenant_id = fa.tenant_id
+        AND fa.status = 'active'
+        AND a.status = 'adopted'
+    `);
+    const count = (result as any)?.rowCount ?? 0;
+    if (count > 0) {
+      console.log(`[Startup] Completed ${count} leftover active foster placement(s) for adopted animals`);
+    }
+  } catch (err) {
+    console.error('[Startup] Foster placement backfill for adopted animals failed:', err);
+  }
+}
 
 export interface PendingMicrochip {
   id: string;
@@ -246,6 +311,10 @@ export async function finalizeAdoption(
     })
     .where(and(eq(animals.tenantId, tenantId), eq(animals.id, animalId)))
     .returning();
+
+  // 4b. Close out any lingering active foster placements so foster check-in
+  // reminders stop for this animal.
+  await completeActiveFosterPlacements(tenantId, animalId);
 
   // 5. Sync linked application stage (idempotent). Prefer the application
   // id stored on the adoption row (which is the authoritative link, set

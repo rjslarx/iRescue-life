@@ -27087,33 +27087,41 @@ Submitted: ${new Date().toLocaleString()}
         if (url) mediaUrls.push(url);
       }
 
-      // Twilio webhook signature validation — look up tenant by the 'To' phone number
+      // Twilio webhook signature validation — look up tenant by the 'To' phone number.
+      // Twilio always sends X-Twilio-Signature, so requests without it are forged.
       const twilioSignature = req.headers['x-twilio-signature'] as string | undefined;
-      if (twilioSignature) {
-        try {
-          const [tenantRecord] = await db
-            .select({ twilioAuthTokenEncrypted: tenants.twilioAuthTokenEncrypted })
-            .from(tenants)
-            .where(eq(tenants.twilioPhoneNumber, To))
-            .limit(1);
+      if (!twilioSignature) {
+        console.warn('[TWILIO] Inbound webhook missing X-Twilio-Signature — rejecting request');
+        return res.status(403).send('Missing Twilio signature');
+      }
+      let signatureValidated = false;
+      try {
+        const [tenantRecord] = await db
+          .select({ twilioAuthTokenEncrypted: tenants.twilioAuthTokenEncrypted })
+          .from(tenants)
+          .where(eq(tenants.twilioPhoneNumber, To))
+          .limit(1);
 
-          if (tenantRecord?.twilioAuthTokenEncrypted) {
-            const twilio = (await import('twilio')).default;
-            const authToken = decrypt(tenantRecord.twilioAuthTokenEncrypted);
-            const webhookUrl = `${process.env.APP_BASE_URL || `${req.protocol}://${req.get('host')}`}${req.originalUrl || req.url}`;
-            const isValid = twilio.validateRequest(authToken, twilioSignature, webhookUrl, req.body);
-            if (!isValid) {
-              console.warn('[TWILIO] Webhook signature validation failed — rejecting request');
-              return res.status(403).send('Invalid Twilio signature');
-            }
+        if (tenantRecord?.twilioAuthTokenEncrypted) {
+          const twilio = (await import('twilio')).default;
+          const authToken = decrypt(tenantRecord.twilioAuthTokenEncrypted);
+          const webhookUrl = `${process.env.APP_BASE_URL || `${req.protocol}://${req.get('host')}`}${req.originalUrl || req.url}`;
+          const isValid = twilio.validateRequest(authToken, twilioSignature, webhookUrl, req.body);
+          if (!isValid) {
+            console.warn('[TWILIO] Webhook signature validation failed — rejecting request');
+            return res.status(403).send('Invalid Twilio signature');
           }
-        } catch (validationError) {
-          console.error('[TWILIO] Signature validation error:', validationError);
-          // Fail open so we don't drop messages on validation errors (e.g. tenant lookup failure)
+          signatureValidated = true;
         }
+      } catch (validationError) {
+        console.error('[TWILIO] Signature validation error — rejecting request:', validationError);
+        return res.status(403).send('Signature validation error');
       }
 
-      const result = await handleIncomingSms(From, To, Body || '', mediaUrls);
+      const result = await handleIncomingSms(From, To, Body || '', mediaUrls, {
+        messageSid: typeof req.body.MessageSid === 'string' ? req.body.MessageSid : undefined,
+        signatureValidated,
+      });
       
       res.set('Content-Type', 'text/xml');
       if (result.routedAs === 'medication_confirmed') {
@@ -51918,7 +51926,7 @@ ${section('Metadata', metaRows)}
 
       const shouldIncludeSms = !channel || channel === 'all' || channel === 'sms';
 
-      if (shouldIncludeSms && (!status || status === 'all' || status === 'sent' || status === 'delivered' || status === 'failed')) {
+      if (shouldIncludeSms && (!status || status === 'all' || status === 'sent' || status === 'delivered' || status === 'failed' || status === 'received')) {
         const smsConditions: any[] = [eq(smsMessageLogs.tenantId, tenantId)];
         if (status && status !== 'all') {
           smsConditions.push(eq(smsMessageLogs.status, status as string));
@@ -51928,6 +51936,7 @@ ${section('Metadata', metaRows)}
           .select({
             id: smsMessageLogs.id,
             toNumber: smsMessageLogs.toNumber,
+            fromNumber: smsMessageLogs.fromNumber,
             body: smsMessageLogs.body,
             status: smsMessageLogs.status,
             direction: smsMessageLogs.direction,
@@ -51950,13 +51959,19 @@ ${section('Metadata', metaRows)}
           smsRows = smsRows.filter(r =>
             (r.recipientName && r.recipientName.toLowerCase().includes(s)) ||
             r.body.toLowerCase().includes(s) ||
-            r.toNumber.includes(s)
+            r.toNumber.includes(s) ||
+            (r.fromNumber && r.fromNumber.includes(s))
           );
         }
 
+        // For inbound rows the interesting party is the SENDER (fromNumber);
+        // for outbound rows it's the recipient (toNumber).
+        const contactNumberOf = (r: { direction: string; fromNumber?: string | null; toNumber: string }) =>
+          r.direction === 'inbound' ? (r.fromNumber || r.toNumber) : r.toNumber;
+
         const unresolvedPhones = smsRows
-          .filter(r => !r.recipientName && r.toNumber)
-          .map(r => r.toNumber);
+          .filter(r => !r.recipientName && contactNumberOf(r))
+          .map(r => contactNumberOf(r));
 
         const phoneNameMap = new Map();
         if (unresolvedPhones.length > 0) {
@@ -51984,10 +51999,11 @@ ${section('Metadata', metaRows)}
         }
 
         for (const r of smsRows) {
+          const contactNumber = contactNumberOf(r);
           let resolvedName = r.recipientName;
-          if (!resolvedName && r.toNumber) {
-            const normalizedTo = r.toNumber.replace(/\D/g, '').slice(-10);
-            resolvedName = phoneNameMap.get(normalizedTo) || null;
+          if (!resolvedName && contactNumber) {
+            const normalized = contactNumber.replace(/\D/g, '').slice(-10);
+            resolvedName = phoneNameMap.get(normalized) || null;
           }
 
           results.push({
@@ -51995,7 +52011,7 @@ ${section('Metadata', metaRows)}
             channel: 'sms',
             direction: r.direction,
             recipientName: resolvedName || r.sentByName || null,
-            recipientAddress: r.toNumber,
+            recipientAddress: contactNumber,
             subject: null,
             body: r.body,
             status: r.status,
