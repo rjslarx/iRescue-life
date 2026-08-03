@@ -63,6 +63,45 @@ import bcrypt from "bcrypt";
 
 const DEMO_ADMIN_PASSWORD = process.env.DEMO_ADMIN_PASSWORD || "Demo123!";
 
+export function getDemoAdminCredentials() {
+  return { email: "admin@demo.com", password: DEMO_ADMIN_PASSWORD };
+}
+
+/**
+ * Ensure the demo admin's password matches the configured DEMO_ADMIN_PASSWORD
+ * (or the default). Called at startup so credentials emailed to demo
+ * requesters are guaranteed to work even if the account was created with a
+ * different password.
+ */
+export async function ensureDemoAdminPassword(): Promise<void> {
+  try {
+    const [demoTenant] = await db
+      .select({ id: tenants.id })
+      .from(tenants)
+      .where(eq(tenants.subdomain, "demo"))
+      .limit(1);
+    if (!demoTenant) return;
+
+    const [admin] = await db
+      .select({ id: users.id, passwordHash: users.passwordHash })
+      .from(users)
+      .where(and(eq(users.tenantId, demoTenant.id), eq(users.email, "admin@demo.com")))
+      .limit(1);
+    if (!admin) return;
+
+    const matches = admin.passwordHash
+      ? await bcrypt.compare(DEMO_ADMIN_PASSWORD, admin.passwordHash)
+      : false;
+    if (!matches) {
+      const passwordHash = await bcrypt.hash(DEMO_ADMIN_PASSWORD, 10);
+      await db.update(users).set({ passwordHash }).where(eq(users.id, admin.id));
+      console.log("[DemoReset] Demo admin password synced to configured value");
+    }
+  } catch (err) {
+    console.error("[DemoReset] Failed to ensure demo admin password:", err);
+  }
+}
+
 /**
  * Reset demo tenant data to a clean state
  * - Preserves the demo tenant and admin user
@@ -108,7 +147,10 @@ export async function resetDemoData(): Promise<{
       console.warn("⚠️  Admin user not found - will recreate");
     }
 
-    const passwordHash = !adminUserId ? await bcrypt.hash(DEMO_ADMIN_PASSWORD, 10) : null;
+    // Always hash the configured password: used to recreate a missing admin,
+    // and to re-sync an existing admin's password so emailed demo
+    // credentials keep working.
+    const passwordHash = await bcrypt.hash(DEMO_ADMIN_PASSWORD, 10);
 
     const deletedCounts: Record<string, number> = {};
 
@@ -185,7 +227,7 @@ export async function resetDemoData(): Promise<{
         deletedCounts.users = (await tx.delete(users).where(eq(users.tenantId, tenantId))).rowCount || 0;
       }
 
-      if (!adminUserId && passwordHash) {
+      if (!adminUserId) {
         await tx.insert(users).values({
           tenantId: tenant.id,
           email: "admin@demo.com",
@@ -195,6 +237,10 @@ export async function resetDemoData(): Promise<{
           isActive: true,
         });
         console.log("✓ Recreated admin user");
+      } else {
+        // Re-sync the admin password to the configured value so the
+        // credentials emailed to demo requesters always work.
+        await tx.update(users).set({ passwordHash, isActive: true }).where(eq(users.id, adminUserId));
       }
 
       await tx

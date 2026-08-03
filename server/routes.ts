@@ -2070,9 +2070,59 @@ Crawl-delay: 1
         }
       }
 
+      // Email the requester the demo link + shared team login so they can
+      // explore without waiting on a manual reply.
+      if (platformEmail) {
+        try {
+          const { getDemoAdminCredentials } = await import('./lib/demo-reset');
+          const demoCreds = getDemoAdminCredentials();
+
+          let demoOrigin = 'https://irescue.life';
+          try {
+            if (parsed.landingPageUrl) {
+              const u = new URL(parsed.landingPageUrl);
+              if (u.protocol === 'https:' || u.protocol === 'http:') demoOrigin = u.origin;
+            }
+          } catch { /* keep default */ }
+
+          const greeting = parsed.fullName ? `Hi ${escapeHtml(parsed.fullName)},` : 'Hi,';
+          const requesterHtml = `
+            <h2>Your iRescue Demo Access</h2>
+            <p>${greeting}</p>
+            <p>Thanks for your interest in iRescue! Here's everything you need to explore the live demo:</p>
+            <ul>
+              <li><strong>Demo site:</strong> <a href="${demoOrigin}/demo">${demoOrigin}/demo</a></li>
+              <li><strong>Team login (staff dashboard):</strong> <a href="${demoOrigin}/demo/login">${demoOrigin}/demo/login</a></li>
+              <li><strong>Email:</strong> ${escapeHtml(demoCreds.email)}</li>
+              <li><strong>Password:</strong> ${escapeHtml(demoCreds.password)}</li>
+            </ul>
+            <p>The demo is a shared environment with sample data, and it resets automatically every night — so feel free to click around, add animals, and try every feature.</p>
+            ${parsed.leadType === 'contact_sales' ? '<p>A member of our team will also reach out shortly to answer any questions and help you get set up.</p>' : ''}
+            <p>Happy exploring!<br>The iRescue Team</p>
+          `;
+
+          await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${platformEmail}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              from: 'iRescue <noreply@irescue.life>',
+              to: [parsed.email],
+              subject: 'Your iRescue demo access — link and team login inside',
+              html: requesterHtml,
+            }),
+          });
+        } catch (emailError) {
+          console.error('Failed to send demo access email to requester:', emailError);
+          // Don't fail the request if email fails
+        }
+      }
+
       const responseMessage = parsed.leadType === 'demo_access'
-        ? 'Thank you! Opening demo site...'
-        : 'Thank you for your interest! We will contact you shortly with demo access.';
+        ? 'Thank you! Check your email for the team login details — opening the demo now...'
+        : 'Thank you for your interest! We just emailed you the demo link and login details.';
 
       res.json({
         success: true,

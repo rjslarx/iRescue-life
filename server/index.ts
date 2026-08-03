@@ -316,6 +316,12 @@ app.use((req, res, next) => {
     ensurePeerCampaignThemeColumn();
     patchBravectoPlusInterval();
 
+    // Keep the shared demo admin login in sync with the configured password
+    // so credentials emailed to demo requesters always work.
+    import('./lib/demo-reset')
+      .then(m => m.ensureDemoAdminPassword())
+      .catch(err => console.error('[Startup] Demo admin password sync failed:', err));
+
     // Add newly-introduced default catalog items to tenants that seeded
     // their catalog before these items existed (idempotent).
     import('./services/medical-catalog-seeding')

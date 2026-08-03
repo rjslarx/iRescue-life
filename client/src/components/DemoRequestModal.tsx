@@ -40,7 +40,7 @@ export function DemoRequestModal({ open, onOpenChange }: DemoRequestModalProps) 
       setSubmitted(true);
       toast({
         title: "Request Submitted!",
-        description: "We'll be in touch shortly with demo access details.",
+        description: "Demo access details are on their way to your email.",
       });
     },
     onError: (error: any) => {
@@ -233,7 +233,7 @@ export function DemoRequestModal({ open, onOpenChange }: DemoRequestModalProps) 
                   We've received your demo request for <strong>{formData.organizationName}</strong>.
                 </p>
                 <p>
-                  We'll send demo details to <strong>{formData.email}</strong> within 24 hours.
+                  We just emailed the demo link and team login details to <strong>{formData.email}</strong>.
                 </p>
               </DialogDescription>
             </DialogHeader>
