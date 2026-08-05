@@ -46963,6 +46963,166 @@ Use timestamps like [00:00] to help with pacing.`;
     }
   });
   /**
+   * POST /api/donation-links/virtual-kennel
+   * Create the Virtual Kennel monthly sponsorship tiers (3 recurring subscription links)
+   */
+  app.post('/api/donation-links/virtual-kennel', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff'), async (req, res, next) => {
+    try {
+      const { donationLinks } = await import('@shared/schema');
+      const Stripe = (await import('stripe')).default;
+
+      const [tenant] = await db
+        .select({
+          id: tenants.id,
+          stripeConnectedAccountId: tenants.stripeConnectedAccountId,
+          subscriptionTier: tenants.subscriptionTier,
+          platformFeePercent: tenants.platformFeePercent,
+        })
+        .from(tenants)
+        .where(eq(tenants.id, req.tenant!.id))
+        .limit(1);
+
+      if (!tenant?.stripeConnectedAccountId) {
+        return res.status(400).json({ error: 'Stripe Connect account not configured.' });
+      }
+
+      const stripeSecretKey = process.env.PLATFORM_STRIPE_SECRET_KEY;
+      if (!stripeSecretKey) {
+        return res.status(500).json({ error: 'Stripe configuration missing' });
+      }
+
+      const stripe = new Stripe(stripeSecretKey, { apiVersion: '2024-12-18.acacia' });
+
+      const { getPlatformFeePercent } = await import('./config/platform');
+      const platformFeePercent = getPlatformFeePercent(tenant.subscriptionTier || 'free', tenant.platformFeePercent);
+      if (platformFeePercent > 0) {
+        console.log(`[VIRTUAL-KENNEL] Platform fee of ${platformFeePercent}% will be applied at checkout session level`);
+      }
+
+      const tiers = [
+        {
+          tierName: 'Food Sponsor',
+          title: 'Virtual Kennel - Food Sponsor',
+          description: 'Your monthly gift helps keep a rescue animal fed and healthy.',
+          amount: 1000,
+        },
+        {
+          tierName: 'Care Sponsor',
+          title: 'Virtual Kennel - Care Sponsor',
+          description: 'Your monthly gift covers food, preventatives, and everyday care for a rescue animal.',
+          amount: 2500,
+        },
+        {
+          tierName: 'Kennel Sponsor',
+          title: 'Virtual Kennel - Kennel Sponsor',
+          description: "Your monthly gift sponsors an entire kennel — food, care, and shelter for a rescue animal.",
+          amount: 5000,
+        },
+      ];
+
+      // Idempotent + self-repairing: only create tiers that don't already exist.
+      // A tier only counts as existing if its payment link was fully persisted.
+      const existingLinks = await db
+        .select()
+        .from(donationLinks)
+        .where(and(
+          eq(donationLinks.tenantId, req.tenant!.id),
+          eq(donationLinks.campaignType, 'virtual_kennel'),
+          eq(donationLinks.isActive, true),
+        ));
+      const completeTierNames = new Set(
+        existingLinks
+          .filter(l => l.stripePaymentLinkUrl && l.stripePaymentLinkId)
+          .map(l => l.tierName)
+      );
+      // Deactivate broken partial rows (created but never got a payment link)
+      for (const broken of existingLinks.filter(l => !l.stripePaymentLinkUrl || !l.stripePaymentLinkId)) {
+        await db.update(donationLinks).set({ isActive: false }).where(eq(donationLinks.id, broken.id));
+      }
+      const missingTiers = tiers.filter(t => !completeTierNames.has(t.tierName));
+      if (missingTiers.length === 0) {
+        return res.status(200).json({ existing: true });
+      }
+
+      const createdLinks = [];
+      for (const tier of missingTiers) {
+        const product = await stripe.products.create({
+          name: tier.title,
+          description: tier.description,
+        }, {
+          stripeAccount: tenant.stripeConnectedAccountId,
+        });
+
+        const price = await stripe.prices.create({
+          product: product.id,
+          currency: 'usd',
+          unit_amount: tier.amount,
+          recurring: { interval: 'month' },
+        }, {
+          stripeAccount: tenant.stripeConnectedAccountId,
+        });
+
+        const paymentLinkParams: any = {
+          line_items: [{ price: price.id, quantity: 1 }],
+          after_completion: {
+            type: 'redirect',
+            redirect: {
+              url: `https://${req.get('host')}/thank-you`,
+            },
+          },
+          metadata: {
+            tenantId: req.tenant!.id,
+            type: 'virtual_kennel',
+            tierName: tier.tierName,
+          },
+        };
+        if (platformFeePercent > 0) {
+          paymentLinkParams.application_fee_percent = platformFeePercent;
+        }
+
+        const paymentLink = await stripe.paymentLinks.create(paymentLinkParams, {
+          stripeAccount: tenant.stripeConnectedAccountId,
+        });
+
+        // Insert only after the payment link exists, so no partial rows are persisted
+        const [newLink] = await db
+          .insert(donationLinks)
+          .values({
+            tenantId: req.tenant!.id,
+            title: tier.title,
+            description: tier.description,
+            amount: tier.amount,
+            isRecurring: true,
+            interval: 'month',
+            stripePaymentLinkUrl: paymentLink.url,
+            stripePaymentLinkId: paymentLink.id,
+            stripeProductId: product.id,
+            stripePriceId: price.id,
+            campaignType: 'virtual_kennel',
+            tierName: tier.tierName,
+            type: 'virtual_kennel',
+            isActive: true,
+          })
+          .returning();
+
+        await stripe.paymentLinks.update(paymentLink.id, {
+          metadata: { ...paymentLinkParams.metadata, campaignId: newLink.id },
+        }, {
+          stripeAccount: tenant.stripeConnectedAccountId,
+        });
+        createdLinks.push(newLink);
+      }
+
+      res.status(201).json({ existing: false, donationLinks: createdLinks });
+    } catch (error: any) {
+      if (error.type === 'StripeInvalidRequestError') {
+        return res.status(400).json({ error: error.message });
+      }
+      next(error);
+    }
+  });
+
+  /**
    * DELETE /api/donation-links/:id
    * Delete (deactivate) a donation link
    */
