@@ -81,7 +81,7 @@ function StripeCheckoutForm({
       const { error: paymentError, paymentIntent } = await stripe.confirmPayment({
         elements,
         confirmParams: {
-          return_url: `${window.location.origin}${basePath}/shop/order/${orderNumber}`,
+          return_url: `${window.location.origin}${basePath}/shop/order/${orderNumber}${(() => { try { const t = sessionStorage.getItem(`shop-order-token:${orderNumber}`); return t ? `?t=${encodeURIComponent(t)}` : ''; } catch { return ''; } })()}`,
         },
         redirect: 'if_required',
       });
@@ -103,7 +103,7 @@ function StripeCheckoutForm({
             title: "Payment successful!",
             description: "Thank you for your purchase. You will receive a confirmation email shortly.",
           });
-          setLocation(`/shop/order/${orderNumber}`);
+          setLocation(`/shop/order/${orderNumber}`); // token already in sessionStorage for this tab
         } else {
           setError('Payment was processed but order confirmation failed. Please contact support.');
         }
@@ -281,6 +281,13 @@ export default function ShopCheckoutPage() {
       setClientSecret(data.clientSecret);
       setOrderId(data.orderId);
       setOrderNumber(data.orderNumber);
+      // Remember the order's access token so the order page can authorize
+      // bonus-ticket claims (order numbers alone are guessable).
+      try {
+        if (data.accessToken) {
+          sessionStorage.setItem(`shop-order-token:${data.orderNumber}`, data.accessToken);
+        }
+      } catch {}
       if (data.totalAmount) {
         setServerTotals({
           subtotal: data.subtotal ?? data.totalAmount,

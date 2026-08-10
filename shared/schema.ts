@@ -3884,6 +3884,11 @@ export const shopProducts = pgTable("shop_products", {
   // Single tickets still use basePrice. Checkout computes the cheapest
   // combination of bundles + singles for any quantity (server-authoritative).
   bundlePricing: jsonb("bundle_pricing").$type<{ quantity: number; price: string }[]>(),
+  // Raffle sharing incentives: buyers of PAID orders can earn bonus tickets by
+  // sharing to social (+1 once per order) or referring friends by email
+  // (+1 each, capped at raffleMaxReferrals per order).
+  raffleIncentivesEnabled: boolean("raffle_incentives_enabled").notNull().default(false),
+  raffleMaxReferrals: integer("raffle_max_referrals").notNull().default(3),
   // Display settings
   featured: boolean("featured").notNull().default(false),
   displayOrder: integer("display_order").notNull().default(0),
@@ -3942,6 +3947,9 @@ export const shopOrders = pgTable("shop_orders", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
   orderNumber: text("order_number").notNull(), // Human-readable order number (e.g., "ORD-001234")
+  // High-entropy capability token: order numbers are sequential/guessable, so
+  // buyer-only actions (bonus-ticket claims/referrals) require this token.
+  accessToken: text("access_token").notNull().default(sql`gen_random_uuid()`),
   // Customer info (not requiring account)
   customerEmail: text("customer_email").notNull(),
   customerName: text("customer_name").notNull(),
@@ -4017,6 +4025,32 @@ export const insertShopOrderItemSchema = createInsertSchema(shopOrderItems).omit
 });
 export type InsertShopOrderItem = z.infer<typeof insertShopOrderItemSchema>;
 export type ShopOrderItem = typeof shopOrderItems.$inferSelect;
+
+// Shop Raffle Bonus Tickets - free tickets earned by paid buyers via sharing
+// incentives (social share = once per order item, referral = per unique friend
+// email up to the product's cap). Ticket numbers come from the same sequence
+// as purchased tickets (allocated under the product row lock) so they are
+// included in the drawing without collisions.
+// (accessToken on shopOrders is the buyer's proof of ownership for bonus-ticket
+// claims; order numbers are sequential/guessable so they are not sufficient.)
+export const shopRaffleBonusTickets = pgTable("shop_raffle_bonus_tickets", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  orderId: uuid("order_id").notNull().references(() => shopOrders.id, { onDelete: 'cascade' }),
+  orderItemId: uuid("order_item_id").notNull().references(() => shopOrderItems.id, { onDelete: 'cascade' }),
+  productId: uuid("product_id").notNull().references(() => shopProducts.id, { onDelete: 'cascade' }),
+  actionType: text("action_type").notNull().$type<"share" | "referral">(),
+  referredEmail: text("referred_email"), // normalized lowercase; set for referrals
+  ticketNumbers: text("ticket_numbers").array().notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertShopRaffleBonusTicketSchema = createInsertSchema(shopRaffleBonusTickets).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertShopRaffleBonusTicket = z.infer<typeof insertShopRaffleBonusTicketSchema>;
+export type ShopRaffleBonusTicket = typeof shopRaffleBonusTickets.$inferSelect;
 
 // Shop Raffle Drawings table - track raffle winners
 export const shopRaffleDrawings = pgTable("shop_raffle_drawings", {

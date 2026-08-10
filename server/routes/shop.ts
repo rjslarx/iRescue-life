@@ -9,6 +9,7 @@ import {
   shopOrders, 
   shopOrderItems,
   shopRaffleDrawings,
+  shopRaffleBonusTickets,
   insertShopProductSchema,
   insertShopProductVariantSchema,
   insertShopOrderSchema,
@@ -323,14 +324,19 @@ router.post('/checkout', requireTenant, async (req, res, next) => {
             sql`SELECT id FROM shop_products WHERE id = ${item.productId} FOR UPDATE`
           );
 
-          // Sum quantities (each order item row can contain many tickets) so
-          // numbers never collide across orders.
+          // Sum quantities (each order item row can contain many tickets) PLUS
+          // any bonus tickets already granted for this raffle so numbers never
+          // collide across orders or with earned bonus tickets.
           const ticketCount = await tx
             .select({ count: sql<number>`coalesce(sum(${shopOrderItems.quantity}), 0)::int` })
             .from(shopOrderItems)
             .where(eq(shopOrderItems.productId, item.productId));
+          const bonusCount = await tx
+            .select({ count: sql<number>`coalesce(sum(cardinality(${shopRaffleBonusTickets.ticketNumbers})), 0)::int` })
+            .from(shopRaffleBonusTickets)
+            .where(eq(shopRaffleBonusTickets.productId, item.productId));
 
-          const startNumber = (ticketCount[0]?.count || 0) + 1;
+          const startNumber = (ticketCount[0]?.count || 0) + (bonusCount[0]?.count || 0) + 1;
           raffleTicketNumbers = Array.from(
             { length: item.quantity },
             (_, i) => String(startNumber + i).padStart(6, '0')
@@ -389,6 +395,7 @@ router.post('/checkout', requireTenant, async (req, res, next) => {
       res.json({
         orderId: order.id,
         orderNumber: order.orderNumber,
+        accessToken: order.accessToken,
         clientSecret: paymentIntent.client_secret,
         subtotal: subtotal.toFixed(2),
         processingFee: processingFee.toFixed(2),
@@ -399,6 +406,7 @@ router.post('/checkout', requireTenant, async (req, res, next) => {
       res.json({
         orderId: order.id,
         orderNumber: order.orderNumber,
+        accessToken: order.accessToken,
         totalAmount: totalAmount.toFixed(2),
       });
     }
@@ -542,12 +550,317 @@ router.get('/orders/:orderNumber', requireTenant, async (req, res, next) => {
       .from(shopOrderItems)
       .where(eq(shopOrderItems.orderId, order.id));
 
+    // Bonus tickets earned via sharing incentives (per order item)
+    const bonusRows = await db
+      .select()
+      .from(shopRaffleBonusTickets)
+      .where(eq(shopRaffleBonusTickets.orderId, order.id));
+
+    // Sharing-incentive status for raffle items on paid orders
+    const raffleProductIds = items
+      .filter((i) => i.productType === 'raffle')
+      .map((i) => i.productId);
+    let incentives: Record<string, {
+      enabled: boolean;
+      maxReferrals: number;
+      shareClaimed: boolean;
+      referralsUsed: number;
+      drawn: boolean;
+      productSlug: string;
+      productName: string;
+    }> = {};
+    if (raffleProductIds.length > 0) {
+      const raffleProducts = await db
+        .select()
+        .from(shopProducts)
+        .where(inArray(shopProducts.id, raffleProductIds));
+      const drawings = await db
+        .select({ productId: shopRaffleDrawings.productId })
+        .from(shopRaffleDrawings)
+        .where(and(
+          inArray(shopRaffleDrawings.productId, raffleProductIds),
+          eq(shopRaffleDrawings.status, 'drawn')
+        ));
+      const drawnSet = new Set(drawings.map((d) => d.productId));
+      for (const item of items) {
+        if (item.productType !== 'raffle') continue;
+        const product = raffleProducts.find((p) => p.id === item.productId);
+        if (!product) continue;
+        const itemBonuses = bonusRows.filter((b) => b.orderItemId === item.id);
+        incentives[item.id] = {
+          enabled: product.raffleIncentivesEnabled,
+          maxReferrals: product.raffleMaxReferrals,
+          shareClaimed: itemBonuses.some((b) => b.actionType === 'share'),
+          referralsUsed: itemBonuses.filter((b) => b.actionType === 'referral').length,
+          drawn: drawnSet.has(product.id),
+          productSlug: product.slug,
+          productName: product.name,
+        };
+      }
+    }
+
+    // Order numbers are sequential/guessable, so mask buyer PII on this
+    // unauthenticated endpoint. Incentive mutations require the full email.
+    const maskEmail = (email: string) => {
+      const [local, domain] = email.split('@');
+      if (!domain) return '***';
+      return `${(local || '').slice(0, 1)}***@${domain}`;
+    };
+
+    const { accessToken: _secretToken, ...publicOrder } = order;
     res.json({ 
       order: {
-        ...order,
-        items,
+        ...publicOrder,
+        customerEmail: maskEmail(order.customerEmail),
+        customerPhone: null,
+        items: items.map((item) => ({
+          ...item,
+          bonusTickets: bonusRows
+            .filter((b) => b.orderItemId === item.id)
+            .map((b) => ({ actionType: b.actionType, ticketNumbers: b.ticketNumbers })),
+        })),
+        incentives,
       }
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * Grant bonus raffle tickets for a sharing incentive, atomically and
+ * idempotently. Numbers are allocated under the product row lock (same
+ * sequence as purchased tickets); the partial unique indexes on
+ * shop_raffle_bonus_tickets make concurrent duplicate claims a no-op.
+ * Returns the granted ticket numbers, or null if this claim already existed.
+ */
+async function grantBonusTickets(opts: {
+  tenantId: string;
+  orderId: string;
+  orderItemId: string;
+  productId: string;
+  actionType: 'share' | 'referral';
+  referredEmail?: string;
+  count: number;
+  maxReferrals?: number;
+}): Promise<string[] | null | 'drawn' | 'cap'> {
+  return db.transaction(async (tx) => {
+    // Serialize with checkout, other bonus grants, AND the draw for this raffle
+    await tx.execute(sql`SELECT id FROM shop_products WHERE id = ${opts.productId} FOR UPDATE`);
+
+    // Re-check drawing status under the lock: the draw also locks the product
+    // row, so a grant can never slip in after the winner pool is assembled.
+    const [drawnRow] = await tx
+      .select({ id: shopRaffleDrawings.id })
+      .from(shopRaffleDrawings)
+      .where(and(
+        eq(shopRaffleDrawings.productId, opts.productId),
+        eq(shopRaffleDrawings.status, 'drawn')
+      ));
+    if (drawnRow) return 'drawn';
+
+    // Enforce the referral cap under the lock (concurrent-safe)
+    if (opts.actionType === 'referral' && opts.maxReferrals !== undefined) {
+      const used = await tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(shopRaffleBonusTickets)
+        .where(and(
+          eq(shopRaffleBonusTickets.orderItemId, opts.orderItemId),
+          eq(shopRaffleBonusTickets.actionType, 'referral')
+        ));
+      if ((used[0]?.count || 0) >= opts.maxReferrals) return 'cap';
+    }
+
+    const soldCount = await tx
+      .select({ count: sql<number>`coalesce(sum(${shopOrderItems.quantity}), 0)::int` })
+      .from(shopOrderItems)
+      .where(eq(shopOrderItems.productId, opts.productId));
+    const bonusCount = await tx
+      .select({ count: sql<number>`coalesce(sum(cardinality(${shopRaffleBonusTickets.ticketNumbers})), 0)::int` })
+      .from(shopRaffleBonusTickets)
+      .where(eq(shopRaffleBonusTickets.productId, opts.productId));
+
+    const startNumber = (soldCount[0]?.count || 0) + (bonusCount[0]?.count || 0) + 1;
+    const ticketNumbers = Array.from(
+      { length: opts.count },
+      (_, i) => String(startNumber + i).padStart(6, '0')
+    );
+
+    const inserted = await tx
+      .insert(shopRaffleBonusTickets)
+      .values({
+        tenantId: opts.tenantId,
+        orderId: opts.orderId,
+        orderItemId: opts.orderItemId,
+        productId: opts.productId,
+        actionType: opts.actionType,
+        referredEmail: opts.referredEmail || null,
+        ticketNumbers,
+      })
+      .onConflictDoNothing()
+      .returning();
+
+    return inserted.length > 0 ? ticketNumbers : null;
+  });
+}
+
+/**
+ * Shared validation for both incentive endpoints: the order must exist in this
+ * tenant, be PAID, contain a raffle item whose product has incentives enabled,
+ * and the raffle must not be drawn yet.
+ */
+async function loadIncentiveContext(tenantId: string, orderNumber: string, orderItemId?: string) {
+  const [order] = await db
+    .select()
+    .from(shopOrders)
+    .where(and(eq(shopOrders.tenantId, tenantId), eq(shopOrders.orderNumber, orderNumber)));
+  if (!order) return { error: 'Order not found', status: 404 as const };
+  if (order.paymentStatus !== 'paid') return { error: 'Bonus tickets are only available on paid orders', status: 400 as const };
+
+  const items = await db
+    .select()
+    .from(shopOrderItems)
+    .where(and(eq(shopOrderItems.orderId, order.id), eq(shopOrderItems.productType, 'raffle')));
+  if (items.length === 0) return { error: 'This order has no raffle tickets', status: 400 as const };
+
+  // Bind the claim to the specific raffle item the buyer acted on. Orders can
+  // contain multiple raffles; only fall back to the sole item when unambiguous.
+  let item: typeof items[number] | undefined;
+  if (orderItemId) {
+    item = items.find((i) => i.id === orderItemId);
+    if (!item) return { error: 'Raffle item not found on this order', status: 404 as const };
+  } else if (items.length === 1) {
+    item = items[0];
+  } else {
+    return { error: 'Please specify which raffle to claim the bonus for', status: 400 as const };
+  }
+  const [product] = await db
+    .select()
+    .from(shopProducts)
+    .where(and(eq(shopProducts.id, item.productId), eq(shopProducts.tenantId, tenantId)));
+  if (!product || !product.raffleIncentivesEnabled) {
+    return { error: 'Bonus tickets are not available for this raffle', status: 400 as const };
+  }
+
+  const [drawing] = await db
+    .select()
+    .from(shopRaffleDrawings)
+    .where(and(
+      eq(shopRaffleDrawings.productId, product.id),
+      eq(shopRaffleDrawings.status, 'drawn')
+    ));
+  if (drawing) return { error: 'This raffle has already been drawn', status: 400 as const };
+
+  return { order, item, product };
+}
+
+/**
+ * POST /api/shop/orders/:orderNumber/claim-share-bonus
+ * Grant +1 bonus ticket for sharing the raffle to social media. Once per order.
+ */
+router.post('/orders/:orderNumber/claim-share-bonus', requireTenant, async (req, res, next) => {
+  try {
+    // Order numbers are guessable; require the per-order access token
+    // (issued at checkout and in the confirmation email link) as proof of ownership.
+    const tokenParse = z.object({
+      accessToken: z.string().min(8).max(128),
+      orderItemId: z.string().uuid().optional(),
+    }).safeParse(req.body);
+    if (!tokenParse.success) {
+      return res.status(400).json({ error: 'Please use the link from your order confirmation to claim bonuses' });
+    }
+
+    const ctx = await loadIncentiveContext(req.tenant!.id, req.params.orderNumber, tokenParse.data.orderItemId);
+    if ('error' in ctx) return res.status(ctx.status ?? 400).json({ error: ctx.error });
+
+    if (tokenParse.data.accessToken !== ctx.order.accessToken) {
+      return res.status(403).json({ error: "This link isn't valid for this order" });
+    }
+
+    const result = await grantBonusTickets({
+      tenantId: req.tenant!.id,
+      orderId: ctx.order.id,
+      orderItemId: ctx.item.id,
+      productId: ctx.product.id,
+      actionType: 'share',
+      count: 1,
+    });
+
+    if (result === 'drawn') {
+      return res.status(400).json({ error: 'This raffle has already been drawn' });
+    }
+    if (result === null || result === 'cap') {
+      return res.status(200).json({ alreadyClaimed: true });
+    }
+    res.status(201).json({ ticketNumbers: result });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/shop/orders/:orderNumber/refer
+ * Grant +1 bonus ticket for referring a friend by email (up to the product's
+ * cap per order). Sends the friend a short invite email with the raffle link.
+ */
+router.post('/orders/:orderNumber/refer', requireTenant, async (req, res, next) => {
+  try {
+    const bodySchema = z.object({
+      friendEmail: z.string().email().max(320),
+      accessToken: z.string().min(8).max(128),
+      orderItemId: z.string().uuid().optional(),
+    });
+    const parsed = bodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Please enter a valid email address' });
+    }
+    const friendEmail = parsed.data.friendEmail.trim().toLowerCase();
+
+    const ctx = await loadIncentiveContext(req.tenant!.id, req.params.orderNumber, parsed.data.orderItemId);
+    if ('error' in ctx) return res.status(ctx.status ?? 400).json({ error: ctx.error });
+
+    if (parsed.data.accessToken !== ctx.order.accessToken) {
+      return res.status(403).json({ error: "This link isn't valid for this order" });
+    }
+
+    if (friendEmail === ctx.order.customerEmail.trim().toLowerCase()) {
+      return res.status(400).json({ error: "You can't refer yourself" });
+    }
+
+    const result = await grantBonusTickets({
+      tenantId: req.tenant!.id,
+      orderId: ctx.order.id,
+      orderItemId: ctx.item.id,
+      productId: ctx.product.id,
+      actionType: 'referral',
+      referredEmail: friendEmail,
+      count: 1,
+      maxReferrals: ctx.product.raffleMaxReferrals,
+    });
+
+    if (result === 'drawn') {
+      return res.status(400).json({ error: 'This raffle has already been drawn' });
+    }
+    if (result === 'cap') {
+      return res.status(400).json({ error: `You've reached the maximum of ${ctx.product.raffleMaxReferrals} referrals for this order` });
+    }
+    if (result === null) {
+      return res.status(400).json({ error: "You've already referred this email address" });
+    }
+    const ticketNumbers = result;
+
+    // Invite the friend (fire-and-forget so email issues never block the grant)
+    const { sendRaffleReferralInviteEmail } = await import('../lib/shop-emails');
+    sendRaffleReferralInviteEmail(
+      req.tenant!.id,
+      friendEmail,
+      ctx.order.customerName,
+      ctx.product.id,
+    ).catch((err) => {
+      console.error(`[Shop] Referral invite email failed for order ${ctx.order.orderNumber}:`, err);
+    });
+
+    res.status(201).json({ ticketNumbers });
   } catch (error) {
     next(error);
   }
@@ -1007,7 +1320,27 @@ router.get('/admin/raffles', requireTenant, requireAuth, requireRoleOrPageAccess
       ticketCounts = counts;
     }
 
+    // Bonus tickets (earned via sharing incentives) on paid orders
+    let bonusCounts: { productId: string; count: number }[] = [];
+    if (raffleIds.length > 0) {
+      bonusCounts = await db
+        .select({
+          productId: shopRaffleBonusTickets.productId,
+          count: sql<number>`coalesce(sum(cardinality(${shopRaffleBonusTickets.ticketNumbers})), 0)::int`,
+        })
+        .from(shopRaffleBonusTickets)
+        .innerJoin(shopOrders, eq(shopRaffleBonusTickets.orderId, shopOrders.id))
+        .where(
+          and(
+            inArray(shopRaffleBonusTickets.productId, raffleIds),
+            eq(shopOrders.paymentStatus, 'paid')
+          )
+        )
+        .groupBy(shopRaffleBonusTickets.productId);
+    }
+
     const ticketCountMap = new Map(ticketCounts.map(t => [t.productId, t.count]));
+    const bonusCountMap = new Map(bonusCounts.map(t => [t.productId, t.count]));
 
     // Get drawing status
     const drawings = await db
@@ -1025,6 +1358,7 @@ router.get('/admin/raffles', requireTenant, requireAuth, requireRoleOrPageAccess
     const rafflesWithStats = raffles.map(r => ({
       ...r,
       ticketsSold: ticketCountMap.get(r.id) || 0,
+      bonusTickets: bonusCountMap.get(r.id) || 0,
       drawing: drawingMap.get(r.id),
     }));
 
@@ -1078,6 +1412,7 @@ router.get('/admin/raffles/:id/tickets', requireTenant, requireAuth, requireRole
       customerPhone: string | null;
       orderNumber: string;
       orderDate: string | null;
+      isBonus: boolean;
     }[] = [];
 
     for (const { orderItem, order } of rows) {
@@ -1090,8 +1425,37 @@ router.get('/admin/raffles/:id/tickets', requireTenant, requireAuth, requireRole
             customerPhone: order.customerPhone || null,
             orderNumber: order.orderNumber,
             orderDate: order.createdAt ? new Date(order.createdAt).toISOString() : null,
+            isBonus: false,
           });
         }
+      }
+    }
+
+    // Bonus tickets earned via sharing incentives (paid orders only)
+    const bonusRows = await db
+      .select({
+        bonus: shopRaffleBonusTickets,
+        order: shopOrders,
+      })
+      .from(shopRaffleBonusTickets)
+      .innerJoin(shopOrders, eq(shopRaffleBonusTickets.orderId, shopOrders.id))
+      .where(
+        and(
+          eq(shopRaffleBonusTickets.productId, raffle.id),
+          eq(shopOrders.paymentStatus, 'paid')
+        )
+      );
+    for (const { bonus, order } of bonusRows) {
+      for (const ticketNumber of bonus.ticketNumbers) {
+        tickets.push({
+          ticketNumber,
+          customerName: order.customerName,
+          customerEmail: order.customerEmail,
+          customerPhone: order.customerPhone || null,
+          orderNumber: order.orderNumber,
+          orderDate: order.createdAt ? new Date(order.createdAt).toISOString() : null,
+          isBonus: true,
+        });
       }
     }
 
@@ -1104,6 +1468,8 @@ router.get('/admin/raffles/:id/tickets', requireTenant, requireAuth, requireRole
         raffleDrawDate: raffle.raffleDrawDate,
       },
       totalTickets: tickets.length,
+      purchasedTickets: tickets.filter((t) => !t.isBonus).length,
+      bonusTickets: tickets.filter((t) => t.isBonus).length,
       tickets,
     });
   } catch (error) {
@@ -1147,8 +1513,26 @@ router.post('/admin/raffles/:id/draw', requireTenant, requireAuth, requireRoleOr
       return res.status(400).json({ error: 'Raffle has already been drawn' });
     }
 
+    // Assemble the pool and record the winner inside one transaction holding
+    // the product row lock, so bonus-ticket grants (which take the same lock)
+    // can never land after the pool is assembled, and two concurrent draws
+    // serialize (the second sees the first's drawn record and aborts).
+    const drawResult = await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT id FROM shop_products WHERE id = ${raffle.id} FOR UPDATE`);
+
+    const [alreadyDrawn] = await tx
+      .select({ id: shopRaffleDrawings.id })
+      .from(shopRaffleDrawings)
+      .where(and(
+        eq(shopRaffleDrawings.productId, raffle.id),
+        eq(shopRaffleDrawings.status, 'drawn')
+      ));
+    if (alreadyDrawn) {
+      return { error: 'Raffle has already been drawn' as const };
+    }
+
     // Get all paid tickets for this raffle
-    const tickets = await db
+    const tickets = await tx
       .select({
         orderItem: shopOrderItems,
         order: shopOrders,
@@ -1161,10 +1545,6 @@ router.post('/admin/raffles/:id/draw', requireTenant, requireAuth, requireRoleOr
           eq(shopOrders.paymentStatus, 'paid')
         )
       );
-
-    if (tickets.length === 0) {
-      return res.status(400).json({ error: 'No tickets sold for this raffle' });
-    }
 
     // Flatten all ticket numbers
     const allTickets: { ticketNumber: string; orderItemId: string; customerName: string; customerEmail: string; customerPhone?: string }[] = [];
@@ -1183,12 +1563,44 @@ router.post('/admin/raffles/:id/draw', requireTenant, requireAuth, requireRoleOr
       }
     }
 
+    // Include bonus tickets earned via sharing incentives (paid orders only).
+    // They reference the underlying order item so the winner record still
+    // points at a real purchase.
+    const bonusRows = await tx
+      .select({
+        bonus: shopRaffleBonusTickets,
+        order: shopOrders,
+      })
+      .from(shopRaffleBonusTickets)
+      .innerJoin(shopOrders, eq(shopRaffleBonusTickets.orderId, shopOrders.id))
+      .where(
+        and(
+          eq(shopRaffleBonusTickets.productId, raffle.id),
+          eq(shopOrders.paymentStatus, 'paid')
+        )
+      );
+    for (const { bonus, order } of bonusRows) {
+      for (const ticketNumber of bonus.ticketNumbers) {
+        allTickets.push({
+          ticketNumber,
+          orderItemId: bonus.orderItemId,
+          customerName: order.customerName,
+          customerEmail: order.customerEmail,
+          customerPhone: order.customerPhone || undefined,
+        });
+      }
+    }
+
+    if (allTickets.length === 0) {
+      return { error: 'No tickets sold for this raffle' as const };
+    }
+
     // Random draw
     const winnerIndex = Math.floor(Math.random() * allTickets.length);
     const winner = allTickets[winnerIndex];
 
     // Create drawing record
-    const [drawing] = await db.insert(shopRaffleDrawings).values({
+    const [drawing] = await tx.insert(shopRaffleDrawings).values({
       productId: raffle.id,
       tenantId: req.tenant!.id,
       winningOrderItemId: winner.orderItemId,
@@ -1201,10 +1613,14 @@ router.post('/admin/raffles/:id/draw', requireTenant, requireAuth, requireRoleOr
       drawnBy: req.user!.id,
     }).returning();
 
-    res.json({ 
-      drawing,
-      totalTickets: allTickets.length,
+    return { drawing, totalTickets: allTickets.length };
     });
+
+    if ('error' in drawResult) {
+      return res.status(400).json({ error: drawResult.error });
+    }
+
+    res.json(drawResult);
   } catch (error) {
     next(error);
   }

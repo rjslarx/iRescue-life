@@ -17,6 +17,7 @@
 - [Dev HTML middleware preamble](dev-html-middleware-preamble.md) — middleware serving raw index.html in dev must inject the Vite React-refresh preamble or pages render blank (dev only).
 - [Application detail dialogs](application-detail-dialogs.md) — three separate staff dialogs render application details; new applications columns must be plumbed into each plus two server selects.
 - [Insert-schema form/date traps](grant-form-insert-schema-dates.md) — raw createInsertSchema in zodResolver silently blocks submit (tenantId required); timestamp cols reject ISO strings server-side, need coercion.
+- [Raffle bonus tickets & order tokens](raffle-bonus-tickets.md) — one ticket sequence (sold+bonus) under product FOR UPDATE lock; public order actions need shop_orders.access_token, never order number/email.
 - [Raffle bundle pricing](raffle-bundle-pricing.md) — charge EXACT configured tier prices (greedy largest-first, no cheapest-combo optimizer); buyer pays grossed-up card fee; server totals authoritative.
 - [Shop checkout confirm gap](shop-checkout-confirm-gap.md) — no shop webhook; paid-on-Stripe orders can stay pending; hourly sweep reconciles; manual fix via public confirm + x-tenant-id header.
 - [Inbound SMS routing & unmatched capture](inbound-sms-routing.md) — replies only match active fosters; unmatched now logged to feed; Twilio webhook must stay fail-closed on signature.

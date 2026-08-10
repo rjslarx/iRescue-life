@@ -1,4 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, Link } from "wouter";
 import { useTenant } from "@/contexts/TenantContext";
 import { useSEO } from "@/hooks/useSEO";
@@ -6,8 +7,12 @@ import PublicHeader from "@/components/PublicHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { 
   CheckCircle2, 
   Package, 
@@ -16,17 +21,104 @@ import {
   Clock,
   ArrowLeft,
   Mail,
+  Share2,
+  Check,
+  Gift,
+  Loader2,
 } from "lucide-react";
+import { SiFacebook, SiX } from "react-icons/si";
 import type { ShopOrder, ShopOrderItem, Tenant } from "@shared/schema";
 
+type BonusTicket = { actionType: 'share' | 'referral'; ticketNumbers: string[] };
+
+type IncentiveInfo = {
+  enabled: boolean;
+  maxReferrals: number;
+  shareClaimed: boolean;
+  referralsUsed: number;
+  drawn: boolean;
+  productSlug: string;
+  productName: string;
+};
+
 type OrderWithItems = ShopOrder & {
-  items: ShopOrderItem[];
+  items: (ShopOrderItem & { bonusTickets?: BonusTicket[] })[];
+  incentives?: Record<string, IncentiveInfo>;
 };
 
 export default function ShopOrderPage() {
   const { basePath } = useTenant();
+  const { toast } = useToast();
   const [, params] = useRoute("/shop/order/:orderNumber");
   const orderNumber = params?.orderNumber;
+  const [friendEmails, setFriendEmails] = useState<Record<string, string>>({});
+  const [linkCopied, setLinkCopied] = useState(false);
+  // Per-order access token is required as proof of ownership for bonus claims
+  // (order numbers alone are guessable). Comes from the checkout redirect
+  // (?t=...) or the confirmation-email link; remembered for this session.
+  const [accessToken] = useState(() => {
+    try {
+      const fromUrl = new URLSearchParams(window.location.search).get("t");
+      if (fromUrl && orderNumber) {
+        sessionStorage.setItem(`shop-order-token:${orderNumber}`, fromUrl);
+        return fromUrl;
+      }
+      return sessionStorage.getItem(`shop-order-token:${orderNumber}`) || "";
+    } catch {
+      return "";
+    }
+  });
+
+  // Bearer-token hygiene: once stored, remove ?t= from the address bar so the
+  // token doesn't linger in browser history or get leaked via referrers.
+  useEffect(() => {
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has("t")) {
+        url.searchParams.delete("t");
+        window.history.replaceState({}, "", url.pathname + (url.search || "") + url.hash);
+      }
+    } catch {}
+  }, []);
+
+  const claimShareMutation = useMutation({
+    mutationFn: async (itemId: string) => {
+      const response = await apiRequest("POST", `/api/shop/orders/${orderNumber}/claim-share-bonus`, { accessToken, orderItemId: itemId });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || "Couldn't claim bonus ticket");
+      }
+      return response.json() as Promise<{ ticketNumbers?: string[]; alreadyClaimed?: boolean }>;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/shop/orders', orderNumber] });
+      if (data.ticketNumbers) {
+        toast({ title: "Bonus ticket earned! 🎟️", description: `Ticket #${data.ticketNumbers.join(', #')} added to your entry.` });
+      }
+    },
+    onError: (error: Error) => {
+      toast({ title: "Couldn't add bonus ticket", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const referMutation = useMutation({
+    mutationFn: async ({ email, itemId }: { email: string; itemId: string }) => {
+      const response = await apiRequest("POST", `/api/shop/orders/${orderNumber}/refer`, { friendEmail: email, accessToken, orderItemId: itemId });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || "Couldn't send referral");
+      }
+      return response.json() as Promise<{ ticketNumbers: string[] }>;
+    },
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/shop/orders', orderNumber] });
+      setFriendEmails(prev => ({ ...prev, [variables.itemId]: "" }));
+      toast({ title: "Bonus ticket earned! 🎟️", description: `Your friend has been invited and ticket #${data.ticketNumbers.join(', #')} was added to your entry.` });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Couldn't send referral", description: error.message, variant: "destructive" });
+    },
+  });
 
   const { data: tenantData } = useQuery<{ tenant: Tenant }>({
     queryKey: ['/api/tenant'],
@@ -84,7 +176,7 @@ export default function ShopOrderPage() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background">
-        <PublicHeader rescueName={rescueName} logoUrl={tenant?.logoUrl} />
+        <PublicHeader rescueName={rescueName} logoUrl={tenant?.logoUrl ?? undefined} />
         <main className="container max-w-2xl mx-auto px-4 py-8">
           <Skeleton className="h-8 w-48 mb-6" />
           <Card>
@@ -102,7 +194,7 @@ export default function ShopOrderPage() {
   if (!order) {
     return (
       <div className="min-h-screen bg-background">
-        <PublicHeader rescueName={rescueName} logoUrl={tenant?.logoUrl} />
+        <PublicHeader rescueName={rescueName} logoUrl={tenant?.logoUrl ?? undefined} />
         <main className="container max-w-2xl mx-auto px-4 py-16 text-center">
           <Package className="h-16 w-16 mx-auto text-muted-foreground/50 mb-4" />
           <h2 className="text-xl font-semibold mb-2">Order Not Found</h2>
@@ -125,7 +217,7 @@ export default function ShopOrderPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <PublicHeader rescueName={rescueName} logoUrl={tenant?.logoUrl} />
+      <PublicHeader rescueName={rescueName} logoUrl={tenant?.logoUrl ?? undefined} />
 
       <main className="container max-w-2xl mx-auto px-4 py-8">
         <Link href="/shop" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground mb-6">
@@ -204,6 +296,11 @@ export default function ShopOrderPage() {
                         {item.raffleTicketNumbers.map((num, j) => (
                           <Badge key={j} variant="outline" className="text-xs">
                             #{num}
+                          </Badge>
+                        ))}
+                        {(item.bonusTickets || []).flatMap(b => b.ticketNumbers).map((num, j) => (
+                          <Badge key={`bonus-${j}`} className="text-xs bg-amber-500 hover:bg-amber-500" data-testid={`badge-bonus-ticket-${num}`}>
+                            #{num} · Bonus
                           </Badge>
                         ))}
                       </div>
@@ -286,6 +383,116 @@ export default function ShopOrderPage() {
             </CardContent>
           </Card>
         )}
+
+        {order.paymentStatus === 'paid' && order.incentives && Object.entries(order.incentives)
+          .filter(([, v]) => v.enabled && !v.drawn)
+          .map(([itemId, info]) => {
+          const referralsLeft = Math.max(0, info.maxReferrals - info.referralsUsed);
+          const raffleUrl = `${window.location.origin}${basePath}/shop/${info.productSlug}`;
+          const shareText = `I just entered the ${info.productName} raffle — you can too!`;
+          const friendEmail = friendEmails[itemId] || "";
+          const openShare = (url: string) => {
+            window.open(url, '_blank', 'width=600,height=400');
+            if (!info.shareClaimed) claimShareMutation.mutate(itemId);
+          };
+          return (
+            <Card key={itemId} className="mb-6 border-amber-400/50 bg-amber-500/5">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Gift className="h-5 w-5 text-amber-500" />
+                  Earn Extra Tickets — Free!
+                  {Object.keys(order.incentives!).length > 1 && (
+                    <span className="text-sm font-normal text-muted-foreground">({info.productName})</span>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {!accessToken && (
+                  <p className="text-sm text-muted-foreground" data-testid="text-bonus-link-needed">
+                    To claim bonus tickets, open this page using the link in your order confirmation email.
+                  </p>
+                )}
+                <div>
+                  <p className="text-sm font-medium mb-1">
+                    Share this raffle {info.shareClaimed ? (
+                      <Badge variant="secondary" className="ml-1"><Check className="h-3 w-3 mr-1" />Bonus claimed</Badge>
+                    ) : (
+                      <span className="text-muted-foreground font-normal">— get +1 free ticket</span>
+                    )}
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openShare(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(raffleUrl)}`)}
+                      disabled={claimShareMutation.isPending}
+                      data-testid="button-bonus-share-facebook"
+                    >
+                      <SiFacebook className="h-4 w-4 mr-2" />Facebook
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openShare(`https://twitter.com/intent/tweet?url=${encodeURIComponent(raffleUrl)}&text=${encodeURIComponent(shareText)}`)}
+                      disabled={claimShareMutation.isPending}
+                      data-testid="button-bonus-share-x"
+                    >
+                      <SiX className="h-4 w-4 mr-2" />X
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        await navigator.clipboard.writeText(raffleUrl);
+                        setLinkCopied(true);
+                        setTimeout(() => setLinkCopied(false), 2000);
+                        if (!info.shareClaimed) claimShareMutation.mutate(itemId);
+                      }}
+                      disabled={claimShareMutation.isPending}
+                      data-testid="button-bonus-copy-link"
+                    >
+                      {linkCopied ? <Check className="h-4 w-4 mr-2" /> : <Share2 className="h-4 w-4 mr-2" />}
+                      Copy Link
+                    </Button>
+                  </div>
+                </div>
+                <Separator />
+                <div>
+                  <p className="text-sm font-medium mb-1">
+                    Refer friends by email
+                    <span className="text-muted-foreground font-normal"> — +1 free ticket each ({referralsLeft} left)</span>
+                  </p>
+                  {referralsLeft > 0 ? (
+                    <form
+                      className="flex gap-2"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        if (friendEmail.trim()) referMutation.mutate({ email: friendEmail.trim(), itemId });
+                      }}
+                    >
+                      <Input
+                        type="email"
+                        placeholder="friend@example.com"
+                        value={friendEmail}
+                        onChange={(e) => setFriendEmails(prev => ({ ...prev, [itemId]: e.target.value }))}
+                        required
+                        data-testid="input-referral-email"
+                      />
+                      <Button type="submit" size="sm" className="shrink-0" disabled={referMutation.isPending} data-testid="button-send-referral">
+                        {referMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Invite & Earn"}
+                      </Button>
+                    </form>
+                  ) : (
+                    <Badge variant="secondary"><Check className="h-3 w-3 mr-1" />All referral bonuses earned</Badge>
+                  )}
+                  <p className="text-xs text-muted-foreground mt-1">
+                    We'll send your friend a friendly invite to the raffle. Bonus tickets appear in your ticket list above.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
 
         {hasRaffleItems && (
           <Card>

@@ -57,12 +57,21 @@ type RaffleTicket = {
   customerPhone: string | null;
   orderNumber: string;
   orderDate: string | null;
+  isBonus?: boolean;
 };
 
 type RaffleTicketsResponse = {
   raffle: { id: string; name: string; raffleDrawDate: string | null };
   totalTickets: number;
+  purchasedTickets?: number;
+  bonusTickets?: number;
   tickets: RaffleTicket[];
+};
+
+type RaffleStats = {
+  id: string;
+  ticketsSold: number;
+  bonusTickets: number;
 };
 
 export default function ShopManagementPage() {
@@ -110,6 +119,8 @@ export default function ShopManagementPage() {
     featured: false,
     rafflePrizeDescription: '',
     raffleDrawDate: '',
+    raffleIncentivesEnabled: false,
+    raffleMaxReferrals: '3',
     imageUrls: [] as string[],
     bundleTiers: [] as { quantity: string; price: string }[],
   });
@@ -129,6 +140,10 @@ export default function ShopManagementPage() {
     priceAdjustment: '0',
     inventory: '0',
     optionType: 'size' as 'size' | 'color' | 'style' | 'other',
+  });
+
+  const { data: raffleStatsData } = useQuery<{ raffles: RaffleStats[] }>({
+    queryKey: ['/api/shop/admin/raffles'],
   });
 
   const { data: productsData, isLoading: isLoadingProducts } = useQuery<{ products: ProductWithVariants[] }>({
@@ -156,7 +171,7 @@ export default function ShopManagementPage() {
     if (!ticketsData) return;
     const escape = (v: string | null) => `"${(v ?? '').replace(/"/g, '""')}"`;
     const rows = [
-      ['Ticket Number', 'Buyer Name', 'Email', 'Phone', 'Order Number', 'Order Date'],
+      ['Ticket Number', 'Buyer Name', 'Email', 'Phone', 'Order Number', 'Order Date', 'Type'],
       ...ticketsData.tickets.map(t => [
         t.ticketNumber,
         t.customerName,
@@ -164,6 +179,7 @@ export default function ShopManagementPage() {
         t.customerPhone || '',
         t.orderNumber,
         t.orderDate ? new Date(t.orderDate).toLocaleDateString() : '',
+        t.isBonus ? 'Bonus' : 'Purchased',
       ]),
     ];
     const csv = rows.map(r => r.map(escape).join(',')).join('\n');
@@ -194,10 +210,10 @@ export default function ShopManagementPage() {
         th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }
         th { background: #f3f3f3; }
       </style></head><body>
-      <h1>${esc(ticketsData.raffle.name)} — Paid Raffle Tickets</h1>
-      <p>${ticketsData.totalTickets} paid ticket${ticketsData.totalTickets !== 1 ? 's' : ''} &middot; Generated ${new Date().toLocaleString()}</p>
-      <table><thead><tr><th>Ticket #</th><th>Buyer</th><th>Email</th><th>Phone</th><th>Order</th></tr></thead><tbody>
-      ${ticketsData.tickets.map(t => `<tr><td>${esc(t.ticketNumber)}</td><td>${esc(t.customerName)}</td><td>${esc(t.customerEmail)}</td><td>${esc(t.customerPhone)}</td><td>${esc(t.orderNumber)}</td></tr>`).join('')}
+      <h1>${esc(ticketsData.raffle.name)} — Raffle Tickets (Paid Orders)</h1>
+      <p>${ticketsData.totalTickets} ticket${ticketsData.totalTickets !== 1 ? 's' : ''} (${ticketsData.purchasedTickets ?? ticketsData.totalTickets} purchased, ${ticketsData.bonusTickets ?? 0} bonus) &middot; Generated ${new Date().toLocaleString()}</p>
+      <table><thead><tr><th>Ticket #</th><th>Buyer</th><th>Email</th><th>Phone</th><th>Order</th><th>Type</th></tr></thead><tbody>
+      ${ticketsData.tickets.map(t => `<tr><td>${esc(t.ticketNumber)}</td><td>${esc(t.customerName)}</td><td>${esc(t.customerEmail)}</td><td>${esc(t.customerPhone)}</td><td>${esc(t.orderNumber)}</td><td>${t.isBonus ? 'Bonus' : 'Purchased'}</td></tr>`).join('')}
       </tbody></table></body></html>`);
     w.document.close();
     w.focus();
@@ -249,6 +265,8 @@ export default function ShopManagementPage() {
         totalInventory: data.trackInventory ? parseInt(data.totalInventory) || 0 : null,
         maxPerOrder: data.maxPerOrder ? parseInt(data.maxPerOrder) : null,
         raffleDrawDate: data.raffleDrawDate ? new Date(data.raffleDrawDate) : null,
+        raffleIncentivesEnabled: data.productType === 'raffle' ? data.raffleIncentivesEnabled : false,
+        raffleMaxReferrals: Math.max(1, parseInt(data.raffleMaxReferrals) || 3),
         imageUrls: data.imageUrls,
         bundlePricing: data.productType === 'raffle' ? buildBundlePricing(bundleTiers) : null,
       });
@@ -279,6 +297,8 @@ export default function ShopManagementPage() {
         totalInventory: data.trackInventory ? parseInt(data.totalInventory) || 0 : null,
         maxPerOrder: data.maxPerOrder ? parseInt(data.maxPerOrder) : null,
         raffleDrawDate: data.raffleDrawDate ? new Date(data.raffleDrawDate) : null,
+        raffleIncentivesEnabled: data.productType === 'raffle' ? data.raffleIncentivesEnabled : false,
+        raffleMaxReferrals: Math.max(1, parseInt(data.raffleMaxReferrals) || 3),
         imageUrls: data.imageUrls,
         bundlePricing: data.productType === 'raffle' ? buildBundlePricing(bundleTiers) : null,
       });
@@ -394,6 +414,8 @@ export default function ShopManagementPage() {
       featured: false,
       rafflePrizeDescription: '',
       raffleDrawDate: '',
+      raffleIncentivesEnabled: false,
+      raffleMaxReferrals: '3',
       imageUrls: [],
       bundleTiers: [],
     });
@@ -460,6 +482,8 @@ export default function ShopManagementPage() {
       featured: product.featured,
       rafflePrizeDescription: product.rafflePrizeDescription || '',
       raffleDrawDate: product.raffleDrawDate ? new Date(product.raffleDrawDate).toISOString().split('T')[0] : '',
+      raffleIncentivesEnabled: product.raffleIncentivesEnabled || false,
+      raffleMaxReferrals: (product.raffleMaxReferrals ?? 3).toString(),
       imageUrls: product.imageUrls || [],
       bundleTiers: (product.bundlePricing || []).map(t => ({ quantity: String(t.quantity), price: t.price })),
     });
@@ -873,6 +897,16 @@ export default function ShopManagementPage() {
                               Drawing: {new Date(raffle.raffleDrawDate).toLocaleDateString()}
                             </p>
                           )}
+                          {(() => {
+                            const stats = raffleStatsData?.raffles?.find(s => s.id === raffle.id);
+                            if (!stats) return null;
+                            return (
+                              <p className="text-sm" data-testid={`text-raffle-stats-${raffle.id}`}>
+                                Tickets: {stats.ticketsSold + (stats.bonusTickets || 0)}
+                                <span className="text-muted-foreground"> ({stats.ticketsSold} purchased{stats.bonusTickets ? `, ${stats.bonusTickets} bonus` : ''})</span>
+                              </p>
+                            );
+                          })()}
                         </div>
                         <div className="flex flex-wrap gap-2">
                           <Button variant="outline" onClick={() => setViewTicketsRaffle(raffle)} data-testid={`button-view-tickets-${raffle.id}`}>
@@ -923,7 +957,7 @@ export default function ShopManagementPage() {
               <div className="space-y-4">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <p className="text-sm font-medium" data-testid="text-ticket-count">
-                    {ticketsData.totalTickets} paid ticket{ticketsData.totalTickets !== 1 ? 's' : ''}
+                    {ticketsData.totalTickets} ticket{ticketsData.totalTickets !== 1 ? 's' : ''} ({ticketsData.purchasedTickets ?? ticketsData.totalTickets} purchased, {ticketsData.bonusTickets ?? 0} bonus)
                   </p>
                   <div className="flex gap-2">
                     <Button variant="outline" size="sm" onClick={handleExportTicketsCsv} data-testid="button-export-tickets-csv">
@@ -945,6 +979,7 @@ export default function ShopManagementPage() {
                         <th className="px-3 py-2 font-medium">Email</th>
                         <th className="px-3 py-2 font-medium">Phone</th>
                         <th className="px-3 py-2 font-medium">Order</th>
+                        <th className="px-3 py-2 font-medium">Type</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -955,6 +990,9 @@ export default function ShopManagementPage() {
                           <td className="px-3 py-2">{t.customerEmail}</td>
                           <td className="px-3 py-2">{t.customerPhone || '—'}</td>
                           <td className="px-3 py-2">{t.orderNumber}</td>
+                          <td className="px-3 py-2">
+                            {t.isBonus ? <Badge className="bg-amber-500 hover:bg-amber-500">Bonus</Badge> : <span className="text-muted-foreground">Purchased</span>}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -1175,6 +1213,36 @@ export default function ShopManagementPage() {
                         rows={2}
                         data-testid="input-prize-description"
                       />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <Label>Sharing Incentives</Label>
+                          <p className="text-sm text-muted-foreground">
+                            Buyers earn +1 free ticket for sharing to social media, and +1 for each friend they refer by email.
+                          </p>
+                        </div>
+                        <Switch
+                          checked={productForm.raffleIncentivesEnabled}
+                          onCheckedChange={(checked) => setProductForm(prev => ({ ...prev, raffleIncentivesEnabled: checked }))}
+                          data-testid="switch-raffle-incentives"
+                        />
+                      </div>
+                      {productForm.raffleIncentivesEnabled && (
+                        <div className="space-y-1">
+                          <Label htmlFor="raffleMaxReferrals">Max referral bonuses per order</Label>
+                          <Input
+                            id="raffleMaxReferrals"
+                            type="number"
+                            min={1}
+                            max={20}
+                            value={productForm.raffleMaxReferrals}
+                            onChange={(e) => setProductForm(prev => ({ ...prev, raffleMaxReferrals: e.target.value }))}
+                            className="w-28"
+                            data-testid="input-raffle-max-referrals"
+                          />
+                        </div>
+                      )}
                     </div>
                     <div className="space-y-2">
                       <div>

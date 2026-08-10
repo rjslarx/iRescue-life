@@ -165,6 +165,38 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' || echo "[post-merge] sms_messag
 ALTER TABLE sms_message_logs ADD COLUMN IF NOT EXISTS alumni_routing_status text;
 SQL
 
+# Raffle sharing incentives: per-product toggle/caps + bonus-ticket records
+# earned by paid buyers (social share once per order item, email referrals up
+# to the cap). Unique partial indexes make grants idempotent under concurrency.
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' || echo "[post-merge] raffle sharing incentive schema skipped (already applied or DB unreachable)."
+ALTER TABLE shop_orders ADD COLUMN IF NOT EXISTS access_token text NOT NULL DEFAULT gen_random_uuid();
+ALTER TABLE shop_products ADD COLUMN IF NOT EXISTS raffle_incentives_enabled boolean NOT NULL DEFAULT false;
+ALTER TABLE shop_products ADD COLUMN IF NOT EXISTS raffle_max_referrals integer NOT NULL DEFAULT 3;
+CREATE TABLE IF NOT EXISTS shop_raffle_bonus_tickets (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  order_id uuid NOT NULL REFERENCES shop_orders(id) ON DELETE CASCADE,
+  order_item_id uuid NOT NULL REFERENCES shop_order_items(id) ON DELETE CASCADE,
+  product_id uuid NOT NULL REFERENCES shop_products(id) ON DELETE CASCADE,
+  action_type text NOT NULL,
+  referred_email text,
+  ticket_numbers text[] NOT NULL,
+  created_at timestamp NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS shop_raffle_bonus_share_unique
+  ON shop_raffle_bonus_tickets (order_item_id)
+  WHERE action_type = 'share';
+CREATE UNIQUE INDEX IF NOT EXISTS shop_raffle_bonus_referral_unique
+  ON shop_raffle_bonus_tickets (order_item_id, referred_email)
+  WHERE action_type = 'referral';
+CREATE INDEX IF NOT EXISTS shop_raffle_bonus_product_idx
+  ON shop_raffle_bonus_tickets (product_id);
+CREATE INDEX IF NOT EXISTS shop_raffle_bonus_order_idx
+  ON shop_raffle_bonus_tickets (order_id);
+CREATE UNIQUE INDEX IF NOT EXISTS shop_raffle_drawings_one_drawn_per_product
+  ON shop_raffle_drawings (product_id) WHERE status='drawn';
+SQL
+
 # Lease timestamp for alumni-routing claims (stale 'processing' recovery). Idempotent.
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' || echo "[post-merge] sms_message_logs alumni_routing_claimed_at column skipped (already applied or DB unreachable)."
 ALTER TABLE sms_message_logs ADD COLUMN IF NOT EXISTS alumni_routing_claimed_at timestamp;
