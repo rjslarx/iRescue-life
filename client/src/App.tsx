@@ -108,6 +108,7 @@ import FormSuccessPage from "@/pages/FormSuccessPage";
 import PublicAdoptionCheckoutPage from "@/pages/PublicAdoptionCheckoutPage";
 import PublicFosterAgreementPage from "@/pages/PublicFosterAgreementPage";
 import PublicSurrenderAgreementPage from "@/pages/PublicSurrenderAgreementPage";
+import PublicAdoptionAgreementDirectPage from "@/pages/PublicAdoptionAgreementDirectPage";
 import PublicPlacementAgreementPage from "@/pages/PublicPlacementAgreementPage";
 import PublicFormSigningPage from "@/pages/PublicFormSigningPage";
 import PublicCustomFormPage from "@/pages/PublicCustomFormPage";
@@ -287,6 +288,7 @@ function RouterSwitch() {
       <Route path="/adoption-checkout/:token" component={PublicAdoptionCheckoutPage} />
       <Route path="/foster-agreement/sign/:token" component={PublicFosterAgreementPage} />
       <Route path="/surrender-agreement/sign/:token" component={PublicSurrenderAgreementPage} />
+      <Route path="/adoption-agreement/sign/:token" component={PublicAdoptionAgreementDirectPage} />
       <Route path="/placement-agreement/sign/:token" component={PublicPlacementAgreementPage} />
       <Route path="/run-sheet/:token" component={RunSheetPage} />
       <Route path="/volunteer-waiver" component={PublicWaiverPage} />

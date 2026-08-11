@@ -37,7 +37,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { FileText, Plus, Edit, Trash2, Eye, Star, Copy, ChevronDown, GripVertical, Type, LayoutTemplate, AlertCircle, Heart, PawPrint, Sparkles, Wand2 } from "lucide-react";
+import { FileText, Plus, Edit, Trash2, Eye, Star, Copy, ChevronDown, GripVertical, Type, LayoutTemplate, AlertCircle, Heart, PawPrint, Sparkles, Wand2, Send, RefreshCw, XCircle, Download, Loader2 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { SmartTemplateEditor, type DocumentType } from "@/components/SmartTemplateEditor";
 import type { EditableVariable } from "@shared/schema";
@@ -71,6 +72,22 @@ interface ContractTemplate {
 
 interface MergeFields {
   [key: string]: string;
+}
+
+interface DirectSend {
+  id: string;
+  templateId: number | null;
+  templateName: string;
+  animalId: string | null;
+  animalName: string | null;
+  recipientName: string;
+  recipientEmail: string;
+  status: 'pending' | 'signed' | 'cancelled' | 'expired';
+  expiresAt: string;
+  signedAt: string | null;
+  signerName: string | null;
+  contractPdfUrl: string | null;
+  createdAt: string;
 }
 
 type ContractType = 'adoption' | 'foster' | 'placement' | 'surrender';
@@ -403,6 +420,14 @@ export default function ContractTemplatesPage() {
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const [editableVariables, setEditableVariables] = useState<EditableVariable[]>([]);
 
+  // Direct send (send adoption agreement to a person) state
+  const [isSendDialogOpen, setIsSendDialogOpen] = useState(false);
+  const [sendTemplate, setSendTemplate] = useState<ContractTemplate | null>(null);
+  const [sendRecipientName, setSendRecipientName] = useState("");
+  const [sendRecipientEmail, setSendRecipientEmail] = useState("");
+  const [sendAnimalId, setSendAnimalId] = useState<string>("none");
+  const [pdfLoadingId, setPdfLoadingId] = useState<string | null>(null);
+
   // Get current merge fields and default sections based on active contract type
   const currentMergeFields = activeContractType === 'adoption' ? ADOPTION_MERGE_FIELDS : activeContractType === 'foster' ? FOSTER_MERGE_FIELDS : activeContractType === 'surrender' ? SURRENDER_MERGE_FIELDS : PLACEMENT_MERGE_FIELDS;
   const currentDefaultSections = activeContractType === 'adoption' ? DEFAULT_ADOPTION_SECTIONS : activeContractType === 'foster' ? DEFAULT_FOSTER_SECTIONS : activeContractType === 'surrender' ? DEFAULT_SURRENDER_SECTIONS : DEFAULT_PLACEMENT_SECTIONS;
@@ -452,6 +477,105 @@ export default function ContractTemplatesPage() {
   const { data: surrenderData, isLoading: surrenderLoading } = useQuery<{ templates: ContractTemplate[]; mergeFields: MergeFields }>({
     queryKey: ['/api/surrender-contract-templates'],
   });
+
+  // Animals for the direct-send dialog picker
+  const { data: animalsData } = useQuery<{ animals: { id: string; name: string; status?: string }[] }>({
+    queryKey: ['/api/animals'],
+    enabled: isSendDialogOpen,
+  });
+
+  // Direct sends list (adoption tab)
+  const { data: directSendsData, isLoading: directSendsLoading } = useQuery<{ sends: DirectSend[] }>({
+    queryKey: ['/api/adoption-agreement-direct-sends'],
+    enabled: activeContractType === 'adoption',
+  });
+
+  const sendDirectMutation = useMutation({
+    mutationFn: async (payload: { templateId: number; recipientName: string; recipientEmail: string; animalId?: string }) => {
+      const response = await apiRequest('POST', `/api/contract-templates/${payload.templateId}/direct-send`, {
+        recipientName: payload.recipientName,
+        recipientEmail: payload.recipientEmail,
+        animalId: payload.animalId || null,
+      });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || err.message || 'Failed to send agreement');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/adoption-agreement-direct-sends'] });
+      setIsSendDialogOpen(false);
+      setSendRecipientName("");
+      setSendRecipientEmail("");
+      setSendAnimalId("none");
+      toast({ title: "Agreement sent", description: "The signing link was emailed to the recipient." });
+    },
+    onError: (error: any) => {
+      toast({ title: "Could not send agreement", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const resendDirectMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await apiRequest('POST', `/api/adoption-agreement-direct-sends/${id}/resend`);
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || err.message || 'Failed to resend');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/adoption-agreement-direct-sends'] });
+      toast({ title: "Email resent", description: "A fresh signing link was emailed to the recipient." });
+    },
+    onError: (error: any) => {
+      toast({ title: "Could not resend", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const cancelDirectMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await apiRequest('POST', `/api/adoption-agreement-direct-sends/${id}/cancel`);
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || err.message || 'Failed to cancel');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/adoption-agreement-direct-sends'] });
+      toast({ title: "Cancelled", description: "The signing link no longer works." });
+    },
+    onError: (error: any) => {
+      toast({ title: "Could not cancel", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const handleViewDirectSendPdf = async (id: string) => {
+    setPdfLoadingId(id);
+    try {
+      const response = await apiRequest('GET', `/api/adoption-agreement-direct-sends/${id}/pdf`);
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'PDF not available');
+      }
+      const { url } = await response.json();
+      window.open(url, '_blank');
+    } catch (error: any) {
+      toast({ title: "Could not open PDF", description: error.message, variant: "destructive" });
+    } finally {
+      setPdfLoadingId(null);
+    }
+  };
+
+  const handleOpenSendDialog = (template: ContractTemplate) => {
+    setSendTemplate(template);
+    setSendRecipientName("");
+    setSendRecipientEmail("");
+    setSendAnimalId("none");
+    setIsSendDialogOpen(true);
+  };
 
   const adoptionTemplates = adoptionData?.templates || [];
   const fosterTemplates = fosterData?.templates || [];
@@ -826,8 +950,9 @@ export default function ContractTemplatesPage() {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="adoption" className="mt-6">
+          <TabsContent value="adoption" className="mt-6 space-y-6">
             {renderTemplateGrid(adoptionTemplates, adoptionLoading)}
+            {renderDirectSendsSection()}
           </TabsContent>
 
           <TabsContent value="foster" className="mt-6">
@@ -1351,6 +1476,86 @@ export default function ContractTemplatesPage() {
         </Dialog>
 
         {/* Preview Dialog */}
+        <Dialog open={isSendDialogOpen} onOpenChange={setIsSendDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Send Adoption Agreement</DialogTitle>
+              <DialogDescription>
+                Email "{sendTemplate?.name}" directly to a person. They'll get a secure link to fill it out and sign online.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="direct-send-name">Recipient Name *</Label>
+                <Input
+                  id="direct-send-name"
+                  value={sendRecipientName}
+                  onChange={(e) => setSendRecipientName(e.target.value)}
+                  placeholder="Jane Smith"
+                  data-testid="input-direct-send-name"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="direct-send-email">Recipient Email *</Label>
+                <Input
+                  id="direct-send-email"
+                  type="email"
+                  value={sendRecipientEmail}
+                  onChange={(e) => setSendRecipientEmail(e.target.value)}
+                  placeholder="jane@example.com"
+                  data-testid="input-direct-send-email"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Animal (optional)</Label>
+                <Select value={sendAnimalId} onValueChange={setSendAnimalId}>
+                  <SelectTrigger data-testid="select-direct-send-animal">
+                    <SelectValue placeholder="No specific animal" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No specific animal</SelectItem>
+                    {(animalsData?.animals || []).map((animal) => (
+                      <SelectItem key={animal.id} value={animal.id}>
+                        {animal.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsSendDialogOpen(false)} data-testid="button-direct-send-cancel-dialog">
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  if (!sendTemplate) return;
+                  sendDirectMutation.mutate({
+                    templateId: sendTemplate.id,
+                    recipientName: sendRecipientName.trim(),
+                    recipientEmail: sendRecipientEmail.trim(),
+                    animalId: sendAnimalId === "none" ? undefined : sendAnimalId,
+                  });
+                }}
+                disabled={!sendRecipientName.trim() || !sendRecipientEmail.trim() || sendDirectMutation.isPending}
+                data-testid="button-direct-send-submit"
+              >
+                {sendDirectMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <Send className="mr-2 h-4 w-4" />
+                    Send Agreement
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         <Dialog open={isPreviewDialogOpen} onOpenChange={setIsPreviewDialogOpen}>
           <DialogContent className="max-w-4xl max-h-[90vh]">
             <DialogHeader>
@@ -1403,6 +1608,106 @@ export default function ContractTemplatesPage() {
   );
 
   // Helper function to render template grid
+  function renderDirectSendsSection() {
+    const sends = directSendsData?.sends || [];
+    const statusBadge = (send: DirectSend) => {
+      const expired = send.status === 'pending' && new Date(send.expiresAt) < new Date();
+      if (send.status === 'signed') return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Signed</Badge>;
+      if (send.status === 'cancelled') return <Badge variant="secondary">Cancelled</Badge>;
+      if (expired || send.status === 'expired') return <Badge variant="destructive">Expired</Badge>;
+      return <Badge variant="outline">Waiting for signature</Badge>;
+    };
+
+    return (
+      <Card data-testid="card-direct-sends">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Send className="h-4 w-4" />
+            Sent Agreements
+          </CardTitle>
+          <CardDescription>
+            Adoption agreements you've sent directly to a person to fill out and sign
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {directSendsLoading ? (
+            <Skeleton className="h-16" />
+          ) : sends.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Nothing sent yet. Use "Send to Someone" on a template above to email an agreement.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {sends.map((send) => {
+                const canResend = send.status === 'pending';
+                return (
+                  <div
+                    key={send.id}
+                    className="flex flex-col sm:flex-row sm:items-center gap-2 border rounded-lg p-3"
+                    data-testid={`row-direct-send-${send.id}`}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium truncate">
+                        {send.recipientName}
+                        <span className="text-muted-foreground font-normal"> · {send.recipientEmail}</span>
+                      </p>
+                      <p className="text-sm text-muted-foreground truncate">
+                        {send.templateName}
+                        {send.animalName ? ` · for ${send.animalName}` : ''}
+                        {' · sent '}{new Date(send.createdAt).toLocaleDateString()}
+                        {send.signedAt ? ` · signed ${new Date(send.signedAt).toLocaleDateString()}` : ''}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {statusBadge(send)}
+                      {send.status === 'signed' && send.contractPdfUrl && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleViewDirectSendPdf(send.id)}
+                          disabled={pdfLoadingId === send.id}
+                          data-testid={`button-direct-send-pdf-${send.id}`}
+                        >
+                          {pdfLoadingId === send.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4 mr-1" />}
+                          PDF
+                        </Button>
+                      )}
+                      {canResend && (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => resendDirectMutation.mutate(send.id)}
+                            disabled={resendDirectMutation.isPending}
+                            data-testid={`button-direct-send-resend-${send.id}`}
+                          >
+                            <RefreshCw className="h-4 w-4 mr-1" />
+                            Resend
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => cancelDirectMutation.mutate(send.id)}
+                            disabled={cancelDirectMutation.isPending}
+                            data-testid={`button-direct-send-cancel-${send.id}`}
+                          >
+                            <XCircle className="h-4 w-4 mr-1" />
+                            Cancel
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    );
+  }
+
   function renderTemplateGrid(templateList: ContractTemplate[], loading: boolean) {
     if (loading) {
       return (
@@ -1483,6 +1788,17 @@ export default function ContractTemplatesPage() {
                 <Edit className="h-4 w-4 mr-1" />
                 Edit
               </Button>
+              {activeContractType === 'adoption' && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleOpenSendDialog(template)}
+                  data-testid={`button-direct-send-${template.id}`}
+                >
+                  <Send className="h-4 w-4 mr-1" />
+                  Send to Someone
+                </Button>
+              )}
               {!template.isDefault && (
                 <>
                   <Button

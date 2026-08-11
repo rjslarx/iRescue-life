@@ -13301,6 +13301,474 @@ Crawl-delay: 1
   });
 
   // ============================================================================
+  // Adoption Agreement Direct Sends (send agreement straight to a person)
+  // ============================================================================
+
+  /**
+   * POST /api/contract-templates/:id/direct-send
+   * Staff sends an adoption agreement directly to a person (no prior application).
+   * The raw signing token only travels inside the recipient's email.
+   */
+  app.post('/api/contract-templates/:id/direct-send', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      const { adoptionAgreementDirectSends, animals } = await import('@shared/schema');
+      const { getTemplateById } = await import('./services/contract-template');
+      const { generateDirectSendToken, buildDirectSendSigningUrl, sendDirectSendEmail } = await import('./services/adoption-direct-agreement');
+
+      const bodySchema = z.object({
+        recipientName: z.string().min(1).max(200),
+        recipientEmail: z.string().email().max(320),
+        animalId: z.string().uuid().optional().nullable(),
+      });
+      const parsed = bodySchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: 'Please provide the recipient name and a valid email address' });
+      }
+
+      const template = await getTemplateById(req.params.id, req.tenant!.id);
+      if (!template || !template.isActive) {
+        return res.status(404).json({ error: 'Template not found' });
+      }
+
+      let animalName: string | null = null;
+      if (parsed.data.animalId) {
+        const [animal] = await db
+          .select({ id: animals.id, name: animals.name })
+          .from(animals)
+          .where(and(eq(animals.id, parsed.data.animalId), eq(animals.tenantId, req.tenant!.id)))
+          .limit(1);
+        if (!animal) {
+          return res.status(404).json({ error: 'Animal not found' });
+        }
+        animalName = animal.name;
+      }
+
+      const { token, tokenHash, expiresAt } = generateDirectSendToken();
+
+      const [send] = await db
+        .insert(adoptionAgreementDirectSends)
+        .values({
+          tenantId: req.tenant!.id,
+          templateId: template.id,
+          templateName: template.name,
+          // Freeze the contract text at send time so later template edits or
+          // deletion can't change what the recipient reviews and signs.
+          templateHtmlSnapshot: template.htmlTemplate,
+          animalId: parsed.data.animalId || null,
+          recipientName: parsed.data.recipientName.trim(),
+          recipientEmail: parsed.data.recipientEmail.trim().toLowerCase(),
+          staffInitiatedBy: req.user!.id,
+          secureTokenHash: tokenHash,
+          expiresAt,
+        })
+        .returning();
+
+      try {
+        await sendDirectSendEmail({
+          tenantId: req.tenant!.id,
+          tenantName: req.tenant!.name,
+          tenantContactEmail: req.tenant!.contactEmail || null,
+          recipientName: send.recipientName,
+          recipientEmail: send.recipientEmail,
+          animalName,
+          signingUrl: buildDirectSendSigningUrl(req.tenant!, token),
+        });
+      } catch (emailError: any) {
+        // Roll back the pending record so staff can retry cleanly
+        await db.delete(adoptionAgreementDirectSends).where(eq(adoptionAgreementDirectSends.id, send.id));
+        return res.status(400).json({ error: emailError?.message || 'Failed to send the agreement email' });
+      }
+
+      // SECURITY: never return the raw token to the browser
+      res.json({
+        send: {
+          id: send.id,
+          recipientName: send.recipientName,
+          recipientEmail: send.recipientEmail,
+          status: send.status,
+          expiresAt: send.expiresAt,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/adoption-agreement-direct-sends
+   * List direct sends for the tenant (staff only)
+   */
+  app.get('/api/adoption-agreement-direct-sends', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      const { adoptionAgreementDirectSends, animals } = await import('@shared/schema');
+      const rows = await db
+        .select({
+          id: adoptionAgreementDirectSends.id,
+          templateId: adoptionAgreementDirectSends.templateId,
+          templateName: adoptionAgreementDirectSends.templateName,
+          animalId: adoptionAgreementDirectSends.animalId,
+          animalName: animals.name,
+          recipientName: adoptionAgreementDirectSends.recipientName,
+          recipientEmail: adoptionAgreementDirectSends.recipientEmail,
+          status: adoptionAgreementDirectSends.status,
+          expiresAt: adoptionAgreementDirectSends.expiresAt,
+          signedAt: adoptionAgreementDirectSends.signedAt,
+          signerName: adoptionAgreementDirectSends.signerName,
+          contractPdfUrl: adoptionAgreementDirectSends.contractPdfUrl,
+          createdAt: adoptionAgreementDirectSends.createdAt,
+        })
+        .from(adoptionAgreementDirectSends)
+        .leftJoin(animals, eq(adoptionAgreementDirectSends.animalId, animals.id))
+        .where(eq(adoptionAgreementDirectSends.tenantId, req.tenant!.id))
+        .orderBy(desc(adoptionAgreementDirectSends.createdAt));
+      res.json({ sends: rows });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/adoption-agreement-direct-sends/:id/resend
+   * Re-issue a fresh token + expiry and email the link again (pending only).
+   */
+  app.post('/api/adoption-agreement-direct-sends/:id/resend', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      const { adoptionAgreementDirectSends, animals } = await import('@shared/schema');
+      const { generateDirectSendToken, buildDirectSendSigningUrl, sendDirectSendEmail } = await import('./services/adoption-direct-agreement');
+
+      const [send] = await db
+        .select()
+        .from(adoptionAgreementDirectSends)
+        .where(and(
+          eq(adoptionAgreementDirectSends.id, req.params.id),
+          eq(adoptionAgreementDirectSends.tenantId, req.tenant!.id),
+        ))
+        .limit(1);
+      if (!send) return res.status(404).json({ error: 'Send not found' });
+      if (send.status !== 'pending') {
+        return res.status(400).json({ error: 'Only pending agreements can be resent' });
+      }
+
+      let animalName: string | null = null;
+      if (send.animalId) {
+        const [animal] = await db.select({ name: animals.name }).from(animals).where(eq(animals.id, send.animalId)).limit(1);
+        animalName = animal?.name || null;
+      }
+
+      const { token, tokenHash, expiresAt } = generateDirectSendToken();
+      // Email first so a delivery failure doesn't invalidate the old link
+      await sendDirectSendEmail({
+        tenantId: req.tenant!.id,
+        tenantName: req.tenant!.name,
+        tenantContactEmail: req.tenant!.contactEmail || null,
+        recipientName: send.recipientName,
+        recipientEmail: send.recipientEmail,
+        animalName,
+        signingUrl: buildDirectSendSigningUrl(req.tenant!, token),
+      });
+      await db
+        .update(adoptionAgreementDirectSends)
+        .set({ secureTokenHash: tokenHash, expiresAt, updatedAt: new Date() })
+        .where(eq(adoptionAgreementDirectSends.id, send.id));
+
+      res.json({ success: true, expiresAt });
+    } catch (error: any) {
+      if (error?.message?.includes('not configured')) {
+        return res.status(400).json({ error: error.message });
+      }
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/adoption-agreement-direct-sends/:id/cancel
+   * Cancel a pending direct send so its link stops working.
+   */
+  app.post('/api/adoption-agreement-direct-sends/:id/cancel', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      const { adoptionAgreementDirectSends } = await import('@shared/schema');
+      const [updated] = await db
+        .update(adoptionAgreementDirectSends)
+        .set({ status: 'cancelled', updatedAt: new Date() })
+        .where(and(
+          eq(adoptionAgreementDirectSends.id, req.params.id),
+          eq(adoptionAgreementDirectSends.tenantId, req.tenant!.id),
+          eq(adoptionAgreementDirectSends.status, 'pending'),
+        ))
+        .returning({ id: adoptionAgreementDirectSends.id });
+      if (!updated) {
+        return res.status(400).json({ error: 'Only pending agreements can be cancelled' });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/adoption-agreement-direct-sends/:id/pdf
+   * Short-lived signed URL for the signed agreement PDF (staff only).
+   */
+  app.get('/api/adoption-agreement-direct-sends/:id/pdf', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      const { adoptionAgreementDirectSends } = await import('@shared/schema');
+      const { generateSignedDirectSendPdfUrl } = await import('./services/adoption-direct-agreement');
+      const [send] = await db
+        .select({ contractPdfUrl: adoptionAgreementDirectSends.contractPdfUrl })
+        .from(adoptionAgreementDirectSends)
+        .where(and(
+          eq(adoptionAgreementDirectSends.id, req.params.id),
+          eq(adoptionAgreementDirectSends.tenantId, req.tenant!.id),
+        ))
+        .limit(1);
+      if (!send?.contractPdfUrl) {
+        return res.status(404).json({ error: 'No PDF available for this agreement' });
+      }
+      const url = await generateSignedDirectSendPdfUrl(send.contractPdfUrl);
+      res.json({ url });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/public/adoption-agreement-direct/:token
+   * Public: load the agreement for review (token-protected).
+   */
+  app.get('/api/public/adoption-agreement-direct/:token', async (req, res, next) => {
+    try {
+      const { adoptionAgreementDirectSends, animals, tenants } = await import('@shared/schema');
+      const { hashDirectSendToken } = await import('./services/adoption-direct-agreement');
+      const { mergePlaceholders } = await import('./services/contract-template');
+      const DOMPurifyMod = (await import('isomorphic-dompurify')).default;
+
+      const tokenHash = hashDirectSendToken(req.params.token);
+      const [send] = await db
+        .select()
+        .from(adoptionAgreementDirectSends)
+        .where(eq(adoptionAgreementDirectSends.secureTokenHash, tokenHash))
+        .limit(1);
+      if (!send || send.status === 'cancelled') {
+        return res.status(404).json({ error: 'Agreement not found or no longer available' });
+      }
+      if (send.status === 'signed') {
+        return res.json({
+          send: { id: send.id, status: send.status, signedAt: send.signedAt },
+        });
+      }
+      if (send.expiresAt && new Date(send.expiresAt) < new Date()) {
+        return res.status(410).json({ error: 'This agreement link has expired. Please contact the rescue for a new one.' });
+      }
+
+      const [tenant] = await db
+        .select({ name: tenants.name, contactEmail: tenants.contactEmail })
+        .from(tenants)
+        .where(eq(tenants.id, send.tenantId))
+        .limit(1);
+
+      let animal: { name: string; species: string | null; breed: string | null; sex: string | null; color: string | null; microchipNumber: string | null } | undefined;
+      if (send.animalId) {
+        [animal] = await db
+          .select({
+            name: animals.name,
+            species: animals.species,
+            breed: animals.breed,
+            sex: animals.sex,
+            color: animals.color,
+            microchipNumber: animals.microchipNumber,
+          })
+          .from(animals)
+          .where(eq(animals.id, send.animalId))
+          .limit(1);
+      }
+
+      const mergedHtml = mergePlaceholders(send.templateHtmlSnapshot, {
+        organization_name: tenant?.name || '',
+        organization_email: tenant?.contactEmail || '',
+        adopter_name: send.recipientName,
+        adopter_email: send.recipientEmail,
+        animal_name: animal?.name || '',
+        animal_species: animal?.species || '',
+        animal_breed: animal?.breed || '',
+        animal_sex: animal?.sex || '',
+        animal_color: animal?.color || '',
+        animal_microchip: animal?.microchipNumber || '',
+        contract_date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
+      });
+
+      const sanitizedHtml = DOMPurifyMod.sanitize(mergedHtml, {
+        ALLOWED_TAGS: ['div', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'strong', 'em', 'u', 'br', 'hr', 'ul', 'ol', 'li', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'img'],
+        ALLOWED_ATTR: ['class', 'style', 'src', 'alt'],
+        ALLOW_DATA_ATTR: false,
+      });
+
+      res.json({
+        send: {
+          id: send.id,
+          status: send.status,
+          expiresAt: send.expiresAt,
+          recipientName: send.recipientName,
+          recipientEmail: send.recipientEmail,
+        },
+        contract: { html: sanitizedHtml, name: send.templateName },
+        animal: animal ? { name: animal.name } : null,
+        organization: tenant ? { name: tenant.name } : null,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/public/adoption-agreement-direct/:token/sign
+   * Public: submit filled-in details + signature (token-protected).
+   */
+  app.post('/api/public/adoption-agreement-direct/:token/sign', async (req, res, next) => {
+    try {
+      const { adoptionAgreementDirectSends, animals, tenants } = await import('@shared/schema');
+      const { hashDirectSendToken, generateDirectSendAgreementPDF } = await import('./services/adoption-direct-agreement');
+      const { mergePlaceholders } = await import('./services/contract-template');
+
+      const tokenHash = hashDirectSendToken(req.params.token);
+      const [send] = await db
+        .select()
+        .from(adoptionAgreementDirectSends)
+        .where(eq(adoptionAgreementDirectSends.secureTokenHash, tokenHash))
+        .limit(1);
+      if (!send || send.status === 'cancelled') {
+        return res.status(404).json({ error: 'Agreement not found or no longer available' });
+      }
+      if (send.status === 'signed') {
+        return res.status(400).json({ error: 'This agreement has already been signed' });
+      }
+      if (send.expiresAt && new Date(send.expiresAt) < new Date()) {
+        return res.status(410).json({ error: 'This agreement link has expired' });
+      }
+
+      const signatureSchema = z.object({
+        signerName: z.string().min(1).max(200),
+        signerEmail: z.string().email().max(320),
+        signerPhone: z.string().max(50).optional().nullable(),
+        signerAddress: z.string().max(500).optional().nullable(),
+        // Strict data-URL only: prevents empty/non-image "signatures" and blocks
+        // remote URLs that would be fetched server-side during PDF rendering (SSRF).
+        signatureImageData: z
+          .string()
+          .max(2_000_000)
+          .regex(
+            /^data:image\/(png|jpe?g|webp);base64,[A-Za-z0-9+/]+={0,2}$/,
+            'A valid signature image is required',
+          ),
+      });
+      const signatureData = signatureSchema.parse(req.body);
+
+      const [tenant] = await db
+        .select({ name: tenants.name, contactEmail: tenants.contactEmail })
+        .from(tenants)
+        .where(eq(tenants.id, send.tenantId))
+        .limit(1);
+
+      let animal: { name: string; species: string | null; breed: string | null; sex: string | null; color: string | null; microchipNumber: string | null } | undefined;
+      if (send.animalId) {
+        [animal] = await db
+          .select({
+            name: animals.name,
+            species: animals.species,
+            breed: animals.breed,
+            sex: animals.sex,
+            color: animals.color,
+            microchipNumber: animals.microchipNumber,
+          })
+          .from(animals)
+          .where(eq(animals.id, send.animalId))
+          .limit(1);
+      }
+
+      const signedAt = new Date();
+      const renderedContract = mergePlaceholders(send.templateHtmlSnapshot, {
+        organization_name: tenant?.name || '',
+        organization_email: tenant?.contactEmail || '',
+        adopter_name: signatureData.signerName,
+        adopter_email: signatureData.signerEmail,
+        adopter_phone: signatureData.signerPhone || '',
+        adopter_address: signatureData.signerAddress || '',
+        animal_name: animal?.name || '',
+        animal_species: animal?.species || '',
+        animal_breed: animal?.breed || '',
+        animal_sex: animal?.sex || '',
+        animal_color: animal?.color || '',
+        animal_microchip: animal?.microchipNumber || '',
+        contract_date: signedAt.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
+        signature_image_url: signatureData.signatureImageData,
+        signed_timestamp: signedAt.toISOString(),
+        signed_ip: req.ip,
+      });
+
+      // Status precondition makes signing idempotent: only a still-pending
+      // record can transition to signed, so a double-submit can't overwrite.
+      const [updated] = await db
+        .update(adoptionAgreementDirectSends)
+        .set({
+          status: 'signed',
+          signedAt,
+          signerName: signatureData.signerName,
+          signerEmail: signatureData.signerEmail,
+          signerPhone: signatureData.signerPhone || null,
+          signerAddress: signatureData.signerAddress || null,
+          signatureData: signatureData.signatureImageData,
+          signedIp: req.ip,
+          signedUserAgent: req.headers['user-agent'] || null,
+          renderedContract,
+          updatedAt: new Date(),
+        })
+        .where(and(
+          eq(adoptionAgreementDirectSends.id, send.id),
+          eq(adoptionAgreementDirectSends.status, 'pending'),
+        ))
+        .returning({ id: adoptionAgreementDirectSends.id });
+      if (!updated) {
+        return res.status(409).json({ error: 'This agreement has already been signed' });
+      }
+
+      // Generate the stamped PDF (non-blocking for the signer)
+      try {
+        await generateDirectSendAgreementPDF(send.id, renderedContract, { ipAddress: req.ip, signedAt });
+        console.log(`[Adoption Direct Send] Generated PDF for ${send.id}`);
+      } catch (pdfError) {
+        console.error('[Adoption Direct Send] Failed to generate PDF:', pdfError);
+      }
+
+      // Notify the rescue that the agreement was signed (fire-and-forget)
+      void (async () => {
+        try {
+          const { EmailService } = await import('./lib/email-service');
+          const emailService = await EmailService.forTenant(send.tenantId);
+          if (emailService && tenant?.contactEmail) {
+            await emailService.send({
+              to: tenant.contactEmail,
+              subject: `Adoption Agreement Signed by ${signatureData.signerName}`,
+              html: `
+<h2>Adoption Agreement Signed</h2>
+<p><strong>${signatureData.signerName}</strong> (${signatureData.signerEmail}) has completed and signed the adoption agreement "${send.templateName}"${animal?.name ? ` for ${animal.name}` : ''}.</p>
+<p>You can view and download the signed PDF from Contract Templates &rarr; Direct Sends in your dashboard.</p>
+              `.trim(),
+            });
+          }
+        } catch (notifyError) {
+          console.error('[Adoption Direct Send] Failed to send staff notification:', notifyError);
+        }
+      })();
+
+      res.json({ success: true });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Invalid signature data', details: error.errors });
+      }
+      next(error);
+    }
+  });
+
+  // ============================================================================
   // Foster Contract Template Routes
   // ============================================================================
 

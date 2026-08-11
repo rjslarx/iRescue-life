@@ -195,6 +195,38 @@ CREATE INDEX IF NOT EXISTS shop_raffle_bonus_order_idx
   ON shop_raffle_bonus_tickets (order_id);
 CREATE UNIQUE INDEX IF NOT EXISTS shop_raffle_drawings_one_drawn_per_product
   ON shop_raffle_drawings (product_id) WHERE status='drawn';
+
+-- Adoption agreement direct sends (send agreement straight to a person, no application)
+CREATE TABLE IF NOT EXISTS adoption_agreement_direct_sends (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  template_id integer REFERENCES adoption_contract_templates(id) ON DELETE SET NULL,
+  template_name text NOT NULL,
+  template_html_snapshot text NOT NULL,
+  animal_id uuid REFERENCES animals(id) ON DELETE SET NULL,
+  recipient_name text NOT NULL,
+  recipient_email text NOT NULL,
+  staff_initiated_by uuid REFERENCES users(id) ON DELETE SET NULL,
+  status text NOT NULL DEFAULT 'pending',
+  secure_token_hash text NOT NULL,
+  expires_at timestamp NOT NULL,
+  signed_at timestamp,
+  signer_name text,
+  signer_email text,
+  signer_phone text,
+  signer_address text,
+  signature_data text,
+  signed_ip text,
+  signed_user_agent text,
+  rendered_contract text,
+  contract_pdf_url text,
+  created_at timestamp NOT NULL DEFAULT now(),
+  updated_at timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS adoption_agreement_direct_sends_tenant_idx
+  ON adoption_agreement_direct_sends (tenant_id);
+CREATE INDEX IF NOT EXISTS adoption_agreement_direct_sends_token_idx
+  ON adoption_agreement_direct_sends (secure_token_hash);
 SQL
 
 # Lease timestamp for alumni-routing claims (stale 'processing' recovery). Idempotent.

@@ -3567,6 +3567,43 @@ export const insertAdoptionContractSchema = createInsertSchema(adoptionContracts
 export type InsertAdoptionContract = z.infer<typeof insertAdoptionContractSchema>;
 export type AdoptionContract = typeof adoptionContracts.$inferSelect;
 
+// Adoption Agreement Direct Sends - staff sends an adoption agreement straight to a
+// person (no prior application) via a tokenized public signing link.
+export const adoptionAgreementDirectSends = pgTable("adoption_agreement_direct_sends", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  templateId: integer("template_id").references(() => adoptionContractTemplates.id, { onDelete: 'set null' }),
+  templateName: text("template_name").notNull(), // Snapshot in case template is deleted/renamed
+  templateHtmlSnapshot: text("template_html_snapshot").notNull(), // Frozen at send time: recipient always reviews/signs exactly what was sent, even if the template is later edited or deleted
+  animalId: uuid("animal_id").references(() => animals.id, { onDelete: 'set null' }),
+  recipientName: text("recipient_name").notNull(),
+  recipientEmail: text("recipient_email").notNull(),
+  staffInitiatedBy: uuid("staff_initiated_by").references(() => users.id, { onDelete: 'set null' }),
+  status: text("status").notNull().default("pending").$type<"pending" | "signed" | "cancelled" | "expired">(),
+  secureTokenHash: text("secure_token_hash").notNull(), // sha256 of the raw token; raw token only travels via email
+  expiresAt: timestamp("expires_at").notNull(),
+  signedAt: timestamp("signed_at"),
+  signerName: text("signer_name"),
+  signerEmail: text("signer_email"),
+  signerPhone: text("signer_phone"),
+  signerAddress: text("signer_address"),
+  signatureData: text("signature_data"), // Base64 signature image
+  signedIp: text("signed_ip"),
+  signedUserAgent: text("signed_user_agent"),
+  renderedContract: text("rendered_contract"), // Final merged HTML incl. signature
+  contractPdfUrl: text("contract_pdf_url"), // /objects/... path in object storage
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertAdoptionAgreementDirectSendSchema = createInsertSchema(adoptionAgreementDirectSends).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertAdoptionAgreementDirectSend = z.infer<typeof insertAdoptionAgreementDirectSendSchema>;
+export type AdoptionAgreementDirectSend = typeof adoptionAgreementDirectSends.$inferSelect;
+
 // Adoption Payments table - payment records for adoptions
 export const adoptionPayments = pgTable("adoption_payments", {
   id: serial("id").primaryKey(),
