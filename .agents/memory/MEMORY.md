@@ -22,4 +22,5 @@
 - [Shop checkout confirm gap](shop-checkout-confirm-gap.md) — no shop webhook; paid-on-Stripe orders can stay pending; hourly sweep reconciles; manual fix via public confirm + x-tenant-id header.
 - [Inbound SMS routing & unmatched capture](inbound-sms-routing.md) — replies only match active fosters; unmatched now logged to feed; Twilio webhook must stay fail-closed on signature.
 - [Alumni SMS photo updates](alumni-sms-updates.md) — adopter replies become unpublished happy_tails on the animal (adopters aren't users); Twilio media must be downloaded (Basic auth, URLs expire) into storage.
+- [Adopter portal deep links](adopter-portal-deep-links.md) — email links to /my-pets need login redirect via localStorage + full page load after magic login; reminder job must skip pending_review proofs.
 - [UTC "today" date-shift](utc-today-date-shift.md) — never default date inputs with toISOString() (UTC = tomorrow in the evening); use todayLocalISO() in client/src/lib/utils.ts.

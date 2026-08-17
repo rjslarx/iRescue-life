@@ -8,9 +8,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Heart, Loader2, Mail, CheckCircle2, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function AdopterLoginPage() {
   const [, setLocation] = useLocation();
+  const { checkAuth } = useAuth();
   const { toast } = useToast();
   const [email, setEmail] = useState("");
   const [linkRequested, setLinkRequested] = useState(false);
@@ -23,11 +25,30 @@ export default function AdopterLoginPage() {
       const response = await apiRequest("POST", "/api/adopter/magic-login", { token: loginToken });
       return await response.json();
     },
-    onSuccess: (data: any) => {
+    onSuccess: async (data: any) => {
       toast({
         title: "Welcome back!",
         description: "You've been logged in successfully.",
       });
+      // Sync the auth context before navigating so the destination page
+      // doesn't see a stale unauthenticated state and bounce back here.
+      await checkAuth();
+      let savedRedirect: string | null = null;
+      try {
+        savedRedirect = localStorage.getItem("adopter-login-redirect");
+        if (savedRedirect) localStorage.removeItem("adopter-login-redirect");
+      } catch {}
+      // Only honor internal /my-pets paths to avoid open redirects.
+      const target = savedRedirect && savedRedirect.startsWith("/my-pets") ? savedRedirect : null;
+      if (target) {
+        // Full page load so the destination mounts with a fresh, fully
+        // authenticated session (avoids stale-auth bounce back to login).
+        // Preserve any tenant path prefix (e.g. /southernpets) from the
+        // current login URL.
+        const basePrefix = window.location.pathname.replace(/\/my-pets\/login\/?$/, "");
+        window.location.href = `${basePrefix}${target}`;
+        return;
+      }
       setLocation(data.redirectTo || "/my-pets");
     },
     onError: (error: any) => {

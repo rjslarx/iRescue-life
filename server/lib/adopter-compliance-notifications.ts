@@ -8,6 +8,7 @@ import {
   adopterMedicationReminders,
   adopterNotificationPreferences,
   adopterNotificationLogs,
+  adopterComplianceConfirmations,
   complianceObligations,
   vaccineRecords,
   adoptions,
@@ -115,8 +116,23 @@ async function getComplianceItemsForAnimal(tenantId: string, animalId: string, a
       lte(preventativeCareRecords.nextDueDate, threeDaysFromNow)
     ));
 
+  // Skip items the adopter has already submitted proof for: a confirmation in
+  // pending_review or approved means the staff has (or will) review it — the
+  // adopter shouldn't keep getting overdue emails in the meantime. Mirrors the
+  // portal's own due-care filtering in server/routes/adopterPortal.ts.
+  const existingConfirmations = await db
+    .select({ preventativeCareRecordId: adopterComplianceConfirmations.preventativeCareRecordId })
+    .from(adopterComplianceConfirmations)
+    .where(and(
+      eq(adopterComplianceConfirmations.tenantId, tenantId),
+      eq(adopterComplianceConfirmations.animalId, animalId),
+      sql`${adopterComplianceConfirmations.status} IN ('pending_review', 'approved')`
+    ));
+  const confirmedRecordIds = new Set(existingConfirmations.map(c => c.preventativeCareRecordId));
+
   for (const record of careRecords) {
     if (!record.nextDueDate) continue;
+    if (confirmedRecordIds.has(record.id)) continue;
     const rawDate = record.nextDueDate instanceof Date ? record.nextDueDate : new Date(record.nextDueDate);
     const dueDateStr = rawDate.toISOString().split('T')[0];
     const isOverdue = dueDateStr < todayStr;

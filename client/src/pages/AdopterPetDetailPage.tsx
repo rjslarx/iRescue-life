@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useParams, Link } from "wouter";
-import { useState, useRef } from "react";
+import { useParams, Link, useLocation } from "wouter";
+import { useState, useRef, useEffect } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -120,6 +121,8 @@ interface AdoptionDocument {
 
 export default function AdopterPetDetailPage() {
   const { animalId } = useParams<{ animalId: string }>();
+  const [, setLocation] = useLocation();
+  const { user, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("compliance");
@@ -154,7 +157,21 @@ export default function AdopterPetDetailPage() {
   const { data: pet, isLoading: petLoading } = useQuery<AdoptedAnimal>({
     queryKey: ["/api/adopter/pets", animalId],
     enabled: !!animalId,
+    retry: false,
   });
+
+  // Compliance emails link straight to this page. If the adopter isn't logged
+  // in, send them to the login screen (remembering where to return) instead of
+  // showing a confusing "Pet not found" error.
+  const isUnauthorized = !authLoading && (!user || !user.roles?.includes("adopter"));
+  useEffect(() => {
+    if (isUnauthorized && animalId) {
+      try {
+        localStorage.setItem("adopter-login-redirect", `/my-pets/${animalId}`);
+      } catch {}
+      setLocation("/my-pets/login");
+    }
+  }, [isUnauthorized, animalId]);
 
   const { data: vaccinations } = useQuery<VaccineRecord[]>({
     queryKey: ["/api/adopter/pets", animalId, "vaccinations"],
@@ -372,7 +389,7 @@ export default function AdopterPetDetailPage() {
     submitHappyTailMutation.mutate({ message, photoUrls });
   };
 
-  if (petLoading) {
+  if (petLoading || isUnauthorized) {
     return (
       <div className="container mx-auto p-6 max-w-4xl">
         <Skeleton className="h-8 w-32 mb-6" />
