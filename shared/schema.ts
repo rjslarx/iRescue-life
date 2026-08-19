@@ -3916,6 +3916,7 @@ export const shopProducts = pgTable("shop_products", {
   // Raffle-specific fields
   raffleDrawDate: timestamp("raffle_draw_date"), // When the raffle will be drawn
   rafflePrizeDescription: text("raffle_prize_description"), // What the winner gets
+  raffleMode: text("raffle_mode").notNull().default("fixed").$type<"fixed" | "split_pot">(),
   // Bundle (bulk-discount) pricing, primarily for raffle tickets:
   // e.g. [{ quantity: 5, price: "20.00" }, { quantity: 15, price: "50.00" }].
   // Single tickets still use basePrice. Checkout computes the cheapest
@@ -3945,7 +3946,10 @@ export const insertShopProductSchema = createInsertSchema(shopProducts).omit({
   createdAt: true,
   updatedAt: true,
 }).extend({
+  productType: z.enum(["physical", "digital", "raffle"]),
+  status: z.enum(["draft", "active", "paused", "archived"]).default("draft"),
   bundlePricing: z.array(bundlePricingTierSchema).max(10).nullable().optional(),
+  raffleMode: z.enum(["fixed", "split_pot"]).default("fixed"),
   // Clients send the draw date as an ISO string over JSON; coerce it to a Date.
   raffleDrawDate: z.coerce.date().nullable().optional(),
 });
@@ -4106,6 +4110,14 @@ export const shopRaffleDrawings = pgTable("shop_raffle_drawings", {
   drawnBy: uuid("drawn_by").references(() => users.id, { onDelete: 'set null' }), // Admin who performed the drawing
   notifiedAt: timestamp("notified_at"),
   claimedAt: timestamp("claimed_at"),
+  // Immutable split-the-pot accounting snapshot, captured under the same lock
+  // as the winning-ticket draw. Null for fixed-prize raffles.
+  ticketSalesAmount: text("ticket_sales_amount"),
+  winnerPrizeAmount: text("winner_prize_amount"),
+  rescueShareAmount: text("rescue_share_amount"),
+  payoutStatus: text("payout_status").$type<"pending" | "paid">(),
+  prizePaidAt: timestamp("prize_paid_at"),
+  prizePaidBy: uuid("prize_paid_by").references(() => users.id, { onDelete: 'set null' }),
   // Notes
   notes: text("notes"),
   createdAt: timestamp("created_at").notNull().defaultNow(),

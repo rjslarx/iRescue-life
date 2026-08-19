@@ -1,7 +1,8 @@
 import { db } from '../db';
 import { shopOrders, shopOrderItems, shopProducts, shopRaffleBonusTickets, tenants } from '@shared/schema';
-import { eq, and, inArray } from 'drizzle-orm';
+import { eq, and, inArray, sql } from 'drizzle-orm';
 import { EmailService } from './email-service';
+import { computeSplitPotAmounts } from '@shared/raffle-pricing';
 
 /** Public base URL for a tenant (custom domain when verified, else path-based). */
 function tenantPublicBaseUrl(tenant: { subdomain: string | null; customDomain: string | null; customDomainVerified: boolean | null }): string {
@@ -53,6 +54,7 @@ export async function sendShopOrderConfirmationEmail(tenantId: string, orderId: 
           slug: shopProducts.slug,
           raffleDrawDate: shopProducts.raffleDrawDate,
           rafflePrizeDescription: shopProducts.rafflePrizeDescription,
+           raffleMode: shopProducts.raffleMode,
           raffleIncentivesEnabled: shopProducts.raffleIncentivesEnabled,
           raffleMaxReferrals: shopProducts.raffleMaxReferrals,
         })
@@ -60,6 +62,22 @@ export async function sendShopOrderConfirmationEmail(tenantId: string, orderId: 
         .where(inArray(shopProducts.id, raffleProductIds))
     : [];
   const raffleMap = new Map(raffleProducts.map((p) => [p.id, p]));
+  const splitPotIds = raffleProducts.filter((p) => p.raffleMode === 'split_pot').map((p) => p.id);
+  const splitPotSalesRows = splitPotIds.length > 0
+    ? await db
+        .select({
+          productId: shopOrderItems.productId,
+          amount: sql<string>`coalesce(sum((${shopOrderItems.totalPrice})::numeric), 0)::text`,
+        })
+        .from(shopOrderItems)
+        .innerJoin(shopOrders, eq(shopOrderItems.orderId, shopOrders.id))
+        .where(and(
+          inArray(shopOrderItems.productId, splitPotIds),
+          eq(shopOrders.paymentStatus, 'paid'),
+        ))
+        .groupBy(shopOrderItems.productId)
+    : [];
+  const splitPotSalesMap = new Map(splitPotSalesRows.map((row) => [row.productId, row.amount]));
 
   // Bonus tickets earned via sharing incentives (shown alongside purchased ones)
   const bonusRows = raffleProductIds.length > 0
@@ -74,6 +92,9 @@ export async function sendShopOrderConfirmationEmail(tenantId: string, orderId: 
 
   const itemRows = items.map((item) => {
     const raffle = item.productId ? raffleMap.get(item.productId) : undefined;
+    const splitPot = raffle?.raffleMode === 'split_pot'
+      ? computeSplitPotAmounts(splitPotSalesMap.get(raffle.id) || '0')
+      : null;
     const bonusNumbers = bonusRows
       .filter((b) => b.orderItemId === item.id)
       .flatMap((b) => b.ticketNumbers);
@@ -83,7 +104,9 @@ export async function sendShopOrderConfirmationEmail(tenantId: string, orderId: 
            <div style="font-family:monospace;font-size:15px;letter-spacing:1px;">${item.raffleTicketNumbers.map(escapeHtml).join(', ')}</div>
            ${bonusNumbers.length > 0 ? `<div style="margin-top:4px;font-size:13px;">Bonus ticket${bonusNumbers.length > 1 ? 's' : ''} (earned by sharing): <span style="font-family:monospace;">${bonusNumbers.map(escapeHtml).join(', ')}</span></div>` : ''}
            ${raffle?.raffleDrawDate ? `<div style="margin-top:6px;font-size:13px;">Drawing: ${new Date(raffle.raffleDrawDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>` : ''}
-           ${raffle?.rafflePrizeDescription ? `<div style="font-size:13px;">Prize: ${escapeHtml(raffle.rafflePrizeDescription)}</div>` : ''}
+            ${splitPot
+              ? `<div style="font-size:13px;margin-top:6px;"><b>50/50 Split the Pot:</b> the winner receives half of paid ticket sales. Current winner's pot: <b>$${splitPot.winnerPrizeAmount}</b>. Card fees come from the rescue's half.</div>`
+              : raffle?.rafflePrizeDescription ? `<div style="font-size:13px;">Prize: ${escapeHtml(raffle.rafflePrizeDescription)}</div>` : ''}
          </div>`
       : '';
     return `<tr>

@@ -3,7 +3,11 @@ import { db } from '../db';
 import { shopOrders, shopOrderItems, shopProductVariants, tenants } from '@shared/schema';
 import { and, eq, inArray, lt, sql } from 'drizzle-orm';
 import { getPlatformStripeKey } from './stripe-service';
-import { transitionShopOrderToPaid } from './shop-order-payment';
+import {
+  refundClosedRafflePayment,
+  ShopRaffleClosedError,
+  transitionShopOrderToPaid,
+} from './shop-order-payment';
 import { sendShopOrderConfirmationEmail } from './shop-emails';
 
 /**
@@ -82,26 +86,37 @@ export async function expireAbandonedShopOrders(
         // the confirm route.
         // Atomically transition to paid AND decrement inventory — if either
         // fails the whole recovery rolls back so a later sweep can retry.
-        const recovered = await db.transaction(async (tx) => {
-          const updated = await transitionShopOrderToPaid(
-            order.id,
-            typeof pi.latest_charge === 'string' ? pi.latest_charge : null,
-            tx
-          );
-          if (updated.length === 0) return false;
-          const items = await tx
-            .select()
-            .from(shopOrderItems)
-            .where(eq(shopOrderItems.orderId, order.id));
-          for (const item of items) {
-            if (item.variantId) {
-              await tx.update(shopProductVariants)
-                .set({ inventory: sql`${shopProductVariants.inventory} - ${item.quantity}` })
-                .where(eq(shopProductVariants.id, item.variantId));
+        let recovered = false;
+        try {
+          recovered = await db.transaction(async (tx) => {
+            const updated = await transitionShopOrderToPaid(
+              order.id,
+              typeof pi.latest_charge === 'string' ? pi.latest_charge : null,
+              tx
+            );
+            if (updated.length === 0) return false;
+            const items = await tx
+              .select()
+              .from(shopOrderItems)
+              .where(eq(shopOrderItems.orderId, order.id));
+            for (const item of items) {
+              if (item.variantId) {
+                await tx.update(shopProductVariants)
+                  .set({ inventory: sql`${shopProductVariants.inventory} - ${item.quantity}` })
+                  .where(eq(shopProductVariants.id, item.variantId));
+              }
             }
-          }
-          return true;
-        });
+            return true;
+          });
+        } catch (error) {
+          if (!(error instanceof ShopRaffleClosedError)) throw error;
+          await refundClosedRafflePayment(stripe, order.id, order.stripePaymentIntentId, {
+            reverseTransfer: !!pi.transfer_data,
+            refundApplicationFee: !!pi.application_fee_amount,
+          });
+          console.log(`[Shop] Sweep refunded order ${order.orderNumber}: raffle was drawn before payment completed`);
+          continue;
+        }
         if (recovered) {
           recoveredPaid++;
           console.log(`[Shop] Sweep recovered paid order ${order.orderNumber} (payment succeeded on Stripe but was never confirmed)`);

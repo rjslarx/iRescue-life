@@ -233,3 +233,17 @@ SQL
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' || echo "[post-merge] sms_message_logs alumni_routing_claimed_at column skipped (already applied or DB unreachable)."
 ALTER TABLE sms_message_logs ADD COLUMN IF NOT EXISTS alumni_routing_claimed_at timestamp;
 SQL
+
+# 50/50 split-the-pot raffles: product mode plus immutable prize accounting
+# and staff-recorded payout status on the drawing. Idempotent.
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' || echo "[post-merge] split-the-pot raffle columns skipped (already applied or DB unreachable)."
+ALTER TABLE shop_products
+  ADD COLUMN IF NOT EXISTS raffle_mode text NOT NULL DEFAULT 'fixed';
+ALTER TABLE shop_raffle_drawings
+  ADD COLUMN IF NOT EXISTS ticket_sales_amount text,
+  ADD COLUMN IF NOT EXISTS winner_prize_amount text,
+  ADD COLUMN IF NOT EXISTS rescue_share_amount text,
+  ADD COLUMN IF NOT EXISTS payout_status text,
+  ADD COLUMN IF NOT EXISTS prize_paid_at timestamp,
+  ADD COLUMN IF NOT EXISTS prize_paid_by uuid REFERENCES users(id) ON DELETE SET NULL;
+SQL

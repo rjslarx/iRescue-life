@@ -7,11 +7,21 @@ import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ShoppingBag, Tag, Ticket, Package, Clock } from "lucide-react";
+import { ShoppingBag, Tag, Ticket, Package, Clock, Trophy } from "lucide-react";
 import type { ShopProduct, ShopProductVariant, Tenant } from "@shared/schema";
+
+type SplitPotInfo = {
+  ticketSalesAmount: string;
+  winnerPrizeAmount: string;
+  rescueShareAmount: string;
+  isDrawn?: boolean;
+  drawnAt?: string | null;
+};
 
 type ProductWithVariants = ShopProduct & {
   variants: ShopProductVariant[];
+  raffleClosed?: boolean;
+  splitPot?: SplitPotInfo;
 };
 
 export default function PublicShopPage() {
@@ -68,7 +78,7 @@ export default function PublicShopPage() {
     if (product.variants.length === 0) {
       return parseFloat(product.basePrice);
     }
-    const prices = product.variants.map(v => 
+    const prices = product.variants.map(v =>
       parseFloat(product.basePrice) + parseFloat(v.priceAdjustment)
     );
     return Math.min(...prices);
@@ -76,7 +86,7 @@ export default function PublicShopPage() {
 
   const hasMultiplePrices = (product: ProductWithVariants) => {
     if (product.variants.length === 0) return false;
-    const prices = product.variants.map(v => 
+    const prices = product.variants.map(v =>
       parseFloat(product.basePrice) + parseFloat(v.priceAdjustment)
     );
     return Math.min(...prices) !== Math.max(...prices);
@@ -101,7 +111,7 @@ export default function PublicShopPage() {
             <h1 className="text-3xl font-bold" data-testid="shop-title">Shop</h1>
           </div>
           <p className="text-muted-foreground max-w-2xl mx-auto">
-            Support our rescue mission by purchasing merchandise or entering our raffles. 
+            Support our rescue mission by purchasing merchandise or entering our raffles.
             Every purchase helps us save more animals!
           </p>
         </div>
@@ -129,87 +139,134 @@ export default function PublicShopPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {products.map((product) => (
-              <Link 
-                key={product.id} 
-                href={`/shop/${product.slug}`}
-                className="block"
-              >
-                <Card 
-                  className="overflow-hidden hover-elevate cursor-pointer h-full flex flex-col"
-                  data-testid={`product-card-${product.id}`}
+            {products.map((product) => {
+              const isSplitPot = product.productType === 'raffle' && product.raffleMode === 'split_pot';
+              const isDrawn = isSplitPot && !!product.splitPot?.isDrawn;
+              const isClosed = !!product.raffleClosed || isDrawn;
+              const winnerPot = isSplitPot && product.splitPot
+                ? parseFloat(product.splitPot.winnerPrizeAmount)
+                : null;
+              return (
+                <Link
+                  key={product.id}
+                  href={`/shop/${product.slug}`}
+                  className="block"
                 >
-                  <div className="relative aspect-square bg-muted">
-                    {product.imageUrls && product.imageUrls.length > 0 ? (
-                      <img
-                        src={product.imageUrls[0]}
-                        alt={product.name}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        {getProductTypeIcon(product.productType)}
+                  <Card
+                    className="overflow-hidden hover-elevate cursor-pointer h-full flex flex-col"
+                    data-testid={`product-card-${product.id}`}
+                  >
+                    <div className="relative aspect-square bg-muted">
+                      {product.imageUrls && product.imageUrls.length > 0 ? (
+                        <img
+                          src={product.imageUrls[0]}
+                          alt={product.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          {getProductTypeIcon(product.productType)}
+                        </div>
+                      )}
+                      <div className="absolute top-2 left-2 flex gap-1 flex-wrap">
+                        <Badge variant="secondary" className="gap-1">
+                          {getProductTypeIcon(product.productType)}
+                          {getProductTypeLabel(product.productType)}
+                        </Badge>
+                        {isSplitPot && (
+                          <Badge variant="secondary" className="bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200 gap-1" data-testid={`badge-split-pot-card-${product.id}`}>
+                            <Trophy className="h-3 w-3" />
+                            50/50
+                          </Badge>
+                        )}
+                        {product.featured && (
+                          <Badge variant="default">Featured</Badge>
+                        )}
                       </div>
-                    )}
-                    
-                    <div className="absolute top-2 left-2 flex gap-1">
-                      <Badge variant="secondary" className="gap-1">
-                        {getProductTypeIcon(product.productType)}
-                        {getProductTypeLabel(product.productType)}
-                      </Badge>
-                      {product.featured && (
-                        <Badge variant="default">Featured</Badge>
+
+                      {isOutOfStock(product) && !isClosed && (
+                        <div className="absolute inset-0 bg-background/80 flex items-center justify-center">
+                          <Badge variant="destructive" className="text-lg py-2 px-4">
+                            Sold Out
+                          </Badge>
+                        </div>
+                      )}
+                      {isClosed && (
+                        <div className="absolute inset-0 bg-background/80 flex items-center justify-center">
+                          <Badge variant="secondary" className="text-lg py-2 px-4" data-testid={`badge-drawing-complete-${product.id}`}>
+                            Drawing Complete
+                          </Badge>
+                        </div>
                       )}
                     </div>
 
-                    {isOutOfStock(product) && (
-                      <div className="absolute inset-0 bg-background/80 flex items-center justify-center">
-                        <Badge variant="destructive" className="text-lg py-2 px-4">
-                          Sold Out
-                        </Badge>
-                      </div>
-                    )}
-                  </div>
+                    <CardContent className="p-4 flex-1">
+                      <h3 className="font-semibold text-lg mb-1 line-clamp-2">
+                        {product.name}
+                      </h3>
+                      {product.description && (
+                        <p className="text-sm text-muted-foreground line-clamp-2 mb-2">
+                          {product.description}
+                        </p>
+                      )}
+                      {product.productType === 'raffle' && product.raffleDrawDate && (
+                        <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                          <Clock className="h-3 w-3" />
+                          <span>
+                            {isClosed
+                              ? `Drawn: ${new Date(product.splitPot?.drawnAt || product.raffleDrawDate).toLocaleDateString()}`
+                              : `Drawing: ${new Date(product.raffleDrawDate).toLocaleDateString()}`}
+                          </span>
+                        </div>
+                      )}
 
-                  <CardContent className="p-4 flex-1">
-                    <h3 className="font-semibold text-lg mb-1 line-clamp-2">
-                      {product.name}
-                    </h3>
-                    {product.description && (
-                      <p className="text-sm text-muted-foreground line-clamp-2 mb-2">
-                        {product.description}
-                      </p>
-                    )}
-                    
-                    {product.productType === 'raffle' && product.raffleDrawDate && (
-                      <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                        <Clock className="h-3 w-3" />
-                        <span>Drawing: {new Date(product.raffleDrawDate).toLocaleDateString()}</span>
-                      </div>
-                    )}
-                    {product.productType === 'raffle' && product.bundlePricing && product.bundlePricing.length > 0 && (
-                      <div className="text-sm text-muted-foreground" data-testid={`text-bundle-hint-${product.id}`}>
-                        Bundle deals: {product.bundlePricing.map(t => `${t.quantity} for $${t.price}`).join(', ')}
-                      </div>
-                    )}
-                  </CardContent>
+                      {/* Split-pot winner pot / final prize */}
+                      {isSplitPot && winnerPot !== null && (
+                        <div className="mt-2 rounded-md bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 px-2 py-1.5" data-testid={`split-pot-card-${product.id}`}>
+                          <p className="text-xs text-purple-700 dark:text-purple-300 font-medium">
+                            {isDrawn ? 'Final winner prize' : 'Current winner pot'}
+                          </p>
+                          <p className="text-base font-bold text-purple-900 dark:text-purple-100" data-testid={`text-winner-pot-card-${product.id}`}>
+                            ${winnerPot.toFixed(2)}
+                          </p>
+                          {!isDrawn && <p className="text-xs text-muted-foreground">Winner gets half of all sales</p>}
+                        </div>
+                      )}
+                      {isSplitPot && winnerPot === null && !isDrawn && (
+                        <div className="mt-2 text-xs text-muted-foreground" data-testid={`split-pot-no-sales-${product.id}`}>
+                          <Trophy className="h-3 w-3 inline mr-1" />
+                          Winner takes half the pot — be the first to enter!
+                        </div>
+                      )}
 
-                  <CardFooter className="p-4 pt-0 flex items-center justify-between gap-2">
-                    <div className="font-bold text-lg">
-                      {hasMultiplePrices(product) && <span className="text-sm font-normal">From </span>}
-                      {formatPrice(String(getLowestPrice(product)))}
-                    </div>
-                    <Button 
-                      size="sm" 
-                      disabled={isOutOfStock(product)}
-                      data-testid={`button-view-product-${product.id}`}
-                    >
-                      {product.productType === 'raffle' ? 'Get Tickets' : 'View'}
-                    </Button>
-                  </CardFooter>
-                </Card>
-              </Link>
-            ))}
+                      {product.productType === 'raffle' && product.bundlePricing && product.bundlePricing.length > 0 && !isClosed && (
+                        <div className="text-sm text-muted-foreground mt-1" data-testid={`text-bundle-hint-${product.id}`}>
+                          Bundle deals: {product.bundlePricing.map(t => `${t.quantity} for $${t.price}`).join(', ')}
+                        </div>
+                      )}
+                    </CardContent>
+
+                    <CardFooter className="p-4 pt-0 flex items-center justify-between gap-2">
+                      <div className="font-bold text-lg">
+                        {hasMultiplePrices(product) && <span className="text-sm font-normal">From </span>}
+                        {formatPrice(String(getLowestPrice(product)))}
+                      </div>
+                      <Button
+                        size="sm"
+                        disabled={isOutOfStock(product) || isClosed}
+                        data-testid={`button-view-product-${product.id}`}
+                      >
+                        {isClosed
+                          ? 'Drawing Complete'
+                          : product.productType === 'raffle'
+                            ? 'Get Tickets'
+                            : 'View'}
+                      </Button>
+                    </CardFooter>
+                  </Card>
+                </Link>
+              );
+            })}
           </div>
         )}
       </main>

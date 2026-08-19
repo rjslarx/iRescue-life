@@ -20,6 +20,7 @@ import {
   AlertCircle,
   Package,
   Ticket,
+  Trophy,
 } from "lucide-react";
 import { SiStripe } from "react-icons/si";
 import { loadStripe } from "@stripe/stripe-js";
@@ -248,14 +249,22 @@ export default function ShopCheckoutPage() {
 
   const hasPhysicalProduct = cartDetails.some(item => item.product?.productType === 'physical');
   const estimatedSubtotal = cartDetails.reduce((sum, item) => sum + item.totalPrice, 0);
-  // Buyer covers card processing fees — mirrors the server's authoritative
-  // gross-up: total*(1-2.9%) - $0.30 = subtotal. Once the order is created,
-  // the server-returned amounts are authoritative and override the estimate.
-  const estimatedGross = estimatedSubtotal > 0 ? Math.round(((estimatedSubtotal + 0.30) / (1 - 0.029)) * 100) / 100 : 0;
+
+  // Detect if the entire cart is split-pot raffle items (no processing fee scenario)
+  const allSplitPot = cartDetails.length > 0 && cartDetails.every(
+    item => item.product?.productType === 'raffle' && (item.product as any).raffleMode === 'split_pot'
+  );
+
+  // Buyer covers card processing fees for regular products — mirrors the server's authoritative
+  // gross-up: total*(1-2.9%) - $0.30 = subtotal. For all-split-pot carts, rescue absorbs fees.
+  // Once the order is created, the server-returned amounts are authoritative and override the estimate.
+  const estimatedGross = (!allSplitPot && estimatedSubtotal > 0)
+    ? Math.round(((estimatedSubtotal + 0.30) / (1 - 0.029)) * 100) / 100
+    : estimatedSubtotal;
   const subtotal = serverTotals ? parseFloat(serverTotals.subtotal) : estimatedSubtotal;
   const processingFee = serverTotals
     ? parseFloat(serverTotals.processingFee)
-    : Math.round((estimatedGross - estimatedSubtotal) * 100) / 100;
+    : allSplitPot ? 0 : Math.round((estimatedGross - estimatedSubtotal) * 100) / 100;
   const orderTotal = serverTotals ? parseFloat(serverTotals.totalAmount) : estimatedSubtotal + processingFee;
 
   const checkoutMutation = useMutation({
@@ -622,6 +631,12 @@ export default function ShopCheckoutPage() {
                       <p className="text-sm text-muted-foreground">
                         Qty: {item.quantity} x ${item.unitPrice.toFixed(2)}
                       </p>
+                      {item.product?.productType === 'raffle' && (item.product as any).raffleMode === 'split_pot' && (
+                        <p className="text-xs text-purple-700 dark:text-purple-300 flex items-center gap-1 mt-0.5" data-testid={`text-split-pot-item-${item.productId}`}>
+                          <Trophy className="h-3 w-3" />
+                          50/50 Split the Pot
+                        </p>
+                      )}
                     </div>
                     <div className="font-medium">
                       ${item.totalPrice.toFixed(2)}
@@ -636,10 +651,26 @@ export default function ShopCheckoutPage() {
                     <span>Subtotal</span>
                     <span>${subtotal.toFixed(2)}</span>
                   </div>
-                  <div className="flex justify-between text-sm">
-                    <span>Card processing fee</span>
-                    <span data-testid="checkout-processing-fee">${processingFee.toFixed(2)}</span>
-                  </div>
+                  {allSplitPot ? (
+                    <div className="rounded-md bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 px-3 py-2" data-testid="checkout-split-pot-fee-notice">
+                      <div className="flex items-center gap-1 text-sm text-purple-800 dark:text-purple-200 font-medium">
+                        <Trophy className="h-3 w-3" />
+                        No card processing fee
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        For 50/50 split-pot raffles, card costs are paid from the rescue's share of the pot.
+                      </p>
+                      <div className="flex justify-between text-sm mt-1">
+                        <span className="text-muted-foreground">Card processing fee</span>
+                        <span data-testid="checkout-processing-fee" className="text-green-600 dark:text-green-400">$0.00</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex justify-between text-sm">
+                      <span>Card processing fee</span>
+                      <span data-testid="checkout-processing-fee">${processingFee.toFixed(2)}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between text-sm text-muted-foreground">
                     <span>Shipping</span>
                     <span>Calculated at checkout</span>

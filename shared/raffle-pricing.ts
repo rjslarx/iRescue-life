@@ -3,6 +3,49 @@ export interface BundleTier {
   price: string;
 }
 
+export interface SplitPotAmounts {
+  ticketSalesAmount: string;
+  winnerPrizeAmount: string;
+  rescueShareAmount: string;
+}
+
+export interface CheckoutPaymentAmounts {
+  subtotal: number;
+  processingFee: number;
+  totalAmount: number;
+}
+
+/** Calculate shop checkout totals while keeping all math rounded to cents. */
+export function computeCheckoutPaymentAmounts(
+  subtotal: number,
+  buyerCoversCardFee: boolean,
+): CheckoutPaymentAmounts {
+  const roundedSubtotal = Math.max(0, Math.round(subtotal * 100) / 100);
+  const grossTotal = buyerCoversCardFee && roundedSubtotal > 0
+    ? Math.round(((roundedSubtotal + 0.30) / (1 - 0.029)) * 100) / 100
+    : roundedSubtotal;
+  return {
+    subtotal: roundedSubtotal,
+    processingFee: Math.round((grossTotal - roundedSubtotal) * 100) / 100,
+    totalAmount: grossTotal,
+  };
+}
+
+/**
+ * Split paid ticket revenue into equal winner/rescue shares using integer
+ * cents. Split-the-pot raffle prices are validated to whole even cents, so a
+ * paid sales total can always be divided exactly without fractional pennies.
+ */
+export function computeSplitPotAmounts(ticketSales: string | number): SplitPotAmounts {
+  const salesCents = Math.max(0, Math.round(Number(ticketSales) * 100));
+  const halfCents = Math.floor(salesCents / 2);
+  return {
+    ticketSalesAmount: (salesCents / 100).toFixed(2),
+    winnerPrizeAmount: (halfCents / 100).toFixed(2),
+    rescueShareAmount: ((salesCents - halfCents) / 100).toFixed(2),
+  };
+}
+
 /**
  * Compute the total price (in dollars) for `quantity` tickets given a
  * per-ticket base price and optional bundle tiers (e.g. 3 for $5, 10 for $20).

@@ -38,6 +38,8 @@ import {
   Copy,
   Printer,
   Download,
+  Trophy,
+  CheckCircle2,
 } from "lucide-react";
 import { useTenant } from "@/contexts/TenantContext";
 import type { ShopProduct, ShopProductVariant, ShopOrder, ShopOrderItem, Tenant } from "@shared/schema";
@@ -72,6 +74,22 @@ type RaffleStats = {
   id: string;
   ticketsSold: number;
   bonusTickets: number;
+  // Split-pot fields (present when raffleMode === 'split_pot')
+  splitPot?: {
+    ticketSalesAmount: string;
+    winnerPrizeAmount: string;
+    rescueShareAmount: string;
+  };
+  // Drawing result fields
+  ticketSalesAmount?: string;
+  winnerPrizeAmount?: string;
+  rescueShareAmount?: string;
+  payoutStatus?: 'pending' | 'paid';
+  prizePaidAt?: string | null;
+  winnerName?: string | null;
+  winnerEmail?: string | null;
+  winningTicketNumber?: string | null;
+  drawn?: boolean;
 };
 
 export default function ShopManagementPage() {
@@ -103,6 +121,7 @@ export default function ShopManagementPage() {
   const [variantDialogOpen, setVariantDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<ProductWithVariants | null>(null);
   const [editingVariantForProduct, setEditingVariantForProduct] = useState<string | null>(null);
+  const [drawConfirmRaffleId, setDrawConfirmRaffleId] = useState<string | null>(null);
 
   const [productForm, setProductForm] = useState({
     name: '',
@@ -117,6 +136,7 @@ export default function ShopManagementPage() {
     maxPerOrder: '',
     category: '',
     featured: false,
+    raffleMode: 'fixed' as 'fixed' | 'split_pot',
     rafflePrizeDescription: '',
     raffleDrawDate: '',
     raffleIncentivesEnabled: false,
@@ -142,7 +162,7 @@ export default function ShopManagementPage() {
     optionType: 'size' as 'size' | 'color' | 'style' | 'other',
   });
 
-  const { data: raffleStatsData } = useQuery<{ raffles: RaffleStats[] }>({
+  const { data: raffleStatsData, refetch: refetchRaffleStats } = useQuery<{ raffles: RaffleStats[] }>({
     queryKey: ['/api/shop/admin/raffles'],
   });
 
@@ -256,6 +276,44 @@ export default function ShopManagementPage() {
     return o.paymentStatus === 'cancelled';
   });
 
+  const drawRaffleMutation = useMutation({
+    mutationFn: async (raffleId: string) => {
+      const response = await apiRequest('POST', `/api/shop/admin/raffles/${raffleId}/draw`);
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to draw winner');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/shop/admin/raffles'] });
+      setDrawConfirmRaffleId(null);
+      toast({ title: "Winner drawn!", description: "The raffle winner has been selected." });
+    },
+    onError: (error: Error) => {
+      setDrawConfirmRaffleId(null);
+      toast({ title: "Draw failed", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const markPrizePaidMutation = useMutation({
+    mutationFn: async (raffleId: string) => {
+      const response = await apiRequest('POST', `/api/shop/admin/raffles/${raffleId}/payout/paid`);
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to record payout');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/shop/admin/raffles'] });
+      toast({ title: "Prize marked as paid", description: "Payout has been recorded." });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Couldn't record payout", description: error.message, variant: "destructive" });
+    },
+  });
+
   const createProductMutation = useMutation({
     mutationFn: async (data: typeof productForm) => {
       const { bundleTiers, ...rest } = data;
@@ -265,6 +323,7 @@ export default function ShopManagementPage() {
         totalInventory: data.trackInventory ? parseInt(data.totalInventory) || 0 : null,
         maxPerOrder: data.maxPerOrder ? parseInt(data.maxPerOrder) : null,
         raffleDrawDate: data.raffleDrawDate ? new Date(data.raffleDrawDate) : null,
+        raffleMode: data.productType === 'raffle' ? data.raffleMode : 'fixed',
         raffleIncentivesEnabled: data.productType === 'raffle' ? data.raffleIncentivesEnabled : false,
         raffleMaxReferrals: Math.max(1, parseInt(data.raffleMaxReferrals) || 3),
         imageUrls: data.imageUrls,
@@ -297,6 +356,7 @@ export default function ShopManagementPage() {
         totalInventory: data.trackInventory ? parseInt(data.totalInventory) || 0 : null,
         maxPerOrder: data.maxPerOrder ? parseInt(data.maxPerOrder) : null,
         raffleDrawDate: data.raffleDrawDate ? new Date(data.raffleDrawDate) : null,
+        raffleMode: data.productType === 'raffle' ? data.raffleMode : 'fixed',
         raffleIncentivesEnabled: data.productType === 'raffle' ? data.raffleIncentivesEnabled : false,
         raffleMaxReferrals: Math.max(1, parseInt(data.raffleMaxReferrals) || 3),
         imageUrls: data.imageUrls,
@@ -412,6 +472,7 @@ export default function ShopManagementPage() {
       maxPerOrder: '',
       category: '',
       featured: false,
+      raffleMode: 'fixed',
       rafflePrizeDescription: '',
       raffleDrawDate: '',
       raffleIncentivesEnabled: false,
@@ -480,6 +541,7 @@ export default function ShopManagementPage() {
       maxPerOrder: product.maxPerOrder?.toString() || '',
       category: product.category || '',
       featured: product.featured,
+      raffleMode: (product.raffleMode as 'fixed' | 'split_pot') || 'fixed',
       rafflePrizeDescription: product.rafflePrizeDescription || '',
       raffleDrawDate: product.raffleDrawDate ? new Date(product.raffleDrawDate).toISOString().split('T')[0] : '',
       raffleIncentivesEnabled: product.raffleIncentivesEnabled || false,
@@ -676,6 +738,11 @@ export default function ShopManagementPage() {
                               <Badge variant="outline">
                                 {product.productType === 'raffle' ? 'Raffle' : product.productType === 'physical' ? 'Physical' : 'Digital'}
                               </Badge>
+                              {product.productType === 'raffle' && product.raffleMode === 'split_pot' && (
+                                <Badge variant="secondary" className="bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200" data-testid={`badge-split-pot-${product.id}`}>
+                                  50/50 Split Pot
+                                </Badge>
+                              )}
                             </div>
                           </div>
                           {product.variants.length > 0 && (
@@ -871,69 +938,196 @@ export default function ShopManagementPage() {
               </Card>
             ) : (
               <div className="space-y-4">
-                {products.filter(p => p.productType === 'raffle').map(raffle => (
-                  <Card key={raffle.id}>
-                    <CardContent className="py-4">
-                      <div className="flex flex-wrap gap-4 items-start justify-between">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <Gift className="h-5 w-5 text-primary" />
-                            <span className="font-semibold">{raffle.name}</span>
-                            <Badge variant={raffle.status === 'active' ? 'default' : 'secondary'}>
-                              {raffle.status}
-                            </Badge>
-                          </div>
-                          <p className="text-sm text-muted-foreground">
-                            ${raffle.basePrice} per ticket
-                            {raffle.bundlePricing && raffle.bundlePricing.length > 0 && (
-                              <span className="text-muted-foreground">
-                                {' '}&middot;{' '}
-                                {raffle.bundlePricing.map(t => `${t.quantity} for $${t.price}`).join(', ')}
-                              </span>
-                            )}
-                          </p>
-                          {raffle.raffleDrawDate && (
-                            <p className="text-sm">
-                              Drawing: {new Date(raffle.raffleDrawDate).toLocaleDateString()}
+                {products.filter(p => p.productType === 'raffle').map(raffle => {
+                  const stats = raffleStatsData?.raffles?.find(s => s.id === raffle.id);
+                  const isSplitPot = raffle.raffleMode === 'split_pot';
+                  const isDrawn = !!stats?.drawn || !!stats?.winnerName;
+                  const splitPotLive = isSplitPot && !isDrawn ? stats?.splitPot : null;
+                  return (
+                    <Card key={raffle.id} data-testid={`raffle-card-${raffle.id}`}>
+                      <CardContent className="py-4">
+                        <div className="flex flex-wrap gap-4 items-start justify-between">
+                          <div className="space-y-1 flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Gift className="h-5 w-5 text-primary flex-shrink-0" />
+                              <span className="font-semibold">{raffle.name}</span>
+                              <Badge variant={raffle.status === 'active' ? 'default' : 'secondary'}>
+                                {raffle.status}
+                              </Badge>
+                              {isSplitPot && (
+                                <Badge variant="secondary" className="bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200" data-testid={`badge-split-pot-raffle-${raffle.id}`}>
+                                  50/50 Split Pot
+                                </Badge>
+                              )}
+                              {isDrawn && (
+                                <Badge className="bg-green-500" data-testid={`badge-drawn-${raffle.id}`}>
+                                  Winner Drawn
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-sm text-muted-foreground">
+                              ${raffle.basePrice} per ticket
+                              {raffle.bundlePricing && raffle.bundlePricing.length > 0 && (
+                                <span className="text-muted-foreground">
+                                  {' '}&middot;{' '}
+                                  {raffle.bundlePricing.map(t => `${t.quantity} for $${t.price}`).join(', ')}
+                                </span>
+                              )}
                             </p>
-                          )}
-                          {(() => {
-                            const stats = raffleStatsData?.raffles?.find(s => s.id === raffle.id);
-                            if (!stats) return null;
-                            return (
+                            {raffle.raffleDrawDate && (
+                              <p className="text-sm">
+                                Drawing: {new Date(raffle.raffleDrawDate).toLocaleDateString()}
+                              </p>
+                            )}
+                            {stats && (
                               <p className="text-sm" data-testid={`text-raffle-stats-${raffle.id}`}>
                                 Tickets: {stats.ticketsSold + (stats.bonusTickets || 0)}
                                 <span className="text-muted-foreground"> ({stats.ticketsSold} purchased{stats.bonusTickets ? `, ${stats.bonusTickets} bonus` : ''})</span>
                               </p>
-                            );
-                          })()}
+                            )}
+                            {/* Live split-pot amounts (pre-draw) */}
+                            {splitPotLive && (
+                              <div className="mt-2 rounded-md bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 px-3 py-2 space-y-1" data-testid={`split-pot-live-${raffle.id}`}>
+                                <p className="text-xs font-medium text-purple-700 dark:text-purple-300">Current Split-Pot Breakdown (live)</p>
+                                <div className="grid grid-cols-3 gap-2 text-sm">
+                                  <div>
+                                    <p className="text-xs text-muted-foreground">Ticket Sales</p>
+                                    <p className="font-semibold" data-testid={`text-ticket-sales-${raffle.id}`}>${parseFloat(splitPotLive.ticketSalesAmount).toFixed(2)}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-xs text-muted-foreground">Winner Pot</p>
+                                    <p className="font-semibold text-green-600 dark:text-green-400" data-testid={`text-winner-pot-${raffle.id}`}>${parseFloat(splitPotLive.winnerPrizeAmount).toFixed(2)}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-xs text-muted-foreground">Rescue Share</p>
+                                    <p className="font-semibold" data-testid={`text-rescue-share-${raffle.id}`}>${parseFloat(splitPotLive.rescueShareAmount).toFixed(2)}</p>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                            {/* Post-draw winner info */}
+                            {isDrawn && stats && (
+                              <div className="mt-2 rounded-md bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 px-3 py-2 space-y-1" data-testid={`winner-info-${raffle.id}`}>
+                                <p className="text-xs font-medium text-green-700 dark:text-green-300">Winner</p>
+                                {stats.winnerName && (
+                                  <p className="text-sm font-semibold" data-testid={`text-winner-name-${raffle.id}`}>{stats.winnerName}</p>
+                                )}
+                                {stats.winnerEmail && (
+                                  <p className="text-sm text-muted-foreground" data-testid={`text-winner-email-${raffle.id}`}>{stats.winnerEmail}</p>
+                                )}
+                                {stats.winningTicketNumber && (
+                                  <p className="text-sm">Winning ticket: <span className="font-mono font-semibold" data-testid={`text-winning-ticket-${raffle.id}`}>#{stats.winningTicketNumber}</span></p>
+                                )}
+                                {isSplitPot && stats.winnerPrizeAmount && (
+                                  <div className="grid grid-cols-3 gap-2 text-sm mt-1">
+                                    <div>
+                                      <p className="text-xs text-muted-foreground">Final Ticket Sales</p>
+                                      <p className="font-semibold" data-testid={`text-final-ticket-sales-${raffle.id}`}>${parseFloat(stats.ticketSalesAmount || '0').toFixed(2)}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-xs text-muted-foreground">Winner Prize</p>
+                                      <p className="font-semibold text-green-600 dark:text-green-400" data-testid={`text-final-winner-prize-${raffle.id}`}>${parseFloat(stats.winnerPrizeAmount).toFixed(2)}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-xs text-muted-foreground">Rescue's Share</p>
+                                      <p className="font-semibold" data-testid={`text-final-rescue-share-${raffle.id}`}>${parseFloat(stats.rescueShareAmount || '0').toFixed(2)}</p>
+                                    </div>
+                                  </div>
+                                )}
+                                {isSplitPot && (
+                                  <div className="mt-1 flex items-center gap-2">
+                                    {stats.payoutStatus === 'paid' ? (
+                                      <div className="flex items-center gap-1 text-sm text-green-600 dark:text-green-400" data-testid={`text-payout-paid-${raffle.id}`}>
+                                        <CheckCircle2 className="h-4 w-4" />
+                                        Prize paid{stats.prizePaidAt ? ` on ${new Date(stats.prizePaidAt).toLocaleDateString()}` : ''}
+                                      </div>
+                                    ) : (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => markPrizePaidMutation.mutate(raffle.id)}
+                                        disabled={markPrizePaidMutation.isPending && markPrizePaidMutation.variables === raffle.id}
+                                        data-testid={`button-mark-prize-paid-${raffle.id}`}
+                                      >
+                                        {markPrizePaidMutation.isPending && markPrizePaidMutation.variables === raffle.id ? (
+                                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                        ) : (
+                                          <DollarSign className="h-4 w-4 mr-2" />
+                                        )}
+                                        Mark Prize Paid
+                                      </Button>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap gap-2 flex-shrink-0">
+                            <Button variant="outline" onClick={() => setViewTicketsRaffle(raffle)} data-testid={`button-view-tickets-${raffle.id}`}>
+                              <Ticket className="h-4 w-4 mr-2" />
+                              View Tickets
+                            </Button>
+                            {!isDrawn && (
+                              <Button
+                                variant="default"
+                                onClick={() => setDrawConfirmRaffleId(raffle.id)}
+                                data-testid={`button-draw-winner-${raffle.id}`}
+                              >
+                                <Trophy className="h-4 w-4 mr-2" />
+                                Draw Winner
+                              </Button>
+                            )}
+                            <Button variant="outline" onClick={() => handleShareProduct(raffle)} data-testid={`button-share-raffle-${raffle.id}`}>
+                              <Share2 className="h-4 w-4 mr-2" />
+                              Share
+                            </Button>
+                            <Button variant="outline" onClick={() => handleCopyProductLink(raffle.slug)} data-testid={`button-copy-link-raffle-${raffle.id}`}>
+                              <Copy className="h-4 w-4 mr-2" />
+                              Copy Link
+                            </Button>
+                            <Button variant="outline" onClick={() => openEditProduct(raffle)}>
+                              <Pencil className="h-4 w-4 mr-2" />
+                              Edit
+                            </Button>
+                          </div>
                         </div>
-                        <div className="flex flex-wrap gap-2">
-                          <Button variant="outline" onClick={() => setViewTicketsRaffle(raffle)} data-testid={`button-view-tickets-${raffle.id}`}>
-                            <Ticket className="h-4 w-4 mr-2" />
-                            View Tickets
-                          </Button>
-                          <Button variant="outline" onClick={() => handleShareProduct(raffle)} data-testid={`button-share-raffle-${raffle.id}`}>
-                            <Share2 className="h-4 w-4 mr-2" />
-                            Share
-                          </Button>
-                          <Button variant="outline" onClick={() => handleCopyProductLink(raffle.slug)} data-testid={`button-copy-link-raffle-${raffle.id}`}>
-                            <Copy className="h-4 w-4 mr-2" />
-                            Copy Link
-                          </Button>
-                          <Button variant="outline" onClick={() => openEditProduct(raffle)}>
-                            <Pencil className="h-4 w-4 mr-2" />
-                            Edit
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </div>
             )}
           </TabsContent>
         </Tabs>
+
+        {/* Draw winner confirmation dialog */}
+        <Dialog open={!!drawConfirmRaffleId} onOpenChange={(open) => { if (!open) setDrawConfirmRaffleId(null); }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Draw Raffle Winner</DialogTitle>
+              <DialogDescription>
+                This will randomly select a winning ticket from all paid entries. This action cannot be undone.
+                Are you sure you want to draw the winner now?
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDrawConfirmRaffleId(null)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={() => drawConfirmRaffleId && drawRaffleMutation.mutate(drawConfirmRaffleId)}
+                disabled={drawRaffleMutation.isPending}
+                data-testid="button-confirm-draw"
+              >
+                {drawRaffleMutation.isPending ? (
+                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Drawing...</>
+                ) : (
+                  <><Trophy className="h-4 w-4 mr-2" />Yes, Draw Winner</>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <Dialog open={!!viewTicketsRaffle} onOpenChange={(open) => { if (!open) setViewTicketsRaffle(null); }}>
           <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
@@ -1193,6 +1387,32 @@ export default function ShopManagementPage() {
                 <>
                   <Separator />
                   <div className="space-y-4">
+                    {/* Raffle Mode selector */}
+                    <div className="space-y-2">
+                      <Label htmlFor="raffleMode">Raffle Prize Type *</Label>
+                      <Select
+                        value={productForm.raffleMode}
+                        onValueChange={(value) => setProductForm(prev => ({ ...prev, raffleMode: value as 'fixed' | 'split_pot' }))}
+                      >
+                        <SelectTrigger data-testid="select-raffle-mode">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="fixed">Fixed Prize</SelectItem>
+                          <SelectItem value="split_pot">50/50 Split the Pot</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {productForm.raffleMode === 'split_pot' && (
+                      <div className="rounded-md bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 p-3 text-sm space-y-1" data-testid="text-split-pot-explanation">
+                        <p className="font-medium text-purple-800 dark:text-purple-200">50/50 Split the Pot</p>
+                        <p className="text-muted-foreground">
+                          The winner receives exactly <strong>half</strong> of total ticket sales. Card processing fees are covered from the rescue's half — buyers pay no additional processing fees on split-pot raffles.
+                        </p>
+                      </div>
+                    )}
+
                     <div className="space-y-2">
                       <Label htmlFor="raffleDrawDate">Drawing Date</Label>
                       <Input
@@ -1203,17 +1423,21 @@ export default function ShopManagementPage() {
                         data-testid="input-raffle-date"
                       />
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="rafflePrizeDescription">Prize Description</Label>
-                      <Textarea
-                        id="rafflePrizeDescription"
-                        value={productForm.rafflePrizeDescription}
-                        onChange={(e) => setProductForm(prev => ({ ...prev, rafflePrizeDescription: e.target.value }))}
-                        placeholder="Describe what the winner will receive..."
-                        rows={2}
-                        data-testid="input-prize-description"
-                      />
-                    </div>
+
+                    {productForm.raffleMode === 'fixed' && (
+                      <div className="space-y-2">
+                        <Label htmlFor="rafflePrizeDescription">Prize Description</Label>
+                        <Textarea
+                          id="rafflePrizeDescription"
+                          value={productForm.rafflePrizeDescription}
+                          onChange={(e) => setProductForm(prev => ({ ...prev, rafflePrizeDescription: e.target.value }))}
+                          placeholder="Describe what the winner will receive..."
+                          rows={2}
+                          data-testid="input-prize-description"
+                        />
+                      </div>
+                    )}
+
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <div>

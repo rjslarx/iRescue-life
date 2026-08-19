@@ -18,10 +18,119 @@ import {
 import { eq, and, desc, asc, sql, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import Stripe from 'stripe';
-import { computeBundledPrice } from '@shared/raffle-pricing';
+import { computeBundledPrice, computeCheckoutPaymentAmounts, computeSplitPotAmounts } from '@shared/raffle-pricing';
 import { sendShopOrderConfirmationEmail } from '../lib/shop-emails';
+import {
+  refundClosedRafflePayment,
+  ShopRaffleClosedError,
+  transitionShopOrderToPaid,
+} from '../lib/shop-order-payment';
 
 const router = Router();
+
+class ShopCheckoutError extends Error {}
+class ShopProductNotFoundError extends Error {}
+class ShopProductTermsLockedError extends Error {}
+
+function isEvenCentAmount(value: string | number): boolean {
+  const cents = Math.round(Number(value) * 100);
+  return Number.isFinite(cents) && cents > 0 && cents % 2 === 0;
+}
+
+function validateSplitPotPricing(product: {
+  raffleMode?: string | null;
+  basePrice?: string | null;
+  bundlePricing?: { quantity: number; price: string }[] | null;
+}): string | null {
+  if (product.raffleMode !== 'split_pot') return null;
+  if (!product.basePrice || !isEvenCentAmount(product.basePrice)) {
+    return 'Split-the-pot ticket prices must be positive and divisible evenly into two shares';
+  }
+  if ((product.bundlePricing || []).some((tier) => !isEvenCentAmount(tier.price))) {
+    return 'Every split-the-pot bundle price must divide evenly into two shares';
+  }
+  return null;
+}
+
+function sameMoneyAmount(left: string | number | null | undefined, right: string | number | null | undefined): boolean {
+  return Math.round(Number(left || 0) * 100) === Math.round(Number(right || 0) * 100);
+}
+
+function normalizedBundlePricing(value: { quantity: number; price: string }[] | null | undefined): string {
+  return JSON.stringify(
+    [...(value || [])]
+      .map((tier) => ({ quantity: tier.quantity, price: Number(tier.price).toFixed(2) }))
+      .sort((a, b) => a.quantity - b.quantity),
+  );
+}
+
+async function loadPaidRaffleSales(
+  productIds: string[],
+  executor: Pick<typeof db, 'select'> = db,
+): Promise<Map<string, string>> {
+  if (productIds.length === 0) return new Map();
+  const rows = await executor
+    .select({
+      productId: shopOrderItems.productId,
+      amount: sql<string>`coalesce(sum((${shopOrderItems.totalPrice})::numeric), 0)::text`,
+    })
+    .from(shopOrderItems)
+    .innerJoin(shopOrders, eq(shopOrderItems.orderId, shopOrders.id))
+    .where(and(
+      inArray(shopOrderItems.productId, productIds),
+      eq(shopOrders.paymentStatus, 'paid'),
+    ))
+    .groupBy(shopOrderItems.productId);
+  return new Map(rows.map((row) => [row.productId, row.amount]));
+}
+
+type PublicRaffleDrawing = {
+  productId: string;
+  drawnAt: Date | null;
+  ticketSalesAmount: string | null;
+  winnerPrizeAmount: string | null;
+  rescueShareAmount: string | null;
+};
+
+async function loadPublicRaffleDrawings(productIds: string[]): Promise<Map<string, PublicRaffleDrawing>> {
+  if (productIds.length === 0) return new Map();
+  const rows = await db
+    .select({
+      productId: shopRaffleDrawings.productId,
+      drawnAt: shopRaffleDrawings.drawnAt,
+      ticketSalesAmount: shopRaffleDrawings.ticketSalesAmount,
+      winnerPrizeAmount: shopRaffleDrawings.winnerPrizeAmount,
+      rescueShareAmount: shopRaffleDrawings.rescueShareAmount,
+    })
+    .from(shopRaffleDrawings)
+    .where(and(
+      inArray(shopRaffleDrawings.productId, productIds),
+      eq(shopRaffleDrawings.status, 'drawn'),
+    ));
+  return new Map(rows.map((row) => [row.productId, row]));
+}
+
+function publicSplitPotStats(
+  product: typeof shopProducts.$inferSelect,
+  salesByProduct: Map<string, string>,
+  drawing?: PublicRaffleDrawing,
+) {
+  if (product.productType !== 'raffle' || product.raffleMode !== 'split_pot') return undefined;
+  if (drawing?.winnerPrizeAmount && drawing.ticketSalesAmount && drawing.rescueShareAmount) {
+    return {
+      ticketSalesAmount: drawing.ticketSalesAmount,
+      winnerPrizeAmount: drawing.winnerPrizeAmount,
+      rescueShareAmount: drawing.rescueShareAmount,
+      isDrawn: true,
+      drawnAt: drawing.drawnAt,
+    };
+  }
+  return {
+    ...computeSplitPotAmounts(salesByProduct.get(product.id) || '0'),
+    isDrawn: false,
+    drawnAt: null,
+  };
+}
 
 // ============================================================================
 // Public Shop Routes (no authentication required)
@@ -69,10 +178,19 @@ router.get('/products', requireTenant, async (req, res, next) => {
       return acc;
     }, {} as Record<string, typeof variants>);
 
-    // Combine products with their variants
+    const salesByProduct = await loadPaidRaffleSales(
+      products.filter((p) => p.productType === 'raffle' && p.raffleMode === 'split_pot').map((p) => p.id),
+    );
+    const drawingsByProduct = await loadPublicRaffleDrawings(
+      products.filter((p) => p.productType === 'raffle').map((p) => p.id),
+    );
+
+    // Combine products with their variants and public split-pot total.
     const productsWithVariants = products.map(p => ({
       ...p,
       variants: variantsByProduct[p.id] || [],
+      raffleClosed: drawingsByProduct.has(p.id),
+      splitPot: publicSplitPotStats(p, salesByProduct, drawingsByProduct.get(p.id)),
     }));
 
     res.json({ products: productsWithVariants });
@@ -114,10 +232,15 @@ router.get('/products/:slug', requireTenant, async (req, res, next) => {
       )
       .orderBy(asc(shopProductVariants.displayOrder));
 
-    res.json({ 
+    const salesByProduct = await loadPaidRaffleSales([product.id]);
+    const drawingsByProduct = await loadPublicRaffleDrawings([product.id]);
+
+    res.json({
       product: {
         ...product,
         variants,
+        raffleClosed: drawingsByProduct.has(product.id),
+        splitPot: publicSplitPotStats(product, salesByProduct, drawingsByProduct.get(product.id)),
       }
     });
   } catch (error) {
@@ -285,12 +408,24 @@ router.post('/checkout', requireTenant, async (req, res, next) => {
     
     const orderNumber = `ORD-${String((orderCount[0]?.count || 0) + 1).padStart(6, '0')}`;
 
-    // Calculate totals (no tax/shipping for now - can be added later).
-    // The buyer covers card processing fees so the rescue nets the exact
-    // configured price: gross-up so total*(1-2.9%) - $0.30 = subtotal.
-    const grossTotal = subtotal > 0 ? Math.round(((subtotal + 0.30) / (1 - 0.029)) * 100) / 100 : 0;
-    const processingFee = Math.round((grossTotal - subtotal) * 100) / 100;
-    const totalAmount = subtotal + processingFee;
+    const splitPotItems = orderItems.filter((item) => {
+      const product = productMap.get(item.productId);
+      return product?.productType === 'raffle' && product.raffleMode === 'split_pot';
+    });
+    if (splitPotItems.length > 0 && splitPotItems.length !== orderItems.length) {
+      return res.status(400).json({ error: 'Split-the-pot raffle tickets must be purchased separately' });
+    }
+    const isSplitPotOnlyOrder = splitPotItems.length > 0;
+    if (isSplitPotOnlyOrder && !isEvenCentAmount(subtotal)) {
+      return res.status(400).json({ error: 'This split-the-pot ticket total cannot be divided evenly into two shares' });
+    }
+
+    // Regular shop buyers cover the card fee. For split-the-pot raffles, the
+    // buyer pays only the ticket price and Stripe's fee comes from the rescue's
+    // half; the winner's half is always 50% of paid ticket revenue.
+    const checkoutAmounts = computeCheckoutPaymentAmounts(subtotal, !isSplitPotOnlyOrder);
+    const processingFee = checkoutAmounts.processingFee;
+    const totalAmount = checkoutAmounts.totalAmount;
 
     // Create the order and its items atomically. Raffle ticket numbers are
     // allocated inside the transaction while holding a row lock on the
@@ -323,6 +458,46 @@ router.post('/checkout', requireTenant, async (req, res, next) => {
           await tx.execute(
             sql`SELECT id FROM shop_products WHERE id = ${item.productId} FOR UPDATE`
           );
+
+          // The product was initially read before this transaction. Re-check
+          // its financial terms after taking the lock so a concurrent staff
+          // edit cannot turn an in-flight fixed raffle into split-pot (or
+          // vice versa) before this first entry is committed.
+          const [lockedProduct] = await tx
+            .select({
+              productType: shopProducts.productType,
+              raffleMode: shopProducts.raffleMode,
+              basePrice: shopProducts.basePrice,
+              bundlePricing: shopProducts.bundlePricing,
+              status: shopProducts.status,
+            })
+            .from(shopProducts)
+            .where(and(
+              eq(shopProducts.id, item.productId),
+              eq(shopProducts.tenantId, tenant.id),
+            ));
+          const originalProduct = productMap.get(item.productId);
+          if (
+            !lockedProduct
+            || lockedProduct.status !== 'active'
+            || lockedProduct.productType !== originalProduct?.productType
+            || lockedProduct.raffleMode !== originalProduct?.raffleMode
+            || !sameMoneyAmount(lockedProduct.basePrice, originalProduct?.basePrice)
+            || normalizedBundlePricing(lockedProduct.bundlePricing) !== normalizedBundlePricing(originalProduct?.bundlePricing)
+          ) {
+            throw new ShopCheckoutError(`${item.productName} changed while checkout was starting. Please refresh and try again.`);
+          }
+
+          const [drawn] = await tx
+            .select({ id: shopRaffleDrawings.id })
+            .from(shopRaffleDrawings)
+            .where(and(
+              eq(shopRaffleDrawings.productId, item.productId),
+              eq(shopRaffleDrawings.status, 'drawn'),
+            ));
+          if (drawn) {
+            throw new ShopCheckoutError(`${item.productName} has already been drawn and is no longer accepting entries`);
+          }
 
           // Sum quantities (each order item row can contain many tickets) PLUS
           // any bonus tickets already granted for this raffle so numbers never
@@ -411,6 +586,9 @@ router.post('/checkout', requireTenant, async (req, res, next) => {
       });
     }
   } catch (error) {
+    if (error instanceof ShopCheckoutError) {
+      return res.status(400).json({ error: error.message });
+    }
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: 'Invalid checkout data', details: error.errors });
     }
@@ -470,31 +648,73 @@ router.post('/checkout/confirm', requireTenant, async (req, res, next) => {
       // retries) return success without side effects.
       // See PAYABLE_ORDER_STATES for exactly which states may transition to
       // paid (includes sweep-cancelled orders; excludes refunded).
-      const { transitionShopOrderToPaid } = await import('../lib/shop-order-payment');
-      const updated = await transitionShopOrderToPaid(order.id, paymentIntent.latest_charge as string);
+      let transitioned = false;
+      try {
+        transitioned = await db.transaction(async (tx) => {
+          const updated = await transitionShopOrderToPaid(
+            order.id,
+            typeof paymentIntent.latest_charge === 'string' ? paymentIntent.latest_charge : null,
+            tx,
+          );
+          if (updated.length === 0) return false;
 
-      if (updated.length > 0) {
-        // Update inventory for variants (first successful confirm only)
-        const orderItems = await db
-          .select()
-          .from(shopOrderItems)
-          .where(eq(shopOrderItems.orderId, order.id));
-
-        for (const item of orderItems) {
-          if (item.variantId) {
-            await db.update(shopProductVariants)
-              .set({ 
-                inventory: sql`${shopProductVariants.inventory} - ${item.quantity}` 
-              })
-              .where(eq(shopProductVariants.id, item.variantId));
+          // Update inventory for variants in the same transaction as the
+          // first successful payment transition.
+          const orderItems = await tx
+            .select()
+            .from(shopOrderItems)
+            .where(eq(shopOrderItems.orderId, order.id));
+          for (const item of orderItems) {
+            if (item.variantId) {
+              await tx.update(shopProductVariants)
+                .set({ inventory: sql`${shopProductVariants.inventory} - ${item.quantity}` })
+                .where(eq(shopProductVariants.id, item.variantId));
+            }
           }
-        }
+          return true;
+        });
+      } catch (error) {
+        if (!(error instanceof ShopRaffleClosedError)) throw error;
+        await refundClosedRafflePayment(stripe, order.id, paymentIntentId, {
+          reverseTransfer: !!paymentIntent.transfer_data,
+          refundApplicationFee: !!paymentIntent.application_fee_amount,
+        });
+        return res.status(409).json({
+          success: false,
+          refunded: true,
+          error: 'This raffle was drawn before payment completed. Your payment has been refunded.',
+        });
+      }
 
+      if (transitioned) {
         // Email the buyer their receipt (with raffle ticket numbers when
         // applicable). Fire-and-forget so email problems never block the
         // payment confirmation response.
         sendShopOrderConfirmationEmail(tenant.id, order.id).catch((err) => {
           console.error(`[Shop] Order confirmation email failed for order ${order.orderNumber}:`, err);
+        });
+      }
+
+      const [finalOrder] = await db
+        .select()
+        .from(shopOrders)
+        .where(and(
+          eq(shopOrders.id, order.id),
+          eq(shopOrders.tenantId, req.tenant!.id),
+        ));
+      if (!finalOrder) return res.status(404).json({ error: 'Order not found' });
+      if (finalOrder.paymentStatus === 'refunded') {
+        return res.status(409).json({
+          success: false,
+          refunded: true,
+          error: 'This raffle was drawn before payment completed. Your payment has been refunded.',
+        });
+      }
+      if (finalOrder.paymentStatus !== 'paid') {
+        return res.status(409).json({
+          success: false,
+          status: finalOrder.paymentStatus,
+          error: 'Payment cannot finalize this order',
         });
       }
 
@@ -507,8 +727,7 @@ router.post('/checkout/confirm', requireTenant, async (req, res, next) => {
       res.json({ 
         success: true,
         order: {
-          ...order,
-          paymentStatus: 'paid',
+          ...finalOrder,
           items,
         }
       });
@@ -569,11 +788,16 @@ router.get('/orders/:orderNumber', requireTenant, async (req, res, next) => {
       productSlug: string;
       productName: string;
     }> = {};
+    let raffleProducts: (typeof shopProducts.$inferSelect)[] = [];
+    let raffleSales = new Map<string, string>();
+    let raffleDrawings = new Map<string, PublicRaffleDrawing>();
     if (raffleProductIds.length > 0) {
-      const raffleProducts = await db
+      raffleProducts = await db
         .select()
         .from(shopProducts)
         .where(inArray(shopProducts.id, raffleProductIds));
+      raffleSales = await loadPaidRaffleSales(raffleProductIds);
+      raffleDrawings = await loadPublicRaffleDrawings(raffleProductIds);
       const drawings = await db
         .select({ productId: shopRaffleDrawings.productId })
         .from(shopRaffleDrawings)
@@ -615,6 +839,11 @@ router.get('/orders/:orderNumber', requireTenant, async (req, res, next) => {
         customerPhone: null,
         items: items.map((item) => ({
           ...item,
+          raffleMode: raffleProducts.find((p) => p.id === item.productId)?.raffleMode,
+          splitPot: (() => {
+            const product = raffleProducts.find((p) => p.id === item.productId);
+            return product ? publicSplitPotStats(product, raffleSales, raffleDrawings.get(product.id)) : undefined;
+          })(),
           bonusTickets: bonusRows
             .filter((b) => b.orderItemId === item.id)
             .map((b) => ({ actionType: b.actionType, ticketNumbers: b.ticketNumbers })),
@@ -930,7 +1159,10 @@ router.post('/admin/products', requireTenant, requireAuth, requireRoleOrPageAcce
     // Bundle (bulk-discount) pricing is a raffle-only feature
     if (productData.productType !== 'raffle') {
       productData.bundlePricing = null;
+      productData.raffleMode = 'fixed';
     }
+    const pricingError = validateSplitPotPricing(productData);
+    if (pricingError) return res.status(400).json({ error: pricingError });
 
     // Generate slug if not provided
     if (!productData.slug) {
@@ -956,37 +1188,81 @@ router.post('/admin/products', requireTenant, requireAuth, requireRoleOrPageAcce
  */
 router.patch('/admin/products/:id', requireTenant, requireAuth, requireRoleOrPageAccess('shop', 'admin', 'staff'), async (req, res, next) => {
   try {
-    const [existing] = await db
-      .select()
-      .from(shopProducts)
-      .where(
-        and(
+    const updateData = insertShopProductSchema.partial().parse(req.body);
+    const product = await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT id FROM shop_products WHERE id = ${req.params.id} AND tenant_id = ${req.tenant!.id} FOR UPDATE`
+      );
+      const [existing] = await tx
+        .select()
+        .from(shopProducts)
+        .where(and(
           eq(shopProducts.id, req.params.id),
-          eq(shopProducts.tenantId, req.tenant!.id)
+          eq(shopProducts.tenantId, req.tenant!.id),
+        ));
+      if (!existing) throw new ShopProductNotFoundError();
+
+      // Bundle (bulk-discount) pricing is a raffle-only feature — clear any
+      // tiers when the product is (or becomes) a non-raffle type.
+      const effectiveType = updateData.productType ?? existing.productType;
+      if (effectiveType !== 'raffle') {
+        updateData.bundlePricing = null;
+        updateData.raffleMode = 'fixed';
+      }
+
+      const pricingError = validateSplitPotPricing({
+        raffleMode: updateData.raffleMode ?? existing.raffleMode,
+        basePrice: updateData.basePrice ?? existing.basePrice,
+        bundlePricing: updateData.bundlePricing === undefined ? existing.bundlePricing : updateData.bundlePricing,
+      });
+      if (pricingError) throw new ShopProductTermsLockedError(pricingError);
+
+      const [entry] = await tx
+        .select({ id: shopOrderItems.id })
+        .from(shopOrderItems)
+        .where(eq(shopOrderItems.productId, existing.id))
+        .limit(1);
+      const [drawing] = await tx
+        .select({ id: shopRaffleDrawings.id })
+        .from(shopRaffleDrawings)
+        .where(eq(shopRaffleDrawings.productId, existing.id))
+        .limit(1);
+
+      const changesProductType = updateData.productType !== undefined
+        && updateData.productType !== existing.productType;
+      const changesRaffleFinancialTerms = existing.productType === 'raffle' && (
+        (updateData.raffleMode !== undefined && updateData.raffleMode !== existing.raffleMode)
+        || (updateData.basePrice !== undefined && !sameMoneyAmount(updateData.basePrice, existing.basePrice))
+        || (
+          updateData.bundlePricing !== undefined
+          && normalizedBundlePricing(updateData.bundlePricing) !== normalizedBundlePricing(existing.bundlePricing)
         )
       );
+      if ((entry || drawing) && (changesProductType || changesRaffleFinancialTerms)) {
+        throw new ShopProductTermsLockedError(
+          'Raffle type, prize mode, ticket price, and bundle pricing cannot change after entries have been created',
+        );
+      }
 
-    if (!existing) {
-      return res.status(404).json({ error: 'Product not found' });
-    }
-
-    const updateData = insertShopProductSchema.partial().parse(req.body);
-
-    // Bundle (bulk-discount) pricing is a raffle-only feature — clear any
-    // tiers when the product is (or becomes) a non-raffle type.
-    const effectiveType = updateData.productType ?? existing.productType;
-    if (effectiveType !== 'raffle') {
-      updateData.bundlePricing = null;
-    }
-
-    const [product] = await db
-      .update(shopProducts)
-      .set({ ...updateData, updatedAt: new Date() })
-      .where(eq(shopProducts.id, req.params.id))
-      .returning();
+      const [updated] = await tx
+        .update(shopProducts)
+        .set({ ...updateData, updatedAt: new Date() })
+        .where(and(
+          eq(shopProducts.id, req.params.id),
+          eq(shopProducts.tenantId, req.tenant!.id),
+        ))
+        .returning();
+      return updated;
+    });
 
     res.json({ product });
   } catch (error) {
+    if (error instanceof ShopProductNotFoundError) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
+    if (error instanceof ShopProductTermsLockedError) {
+      return res.status(400).json({ error: error.message });
+    }
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: 'Invalid product data', details: error.errors });
     }
@@ -1354,13 +1630,27 @@ router.get('/admin/raffles', requireTenant, requireAuth, requireRoleOrPageAccess
       );
 
     const drawingMap = new Map(drawings.map(d => [d.productId, d]));
+    const salesByProduct = await loadPaidRaffleSales(raffleIds);
 
-    const rafflesWithStats = raffles.map(r => ({
-      ...r,
-      ticketsSold: ticketCountMap.get(r.id) || 0,
-      bonusTickets: bonusCountMap.get(r.id) || 0,
-      drawing: drawingMap.get(r.id),
-    }));
+    const rafflesWithStats = raffles.map(r => {
+      const drawing = drawingMap.get(r.id);
+      return {
+        ...r,
+        ticketsSold: ticketCountMap.get(r.id) || 0,
+        bonusTickets: bonusCountMap.get(r.id) || 0,
+        splitPot: publicSplitPotStats(r, salesByProduct),
+        drawing,
+        drawn: !!drawing,
+        winnerName: drawing?.winnerName,
+        winnerEmail: drawing?.winnerEmail,
+        winningTicketNumber: drawing?.winningTicketNumber,
+        ticketSalesAmount: drawing?.ticketSalesAmount,
+        winnerPrizeAmount: drawing?.winnerPrizeAmount,
+        rescueShareAmount: drawing?.rescueShareAmount,
+        payoutStatus: drawing?.payoutStatus,
+        prizePaidAt: drawing?.prizePaidAt,
+      };
+    });
 
     res.json({ raffles: rafflesWithStats });
   } catch (error) {
@@ -1466,6 +1756,8 @@ router.get('/admin/raffles/:id/tickets', requireTenant, requireAuth, requireRole
         id: raffle.id,
         name: raffle.name,
         raffleDrawDate: raffle.raffleDrawDate,
+        raffleMode: raffle.raffleMode,
+        splitPot: publicSplitPotStats(raffle, await loadPaidRaffleSales([raffle.id])),
       },
       totalTickets: tickets.length,
       purchasedTickets: tickets.filter((t) => !t.isBonus).length,
@@ -1599,7 +1891,13 @@ router.post('/admin/raffles/:id/draw', requireTenant, requireAuth, requireRoleOr
     const winnerIndex = Math.floor(Math.random() * allTickets.length);
     const winner = allTickets[winnerIndex];
 
-    // Create drawing record
+    const splitPot = raffle.raffleMode === 'split_pot'
+      ? computeSplitPotAmounts((await loadPaidRaffleSales([raffle.id], tx)).get(raffle.id) || '0')
+      : null;
+
+    // Create drawing record. Split-pot accounting is snapshotted under the
+    // same product lock, so later payments/refunds cannot silently change the
+    // winner's recorded prize.
     const [drawing] = await tx.insert(shopRaffleDrawings).values({
       productId: raffle.id,
       tenantId: req.tenant!.id,
@@ -1611,6 +1909,10 @@ router.post('/admin/raffles/:id/draw', requireTenant, requireAuth, requireRoleOr
       status: 'drawn',
       drawnAt: new Date(),
       drawnBy: req.user!.id,
+      ticketSalesAmount: splitPot?.ticketSalesAmount,
+      winnerPrizeAmount: splitPot?.winnerPrizeAmount,
+      rescueShareAmount: splitPot?.rescueShareAmount,
+      payoutStatus: splitPot ? 'pending' : null,
     }).returning();
 
     return { drawing, totalTickets: allTickets.length };
@@ -1621,6 +1923,66 @@ router.post('/admin/raffles/:id/draw', requireTenant, requireAuth, requireRoleOr
     }
 
     res.json(drawResult);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/shop/admin/raffles/:id/payout/paid
+ * Record that staff paid a split-the-pot winner. Idempotent.
+ */
+router.post('/admin/raffles/:id/payout/paid', requireTenant, requireAuth, requireRoleOrPageAccess('shop', 'admin'), async (req, res, next) => {
+  try {
+    const [raffle] = await db
+      .select({ id: shopProducts.id, raffleMode: shopProducts.raffleMode })
+      .from(shopProducts)
+      .where(and(
+        eq(shopProducts.id, req.params.id),
+        eq(shopProducts.tenantId, req.tenant!.id),
+        eq(shopProducts.productType, 'raffle'),
+      ));
+    if (!raffle) return res.status(404).json({ error: 'Raffle not found' });
+    if (raffle.raffleMode !== 'split_pot') {
+      return res.status(400).json({ error: 'Payout tracking is only available for split-the-pot raffles' });
+    }
+
+    const [drawing] = await db
+      .select()
+      .from(shopRaffleDrawings)
+      .where(and(
+        eq(shopRaffleDrawings.productId, raffle.id),
+        eq(shopRaffleDrawings.tenantId, req.tenant!.id),
+        eq(shopRaffleDrawings.status, 'drawn'),
+      ));
+    if (!drawing) return res.status(400).json({ error: 'Draw a winner before recording the payout' });
+    const [updated] = await db
+      .update(shopRaffleDrawings)
+      .set({
+        payoutStatus: 'paid',
+        prizePaidAt: new Date(),
+        prizePaidBy: req.user!.id,
+        updatedAt: new Date(),
+      })
+      .where(and(
+        eq(shopRaffleDrawings.id, drawing.id),
+        eq(shopRaffleDrawings.tenantId, req.tenant!.id),
+        eq(shopRaffleDrawings.payoutStatus, 'pending'),
+      ))
+      .returning();
+    if (updated) return res.json({ drawing: updated });
+
+    // Another request may have won the pending -> paid transition. Return the
+    // immutable audit fields it wrote rather than overwriting its timestamp or
+    // staff actor.
+    const [current] = await db
+      .select()
+      .from(shopRaffleDrawings)
+      .where(and(
+        eq(shopRaffleDrawings.id, drawing.id),
+        eq(shopRaffleDrawings.tenantId, req.tenant!.id),
+      ));
+    res.json({ drawing: current });
   } catch (error) {
     next(error);
   }

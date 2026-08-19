@@ -25,6 +25,7 @@ import {
   Check,
   Gift,
   Loader2,
+  Trophy,
 } from "lucide-react";
 import { SiFacebook, SiX } from "react-icons/si";
 import type { ShopOrder, ShopOrderItem, Tenant } from "@shared/schema";
@@ -41,8 +42,22 @@ type IncentiveInfo = {
   productName: string;
 };
 
+type SplitPotInfo = {
+  ticketSalesAmount: string;
+  winnerPrizeAmount: string;
+  rescueShareAmount: string;
+  isDrawn?: boolean;
+  drawnAt?: string | null;
+};
+
+type OrderItemWithExtras = ShopOrderItem & {
+  bonusTickets?: BonusTicket[];
+  raffleMode?: 'fixed' | 'split_pot';
+  splitPot?: SplitPotInfo;
+};
+
 type OrderWithItems = ShopOrder & {
-  items: (ShopOrderItem & { bonusTickets?: BonusTicket[] })[];
+  items: OrderItemWithExtras[];
   incentives?: Record<string, IncentiveInfo>;
 };
 
@@ -214,6 +229,7 @@ export default function ShopOrderPage() {
 
   const hasPhysicalItems = order.items.some(item => item.productType === 'physical');
   const hasRaffleItems = order.items.some(item => item.productType === 'raffle');
+  const hasSplitPotItems = order.items.some(item => item.productType === 'raffle' && item.raffleMode === 'split_pot');
 
   return (
     <div className="min-h-screen bg-background">
@@ -272,46 +288,70 @@ export default function ShopOrderPage() {
             </p>
           </CardHeader>
           <CardContent className="space-y-4">
-            {order.items.map((item, i) => (
-              <div key={i} className="flex gap-3 items-start">
-                <div className="w-12 h-12 rounded-md bg-muted flex items-center justify-center flex-shrink-0">
-                  {item.productType === 'raffle' ? (
-                    <Ticket className="h-6 w-6 text-muted-foreground" />
-                  ) : (
-                    <Package className="h-6 w-6 text-muted-foreground" />
-                  )}
-                </div>
-                <div className="flex-1">
-                  <p className="font-medium">{item.productName}</p>
-                  {item.variantName && (
-                    <p className="text-sm text-muted-foreground">{item.variantName}</p>
-                  )}
-                  <p className="text-sm text-muted-foreground">
-                    Qty: {item.quantity} x ${parseFloat(item.unitPrice).toFixed(2)}
-                  </p>
-                  {item.raffleTicketNumbers && item.raffleTicketNumbers.length > 0 && (
-                    <div className="mt-2">
-                      <p className="text-xs font-medium text-muted-foreground mb-1">Your Ticket Numbers:</p>
-                      <div className="flex flex-wrap gap-1">
-                        {item.raffleTicketNumbers.map((num, j) => (
-                          <Badge key={j} variant="outline" className="text-xs">
-                            #{num}
-                          </Badge>
-                        ))}
-                        {(item.bonusTickets || []).flatMap(b => b.ticketNumbers).map((num, j) => (
-                          <Badge key={`bonus-${j}`} className="text-xs bg-amber-500 hover:bg-amber-500" data-testid={`badge-bonus-ticket-${num}`}>
-                            #{num} · Bonus
-                          </Badge>
-                        ))}
+            {order.items.map((item, i) => {
+              const isSplitPot = item.productType === 'raffle' && item.raffleMode === 'split_pot';
+              const itemDrawn = isSplitPot && !!item.splitPot?.isDrawn;
+              const winnerPot = isSplitPot && item.splitPot
+                ? parseFloat(item.splitPot.winnerPrizeAmount)
+                : null;
+              return (
+                <div key={i} className="flex gap-3 items-start">
+                  <div className="w-12 h-12 rounded-md bg-muted flex items-center justify-center flex-shrink-0">
+                    {item.productType === 'raffle' ? (
+                      <Ticket className="h-6 w-6 text-muted-foreground" />
+                    ) : (
+                      <Package className="h-6 w-6 text-muted-foreground" />
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-medium">{item.productName}</p>
+                    {item.variantName && (
+                      <p className="text-sm text-muted-foreground">{item.variantName}</p>
+                    )}
+                    <p className="text-sm text-muted-foreground">
+                      Qty: {item.quantity} x ${parseFloat(item.unitPrice).toFixed(2)}
+                    </p>
+                    {isSplitPot && (
+                      <p className="text-xs text-purple-700 dark:text-purple-300 flex items-center gap-1 mt-0.5" data-testid={`text-split-pot-order-item-${item.id}`}>
+                        <Trophy className="h-3 w-3" />
+                        50/50 Split the Pot
+                      </p>
+                    )}
+                    {item.raffleTicketNumbers && item.raffleTicketNumbers.length > 0 && (
+                      <div className="mt-2">
+                        <p className="text-xs font-medium text-muted-foreground mb-1">Your Ticket Numbers:</p>
+                        <div className="flex flex-wrap gap-1">
+                          {item.raffleTicketNumbers.map((num, j) => (
+                            <Badge key={j} variant="outline" className="text-xs">
+                              #{num}
+                            </Badge>
+                          ))}
+                          {(item.bonusTickets || []).flatMap(b => b.ticketNumbers).map((num, j) => (
+                            <Badge key={`bonus-${j}`} className="text-xs bg-amber-500 hover:bg-amber-500" data-testid={`badge-bonus-ticket-${num}`}>
+                              #{num} · Bonus
+                            </Badge>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
+                    {/* Split-pot winner pot / final prize for this item */}
+                    {isSplitPot && winnerPot !== null && (
+                      <div className="mt-2 rounded-md bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 px-2 py-1.5 inline-block" data-testid={`split-pot-order-item-pot-${item.id}`}>
+                        <p className="text-xs text-purple-700 dark:text-purple-300 font-medium">
+                          {itemDrawn ? 'Final winner prize' : 'Current winner pot'}
+                        </p>
+                        <p className="text-sm font-bold text-purple-900 dark:text-purple-100" data-testid={`text-winner-pot-order-${item.id}`}>
+                          ${winnerPot.toFixed(2)}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  <div className="font-medium">
+                    ${parseFloat(item.totalPrice).toFixed(2)}
+                  </div>
                 </div>
-                <div className="font-medium">
-                  ${parseFloat(item.totalPrice).toFixed(2)}
-                </div>
-              </div>
-            ))}
+              );
+            })}
 
             <Separator />
 
@@ -332,10 +372,18 @@ export default function ShopOrderPage() {
                   <span>${parseFloat(order.taxAmount).toFixed(2)}</span>
                 </div>
               )}
-              {parseFloat(order.processingFee || '0') > 0 && (
+              {parseFloat(order.processingFee || '0') > 0 ? (
                 <div className="flex justify-between text-sm">
                   <span>Card processing fee</span>
                   <span>${parseFloat(order.processingFee).toFixed(2)}</span>
+                </div>
+              ) : hasSplitPotItems && (
+                <div className="flex justify-between text-sm text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <Trophy className="h-3 w-3" />
+                    Card processing fee
+                  </span>
+                  <span data-testid="text-order-no-processing-fee">Covered by rescue's share</span>
                 </div>
               )}
               <div className="flex justify-between font-bold text-lg">
@@ -502,11 +550,29 @@ export default function ShopOrderPage() {
                 Raffle Information
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-3">
               <p className="text-sm text-muted-foreground">
                 Your raffle ticket numbers are listed above. Winners will be notified via email 
                 after the drawing date. Keep this page bookmarked to check your ticket numbers!
               </p>
+              {hasSplitPotItems && (() => {
+                const anyDrawn = order.items.some(
+                  item => item.productType === 'raffle' && item.raffleMode === 'split_pot' && item.splitPot?.isDrawn
+                );
+                return (
+                  <div className="rounded-md bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 px-3 py-2" data-testid="text-split-pot-order-explanation">
+                    <div className="flex items-center gap-2 text-purple-700 dark:text-purple-300 font-medium text-sm mb-1">
+                      <Trophy className="h-4 w-4" />
+                      50/50 Split the Pot
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      {anyDrawn
+                        ? <>This was a 50/50 split-pot raffle. The winner received <strong>half of all ticket sales</strong>. The final winner prize is shown above. Card fees were covered by the rescue's half.</>
+                        : <>This is a 50/50 split-pot raffle. The winner receives <strong>half of all ticket sales</strong>. The winner pot shown above grows with every ticket sold until the drawing. Card fees are covered by the rescue's half — you pay nothing extra.</>}
+                    </p>
+                  </div>
+                );
+              })()}
             </CardContent>
           </Card>
         )}

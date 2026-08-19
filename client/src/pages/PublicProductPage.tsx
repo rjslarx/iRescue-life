@@ -20,13 +20,24 @@ import {
   Check,
   Minus,
   Plus,
+  Trophy,
 } from "lucide-react";
 import { SiFacebook, SiX } from "react-icons/si";
 import type { ShopProduct, ShopProductVariant, Tenant } from "@shared/schema";
 import { computeBundledPrice, bundleSavingsPercent } from "@shared/raffle-pricing";
 
+type SplitPotInfo = {
+  ticketSalesAmount: string;
+  winnerPrizeAmount: string;
+  rescueShareAmount: string;
+  isDrawn?: boolean;
+  drawnAt?: string | null;
+};
+
 type ProductWithVariants = ShopProduct & {
   variants: ShopProductVariant[];
+  raffleClosed?: boolean;
+  splitPot?: SplitPotInfo;
 };
 
 export default function PublicProductPage() {
@@ -97,6 +108,13 @@ export default function PublicProductPage() {
     }
     return product.variants.every(v => v.inventory <= 0);
   }, [product, selectedVariant]);
+
+  const isSplitPot = product?.productType === 'raffle' && product?.raffleMode === 'split_pot';
+  const isDrawn = isSplitPot && !!product?.splitPot?.isDrawn;
+  const isClosed = !!product?.raffleClosed || isDrawn;
+  const winnerPot = isSplitPot && product?.splitPot
+    ? parseFloat(product.splitPot.winnerPrizeAmount)
+    : null;
 
   const tenantOrigin = typeof window !== 'undefined' ? window.location.origin : '';
 
@@ -293,12 +311,23 @@ export default function PublicProductPage() {
 
           <div className="space-y-6">
             <div>
-              <div className="flex items-center gap-2 mb-2">
+              <div className="flex items-center gap-2 mb-2 flex-wrap">
                 <Badge variant="secondary" className="gap-1">
                   {getProductTypeIcon(product.productType)}
-                  {product.productType === 'raffle' ? 'Raffle' : 
+                  {product.productType === 'raffle' ? 'Raffle' :
                    product.productType === 'physical' ? 'Merchandise' : 'Digital'}
                 </Badge>
+                {isSplitPot && (
+                  <Badge variant="secondary" className="bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200 gap-1" data-testid="badge-split-pot-product">
+                    <Trophy className="h-3 w-3" />
+                    50/50 Split the Pot
+                  </Badge>
+                )}
+                {isClosed && (
+                  <Badge variant="secondary" data-testid="badge-drawing-complete-product">
+                    Drawing Complete
+                  </Badge>
+                )}
                 {product.featured && <Badge>Featured</Badge>}
               </div>
 
@@ -315,6 +344,9 @@ export default function PublicProductPage() {
                     {formatPrice(parseFloat(product.compareAtPrice))}
                   </span>
                 )}
+                {isSplitPot && !isClosed && (
+                  <span className="text-sm text-muted-foreground">per ticket · no processing fee</span>
+                )}
               </div>
             </div>
 
@@ -329,20 +361,54 @@ export default function PublicProductPage() {
                     <div className="flex items-center gap-2">
                       <Clock className="h-4 w-4 text-primary" />
                       <span>
-                        Drawing: {new Date(product.raffleDrawDate).toLocaleDateString('en-US', {
+                        {isClosed ? 'Drawn' : 'Drawing'}:{' '}
+                        {new Date(
+                          (isDrawn && product.splitPot?.drawnAt) || product.raffleDrawDate
+                        ).toLocaleDateString('en-US', {
                           weekday: 'long',
                           year: 'numeric',
                           month: 'long',
-                          day: 'numeric'
+                          day: 'numeric',
                         })}
                       </span>
                     </div>
                   )}
-                  {product.rafflePrizeDescription && (
-                    <div className="text-sm">
-                      <span className="font-semibold">Prize: </span>
-                      {product.rafflePrizeDescription}
+
+                  {/* Split-pot explanation and winner pot / final prize */}
+                  {isSplitPot ? (
+                    <div className="space-y-2" data-testid="split-pot-product-info">
+                      <div className="flex items-center gap-2 text-purple-700 dark:text-purple-300">
+                        <Trophy className="h-4 w-4" />
+                        <span className="font-semibold">50/50 Split the Pot</span>
+                      </div>
+                      {!isDrawn && (
+                        <p className="text-sm text-muted-foreground">
+                          The winner takes <strong>half of all ticket sales</strong>. The rescue keeps the other half — and card processing fees come out of the rescue's portion, so you pay nothing extra.
+                        </p>
+                      )}
+                      {winnerPot !== null ? (
+                        <div className="rounded-md bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 px-3 py-2">
+                          <p className="text-xs text-purple-700 dark:text-purple-300 font-medium">
+                            {isDrawn ? 'Final winner prize' : 'Current winner pot'}
+                          </p>
+                          <p className="text-2xl font-bold text-purple-900 dark:text-purple-100" data-testid="text-winner-pot-product">
+                            ${winnerPot.toFixed(2)}
+                          </p>
+                          {!isDrawn && <p className="text-xs text-muted-foreground">Grows with every ticket sold!</p>}
+                        </div>
+                      ) : !isDrawn ? (
+                        <p className="text-sm text-muted-foreground">
+                          Be the first to enter — the pot grows with every ticket sold!
+                        </p>
+                      ) : null}
                     </div>
+                  ) : (
+                    product.rafflePrizeDescription && (
+                      <div className="text-sm">
+                        <span className="font-semibold">Prize: </span>
+                        {product.rafflePrizeDescription}
+                      </div>
+                    )
                   )}
                 </CardContent>
               </Card>
@@ -452,24 +518,34 @@ export default function PublicProductPage() {
             </div>
 
             <div className="flex flex-col gap-3">
-              <Button 
-                size="lg" 
+              <Button
+                size="lg"
                 className="w-full"
-                disabled={isOutOfStock || (product.variants.length > 0 && !selectedVariantId)}
-                onClick={handleAddToCheckout}
+                disabled={isClosed || isOutOfStock || (product.variants.length > 0 && !selectedVariantId)}
+                onClick={isClosed ? undefined : handleAddToCheckout}
                 data-testid="button-buy-now"
               >
                 <ShoppingBag className="h-4 w-4 mr-2" />
-                {isOutOfStock ? 'Sold Out' : 
-                 product.productType === 'raffle' ? `Buy ${quantity} Ticket${quantity > 1 ? 's' : ''} - ${formatPrice(orderTotal)}` : 
-                 `Buy Now - ${formatPrice(orderTotal)}`}
+                {isClosed
+                  ? 'Drawing Complete'
+                  : isOutOfStock
+                    ? 'Sold Out'
+                    : product.productType === 'raffle'
+                      ? `Buy ${quantity} Ticket${quantity > 1 ? 's' : ''} - ${formatPrice(orderTotal)}`
+                      : `Buy Now - ${formatPrice(orderTotal)}`}
               </Button>
 
-              <p className="text-xs text-muted-foreground text-center">
-                Card processing fee added at checkout
-              </p>
+              {!isClosed && (isSplitPot ? (
+                <p className="text-xs text-muted-foreground text-center" data-testid="text-split-pot-no-fee">
+                  No card processing fee — covered by rescue's share of the pot
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground text-center">
+                  Card processing fee added at checkout
+                </p>
+              ))}
 
-              {product.variants.length > 0 && !selectedVariantId && (
+              {product.variants.length > 0 && !selectedVariantId && !isClosed && (
                 <p className="text-sm text-muted-foreground text-center">
                   Please select an option above
                 </p>
