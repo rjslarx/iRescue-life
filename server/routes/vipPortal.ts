@@ -28,12 +28,7 @@ function getSecret(): string {
   return secret;
 }
 
-function getAppBaseUrl(): string {
-  if (process.env.REPLIT_DEV_DOMAIN) {
-    return `https://${process.env.REPLIT_DEV_DOMAIN}`;
-  }
-  return process.env.APP_BASE_URL || 'https://irescue.life';
-}
+import { getAppBaseUrl } from '../lib/app-base-url';
 
 function buildVipPortalUrl(tenant: { subdomain: string | null; customDomain: string | null }, token: string): string {
   const tenantPath = tenant.customDomain ? '' : (tenant.subdomain ? `/${tenant.subdomain}` : '');

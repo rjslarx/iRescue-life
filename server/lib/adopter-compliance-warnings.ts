@@ -130,10 +130,7 @@ export function renderWarningTemplate(template: string, tokens: WarningTokens): 
     .replace(/\{\{portalLink\}\}/g, tokens.portalLink);
 }
 
-function getAppBaseUrl(): string {
-  if (process.env.REPLIT_DEV_DOMAIN) return `https://${process.env.REPLIT_DEV_DOMAIN}`;
-  return process.env.APP_BASE_URL || 'https://irescue.life';
-}
+import { getAppBaseUrl } from './app-base-url';
 
 export function buildAdopterPortalUrl(
   tenant: { subdomain: string | null; customDomain: string | null },

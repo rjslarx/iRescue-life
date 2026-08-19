@@ -4,6 +4,7 @@ import { tenants, smsMessageLogs, smsProxySessions, transportEvents, users, fost
 import { eq, and, desc, gte, lte, isNotNull, inArray, or, sql } from 'drizzle-orm';
 import { startOfDay, endOfDay, eachDayOfInterval, addDays, format, parseISO } from 'date-fns';
 import { decrypt, encrypt } from './encryption';
+import { getAppBaseUrl } from './app-base-url';
 
 interface TwilioConfig {
   accountSid: string;
@@ -67,7 +68,7 @@ function createTwilioClient(config: TwilioConfig) {
 }
 
 function getStatusCallbackUrl(): string | undefined {
-  const base = process.env.APP_BASE_URL || process.env.REPLIT_DEV_DOMAIN || 'https://irescue.life';
+  const base = getAppBaseUrl();
   const origin = base.startsWith('http') ? base : `https://${base}`;
   return `${origin}/api/webhooks/twilio/status`;
 }

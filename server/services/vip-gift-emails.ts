@@ -1,4 +1,5 @@
 import { EmailService } from '../lib/email-service';
+import { getAppBaseUrl } from '../lib/app-base-url';
 import type { Tenant } from '@shared/schema';
 
 export type GiftEmailTenant = Pick<
@@ -133,9 +134,7 @@ export async function runGiftAnnouncementJob(): Promise<{ sent: number; failed: 
   let sent = 0;
   let failed = 0;
   let skipped = 0;
-  const fallbackOrigin = process.env.REPLIT_DEV_DOMAIN
-    ? `https://${process.env.REPLIT_DEV_DOMAIN}`
-    : (process.env.APP_BASE_URL || 'https://irescue.life');
+  const fallbackOrigin = getAppBaseUrl();
 
   for (const row of due) {
     if (!row.honoreeEmail) { skipped++; continue; }

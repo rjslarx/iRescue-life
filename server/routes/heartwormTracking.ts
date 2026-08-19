@@ -16,6 +16,7 @@ import { eq, and, isNull } from 'drizzle-orm';
 import { db } from '../db';
 import { adopterComplianceWarnings, tenants, animals } from '@shared/schema';
 import { buildAdopterPortalUrl } from '../lib/adopter-compliance-warnings';
+import { getAppBaseUrl } from '../lib/app-base-url';
 
 const router = Router();
 
@@ -73,9 +74,7 @@ router.get('/open/:warningIdGif', async (req, res) => {
 router.get('/click/:warningId', async (req, res) => {
   const warningId = String(req.params.warningId || '');
 
-  const fallback = process.env.REPLIT_DEV_DOMAIN
-    ? `https://${process.env.REPLIT_DEV_DOMAIN}`
-    : (process.env.APP_BASE_URL || 'https://irescue.life');
+  const fallback = getAppBaseUrl();
 
   if (!UUID_REGEX.test(warningId)) {
     return res.redirect(302, fallback);

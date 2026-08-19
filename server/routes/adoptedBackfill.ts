@@ -13,6 +13,7 @@ import {
   tenants,
 } from '@shared/schema';
 import { eq, and, or, sql, isNull, ilike } from 'drizzle-orm';
+import { getAppBaseUrl } from '../lib/app-base-url';
 import { createAnimal } from '../services/animals';
 import { EmailService } from '../lib/email-service';
 
@@ -259,9 +260,7 @@ router.post('/adopted-backfill', async (req: Request, res: Response) => {
         if (tenantInfo.customDomain) {
           loginUrl = `https://${tenantInfo.customDomain}/my-pets/login?token=${encodedToken}`;
         } else {
-          const baseUrl = process.env.REPLIT_DEV_DOMAIN
-            ? `https://${process.env.REPLIT_DEV_DOMAIN}`
-            : (process.env.APP_BASE_URL || 'https://irescue.life');
+          const baseUrl = getAppBaseUrl();
           const tenantPath = tenantInfo.subdomain ? `/${tenantInfo.subdomain}` : '';
           loginUrl = `${baseUrl}${tenantPath}/my-pets/login?token=${encodedToken}`;
         }

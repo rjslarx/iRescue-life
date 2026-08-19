@@ -93,12 +93,7 @@ function deduplicateVaccineRecords(records: VaccineRecord[]): VaccineRecord[] {
   return result;
 }
 
-function getAppBaseUrl(): string {
-  if (process.env.REPLIT_DEV_DOMAIN) {
-    return `https://${process.env.REPLIT_DEV_DOMAIN}`;
-  }
-  return process.env.APP_BASE_URL || 'https://irescue.life';
-}
+import { getAppBaseUrl } from '../lib/app-base-url';
 
 function buildAdopterPortalUrl(tenant: { subdomain: string | null; customDomain: string | null }, path: string): string {
   if (tenant.customDomain) {

@@ -25,12 +25,7 @@ interface NotificationResult {
   errors: string[];
 }
 
-function getAppBaseUrl(): string {
-  if (process.env.REPLIT_DEV_DOMAIN) {
-    return `https://${process.env.REPLIT_DEV_DOMAIN}`;
-  }
-  return process.env.APP_BASE_URL || 'https://irescue.life';
-}
+import { getAppBaseUrl } from './app-base-url';
 
 function buildPortalUrl(tenant: { subdomain: string | null; customDomain: string | null }, path: string): string {
   if (tenant.customDomain) {
