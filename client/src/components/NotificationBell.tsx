@@ -38,7 +38,7 @@ export default function NotificationBell() {
 
   const handleComplianceClick = () => {
     setOpen(false);
-    navigate("/dashboard/adopter-compliance");
+    navigate("/dashboard/adopter-compliance?tab=action-required");
   };
 
   const handleMedicalImportClick = () => {

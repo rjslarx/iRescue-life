@@ -1,5 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -50,6 +51,7 @@ import { useToast } from "@/hooks/use-toast";
 import DashboardLayout from "@/components/DashboardLayout";
 import { ObjectUploader } from "@/components/ObjectUploader";
 import HeartwormWatchTab from "@/components/compliance/HeartwormWatchTab";
+import PendingComplianceReviewsTab from "@/components/compliance/PendingComplianceReviewsTab";
 
 const OBLIGATION_LABELS: Record<string, string> = {
   spay_neuter: "Spay/Neuter",
@@ -61,6 +63,23 @@ const OBLIGATION_LABELS: Record<string, string> = {
   fecal_test: "Fecal Test",
   custom: "Custom",
 };
+
+const COMPLIANCE_TABS = new Set([
+  "overview",
+  "action-required",
+  "overdue",
+  "upcoming",
+  "ongoing",
+  "custom",
+  "completed",
+  "heartworm",
+  "alumni",
+]);
+
+function getComplianceTab(location: string): string {
+  const requestedTab = new URLSearchParams(location.split("?")[1] || "").get("tab");
+  return requestedTab && COMPLIANCE_TABS.has(requestedTab) ? requestedTab : "overview";
+}
 
 function getObligationLabel(type: string): string {
   return OBLIGATION_LABELS[type] || type;
@@ -390,13 +409,25 @@ function AddObligationDialog({ onCreated }: { onCreated: () => void }) {
 export default function AdopterCompliancePage() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState("overview");
+  const [location, navigate] = useLocation();
+  const requestedTab = getComplianceTab(location);
+  const [activeTab, setActiveTab] = useState(requestedTab);
   const [completingId, setCompletingId] = useState<string | null>(null);
   const [waivingId, setWaivingId] = useState<string | null>(null);
   const [proofUrl, setProofUrl] = useState("");
   const [waiveReason, setWaiveReason] = useState("");
   const [alumniSearch, setAlumniSearch] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+
+  useEffect(() => {
+    setActiveTab(requestedTab);
+  }, [requestedTab]);
+
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
+    const query = tab === "overview" ? "" : `?tab=${encodeURIComponent(tab)}`;
+    navigate(`/dashboard/adopter-compliance${query}`, { replace: true });
+  };
 
   const { data, isLoading } = useQuery<AdopterComplianceResponse>({
     queryKey: ["/api/dashboard/adopter-compliance"],
@@ -714,9 +745,12 @@ export default function AdopterCompliancePage() {
         </Card>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
+      <Tabs value={activeTab} onValueChange={handleTabChange}>
         <TabsList className="mb-4 flex-wrap gap-1">
           <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
+          <TabsTrigger value="action-required" data-testid="tab-action-required">
+            Action Required ({stats?.pendingReviewCount || 0})
+          </TabsTrigger>
           <TabsTrigger value="overdue" data-testid="tab-overdue">
             Overdue ({data?.overdue?.length || 0})
           </TabsTrigger>
@@ -775,7 +809,7 @@ export default function AdopterCompliancePage() {
                       </div>
                     ))}
                     {data!.overdue.length > 5 && (
-                      <Button variant="ghost" className="w-full" onClick={() => setActiveTab("overdue")} data-testid="button-view-all-overdue">
+                      <Button variant="ghost" className="w-full" onClick={() => handleTabChange("overdue")} data-testid="button-view-all-overdue">
                         View all {data!.overdue.length} overdue
                       </Button>
                     )}
@@ -832,6 +866,10 @@ export default function AdopterCompliancePage() {
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
+
+        <TabsContent value="action-required">
+          <PendingComplianceReviewsTab />
         </TabsContent>
 
         <TabsContent value="overdue">

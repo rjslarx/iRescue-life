@@ -41589,6 +41589,7 @@ Email: ${application.applicantEmail || ''}`
           notes: adopterComplianceConfirmations.notes,
           status: adopterComplianceConfirmations.status,
           createdAt: adopterComplianceConfirmations.createdAt,
+           fileUrl: adopterComplianceConfirmations.fileUrl,
           adopterName: users.fullName,
           adopterEmail: users.email,
           animalName: animals.name,
