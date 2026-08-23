@@ -5,7 +5,13 @@ import { objectStorageClient, signObjectURL } from '../objectStorage';
 import { db } from '../db';
 import { animals, contacts, applications, tenants, adoptionContractTemplates, adoptionFormFields, type AdoptionCheckoutSession } from '@shared/schema';
 import { eq, and, ilike } from 'drizzle-orm';
-import { getDefaultTemplate, ensureDefaultTemplate, mergePlaceholders, type MergeData } from './contract-template';
+import {
+  getDefaultTemplate,
+  ensureDefaultTemplate,
+  ensureDriversLicenseSection,
+  mergePlaceholders,
+  type MergeData,
+} from './contract-template';
 
 /**
  * Format a date string for display in the contract
@@ -794,8 +800,16 @@ export async function generateAdoptionContractPDF(
     }
   }
 
+  // Existing tenant templates may not contain the driver's-license placeholder.
+  // Add a standard appendix whenever an ID was uploaded so regeneration also
+  // repairs older signed contracts.
+  const templateHtml = ensureDriversLicenseSection(
+    template.htmlTemplate,
+    Boolean(mergeData.drivers_license_image_url),
+  );
+
   // Merge placeholders with actual data
-  const mergedHtml = mergePlaceholders(template.htmlTemplate, mergeData);
+  const mergedHtml = mergePlaceholders(templateHtml, mergeData);
 
   // Final sanitization as defense-in-depth
   // This catches any potential XSS that might have slipped through

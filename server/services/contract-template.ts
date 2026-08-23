@@ -358,6 +358,48 @@ function isSafeUrl(url: string): boolean {
 }
 
 /**
+ * Validate image sources used by server-generated contract PDFs.
+ * Data URIs are restricted to raster image formats and valid base64 payloads;
+ * SVG and arbitrary data: content remain blocked.
+ */
+function isSafeImageUrl(url: string): boolean {
+  if (isSafeUrl(url)) return true;
+
+  return /^data:image\/(?:png|jpe?g|webp);base64,[A-Za-z0-9+/]+={0,2}$/i.test(url.trim());
+}
+
+/**
+ * Existing tenant templates may predate uploaded-ID support. Add a standard
+ * appendix when an ID was supplied unless the template already places it.
+ */
+export function ensureDriversLicenseSection(
+  htmlTemplate: string,
+  hasDriversLicenseImage: boolean,
+): string {
+  if (!hasDriversLicenseImage || htmlTemplate.includes('{{drivers_license_image_url}}')) {
+    return htmlTemplate;
+  }
+
+  const section = `
+    <div class="uploaded-identification" style="page-break-before: always;">
+      <h2>Uploaded Identification</h2>
+      <p>The following identification image was submitted by the adopter during electronic signing.</p>
+      <img
+        src="{{drivers_license_image_url}}"
+        alt="Uploaded adopter ID"
+        style="display: block; max-width: 100%; max-height: 650px; object-fit: contain; margin-top: 16px;"
+      />
+    </div>
+  `;
+
+  if (/<\/body>/i.test(htmlTemplate)) {
+    return htmlTemplate.replace(/<\/body>/i, `${section}</body>`);
+  }
+
+  return `${htmlTemplate}${section}`;
+}
+
+/**
  * Merge placeholders in HTML template with actual data
  * Handles missing optional data gracefully by replacing with empty string
  * 
@@ -397,7 +439,7 @@ export function mergePlaceholders(htmlTemplate: string, data: Partial<MergeData>
   // Special handling for signature URL - validate AND escape
   if (data.signature_image_url) {
     const url = data.signature_image_url;
-    if (isSafeUrl(url)) {
+    if (isSafeImageUrl(url)) {
       // URL is safe protocol-wise, but still escape it to prevent attribute injection
       const escapedUrl = escapeHtml(url);
       result = result.replaceAll('{{signature_image_url}}', escapedUrl);
@@ -413,7 +455,7 @@ export function mergePlaceholders(htmlTemplate: string, data: Partial<MergeData>
   // Special handling for driver's license image URL - validate AND escape
   if (data.drivers_license_image_url) {
     const url = data.drivers_license_image_url;
-    if (isSafeUrl(url)) {
+    if (isSafeImageUrl(url)) {
       const escapedUrl = escapeHtml(url);
       result = result.replaceAll('{{drivers_license_image_url}}', escapedUrl);
     } else {

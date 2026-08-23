@@ -58,7 +58,12 @@ export default function AnimalApplicationsPage() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const { user } = useAuth();
-  const canRegenerate = user && ['admin', 'owner', 'manager'].includes(user.role);
+  const canRegenerate = Boolean(
+    user && (
+      ['platform_admin', 'admin', 'owner', 'manager'].includes(user.activeRole) ||
+      user.roles?.includes('owner')
+    )
+  );
   const [selectedApplication, setSelectedApplication] = useState<ApplicationWithAnimal | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [showApprovalDialog, setShowApprovalDialog] = useState(false);

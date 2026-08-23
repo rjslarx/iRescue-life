@@ -33,3 +33,11 @@ must be idempotent across BOTH.
 
 ## Signature pad on iPad/mobile (fixed once — don't regress)
 - The shared `SignatureCanvas` originally cleared the canvas on EVERY window resize. On iOS, opening/closing the on-screen keyboard fires a resize, so signing then tapping a text field silently wiped the signature ("it won't let me sign"). The fix: skip resizes where container width is unchanged (keyboard = height-only) and preserve/restore the signature via toDataURL/fromDataURL when width really changes. Any new signature canvas must follow the same rule.
+
+## Verifying stored images in signed PDFs
+
+A non-null signature or ID storage reference does not prove the image rendered in the signed PDF. Verify the actual PDF visually, including regeneration of an existing agreement.
+
+**Why:** The files were saved correctly, but a later template-security step rejected the inline raster image source. The PDF still generated successfully with a broken signature icon, while a legacy template omitted the uploaded ID entirely.
+
+**How to apply:** Keep inline PDF images restricted to validated raster base64 data (never SVG or arbitrary data URLs), ensure legacy templates receive the ID appendix exactly once, and test both the initial generation and staff regeneration paths by rendering the resulting PDF.
