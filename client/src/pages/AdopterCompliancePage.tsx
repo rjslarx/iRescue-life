@@ -1,6 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -76,8 +76,8 @@ const COMPLIANCE_TABS = new Set([
   "alumni",
 ]);
 
-function getComplianceTab(location: string): string {
-  const requestedTab = new URLSearchParams(location.split("?")[1] || "").get("tab");
+function getComplianceTab(searchString: string): string {
+  const requestedTab = new URLSearchParams(searchString).get("tab");
   return requestedTab && COMPLIANCE_TABS.has(requestedTab) ? requestedTab : "overview";
 }
 
@@ -409,8 +409,9 @@ function AddObligationDialog({ onCreated }: { onCreated: () => void }) {
 export default function AdopterCompliancePage() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [location, navigate] = useLocation();
-  const requestedTab = getComplianceTab(location);
+  const [, navigate] = useLocation();
+  const searchString = useSearch();
+  const requestedTab = getComplianceTab(searchString);
   const [activeTab, setActiveTab] = useState(requestedTab);
   const [completingId, setCompletingId] = useState<string | null>(null);
   const [waivingId, setWaivingId] = useState<string | null>(null);

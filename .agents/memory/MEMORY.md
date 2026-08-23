@@ -14,6 +14,7 @@
 - [Volunteer scheduling audit](volunteer-scheduling-audit.md) — two separate systems (calendar_events "{Name} - Signup" vs volunteer_signups); who-scheduled-whom = calendar_events.created_by + created_at; one creator across many volunteers = coordinator, not self-signup.
 - [Page-gate vs write-guard asymmetry](page-permission-gate-vs-write.md) — "view but 403 on save" trap: gate the route/sidebar by the SAME pageId the write API guards; frontend canAccessPage honors role-based access but backend requireRoleOrPageAccess only honors individual grants.
 - [Wouter base double-prefix](wouter-base-double-prefix.md) — useRoute patterns inside the based Router must be relative; basePath-prefixed patterns never match in dev path-based mode (silent "not found").
+- [Wouter query parameters](wouter-query-parameters.md) — useLocation omits the query string; query-driven tabs and filters must read useSearch or silently fall back after deep-link navigation.
 - [Dev HTML middleware preamble](dev-html-middleware-preamble.md) — middleware serving raw index.html in dev must inject the Vite React-refresh preamble or pages render blank (dev only).
 - [Application detail dialogs](application-detail-dialogs.md) — three separate staff dialogs render application details; new applications columns must be plumbed into each plus two server selects.
 - [Insert-schema form/date traps](grant-form-insert-schema-dates.md) — raw createInsertSchema in zodResolver silently blocks submit (tenantId required); timestamp cols reject ISO strings server-side, need coercion.
