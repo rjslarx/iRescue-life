@@ -58,7 +58,7 @@ export function registerReceiptSignatureRoutes(app: Express, deps: ReceiptSignat
           return res.status(400).json({ error: 'Signature image is too large (max 2MB).' });
         }
         const { processSignatureImage } = await import('../services/contract-pdf');
-        const { objectUrl } = await processSignatureImage(signature);
+        const { objectUrl } = await processSignatureImage(signature, req.tenant!.id);
         updates.receiptSignatureUrl = objectUrl;
       } else {
         const [current] = await db

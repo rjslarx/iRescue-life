@@ -32,7 +32,7 @@ import {
   type AdoptionPayment,
   type Tenant,
 } from '@shared/schema';
-import { eq, and, or, desc, sql, isNull, ilike } from 'drizzle-orm';
+import { eq, and, or, desc, sql, isNull, ilike, inArray } from 'drizzle-orm';
 import { EmailService } from '../lib/email-service';
 import { stripeService } from '../lib/stripe-service';
 import { generatePaymentReceiptPDF } from './payment-receipt-pdf';
@@ -870,23 +870,38 @@ export async function captureSignature(
     driversLicenseNumber?: string;
   }
 ): Promise<AdoptionContract> {
-  const [session] = await db
+  const [existingSession] = await db
     .select()
     .from(adoptionCheckoutSessions)
     .where(eq(adoptionCheckoutSessions.id, sessionId))
     .limit(1);
 
-  if (!session) {
+  if (!existingSession) {
     throw new Error('Session not found');
   }
 
-  if (session.status !== 'initiated' && session.status !== 'awaiting_signature') {
+  if (existingSession.status !== 'initiated' && existingSession.status !== 'awaiting_signature') {
     throw new Error('Session is not in a state to accept signatures');
   }
 
+  const signatureClaimedAt = new Date();
+  const [session] = await db
+    .update(adoptionCheckoutSessions)
+    .set({ signatureClaimedAt, updatedAt: signatureClaimedAt })
+    .where(and(
+      eq(adoptionCheckoutSessions.id, sessionId),
+      inArray(adoptionCheckoutSessions.status, ['initiated', 'awaiting_signature']),
+      isNull(adoptionCheckoutSessions.signatureClaimedAt),
+    ))
+    .returning();
+  if (!session) {
+    throw new Error('Signature capture is already in progress');
+  }
+
+  try {
   // Process signature image and upload to storage
   const { processSignatureImage, generateAdoptionContractPDF } = await import('./contract-pdf');
-  const sigResult = await processSignatureImage(signatureData.signatureImageData);
+  const sigResult = await processSignatureImage(signatureData.signatureImageData, session.tenantId);
   const signatureImageUrl = sigResult.objectUrl;
   const signedAt = new Date();
 
@@ -900,6 +915,8 @@ export async function captureSignature(
     ipAddress: signatureData.ipAddress,
     signedAt,
     driversLicenseNumber: signatureData.driversLicenseNumber,
+    signerName: signatureData.signerName,
+    signerEmail: signatureData.signerEmail,
   }, precomputedDataUris);
 
   // Create contract record (copy driver's license image URL from session)
@@ -962,6 +979,24 @@ export async function captureSignature(
     .where(eq(adoptionCheckoutSessions.id, sessionId));
 
   return contract;
+  } catch (error) {
+    const [committedContract] = await db
+      .select({ id: adoptionContracts.id })
+      .from(adoptionContracts)
+      .where(eq(adoptionContracts.sessionId, sessionId))
+      .limit(1);
+
+    if (!committedContract) {
+      await db
+        .update(adoptionCheckoutSessions)
+        .set({ signatureClaimedAt: null, updatedAt: new Date() })
+        .where(and(
+          eq(adoptionCheckoutSessions.id, sessionId),
+          eq(adoptionCheckoutSessions.signatureClaimedAt, signatureClaimedAt),
+        ));
+    }
+    throw error;
+  }
 }
 
 /**

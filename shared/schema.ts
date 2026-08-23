@@ -3506,6 +3506,7 @@ export const adoptionCheckoutSessions = pgTable("adoption_checkout_sessions", {
   status: text("status").notNull().default("initiated").$type<"initiated" | "awaiting_signature" | "awaiting_payment" | "completed" | "cancelled" | "expired">(),
   secureTokenHash: text("secure_token_hash").notNull(), // Hashed token for public link
   expiresAt: timestamp("expires_at").notNull(), // 72 hours default
+  signatureClaimedAt: timestamp("signature_claimed_at"), // Atomic guard: ID evidence freezes when signing begins
   signedAt: timestamp("signed_at"),
   paidAt: timestamp("paid_at"),
   totals: jsonb("totals").$type<{ subtotal: string; fees: string; total: string }>(), // Fee breakdown
@@ -3551,6 +3552,9 @@ export const adoptionContracts = pgTable("adoption_contracts", {
   templateSnapshot: jsonb("template_snapshot").notNull(), // Snapshot of template used
   contractPdfUrl: text("contract_pdf_url"), // Object storage URL
   signatureImageUrl: text("signature_image_url"), // Object storage URL
+  // Immutable evidence snapshots captured when the contract is signed.
+  driversLicenseImageUrl: text("drivers_license_image_url"),
+  driversLicenseNumber: text("drivers_license_number"),
   signerName: text("signer_name").notNull(),
   signerEmail: text("signer_email").notNull(),
   signedIp: text("signed_ip"),
@@ -3566,6 +3570,32 @@ export const insertAdoptionContractSchema = createInsertSchema(adoptionContracts
 });
 export type InsertAdoptionContract = z.infer<typeof insertAdoptionContractSchema>;
 export type AdoptionContract = typeof adoptionContracts.$inferSelect;
+
+// Historical adoption-agreement PDF repairs are recorded separately from the
+// contract so the legal signing record remains immutable.
+export const adoptionContractPdfRegenerationAudits = pgTable("adoption_contract_pdf_regeneration_audits", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  runId: uuid("run_id").notNull(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  contractId: integer("contract_id").notNull().references(() => adoptionContracts.id, { onDelete: 'cascade' }),
+  status: text("status").notNull().$type<"started" | "succeeded" | "failed">(),
+  reason: text("reason").notNull(),
+  oldPdfUrl: text("old_pdf_url"),
+  newPdfUrl: text("new_pdf_url"),
+  signatureImageUrl: text("signature_image_url"),
+  driversLicenseImageUrl: text("drivers_license_image_url"),
+  error: text("error"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  completedAt: timestamp("completed_at"),
+}, (table) => ({
+  tenantRunIndex: index("adoption_contract_pdf_regen_tenant_run_idx").on(table.tenantId, table.runId),
+  contractStatusIndex: index("adoption_contract_pdf_regen_contract_status_idx").on(table.contractId, table.status),
+  activeRepairUnique: uniqueIndex("adoption_contract_pdf_regen_active_unique")
+    .on(table.contractId, table.reason)
+    .where(sql`${table.status} IN ('started', 'succeeded')`),
+}));
+
+export type AdoptionContractPdfRegenerationAudit = typeof adoptionContractPdfRegenerationAudits.$inferSelect;
 
 // Adoption Agreement Direct Sends - staff sends an adoption agreement straight to a
 // person (no prior application) via a tokenized public signing link.

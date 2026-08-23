@@ -6884,37 +6884,45 @@ Crawl-delay: 1
       const tenantId = req.tenant!.id;
       const contractId = parseInt(req.params.contractId);
 
-      const [contract] = await db
-        .select()
+      const [contractRow] = await db
+        .select({
+          contract: adoptionContracts,
+          session: adoptionCheckoutSessions,
+        })
         .from(adoptionContracts)
-        .where(eq(adoptionContracts.id, contractId))
+        .innerJoin(adoptionCheckoutSessions, eq(adoptionContracts.sessionId, adoptionCheckoutSessions.id))
+        .where(and(
+          eq(adoptionContracts.id, contractId),
+          eq(adoptionCheckoutSessions.tenantId, tenantId),
+        ))
         .limit(1);
 
-      if (!contract) {
+      if (!contractRow) {
         return res.status(404).json({ error: 'Contract not found' });
       }
 
-      const [session] = await db
-        .select()
-        .from(adoptionCheckoutSessions)
-        .where(
-          and(
-            eq(adoptionCheckoutSessions.id, contract.sessionId),
-            eq(adoptionCheckoutSessions.tenantId, tenantId)
-          )
-        )
-        .limit(1);
+      const { contract, session } = contractRow;
 
-      if (!session) {
-        return res.status(404).json({ error: 'Adoption session not found for this tenant' });
+      const {
+        generateAdoptionContractPDF,
+        secureAdoptionContractObject,
+      } = await import('./services/contract-pdf');
+      if (contract.contractPdfUrl) {
+        await secureAdoptionContractObject(contract.contractPdfUrl, tenantId, 'contracts');
       }
-
-      const { generateAdoptionContractPDF } = await import('./services/contract-pdf');
+      if (contract.signatureImageUrl) {
+        await secureAdoptionContractObject(contract.signatureImageUrl, tenantId, 'signatures');
+      }
+      if (contract.driversLicenseImageUrl) {
+        await secureAdoptionContractObject(contract.driversLicenseImageUrl, tenantId, 'drivers-licenses');
+      }
       const newPdfUrl = await generateAdoptionContractPDF(session, contract.signatureImageUrl || undefined, {
         ipAddress: contract.signedIp || undefined,
         signedAt: contract.signedAt,
-        driversLicenseNumber: (contract as any).driversLicenseNumber || undefined,
-      });
+        driversLicenseNumber: contract.driversLicenseNumber || undefined,
+        signerName: contract.signerName,
+        signerEmail: contract.signerEmail,
+      }, undefined, contract.driversLicenseImageUrl || undefined);
 
       await db
         .update(adoptionContracts)
@@ -11604,6 +11612,12 @@ Crawl-delay: 1
       if (!session) {
         return res.status(404).json({ error: 'Session not found or expired' });
       }
+      if (
+        (session.status !== 'initiated' && session.status !== 'awaiting_signature')
+        || session.signatureClaimedAt
+      ) {
+        return res.status(409).json({ error: 'Driver license evidence cannot be changed after signing' });
+      }
 
       // Fetch related data for display
       const [animal] = await db
@@ -11909,15 +11923,24 @@ Crawl-delay: 1
 
       const { imageData } = uploadSchema.parse(req.body);
 
-      const imageUrl = await processDriversLicenseImage(imageData);
+      const imageUrl = await processDriversLicenseImage(imageData, session.tenantId);
 
-      await db
+      const [updated] = await db
         .update(adoptionCheckoutSessions)
         .set({ 
           driversLicenseImageUrl: imageUrl,
           updatedAt: new Date(),
         })
-        .where(eq(adoptionCheckoutSessions.id, session.id));
+        .where(and(
+          eq(adoptionCheckoutSessions.id, session.id),
+          inArray(adoptionCheckoutSessions.status, ['initiated', 'awaiting_signature']),
+          isNull(adoptionCheckoutSessions.signatureClaimedAt),
+        ))
+        .returning({ id: adoptionCheckoutSessions.id });
+
+      if (!updated) {
+        return res.status(409).json({ error: 'Driver license evidence cannot be changed after signing' });
+      }
 
       res.json({ success: true, imageUrl });
     } catch (error: any) {

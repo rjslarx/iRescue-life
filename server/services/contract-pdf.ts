@@ -1,7 +1,9 @@
 import puppeteer from 'puppeteer';
 import sharp from 'sharp';
 import DOMPurify from 'isomorphic-dompurify';
+import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import { objectStorageClient, signObjectURL } from '../objectStorage';
+import { getObjectAclPolicy, setObjectAclPolicy, type ObjectAclPolicy } from '../objectAcl';
 import { db } from '../db';
 import { animals, contacts, applications, tenants, adoptionContractTemplates, adoptionFormFields, type AdoptionCheckoutSession } from '@shared/schema';
 import { eq, and, ilike } from 'drizzle-orm';
@@ -81,44 +83,109 @@ function buildCarePriorityMergeFields(carePriorities: any): Partial<MergeData> {
  * Puppeteer uses page.setContent() with no base URL, so relative /objects/... paths
  * cannot be resolved. This converts them to inline data URIs.
  */
-async function objectStorageImageToDataUri(objectUrl: string): Promise<string> {
-  try {
-    const privateObjectDir = process.env.PRIVATE_OBJECT_DIR;
-    if (!privateObjectDir) {
-      console.error('[contract-pdf] PRIVATE_OBJECT_DIR not configured, cannot resolve image');
-      return objectUrl;
-    }
+type ContractPrivateFolder = 'signatures' | 'drivers-licenses' | 'contracts';
 
-    const filename = objectUrl.split('/').pop();
-    if (!filename) return objectUrl;
-
-    const folder = objectUrl.includes('/signatures/') ? 'signatures'
-      : objectUrl.includes('/drivers-licenses/') ? 'drivers-licenses'
-      : null;
-    if (!folder) return objectUrl;
-
-    const objectPath = `${privateObjectDir}/${folder}/${filename}`;
-    const pathParts = objectPath.split('/');
-    const bucketName = pathParts[1];
-    const objectName = pathParts.slice(2).join('/');
-
-    const bucket = objectStorageClient.bucket(bucketName);
-    const file = bucket.file(objectName);
-
-    const [exists] = await file.exists();
-    if (!exists) {
-      console.error(`[contract-pdf] Image not found in storage: ${objectName}`);
-      return objectUrl;
-    }
-
-    const [buffer] = await file.download();
-    const contentType = folder === 'drivers-licenses' ? 'image/jpeg' : 'image/png';
-    const base64 = Buffer.from(buffer).toString('base64');
-    return `data:${contentType};base64,${base64}`;
-  } catch (error) {
-    console.error('[contract-pdf] Failed to convert image to data URI:', error);
-    return objectUrl;
+function getContractPrivateObjectFile(objectUrl: string, folder: ContractPrivateFolder) {
+  const match = new RegExp(`^/objects/${folder}/([A-Za-z0-9][A-Za-z0-9._-]*)$`).exec(objectUrl);
+  if (!match) {
+    throw new Error(`Invalid ${folder} object reference`);
   }
+
+  const privateObjectDir = process.env.PRIVATE_OBJECT_DIR;
+  if (!privateObjectDir) {
+    throw new Error('PRIVATE_OBJECT_DIR not configured');
+  }
+
+  const objectPath = `${privateObjectDir}/${folder}/${match[1]}`;
+  const pathParts = objectPath.split('/');
+  const bucketName = pathParts[1];
+  const objectName = pathParts.slice(2).join('/');
+
+  if (!bucketName || !objectName) {
+    throw new Error('PRIVATE_OBJECT_DIR is not a valid object storage path');
+  }
+
+  return objectStorageClient.bucket(bucketName).file(objectName);
+}
+
+/**
+ * Restore the tenant ACL on a contract image or PDF before it is read or
+ * replaced. Historical objects predate tenant ACL metadata, so this prevents a
+ * regenerated agreement from making the source signature or ID publicly readable.
+ */
+export async function secureAdoptionContractObject(
+  objectUrl: string,
+  tenantId: string,
+  folder: ContractPrivateFolder,
+): Promise<void> {
+  const file = getContractPrivateObjectFile(objectUrl, folder);
+  const existingPolicy = await getObjectAclPolicy(file);
+  await setObjectAclPolicy(file, buildTenantPrivateContractAcl(existingPolicy, tenantId));
+}
+
+export async function getAdoptionContractObjectCreatedAt(
+  objectUrl: string,
+  folder: ContractPrivateFolder,
+): Promise<Date> {
+  const file = getContractPrivateObjectFile(objectUrl, folder);
+  const [metadata] = await file.getMetadata();
+  if (!metadata.timeCreated) {
+    throw new Error('Contract object has no creation timestamp');
+  }
+  const createdAt = new Date(metadata.timeCreated);
+  if (Number.isNaN(createdAt.getTime())) {
+    throw new Error('Contract object has an invalid creation timestamp');
+  }
+  return createdAt;
+}
+
+export function buildTenantPrivateContractAcl(
+  existingPolicy: ObjectAclPolicy | null,
+  tenantId: string,
+): ObjectAclPolicy {
+  if (existingPolicy?.tenantId && existingPolicy.tenantId !== tenantId) {
+    throw new Error('Contract object belongs to a different tenant');
+  }
+
+  return {
+    owner: existingPolicy?.owner || tenantId,
+    tenantId,
+    visibility: 'private',
+    aclRules: existingPolicy?.aclRules,
+  };
+}
+
+async function objectStorageImageToDataUri(objectUrl: string): Promise<string> {
+  const folder = objectUrl.includes('/signatures/') ? 'signatures'
+    : objectUrl.includes('/drivers-licenses/') ? 'drivers-licenses'
+    : null;
+  if (!folder) {
+    throw new Error('Unsupported contract image object reference');
+  }
+
+  const file = getContractPrivateObjectFile(objectUrl, folder);
+  const [exists] = await file.exists();
+  if (!exists) {
+    throw new Error(`Contract image is missing from storage: ${file.name}`);
+  }
+
+  const [buffer] = await file.download();
+  const contentType = folder === 'drivers-licenses' ? 'image/jpeg' : 'image/png';
+  const base64 = Buffer.from(buffer).toString('base64');
+  return `data:${contentType};base64,${base64}`;
+}
+
+async function downloadContractPrivateObject(
+  objectUrl: string,
+  folder: ContractPrivateFolder,
+): Promise<Buffer> {
+  const file = getContractPrivateObjectFile(objectUrl, folder);
+  const [exists] = await file.exists();
+  if (!exists) {
+    throw new Error(`Historical ${folder} object is missing from storage`);
+  }
+  const [buffer] = await file.download();
+  return Buffer.from(buffer);
 }
 
 /**
@@ -126,7 +193,10 @@ async function objectStorageImageToDataUri(objectUrl: string): Promise<string> {
  * @param signatureBase64 - Base64 encoded signature image (data:image/png;base64,...)
  * @returns Object with objectUrl (storage path) and dataUri (inline base64 for PDF embedding)
  */
-export async function processSignatureImage(signatureBase64: string): Promise<{ objectUrl: string; dataUri: string }> {
+export async function processSignatureImage(
+  signatureBase64: string,
+  tenantId?: string,
+): Promise<{ objectUrl: string; dataUri: string }> {
   const base64Data = signatureBase64.replace(/^data:image\/\w+;base64,/, '');
   const buffer = Buffer.from(base64Data, 'base64');
 
@@ -161,6 +231,14 @@ export async function processSignatureImage(signatureBase64: string): Promise<{ 
     },
   });
 
+  if (tenantId) {
+    await setObjectAclPolicy(file, {
+      owner: tenantId,
+      tenantId,
+      visibility: 'private',
+    });
+  }
+
   const objectUrl = `/objects/signatures/${file.name.split('/').pop()}`;
   return { objectUrl, dataUri };
 }
@@ -170,7 +248,7 @@ export async function processSignatureImage(signatureBase64: string): Promise<{ 
  * @param imageBase64 - Base64 encoded image data
  * @returns Object storage URL for the processed image
  */
-export async function processDriversLicenseImage(imageBase64: string): Promise<string> {
+export async function processDriversLicenseImage(imageBase64: string, tenantId?: string): Promise<string> {
   const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
   const buffer = Buffer.from(base64Data, 'base64');
 
@@ -203,6 +281,14 @@ export async function processDriversLicenseImage(imageBase64: string): Promise<s
     },
   });
 
+  if (tenantId) {
+    await setObjectAclPolicy(file, {
+      owner: tenantId,
+      tenantId,
+      visibility: 'private',
+    });
+  }
+
   return `/objects/drivers-licenses/${file.name.split('/').pop()}`;
 }
 
@@ -211,7 +297,7 @@ export async function processDriversLicenseImage(imageBase64: string): Promise<s
  * @param pdfBuffer - PDF file buffer
  * @returns Object storage URL for the PDF
  */
-async function uploadPdfToStorage(pdfBuffer: Buffer | Uint8Array): Promise<string> {
+async function uploadPdfToStorage(pdfBuffer: Buffer | Uint8Array, tenantId: string): Promise<string> {
   const privateObjectDir = process.env.PRIVATE_OBJECT_DIR;
   if (!privateObjectDir) {
     throw new Error('PRIVATE_OBJECT_DIR not configured');
@@ -241,6 +327,12 @@ async function uploadPdfToStorage(pdfBuffer: Buffer | Uint8Array): Promise<strin
     },
   });
 
+  await setObjectAclPolicy(file, {
+    owner: tenantId,
+    tenantId,
+    visibility: 'private',
+  });
+
   const [exists] = await file.exists();
   if (!exists) {
     throw new Error(`Contract PDF upload verification failed - file not found after upload: ${objectName}`);
@@ -249,6 +341,141 @@ async function uploadPdfToStorage(pdfBuffer: Buffer | Uint8Array): Promise<strin
   const filename = file.name.split('/').pop();
   console.log(`[contract-pdf] Contract PDF uploaded successfully: ${filename} (${buffer.length} bytes)`);
   return `/objects/contracts/${filename}`;
+}
+
+function fitImageWithin(
+  image: { width: number; height: number },
+  maxWidth: number,
+  maxHeight: number,
+): { width: number; height: number } {
+  const scale = Math.min(maxWidth / image.width, maxHeight / image.height, 1);
+  return {
+    width: image.width * scale,
+    height: image.height * scale,
+  };
+}
+
+function toPdfSafeText(value: string): string {
+  return value
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\x20-\x7E]/g, '?');
+}
+
+export async function buildHistoricalAdoptionContractRepairPdf(params: {
+  originalPdf: Buffer | Uint8Array;
+  signatureImage?: Buffer | Uint8Array;
+  driversLicenseImage?: Buffer | Uint8Array;
+  signerName: string;
+  signerEmail: string;
+  signedAt: Date;
+  signedIp?: string;
+}): Promise<Uint8Array> {
+  const pdf = await PDFDocument.load(params.originalPdf);
+  const regular = await pdf.embedFont(StandardFonts.Helvetica);
+  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const pageSize: [number, number] = [595.28, 841.89];
+  const margin = 50;
+
+  if (params.signatureImage) {
+    const signature = await pdf.embedPng(params.signatureImage);
+    const page = pdf.addPage(pageSize);
+    const signatureSize = fitImageWithin(signature, pageSize[0] - margin * 2, 180);
+
+    page.drawText('Electronic Signature Verification', {
+      x: margin,
+      y: 765,
+      size: 20,
+      font: bold,
+      color: rgb(0.08, 0.08, 0.08),
+    });
+    page.drawText('This appendix restores the signature image submitted with the signed adoption agreement.', {
+      x: margin,
+      y: 730,
+      size: 10,
+      font: regular,
+      color: rgb(0.2, 0.2, 0.2),
+    });
+    page.drawImage(signature, {
+      x: margin,
+      y: 500,
+      width: signatureSize.width,
+      height: signatureSize.height,
+    });
+    page.drawText(`Signer: ${toPdfSafeText(params.signerName)}`, { x: margin, y: 455, size: 11, font: regular });
+    page.drawText(`Email: ${toPdfSafeText(params.signerEmail)}`, { x: margin, y: 435, size: 11, font: regular });
+    page.drawText(`Signed: ${params.signedAt.toISOString()}`, { x: margin, y: 415, size: 11, font: regular });
+    page.drawText(`IP address: ${toPdfSafeText(params.signedIp || 'Not recorded')}`, { x: margin, y: 395, size: 11, font: regular });
+  }
+
+  if (params.driversLicenseImage) {
+    const idImage = await pdf.embedJpg(params.driversLicenseImage);
+    const page = pdf.addPage(pageSize);
+    const imageSize = fitImageWithin(idImage, pageSize[0] - margin * 2, 650);
+
+    page.drawText('Uploaded Identification', {
+      x: margin,
+      y: 765,
+      size: 20,
+      font: bold,
+      color: rgb(0.08, 0.08, 0.08),
+    });
+    page.drawText('Identification submitted by the adopter during electronic signing.', {
+      x: margin,
+      y: 730,
+      size: 10,
+      font: regular,
+      color: rgb(0.2, 0.2, 0.2),
+    });
+    page.drawImage(idImage, {
+      x: (pageSize[0] - imageSize.width) / 2,
+      y: 55,
+      width: imageSize.width,
+      height: imageSize.height,
+    });
+  }
+
+  return pdf.save();
+}
+
+/**
+ * Repair a historical signed PDF without re-rendering its legal text from
+ * mutable contact, animal, session, or template records. The original rendered
+ * pages are preserved, and appendices add the verified stored signature and
+ * uploaded ID that the old renderer omitted.
+ */
+export async function repairHistoricalAdoptionContractPDF(params: {
+  tenantId: string;
+  originalPdfUrl: string;
+  signatureImageUrl?: string;
+  driversLicenseImageUrl?: string;
+  signerName: string;
+  signerEmail: string;
+  signedAt: Date;
+  signedIp?: string;
+}): Promise<string> {
+  if (!params.signatureImageUrl && !params.driversLicenseImageUrl) {
+    throw new Error('Historical contract has no saved signature or ID reference');
+  }
+
+  const originalPdf = await downloadContractPrivateObject(params.originalPdfUrl, 'contracts');
+  const signatureImage = params.signatureImageUrl
+    ? await downloadContractPrivateObject(params.signatureImageUrl, 'signatures')
+    : undefined;
+  const driversLicenseImage = params.driversLicenseImageUrl
+    ? await downloadContractPrivateObject(params.driversLicenseImageUrl, 'drivers-licenses')
+    : undefined;
+  const repairedPdf = await buildHistoricalAdoptionContractRepairPdf({
+    originalPdf,
+    signatureImage,
+    driversLicenseImage,
+    signerName: params.signerName,
+    signerEmail: params.signerEmail,
+    signedAt: params.signedAt,
+    signedIp: params.signedIp,
+  });
+
+  return uploadPdfToStorage(repairedPdf, params.tenantId);
 }
 
 /**
@@ -579,8 +806,15 @@ function generateContractHTML(data: {
 export async function generateAdoptionContractPDF(
   session: AdoptionCheckoutSession,
   signatureImageUrl?: string,
-  signatureMetadata?: { ipAddress?: string; signedAt?: Date; driversLicenseNumber?: string },
-  precomputedDataUris?: { signatureDataUri?: string; driversLicenseDataUri?: string }
+  signatureMetadata?: {
+    ipAddress?: string;
+    signedAt?: Date;
+    driversLicenseNumber?: string;
+    signerName?: string;
+    signerEmail?: string;
+  },
+  precomputedDataUris?: { signatureDataUri?: string; driversLicenseDataUri?: string },
+  driversLicenseImageUrlOverride?: string,
 ): Promise<string> {
   // Fetch all required data
   const [tenant] = await db
@@ -707,6 +941,15 @@ export async function generateAdoptionContractPDF(
     adopterPhone = application?.applicantPhone || '';
   }
 
+  // Regenerating a signed agreement must use the legal signer identity captured
+  // at signing, not contact data that staff may have changed since then.
+  if (signatureMetadata?.signerName) {
+    adopterName = signatureMetadata.signerName;
+  }
+  if (signatureMetadata?.signerEmail) {
+    adopterEmail = signatureMetadata.signerEmail;
+  }
+
   // Split adopter name into first and last name
   if (adopterName && adopterName !== 'Unknown') {
     const nameParts = adopterName.trim().split(/\s+/);
@@ -788,8 +1031,8 @@ export async function generateAdoptionContractPDF(
     signed_ip: signatureMetadata?.ipAddress || 'Not recorded',
     drivers_license_image_url: precomputedDataUris?.driversLicenseDataUri
       ? precomputedDataUris.driversLicenseDataUri
-      : session.driversLicenseImageUrl
-        ? await objectStorageImageToDataUri(session.driversLicenseImageUrl)
+      : (driversLicenseImageUrlOverride || session.driversLicenseImageUrl)
+        ? await objectStorageImageToDataUri(driversLicenseImageUrlOverride || session.driversLicenseImageUrl!)
         : undefined,
   };
 
@@ -848,7 +1091,7 @@ export async function generateAdoptionContractPDF(
     });
 
     // Upload to object storage
-    const pdfUrl = await uploadPdfToStorage(pdfBuffer);
+    const pdfUrl = await uploadPdfToStorage(pdfBuffer, session.tenantId);
 
     return pdfUrl;
   } finally {

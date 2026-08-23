@@ -41,3 +41,21 @@ A non-null signature or ID storage reference does not prove the image rendered i
 **Why:** The files were saved correctly, but a later template-security step rejected the inline raster image source. The PDF still generated successfully with a broken signature icon, while a legacy template omitted the uploaded ID entirely.
 
 **How to apply:** Keep inline PDF images restricted to validated raster base64 data (never SVG or arbitrary data URLs), ensure legacy templates receive the ID appendix exactly once, and test both the initial generation and staff regeneration paths by rendering the resulting PDF.
+
+## Repairing historical signed PDFs
+
+Historical agreement repair must preserve the original rendered PDF pages and
+append recovered signature/ID evidence; do not re-render legal text from current
+templates, contacts, animals, or session fields.
+
+**Why:** Those source records can change after signing, so regenerating from live
+data can silently alter an already executed agreement while trying to repair an
+image.
+
+**How to apply:** Select by the exact fix cutoff, process one tenant at a time,
+use durable per-contract claims/outcomes, make abandoned-run recovery explicit,
+and apply tenant-private ACLs to the original PDF, replacement PDF, signature,
+and ID while rejecting any object already scoped to another tenant. Snapshot the
+ID reference on the contract under an atomic signing claim; a legacy session
+reference may be pinned only when object metadata proves it existed by signing,
+otherwise leave the PDF unchanged and record a failure.
