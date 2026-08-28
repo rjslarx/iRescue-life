@@ -328,6 +328,7 @@ app.use((req, res, next) => {
       .then(m => m.ensureNewDefaultCatalogItems([
         'Barrier Flea & Heartworm (Dog)',
         'Barrier Flea & Heartworm (Cat)',
+        'Virbantel (Praziquantel/Pyrantel/Febantel)',
       ]))
       .catch(err => console.error('[Startup] New catalog item backfill failed:', err));
 

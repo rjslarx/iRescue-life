@@ -48,6 +48,7 @@ const DEFAULT_CATALOG_ITEMS: CatalogSeedItem[] = [
   { name: 'Fenbendazole (Panacur)', category: 'Medication', defaultDose: '50mg/kg', defaultFrequency: 'SID x 3-5 days' },
   { name: 'Pyrantel (Strongid)', category: 'Medication', defaultDose: '1ml/10lbs', defaultFrequency: 'Once, repeat in 2 weeks' },
   { name: 'Praziquantel (Droncit)', category: 'Medication', defaultDose: '5mg/kg', defaultFrequency: 'Once' },
+  { name: 'Virbantel (Praziquantel/Pyrantel/Febantel)', category: 'Medication', defaultDose: 'Per weight-based package directions', defaultFrequency: 'Once', speciesTarget: 'Dog', defaultRoute: 'PO', manufacturer: 'Virbac' },
   { name: 'Mirtazapine (Mirataz)', category: 'Medication', defaultDose: '1.88mg', defaultFrequency: 'Every 48hrs' },
   { name: 'Galliprant (Grapiprant)', category: 'Medication', defaultDose: '2mg/kg', defaultFrequency: 'SID' },
   { name: 'Metoclopramide (Reglan)', category: 'Medication', defaultDose: '0.3mg/kg', defaultFrequency: 'TID' },
