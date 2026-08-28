@@ -26,3 +26,4 @@
 - [Dev-domain links in prod emails](prod-dev-domain-links.md) — deployed app has REPLIT_DEV_DOMAIN set; all link builders must use shared getAppBaseUrl (gates on REPLIT_DEPLOYMENT), never a bare dev-domain check.
 - [Adopter portal deep links](adopter-portal-deep-links.md) — email links to /my-pets need login redirect via localStorage + full page load after magic login; reminder job must skip pending_review proofs.
 - [UTC "today" date-shift](utc-today-date-shift.md) — never default date inputs with toISOString() (UTC = tomorrow in the evening); use todayLocalISO() in client/src/lib/utils.ts.
+- [Scheduled delivery runtime guard](scheduled-delivery-runtime-guard.md) — autonomous jobs run only when REPLIT_DEPLOYMENT=1; NODE_ENV=production alone is unsafe in workspaces.

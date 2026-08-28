@@ -16,6 +16,11 @@ let schedulerInitialized = false;
  * Initialize scheduled jobs
  */
 export function initializeScheduler() {
+  if (!isProductionRuntime()) {
+    console.log("[Scheduler] All scheduled jobs disabled outside the published production deployment");
+    return;
+  }
+
   if (schedulerInitialized) {
     console.log("[Scheduler] Already initialized, skipping duplicate init");
     return;
@@ -702,26 +707,19 @@ export function initializeScheduler() {
   }, { timezone: "UTC" });
   console.log(`✓ Shop order expiry scheduled: ${shopOrderExpirySchedule} (UTC)`);
 
-  // Volunteer Recruitment SMS — only the published app may send these.
-  // A development workspace can contain stale calendar data while still
-  // sharing live Twilio credentials, which would produce false shortage texts.
-  if (isProductionRuntime()) {
-    cron.schedule('30 0 * * *', async () => {
-      try {
-        await VolunteerRecruitmentSmsService.checkAndRunAllTenants('weekly');
-      } catch (err: any) {
-        console.error('[Scheduler] Volunteer recruitment weekly SMS error:', err.message);
-      }
-      try {
-        await VolunteerRecruitmentSmsService.checkAndRunAllTenants('urgent');
-      } catch (err: any) {
-        console.error('[Scheduler] Volunteer recruitment urgent SMS error:', err.message);
-      }
-    }, { timezone: "UTC" });
-    console.log("✓ Volunteer recruitment SMS (weekly + urgent) scheduled: 30 0 * * * (UTC / 6:30 PM CST)");
-  } else {
-    console.log("⊘ Volunteer recruitment SMS scheduler disabled outside production");
-  }
+  cron.schedule('30 0 * * *', async () => {
+    try {
+      await VolunteerRecruitmentSmsService.checkAndRunAllTenants('weekly');
+    } catch (err: any) {
+      console.error('[Scheduler] Volunteer recruitment weekly SMS error:', err.message);
+    }
+    try {
+      await VolunteerRecruitmentSmsService.checkAndRunAllTenants('urgent');
+    } catch (err: any) {
+      console.error('[Scheduler] Volunteer recruitment urgent SMS error:', err.message);
+    }
+  }, { timezone: "UTC" });
+  console.log("✓ Volunteer recruitment SMS (weekly + urgent) scheduled: 30 0 * * * (UTC / 6:30 PM CST)");
 
   // Log next scheduled run times
   const nextMidnight = new Date();
