@@ -8,6 +8,7 @@ import { resetMonthlyEmailQuotas } from "./email-quota-reset";
 import { VolunteerThresholdAlertService } from "../services/volunteer-threshold-alerts";
 import { VolunteerScheduleDigestService } from "../services/volunteer-schedule-digest";
 import { VolunteerRecruitmentSmsService } from "../services/volunteer-recruitment-sms";
+import { isProductionRuntime } from "./runtime-environment";
 
 let schedulerInitialized = false;
 
@@ -701,20 +702,26 @@ export function initializeScheduler() {
   }, { timezone: "UTC" });
   console.log(`✓ Shop order expiry scheduled: ${shopOrderExpirySchedule} (UTC)`);
 
-  // Volunteer Recruitment SMS — weekly + urgent run sequentially to prevent race-condition duplicates
-  cron.schedule('30 0 * * *', async () => {
-    try {
-      await VolunteerRecruitmentSmsService.checkAndRunAllTenants('weekly');
-    } catch (err: any) {
-      console.error('[Scheduler] Volunteer recruitment weekly SMS error:', err.message);
-    }
-    try {
-      await VolunteerRecruitmentSmsService.checkAndRunAllTenants('urgent');
-    } catch (err: any) {
-      console.error('[Scheduler] Volunteer recruitment urgent SMS error:', err.message);
-    }
-  }, { timezone: "UTC" });
-  console.log("✓ Volunteer recruitment SMS (weekly + urgent) scheduled: 30 0 * * * (UTC / 6:30 PM CST)");
+  // Volunteer Recruitment SMS — only the published app may send these.
+  // A development workspace can contain stale calendar data while still
+  // sharing live Twilio credentials, which would produce false shortage texts.
+  if (isProductionRuntime()) {
+    cron.schedule('30 0 * * *', async () => {
+      try {
+        await VolunteerRecruitmentSmsService.checkAndRunAllTenants('weekly');
+      } catch (err: any) {
+        console.error('[Scheduler] Volunteer recruitment weekly SMS error:', err.message);
+      }
+      try {
+        await VolunteerRecruitmentSmsService.checkAndRunAllTenants('urgent');
+      } catch (err: any) {
+        console.error('[Scheduler] Volunteer recruitment urgent SMS error:', err.message);
+      }
+    }, { timezone: "UTC" });
+    console.log("✓ Volunteer recruitment SMS (weekly + urgent) scheduled: 30 0 * * * (UTC / 6:30 PM CST)");
+  } else {
+    console.log("⊘ Volunteer recruitment SMS scheduler disabled outside production");
+  }
 
   // Log next scheduled run times
   const nextMidnight = new Date();

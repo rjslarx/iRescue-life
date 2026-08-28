@@ -17,5 +17,10 @@ Urgent shortage SMS must stay count-based ("X/Y signed up"), never name a specif
 
 # Per-calendar minimum silently shadows the tenant-wide minimum
 The shortage threshold is `calendar.minVolunteersRequired ?? settings.minimumVolunteers`. But `calendars.min_volunteers_required` has a **non-null DB default of 2**, so it is never null, so the global `minimumVolunteers` setting is effectively dead — lowering the global has zero effect on alerts.
-**Why it matters:** a tenant set the global minimum to 1 ("1 volunteer is enough"), kept getting "needs 1 more" texts for 1-of-2 mornings, and reported it as broken. The per-calendar value (default 2) was overriding their global choice. The settings UI also doesn't cascade a global change down to per-calendar overrides, so the global control looks like it does nothing.
+**Why it matters:** the settings UI does not cascade a global change down to per-calendar overrides, so the global control can look ineffective. Haseya explicitly confirmed that Morning Cleaners should retain its per-calendar requirement of 2; alerts should state both occupancy and remaining need (for example, "1/2 signed up; need 1 more") so "need 1" is not mistaken for the total requirement.
 **How to apply:** to actually change a tenant's effective threshold, set `calendars.min_volunteers_required` per volunteer calendar (this also keeps CalendarViewPage color-coding consistent, since it reads the same per-calendar value with a hardcoded `?? 2`). A proper systemic fix would make the global setting authoritative across SMS + calendar color-coding + share image, all of which currently fall back to a hardcoded 2 rather than the global.
+
+# Scheduled recruitment SMS must be production-only
+The development workspace can share live Twilio credentials while its database has stale calendar signups. Never allow its scheduled recruitment job to send; only an explicit production runtime may schedule it.
+**Why:** development and production both sent alerts at the same time, but the development copy falsely reported covered shifts as empty.
+**How to apply:** preserve the production-runtime guard around scheduled recruitment SMS. Staff-triggered testing should remain explicit rather than enabling scheduled delivery in development.

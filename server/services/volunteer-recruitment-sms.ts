@@ -37,6 +37,14 @@ interface UrgentAlertResult {
   errors: string[];
 }
 
+export function formatVolunteerShortageStatus(
+  signedUpCount: number,
+  minVolunteersRequired: number,
+): string {
+  const shortage = Math.max(0, minVolunteersRequired - signedUpCount);
+  return `${signedUpCount}/${minVolunteersRequired} signed up; need ${shortage} more`;
+}
+
 export class VolunteerRecruitmentSmsService {
   private static async hasRecruitmentSmsSentInLast24Hours(tenantId: string): Promise<boolean> {
     const cutoff = subHours(new Date(), 24);
@@ -231,7 +239,7 @@ export class VolunteerRecruitmentSmsService {
         .sort((a, b) => a.date.localeCompare(b.date))
         .map((s) => {
           const dayLabel = format(parseISO(s.date), "EEE M/d");
-          return `${dayLabel} (need ${s.shortage})`;
+          return `${dayLabel} (${formatVolunteerShortageStatus(s.signedUpCount, s.minVolunteersRequired)})`;
         });
       lines.push(`${calName}: ${dayParts.join(", ")}`);
     }
@@ -391,7 +399,7 @@ export class VolunteerRecruitmentSmsService {
       const lines: string[] = [`🐕 ${orgName}: Volunteers needed!`];
       newShortages.forEach((s, i) => {
         const dayLabel = format(parseISO(s.date), "EEE M/d");
-        lines.push(`${i + 1}. ${s.calendarName} ${dayLabel} (need ${s.shortage})`);
+        lines.push(`${i + 1}. ${s.calendarName} ${dayLabel} (${formatVolunteerShortageStatus(s.signedUpCount, s.minVolunteersRequired)})`);
       });
       lines.push(`Reply with a # to claim a shift!`);
       lines.push(signupUrl);
