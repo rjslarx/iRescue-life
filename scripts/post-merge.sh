@@ -280,3 +280,10 @@ ALTER TABLE shop_raffle_drawings
   ADD COLUMN IF NOT EXISTS prize_paid_at timestamp,
   ADD COLUMN IF NOT EXISTS prize_paid_by uuid REFERENCES users(id) ON DELETE SET NULL;
 SQL
+
+# Public raffle ticket-sales goal. Existing and new raffles default to 100;
+# the value is informational and does not cap ticket sales. Idempotent.
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' || echo "[post-merge] raffle ticket goal column skipped (already applied or DB unreachable)."
+ALTER TABLE shop_products
+  ADD COLUMN IF NOT EXISTS raffle_ticket_goal integer NOT NULL DEFAULT 100;
+SQL

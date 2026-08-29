@@ -3957,6 +3957,7 @@ export const shopProducts = pgTable("shop_products", {
   // (+1 each, capped at raffleMaxReferrals per order).
   raffleIncentivesEnabled: boolean("raffle_incentives_enabled").notNull().default(false),
   raffleMaxReferrals: integer("raffle_max_referrals").notNull().default(3),
+  raffleTicketGoal: integer("raffle_ticket_goal").notNull().default(100),
   // Display settings
   featured: boolean("featured").notNull().default(false),
   displayOrder: integer("display_order").notNull().default(0),
@@ -3980,6 +3981,7 @@ export const insertShopProductSchema = createInsertSchema(shopProducts).omit({
   status: z.enum(["draft", "active", "paused", "archived"]).default("draft"),
   bundlePricing: z.array(bundlePricingTierSchema).max(10).nullable().optional(),
   raffleMode: z.enum(["fixed", "split_pot"]).default("fixed"),
+  raffleTicketGoal: z.number().int().min(1, "Ticket goal must be at least 1").default(100),
   // Clients send the draw date as an ISO string over JSON; coerce it to a Date.
   raffleDrawDate: z.coerce.date().nullable().optional(),
 });

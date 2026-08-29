@@ -141,6 +141,7 @@ export default function ShopManagementPage() {
     raffleDrawDate: '',
     raffleIncentivesEnabled: false,
     raffleMaxReferrals: '3',
+    raffleTicketGoal: '100',
     imageUrls: [] as string[],
     bundleTiers: [] as { quantity: string; price: string }[],
   });
@@ -326,6 +327,7 @@ export default function ShopManagementPage() {
         raffleMode: data.productType === 'raffle' ? data.raffleMode : 'fixed',
         raffleIncentivesEnabled: data.productType === 'raffle' ? data.raffleIncentivesEnabled : false,
         raffleMaxReferrals: Math.max(1, parseInt(data.raffleMaxReferrals) || 3),
+        raffleTicketGoal: Math.max(1, parseInt(data.raffleTicketGoal) || 100),
         imageUrls: data.imageUrls,
         bundlePricing: data.productType === 'raffle' ? buildBundlePricing(bundleTiers) : null,
       });
@@ -359,6 +361,7 @@ export default function ShopManagementPage() {
         raffleMode: data.productType === 'raffle' ? data.raffleMode : 'fixed',
         raffleIncentivesEnabled: data.productType === 'raffle' ? data.raffleIncentivesEnabled : false,
         raffleMaxReferrals: Math.max(1, parseInt(data.raffleMaxReferrals) || 3),
+        raffleTicketGoal: Math.max(1, parseInt(data.raffleTicketGoal) || 100),
         imageUrls: data.imageUrls,
         bundlePricing: data.productType === 'raffle' ? buildBundlePricing(bundleTiers) : null,
       });
@@ -477,6 +480,7 @@ export default function ShopManagementPage() {
       raffleDrawDate: '',
       raffleIncentivesEnabled: false,
       raffleMaxReferrals: '3',
+      raffleTicketGoal: '100',
       imageUrls: [],
       bundleTiers: [],
     });
@@ -546,6 +550,7 @@ export default function ShopManagementPage() {
       raffleDrawDate: product.raffleDrawDate ? new Date(product.raffleDrawDate).toISOString().split('T')[0] : '',
       raffleIncentivesEnabled: product.raffleIncentivesEnabled || false,
       raffleMaxReferrals: (product.raffleMaxReferrals ?? 3).toString(),
+      raffleTicketGoal: (product.raffleTicketGoal ?? 100).toString(),
       imageUrls: product.imageUrls || [],
       bundleTiers: (product.bundlePricing || []).map(t => ({ quantity: String(t.quantity), price: t.price })),
     });
@@ -983,6 +988,7 @@ export default function ShopManagementPage() {
                               <p className="text-sm" data-testid={`text-raffle-stats-${raffle.id}`}>
                                 Tickets: {stats.ticketsSold + (stats.bonusTickets || 0)}
                                 <span className="text-muted-foreground"> ({stats.ticketsSold} purchased{stats.bonusTickets ? `, ${stats.bonusTickets} bonus` : ''})</span>
+                                <span className="text-muted-foreground"> · Goal: {raffle.raffleTicketGoal || 100}</span>
                               </p>
                             )}
                             {/* Live split-pot amounts (pre-draw) */}
@@ -1422,6 +1428,24 @@ export default function ShopManagementPage() {
                         onChange={(e) => setProductForm(prev => ({ ...prev, raffleDrawDate: e.target.value }))}
                         data-testid="input-raffle-date"
                       />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="raffleTicketGoal">Ticket Goal</Label>
+                      <Input
+                        id="raffleTicketGoal"
+                        type="number"
+                        min={1}
+                        step={1}
+                        required
+                        value={productForm.raffleTicketGoal}
+                        onChange={(e) => setProductForm(prev => ({ ...prev, raffleTicketGoal: e.target.value }))}
+                        className="w-32"
+                        data-testid="input-raffle-ticket-goal"
+                      />
+                      <p className="text-sm text-muted-foreground">
+                        Shown publicly as a progress goal. Sales can continue after the goal is reached.
+                      </p>
                     </div>
 
                     {productForm.raffleMode === 'fixed' && (

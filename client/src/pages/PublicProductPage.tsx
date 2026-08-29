@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Progress } from "@/components/ui/progress";
 import { 
   ShoppingBag, 
   ArrowLeft, 
@@ -38,6 +39,7 @@ type ProductWithVariants = ShopProduct & {
   variants: ShopProductVariant[];
   raffleClosed?: boolean;
   splitPot?: SplitPotInfo;
+  ticketsSold?: number;
 };
 
 export default function PublicProductPage() {
@@ -115,6 +117,9 @@ export default function PublicProductPage() {
   const winnerPot = isSplitPot && product?.splitPot
     ? parseFloat(product.splitPot.winnerPrizeAmount)
     : null;
+  const ticketsSold = product?.productType === 'raffle' ? Math.max(0, product.ticketsSold || 0) : 0;
+  const ticketGoal = product?.productType === 'raffle' ? Math.max(1, product.raffleTicketGoal || 100) : 100;
+  const ticketGoalProgress = Math.min(100, (ticketsSold / ticketGoal) * 100);
 
   const tenantOrigin = typeof window !== 'undefined' ? window.location.origin : '';
 
@@ -373,6 +378,29 @@ export default function PublicProductPage() {
                       </span>
                     </div>
                   )}
+
+                  <div
+                    className="rounded-md border bg-primary/5 px-3 py-3 space-y-2"
+                    data-testid="raffle-ticket-progress"
+                  >
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="font-semibold">Ticket goal</span>
+                      <span className="text-sm font-medium" data-testid="text-raffle-ticket-progress">
+                        {ticketsSold.toLocaleString()} of {ticketGoal.toLocaleString()} tickets sold
+                      </span>
+                    </div>
+                    <Progress
+                      value={ticketGoalProgress}
+                      aria-label={`${ticketsSold} of ${ticketGoal} tickets sold`}
+                      aria-valuetext={`${ticketsSold} of ${ticketGoal} tickets sold`}
+                      data-testid="progress-raffle-ticket-goal"
+                    />
+                    {ticketsSold >= ticketGoal && (
+                      <p className="text-xs font-medium text-primary" data-testid="text-raffle-goal-reached">
+                        Goal reached! Every additional ticket still supports the rescue.
+                      </p>
+                    )}
+                  </div>
 
                   {/* Split-pot explanation and winner pot / final prize */}
                   {isSplitPot ? (

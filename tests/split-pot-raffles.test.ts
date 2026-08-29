@@ -200,6 +200,21 @@ test('product setup rejects a price that cannot split evenly to the cent', async
   });
   assert.equal(result.status, 400);
   assert.match(result.body.error, /divide|divisible/i);
+
+  const invalidGoal = await request('/admin/products', {
+    method: 'POST',
+    body: JSON.stringify({
+      name: 'Invalid ticket goal',
+      slug: `${RUN_ID}-invalid-goal`,
+      productType: 'raffle',
+      raffleMode: 'fixed',
+      status: 'draft',
+      basePrice: '5.00',
+      raffleTicketGoal: 0,
+    }),
+  });
+  assert.equal(invalidGoal.status, 400);
+  assert.match(JSON.stringify(invalidGoal.body), /ticket goal|at least 1/i);
 });
 
 test('only paid ticket revenue funds the live pot; bonus tickets add no cash', async () => {
@@ -227,6 +242,14 @@ test('only paid ticket revenue funds the live pot; bonus tickets add no cash', a
     isDrawn: false,
     drawnAt: null,
   });
+  assert.equal(publicResult.body.product.raffleTicketGoal, 100);
+  assert.equal(publicResult.body.product.ticketsSold, 2);
+
+  const publicListResult = await request('/products');
+  assert.equal(publicListResult.status, 200);
+  const listedRaffle = publicListResult.body.products.find((row: any) => row.id === product.id);
+  assert.equal(listedRaffle.raffleTicketGoal, 100);
+  assert.equal(listedRaffle.ticketsSold, 2);
 
   const adminResult = await request('/admin/raffles');
   const raffle = adminResult.body.raffles.find((row: any) => row.id === product.id);
@@ -417,10 +440,21 @@ test('raffle mode and pricing cannot change after entries exist or after a draw'
     body: JSON.stringify({ status: 'paused' }),
   });
   assert.equal(statusOnly.status, 200);
+
+  const goalUpdate = await request(`/admin/products/${split.id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ raffleTicketGoal: 250 }),
+  });
+  assert.equal(goalUpdate.status, 200);
+  assert.equal(goalUpdate.body.product.raffleTicketGoal, 250);
+
   await request(`/admin/products/${split.id}`, {
     method: 'PATCH',
     body: JSON.stringify({ status: 'active' }),
   });
+  const publicAfterGoalUpdate = await request(`/products/${split.slug}`);
+  assert.equal(publicAfterGoalUpdate.status, 200);
+  assert.equal(publicAfterGoalUpdate.body.product.raffleTicketGoal, 250);
 
   const draw = await request(`/admin/raffles/${split.id}/draw`, { method: 'POST', body: '{}' });
   assert.equal(draw.status, 200);

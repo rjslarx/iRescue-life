@@ -84,6 +84,26 @@ async function loadPaidRaffleSales(
   return new Map(rows.map((row) => [row.productId, row.amount]));
 }
 
+async function loadPaidRaffleTicketCounts(
+  productIds: string[],
+  executor: Pick<typeof db, 'select'> = db,
+): Promise<Map<string, number>> {
+  if (productIds.length === 0) return new Map();
+  const rows = await executor
+    .select({
+      productId: shopOrderItems.productId,
+      count: sql<number>`coalesce(sum(${shopOrderItems.quantity}), 0)::int`,
+    })
+    .from(shopOrderItems)
+    .innerJoin(shopOrders, eq(shopOrderItems.orderId, shopOrders.id))
+    .where(and(
+      inArray(shopOrderItems.productId, productIds),
+      eq(shopOrders.paymentStatus, 'paid'),
+    ))
+    .groupBy(shopOrderItems.productId);
+  return new Map(rows.map((row) => [row.productId, row.count]));
+}
+
 type PublicRaffleDrawing = {
   productId: string;
   drawnAt: Date | null;
@@ -178,11 +198,13 @@ router.get('/products', requireTenant, async (req, res, next) => {
       return acc;
     }, {} as Record<string, typeof variants>);
 
+    const raffleProductIds = products.filter((p) => p.productType === 'raffle').map((p) => p.id);
     const salesByProduct = await loadPaidRaffleSales(
       products.filter((p) => p.productType === 'raffle' && p.raffleMode === 'split_pot').map((p) => p.id),
     );
+    const ticketCountsByProduct = await loadPaidRaffleTicketCounts(raffleProductIds);
     const drawingsByProduct = await loadPublicRaffleDrawings(
-      products.filter((p) => p.productType === 'raffle').map((p) => p.id),
+      raffleProductIds,
     );
 
     // Combine products with their variants and public split-pot total.
@@ -190,6 +212,7 @@ router.get('/products', requireTenant, async (req, res, next) => {
       ...p,
       variants: variantsByProduct[p.id] || [],
       raffleClosed: drawingsByProduct.has(p.id),
+      ticketsSold: p.productType === 'raffle' ? (ticketCountsByProduct.get(p.id) || 0) : undefined,
       splitPot: publicSplitPotStats(p, salesByProduct, drawingsByProduct.get(p.id)),
     }));
 
@@ -233,6 +256,9 @@ router.get('/products/:slug', requireTenant, async (req, res, next) => {
       .orderBy(asc(shopProductVariants.displayOrder));
 
     const salesByProduct = await loadPaidRaffleSales([product.id]);
+    const ticketCountsByProduct = product.productType === 'raffle'
+      ? await loadPaidRaffleTicketCounts([product.id])
+      : new Map<string, number>();
     const drawingsByProduct = await loadPublicRaffleDrawings([product.id]);
 
     res.json({
@@ -240,6 +266,7 @@ router.get('/products/:slug', requireTenant, async (req, res, next) => {
         ...product,
         variants,
         raffleClosed: drawingsByProduct.has(product.id),
+        ticketsSold: product.productType === 'raffle' ? (ticketCountsByProduct.get(product.id) || 0) : undefined,
         splitPot: publicSplitPotStats(product, salesByProduct, drawingsByProduct.get(product.id)),
       }
     });
