@@ -68,6 +68,18 @@ export default function ShopOrderPage() {
   const orderNumber = params?.orderNumber;
   const [friendEmails, setFriendEmails] = useState<Record<string, string>>({});
   const [linkCopied, setLinkCopied] = useState(false);
+  const [stripeReturn] = useState(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      return {
+        paymentIntentId: params.get("payment_intent"),
+        redirectStatus: params.get("redirect_status"),
+      };
+    } catch {
+      return { paymentIntentId: null, redirectStatus: null };
+    }
+  });
+  const [reconciliationAttempted, setReconciliationAttempted] = useState(false);
   // Per-order access token is required as proof of ownership for bonus claims
   // (order numbers alone are guessable). Comes from the checkout redirect
   // (?t=...) or the confirmation-email link; remembered for this session.
@@ -84,13 +96,20 @@ export default function ShopOrderPage() {
     }
   });
 
-  // Bearer-token hygiene: once stored, remove ?t= from the address bar so the
-  // token doesn't linger in browser history or get leaked via referrers.
+  // Bearer-token hygiene: once return data is captured, remove the order token
+  // and Stripe's client secret from the address bar so they do not linger in
+  // browser history or leak through referrers.
   useEffect(() => {
     try {
       const url = new URL(window.location.href);
-      if (url.searchParams.has("t")) {
-        url.searchParams.delete("t");
+      const sensitiveParams = [
+        "t",
+        "payment_intent",
+        "payment_intent_client_secret",
+        "redirect_status",
+      ];
+      if (sensitiveParams.some((param) => url.searchParams.has(param))) {
+        sensitiveParams.forEach((param) => url.searchParams.delete(param));
         window.history.replaceState({}, "", url.pathname + (url.search || "") + url.hash);
       }
     } catch {}
@@ -147,6 +166,53 @@ export default function ShopOrderPage() {
   const tenant = tenantData?.tenant;
   const order = orderData?.order;
   const rescueName = tenant?.name || "Shop";
+
+  // Redirect-based Stripe methods (notably Cash App Pay) return directly to
+  // this order page, bypassing the checkout component's normal confirm call.
+  // Reconcile once using the server endpoint, which independently verifies the
+  // PaymentIntent with Stripe and performs an idempotent paid transition.
+  useEffect(() => {
+    if (
+      !order ||
+      reconciliationAttempted ||
+      stripeReturn.redirectStatus !== "succeeded" ||
+      !stripeReturn.paymentIntentId ||
+      order.paymentStatus === "paid" ||
+      order.stripePaymentIntentId !== stripeReturn.paymentIntentId
+    ) {
+      return;
+    }
+
+    setReconciliationAttempted(true);
+    void apiRequest("POST", "/api/shop/checkout/confirm", {
+      orderId: order.id,
+      paymentIntentId: stripeReturn.paymentIntentId,
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error("Payment succeeded, but the order could not be finalized.");
+        }
+        await queryClient.invalidateQueries({ queryKey: ['/api/shop/orders', orderNumber] });
+        toast({
+          title: "Payment successful!",
+          description: "Your order and raffle tickets are confirmed.",
+        });
+      })
+      .catch((error: Error) => {
+        toast({
+          title: "Order confirmation delayed",
+          description: error.message,
+          variant: "destructive",
+        });
+      });
+  }, [
+    order,
+    orderNumber,
+    reconciliationAttempted,
+    stripeReturn.paymentIntentId,
+    stripeReturn.redirectStatus,
+    toast,
+  ]);
 
   useSEO({
     title: order ? `Order ${order.orderNumber} - ${rescueName}` : `Order Details - ${rescueName}`,

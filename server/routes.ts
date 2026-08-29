@@ -30723,6 +30723,107 @@ Submitted: ${new Date().toLocaleString()}
       }
 
       switch (event.type) {
+        case 'payment_intent.succeeded': {
+          const paymentIntent = event.data.object as Stripe.PaymentIntent;
+          const shopOrderId = paymentIntent.metadata?.orderId;
+          const shopOrderNumber = paymentIntent.metadata?.orderNumber;
+
+          // Shop PaymentIntents (including redirect-based methods such as
+          // Cash App Pay) carry both values. Finalize server-side so a buyer
+          // closing the tab or returning through a redirect cannot leave a
+          // successful payment marked incomplete.
+          if (shopOrderId && shopOrderNumber) {
+            const {
+              shopOrders,
+              shopOrderItems,
+              shopProductVariants,
+            } = await import('@shared/schema');
+            const {
+              refundClosedRafflePayment,
+              ShopRaffleClosedError,
+              transitionShopOrderToPaid,
+            } = await import('./lib/shop-order-payment');
+
+            const [shopOrder] = await db
+              .select({ id: shopOrders.id, orderNumber: shopOrders.orderNumber })
+              .from(shopOrders)
+              .where(and(
+                eq(shopOrders.id, shopOrderId),
+                eq(shopOrders.tenantId, tenant.id),
+                eq(shopOrders.orderNumber, shopOrderNumber),
+                eq(shopOrders.stripePaymentIntentId, paymentIntent.id),
+              ))
+              .limit(1);
+
+            if (!shopOrder) {
+              console.warn(`[STRIPE-WEBHOOK] Shop order not found or PaymentIntent mismatch for ${shopOrderNumber}`);
+              break;
+            }
+
+            let transitioned = false;
+            try {
+              transitioned = await db.transaction(async (tx) => {
+                const updated = await transitionShopOrderToPaid(
+                  shopOrder.id,
+                  typeof paymentIntent.latest_charge === 'string' ? paymentIntent.latest_charge : null,
+                  tx,
+                );
+                if (updated.length === 0) return false;
+
+                const items = await tx
+                  .select()
+                  .from(shopOrderItems)
+                  .where(eq(shopOrderItems.orderId, shopOrder.id));
+                for (const item of items) {
+                  if (item.variantId) {
+                    await tx
+                      .update(shopProductVariants)
+                      .set({ inventory: sql`${shopProductVariants.inventory} - ${item.quantity}` })
+                      .where(eq(shopProductVariants.id, item.variantId));
+                  }
+                }
+                return true;
+              });
+            } catch (error) {
+              if (!(error instanceof ShopRaffleClosedError)) throw error;
+
+              const StripeClient = (await import('stripe')).default;
+              const { getPlatformStripeKey } = await import('./lib/stripe-service');
+              let refundStripe: Stripe | null = null;
+              if (tenant.stripeSecretKeyEncrypted) {
+                refundStripe = new StripeClient(decrypt(tenant.stripeSecretKeyEncrypted), {
+                  apiVersion: '2025-09-30.clover',
+                });
+              } else if (tenant.stripeConnectedAccountId && getPlatformStripeKey()) {
+                refundStripe = new StripeClient(getPlatformStripeKey()!, {
+                  apiVersion: '2025-09-30.clover',
+                });
+              }
+              if (!refundStripe) {
+                throw new Error(`Stripe client unavailable to refund closed raffle order ${shopOrder.orderNumber}`);
+              }
+
+              await refundClosedRafflePayment(refundStripe, shopOrder.id, paymentIntent.id, {
+                reverseTransfer: !!paymentIntent.transfer_data,
+                refundApplicationFee: !!paymentIntent.application_fee_amount,
+              });
+              console.log(`[STRIPE-WEBHOOK] Refunded shop order ${shopOrder.orderNumber}: raffle was drawn before payment completed`);
+              break;
+            }
+
+            if (transitioned) {
+              const { sendShopOrderConfirmationEmail } = await import('./lib/shop-emails');
+              sendShopOrderConfirmationEmail(tenant.id, shopOrder.id).catch((emailError) => {
+                console.error(`[STRIPE-WEBHOOK] Shop order confirmation email failed for ${shopOrder.orderNumber}:`, emailError);
+              });
+              console.log(`[STRIPE-WEBHOOK] Shop order marked paid from PaymentIntent: ${shopOrder.orderNumber}`);
+            } else {
+              console.log(`[STRIPE-WEBHOOK] Shop order already finalized: ${shopOrder.orderNumber}`);
+            }
+          }
+          break;
+        }
+
         case 'checkout.session.completed': {
           console.log('[STRIPE-WEBHOOK] Processing checkout.session.completed event');
           const session = event.data.object as any;
