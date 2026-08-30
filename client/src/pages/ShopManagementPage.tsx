@@ -213,6 +213,24 @@ export default function ShopManagementPage() {
     URL.revokeObjectURL(url);
   };
 
+  const handleCopyTicketNumbers = async () => {
+    if (!ticketsData?.tickets.length) return;
+    const ticketNumbers = ticketsData.tickets.map((ticket) => ticket.ticketNumber).join('\n');
+    try {
+      await navigator.clipboard.writeText(ticketNumbers);
+      toast({
+        title: `${ticketsData.totalTickets} ticket number${ticketsData.totalTickets === 1 ? '' : 's'} copied`,
+        description: 'Each ticket is on its own line, ready to paste into Wheel of Names.',
+      });
+    } catch {
+      toast({
+        title: "Couldn't copy ticket numbers",
+        description: 'Please try again or use Export CSV.',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const handlePrintTickets = () => {
     if (!ticketsData) return;
     const esc = (v: string | null) =>
@@ -1159,7 +1177,11 @@ export default function ShopManagementPage() {
                   <p className="text-sm font-medium" data-testid="text-ticket-count">
                     {ticketsData.totalTickets} ticket{ticketsData.totalTickets !== 1 ? 's' : ''} ({ticketsData.purchasedTickets ?? ticketsData.totalTickets} purchased, {ticketsData.bonusTickets ?? 0} bonus)
                   </p>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="default" size="sm" onClick={handleCopyTicketNumbers} data-testid="button-copy-ticket-numbers">
+                      <Copy className="h-4 w-4 mr-2" />
+                      Copy for Wheel of Names
+                    </Button>
                     <Button variant="outline" size="sm" onClick={handleExportTicketsCsv} data-testid="button-export-tickets-csv">
                       <Download className="h-4 w-4 mr-2" />
                       Export CSV
