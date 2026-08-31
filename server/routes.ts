@@ -11612,12 +11612,6 @@ Crawl-delay: 1
       if (!session) {
         return res.status(404).json({ error: 'Session not found or expired' });
       }
-      if (
-        (session.status !== 'initiated' && session.status !== 'awaiting_signature')
-        || session.signatureClaimedAt
-      ) {
-        return res.status(409).json({ error: 'Driver license evidence cannot be changed after signing' });
-      }
 
       // Fetch related data for display
       const [animal] = await db
@@ -11976,7 +11970,6 @@ Crawl-delay: 1
       });
 
       const signatureData = signatureSchema.parse(req.body);
-
       const contract = await captureSignature(session.id, {
         ...signatureData,
         ipAddress: req.ip,
@@ -12587,7 +12580,9 @@ Crawl-delay: 1
       const { fosterAgreementSessions, fosterContractTemplates, fosterApplications, animals, tenants } = await import('@shared/schema');
       const crypto = await import('crypto');
       
-      const tokenHash = crypto.createHash('sha256').update(req.params.token).digest('hex');
+      const tokenResult = z.string().regex(/^[a-f0-9]{64}$/i).safeParse(req.params.token);
+      if (!tokenResult.success) return res.status(404).json({ error: 'Session not found or expired' });
+      const tokenHash = crypto.createHash('sha256').update(tokenResult.data).digest('hex');
       
       const [session] = await db
         .select({
@@ -12598,6 +12593,11 @@ Crawl-delay: 1
           fosterName: fosterAgreementSessions.fosterName,
           fosterEmail: fosterAgreementSessions.fosterEmail,
           fosterPhone: fosterAgreementSessions.fosterPhone,
+          fosterAddress: fosterAgreementSessions.fosterAddress,
+          origin: fosterAgreementSessions.origin,
+          directContactId: fosterAgreementSessions.directContactId,
+          templateHtmlSnapshot: fosterAgreementSessions.templateHtmlSnapshot,
+          templateName: fosterAgreementSessions.templateName,
           status: fosterAgreementSessions.status,
           expiresAt: fosterAgreementSessions.expiresAt,
           signedAt: fosterAgreementSessions.signedAt,
@@ -12610,8 +12610,21 @@ Crawl-delay: 1
         return res.status(404).json({ error: 'Session not found or expired' });
       }
 
+      if (session.status === 'cancelled') {
+        return res.status(410).json({ error: 'Session has been cancelled' });
+      }
+      if (session.status === 'expired') {
+        return res.status(410).json({ error: 'Session has expired' });
+      }
       // Check expiration
       if (session.expiresAt && new Date(session.expiresAt) < new Date()) {
+        await db
+          .update(fosterAgreementSessions)
+          .set({ status: 'expired', updatedAt: new Date() })
+          .where(and(
+            eq(fosterAgreementSessions.id, session.id),
+            eq(fosterAgreementSessions.status, 'pending'),
+          ));
         return res.status(410).json({ error: 'Session has expired' });
       }
 
@@ -12623,9 +12636,12 @@ Crawl-delay: 1
 
       // Fetch and process contract template
       let contractData: { html: string; name: string } | null = null;
-      if (session.templateId) {
+       if (session.templateId || session.templateHtmlSnapshot) {
         const DOMPurify = (await import('isomorphic-dompurify')).default;
-        const [template] = await db
+        const [template] = session.templateHtmlSnapshot ? [{
+          name: session.templateName || 'Foster Agreement',
+          htmlTemplate: session.templateHtmlSnapshot,
+        }] : await db
           .select({
             id: fosterContractTemplates.id,
             name: fosterContractTemplates.name,
@@ -12637,15 +12653,12 @@ Crawl-delay: 1
         if (template) {
           const { mergeFosterPlaceholders, buildFosterMergeData } = await import('./services/foster-contract-template');
           
-          // Fetch foster application for address
-          let fosterAddress = '';
-          const [fosterApp] = await db
-            .select({ address: fosterApplications.address })
-            .from(fosterApplications)
-            .where(eq(fosterApplications.id, session.fosterApplicationId))
-            .limit(1);
-          if (fosterApp) {
-            fosterAddress = fosterApp.address || '';
+          // Direct sessions freeze their address; old application sessions keep
+          // their existing application lookup for backward compatibility.
+          let fosterAddress = session.fosterAddress || '';
+          if (session.fosterApplicationId) {
+            const [fosterApp] = await db.select({ address: fosterApplications.address }).from(fosterApplications).where(eq(fosterApplications.id, session.fosterApplicationId)).limit(1);
+            fosterAddress = fosterApp?.address || fosterAddress;
           }
           
           const mergeData = buildFosterMergeData({
@@ -12704,7 +12717,9 @@ Crawl-delay: 1
       const { fosterAgreementSessions, fosterContractTemplates, fosterApplications, tenants } = await import('@shared/schema');
       const crypto = await import('crypto');
       
-      const tokenHash = crypto.createHash('sha256').update(req.params.token).digest('hex');
+      const tokenResult = z.string().regex(/^[a-f0-9]{64}$/i).safeParse(req.params.token);
+      if (!tokenResult.success) return res.status(404).json({ error: 'Session not found or expired' });
+      const tokenHash = crypto.createHash('sha256').update(tokenResult.data).digest('hex');
       
       const [session] = await db
         .select({
@@ -12715,6 +12730,9 @@ Crawl-delay: 1
           fosterName: fosterAgreementSessions.fosterName,
           fosterEmail: fosterAgreementSessions.fosterEmail,
           fosterPhone: fosterAgreementSessions.fosterPhone,
+          fosterAddress: fosterAgreementSessions.fosterAddress,
+          directContactId: fosterAgreementSessions.directContactId,
+          templateHtmlSnapshot: fosterAgreementSessions.templateHtmlSnapshot,
           status: fosterAgreementSessions.status,
           expiresAt: fosterAgreementSessions.expiresAt,
         })
@@ -12729,23 +12747,41 @@ Crawl-delay: 1
       if (session.status === 'signed') {
         return res.status(400).json({ error: 'Agreement has already been signed' });
       }
+      if (session.status === 'cancelled') {
+        return res.status(410).json({ error: 'Session has been cancelled' });
+      }
+      if (session.status === 'expired') {
+        return res.status(410).json({ error: 'Session has expired' });
+      }
 
       if (session.expiresAt && new Date(session.expiresAt) < new Date()) {
+        await db.update(fosterAgreementSessions).set({ status: 'expired', updatedAt: new Date() }).where(and(eq(fosterAgreementSessions.id, session.id), eq(fosterAgreementSessions.status, 'pending')));
         return res.status(410).json({ error: 'Session has expired' });
       }
 
       const signatureSchema = z.object({
-        signerName: z.string().min(1),
-        signerEmail: z.string().email(),
-        signatureImageData: z.string(),
+        signerName: z.string().trim().min(1).max(200),
+        signerEmail: z.string().trim().email().max(320),
+        signatureImageData: z
+          .string()
+          .max(2_000_000)
+          .regex(
+            /^data:image\/(png|jpe?g|webp);base64,[A-Za-z0-9+/]+={0,2}$/,
+            'A valid signature image is required',
+          ),
       });
 
       const signatureData = signatureSchema.parse(req.body);
+      // A direct link belongs to the approved contact selected by staff. Do not
+      // let a submitted email turn a direct agreement into a second contact.
+      if (session.directContactId && signatureData.signerEmail.trim().toLowerCase() !== session.fosterEmail.trim().toLowerCase()) {
+        return res.status(400).json({ error: 'Signer email must match the agreement recipient' });
+      }
 
       // Render final contract with signature
       let renderedContract = '';
-      if (session.templateId) {
-        const [template] = await db
+      if (session.templateId || session.templateHtmlSnapshot) {
+        const [template] = session.templateHtmlSnapshot ? [{ htmlTemplate: session.templateHtmlSnapshot }] : await db
           .select({
             id: fosterContractTemplates.id,
             htmlTemplate: fosterContractTemplates.htmlTemplate,
@@ -12760,15 +12796,10 @@ Crawl-delay: 1
             .where(eq(tenants.id, session.tenantId))
             .limit(1);
           
-          // Fetch foster application for address
-          let fosterAddress = '';
-          const [fosterApp] = await db
-            .select({ address: fosterApplications.address })
-            .from(fosterApplications)
-            .where(eq(fosterApplications.id, session.fosterApplicationId))
-            .limit(1);
-          if (fosterApp) {
-            fosterAddress = fosterApp.address || '';
+          let fosterAddress = session.fosterAddress || '';
+          if (session.fosterApplicationId) {
+            const [fosterApp] = await db.select({ address: fosterApplications.address }).from(fosterApplications).where(eq(fosterApplications.id, session.fosterApplicationId)).limit(1);
+            fosterAddress = fosterApp?.address || fosterAddress;
           }
           
           const { mergeFosterPlaceholders, buildFosterMergeData } = await import('./services/foster-contract-template');
@@ -12789,7 +12820,7 @@ Crawl-delay: 1
 
       // Update session with signature
       const signedAt = new Date();
-      await db
+      const [signedSession] = await db
         .update(fosterAgreementSessions)
         .set({
           status: 'signed',
@@ -12799,7 +12830,16 @@ Crawl-delay: 1
           renderedContract,
           updatedAt: new Date(),
         })
-        .where(eq(fosterAgreementSessions.id, session.id));
+        .where(and(
+          eq(fosterAgreementSessions.id, session.id),
+          eq(fosterAgreementSessions.status, 'pending'),
+          eq(fosterAgreementSessions.secureTokenHash, tokenHash),
+        ))
+        .returning({ id: fosterAgreementSessions.id });
+
+      if (!signedSession) {
+        return res.status(409).json({ error: 'This agreement has already been signed or is no longer active' });
+      }
 
       // Generate PDF of the signed agreement
       let contractPdfUrl: string | undefined;
@@ -12824,26 +12864,23 @@ Crawl-delay: 1
         // Don't fail the signing process if PDF generation fails
       }
 
-      // Update foster application to 'active_pool' status (approved foster)
-      await db
-        .update(fosterApplications)
-        .set({
-          pipelineStatus: 'active_pool',
-          status: 'approved',
-          updatedAt: new Date(),
-        })
-        .where(eq(fosterApplications.id, session.fosterApplicationId));
-      
-      console.log(`[Foster Agreement] Updated application ${session.fosterApplicationId} to active_pool status`);
+      // Direct agreements deliberately have no application to mutate.
+      if (session.fosterApplicationId) {
+        await db.update(fosterApplications).set({ pipelineStatus: 'active_pool', status: 'approved', updatedAt: new Date() }).where(eq(fosterApplications.id, session.fosterApplicationId));
+        console.log(`[Foster Agreement] Updated application ${session.fosterApplicationId} to active_pool status`);
+      }
 
       // Sync foster to contacts directory & user system
       try {
         const { activateFosterInDirectory } = await import('./services/contacts');
         await activateFosterInDirectory({
           tenantId: session.tenantId,
-          applicantName: signatureData.signerName,
-          applicantEmail: signatureData.signerEmail,
+          applicantName: session.directContactId ? session.fosterName : signatureData.signerName,
+          applicantEmail: session.directContactId ? session.fosterEmail : signatureData.signerEmail,
+          applicantPhone: session.fosterPhone || undefined,
           fosterApplicationId: session.fosterApplicationId,
+          address: session.fosterAddress || undefined,
+          existingContactId: session.directContactId || undefined,
         });
       } catch (syncError) {
         console.error('[Foster Agreement] Error syncing foster to directory:', syncError);
@@ -12851,13 +12888,13 @@ Crawl-delay: 1
 
       // Create Google Drive folder for the foster (same automation as when manually moved to active_pool)
       // Check if folder already exists to avoid duplicates
-      const [fosterAppForFolder] = await db
+      const [fosterAppForFolder] = session.fosterApplicationId ? await db
         .select({ driveFolderId: fosterApplications.driveFolderId })
         .from(fosterApplications)
         .where(eq(fosterApplications.id, session.fosterApplicationId))
-        .limit(1);
+        .limit(1) : [undefined];
       
-      if (!fosterAppForFolder?.driveFolderId) {
+      if (session.fosterApplicationId && !fosterAppForFolder?.driveFolderId) {
         try {
           const { VolunteerFosterBackupService } = await import('./lib/volunteerFosterBackupService');
           const backupService = new VolunteerFosterBackupService(session.tenantId);
@@ -12874,7 +12911,7 @@ Crawl-delay: 1
         } catch (folderError) {
           console.error('[Foster Agreement] Error creating folder:', folderError);
         }
-      } else {
+      } else if (session.fosterApplicationId) {
         console.log(`[Foster Agreement] Folder already exists for application ${session.fosterApplicationId}, skipping creation`);
       }
 
@@ -12992,7 +13029,9 @@ Crawl-delay: 1
                   <li><strong>Phone:</strong> ${safePhone}</li>
                   <li><strong>Signed:</strong> ${signedDate}</li>
                 </ul>
-                <p>The foster applicant has been moved to "In Foster" status and is ready for their foster pet!</p>
+                <p>${session.fosterApplicationId
+                  ? 'The foster applicant has been moved to "In Foster" status and is ready for their foster pet!'
+                  : 'This approved adopter has signed the foster agreement and is now active in the foster directory.'}</p>
                 ${pdfAttachments.length > 0
                   ? '<p>The signed foster agreement PDF is attached to this email.</p>'
                   : `<hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
@@ -13017,12 +13056,9 @@ Crawl-delay: 1
           const [contact] = await db
             .select({ id: contacts.id })
             .from(contacts)
-            .where(
-              and(
-                eq(contacts.tenantId, session.tenantId),
-                sql`LOWER(TRIM(${contacts.email})) = ${normalizedEmail}`
-              )
-            )
+            .where(and(eq(contacts.tenantId, session.tenantId), session.directContactId
+              ? eq(contacts.id, session.directContactId)
+              : sql`LOWER(TRIM(${contacts.email})) = ${normalizedEmail}`))
             .limit(1);
 
           await db.insert(personDocuments).values({
@@ -13073,6 +13109,12 @@ Crawl-delay: 1
           fosterName: fosterAgreementSessions.fosterName,
           fosterEmail: fosterAgreementSessions.fosterEmail,
           fosterPhone: fosterAgreementSessions.fosterPhone,
+          fosterAddress: fosterAgreementSessions.fosterAddress,
+          origin: fosterAgreementSessions.origin,
+          templateName: fosterAgreementSessions.templateName,
+          sendMethod: fosterAgreementSessions.sendMethod,
+          directContactId: fosterAgreementSessions.directContactId,
+          staffInitiatedBy: fosterAgreementSessions.staffInitiatedBy,
           status: fosterAgreementSessions.status,
           expiresAt: fosterAgreementSessions.expiresAt,
           signedAt: fosterAgreementSessions.signedAt,
@@ -13088,6 +13130,215 @@ Crawl-delay: 1
     } catch (error) {
       next(error);
     }
+  });
+
+  // Completed adoptions are the authoritative approval evidence: unlike an
+  // application stage/contact tag they represent an actual finalized placement.
+  // Joining to contacts gives direct-send a stable tenant-scoped identity and
+  // DISTINCT ON prevents one adopter with multiple completed adoptions repeating.
+  app.get('/api/foster-agreements/approved-adopters', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      const { getApprovedAdopters } = await import('./services/direct-foster-agreement');
+      res.json({ adopters: await getApprovedAdopters(req.tenant!.id) });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/api/foster-agreements/direct-send', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      const body = z.object({
+        contactId: z.string().uuid(),
+        templateId: z.number().int().positive().optional(),
+        sendMethod: z.enum(['email', 'sms', 'both']),
+      }).parse(req.body);
+      const { fosterContractTemplates } = await import('@shared/schema');
+      // A contact is eligible only when this tenant has a completed adoption
+      // under the same email; this prevents cross-tenant IDs and unapproved sends.
+      const {
+        createPendingDirectFosterAgreement,
+        getApprovedAdopter,
+        resolveDeliveredSendMethod,
+      } = await import('./services/direct-foster-agreement');
+      const contact = await getApprovedAdopter(req.tenant!.id, body.contactId);
+      if (!contact) return res.status(404).json({ error: 'Approved adopter not found' });
+      if ((body.sendMethod === 'email' || body.sendMethod === 'both') && !contact.email) return res.status(400).json({ error: 'Approved adopter has no email address' });
+      if ((body.sendMethod === 'sms' || body.sendMethod === 'both') && !contact.phone) return res.status(400).json({ error: 'Approved adopter has no phone number' });
+
+      const templateWhere = body.templateId
+        ? and(eq(fosterContractTemplates.id, body.templateId), eq(fosterContractTemplates.tenantId, req.tenant!.id), eq(fosterContractTemplates.isActive, true))
+        : and(eq(fosterContractTemplates.tenantId, req.tenant!.id), eq(fosterContractTemplates.isActive, true), eq(fosterContractTemplates.isDefault, true));
+      let [template] = await db.select().from(fosterContractTemplates).where(templateWhere).limit(1);
+      if (!template && !body.templateId) [template] = await db.select().from(fosterContractTemplates).where(and(eq(fosterContractTemplates.tenantId, req.tenant!.id), eq(fosterContractTemplates.isActive, true))).limit(1);
+      if (!template) return res.status(404).json({ error: 'Active foster agreement template not found' });
+
+      const crypto = await import('crypto');
+      const token = crypto.randomBytes(32).toString('hex');
+      const expiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+      const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+      const session = await createPendingDirectFosterAgreement({
+        tenantId: req.tenant!.id,
+        templateId: template.id,
+        staffInitiatedBy: req.user!.id,
+        contact,
+        templateName: template.name,
+        templateHtmlSnapshot: template.htmlTemplate,
+        sendMethod: body.sendMethod,
+        secureTokenHash: tokenHash,
+        expiresAt,
+      });
+      if (!session) {
+        return res.status(409).json({
+          error: 'This adopter already has an active direct foster agreement. Use Agreement History to resend or cancel it.',
+        });
+      }
+      const base = req.tenant!.customDomain ? `https://${req.tenant!.customDomain}` :
+        `${process.env.REPLIT_DEPLOYMENT === '1' ? 'https://irescue.life' : process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : 'http://localhost:5000'}/${req.tenant!.subdomain}`;
+      const signingUrl = `${base}/foster-agreement/sign/${token}`;
+      const deliveredMethods: Array<'email' | 'sms'> = [];
+      const deliveryErrors: string[] = [];
+      if (body.sendMethod === 'email' || body.sendMethod === 'both') {
+        try {
+          const { EmailService } = await import('./lib/email-service');
+          const email = await EmailService.forTenant(req.tenant!.id);
+          if (!email) throw new Error('Email service is not configured');
+          await email.send({ to: contact.email, subject: `Action Required: Sign Foster Agreement - ${escapeHtml(req.tenant!.name)}`, html: `<p>Hello ${escapeHtml(contact.name)},</p><p>Please <a href="${signingUrl}">review and sign your foster agreement</a>.</p>` });
+          deliveredMethods.push('email');
+        } catch (error: any) {
+          deliveryErrors.push(`Email: ${error?.message || 'delivery failed'}`);
+        }
+      }
+      if (body.sendMethod === 'sms' || body.sendMethod === 'both') {
+        try {
+          const { sendSms } = await import('./lib/twilio-service');
+          await sendSms(req.tenant!.id, contact.phone!, `${req.tenant!.name}: Please sign your foster agreement: ${signingUrl}`, 'notification', { source: 'foster_agreement', sessionId: session.id });
+          deliveredMethods.push('sms');
+        } catch (error: any) {
+          deliveryErrors.push(`SMS: ${error?.message || 'delivery failed'}`);
+        }
+      }
+      if (deliveredMethods.length === 0) {
+        await db.delete(fosterAgreementSessions).where(eq(fosterAgreementSessions.id, session.id));
+        return res.status(400).json({ error: deliveryErrors[0] || 'Failed to deliver foster agreement' });
+      }
+      const deliveredSendMethod = resolveDeliveredSendMethod(deliveredMethods)!;
+      if (deliveredSendMethod !== body.sendMethod) {
+        await db
+          .update(fosterAgreementSessions)
+          .set({ sendMethod: deliveredSendMethod, updatedAt: new Date() })
+          .where(eq(fosterAgreementSessions.id, session.id));
+      }
+      // Deliberately omit token/signingUrl from staff response.
+      res.json({
+        session: {
+          id: session.id,
+          status: session.status,
+          expiresAt: session.expiresAt,
+          sendMethod: deliveredSendMethod,
+        },
+        warning: deliveryErrors.length > 0 ? deliveryErrors.join(' ') : undefined,
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: 'Invalid direct foster agreement request' });
+      next(error);
+    }
+  });
+
+  app.post('/api/foster-agreements/sessions/:id/cancel', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      if (!z.string().uuid().safeParse(req.params.id).success) return res.status(400).json({ error: 'Invalid session id' });
+      const [updated] = await db.update(fosterAgreementSessions).set({ status: 'cancelled', updatedAt: new Date() }).where(and(eq(fosterAgreementSessions.id, req.params.id), eq(fosterAgreementSessions.tenantId, req.tenant!.id), eq(fosterAgreementSessions.status, 'pending'))).returning({ id: fosterAgreementSessions.id });
+      if (!updated) return res.status(400).json({ error: 'Only pending agreements can be cancelled' });
+      res.json({ success: true });
+    } catch (error) { next(error); }
+  });
+
+  app.post('/api/foster-agreements/sessions/:id/resend', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      if (!z.string().uuid().safeParse(req.params.id).success) return res.status(400).json({ error: 'Invalid session id' });
+      // Recover a claim left behind only if a worker died mid-delivery.
+      await db
+        .update(fosterAgreementSessions)
+        .set({ status: 'pending', updatedAt: new Date() })
+        .where(and(
+          eq(fosterAgreementSessions.id, req.params.id),
+          eq(fosterAgreementSessions.tenantId, req.tenant!.id),
+          eq(fosterAgreementSessions.status, 'resending'),
+          lt(fosterAgreementSessions.updatedAt, new Date(Date.now() - 10 * 60 * 1000)),
+        ));
+      const [session] = await db.select().from(fosterAgreementSessions).where(and(eq(fosterAgreementSessions.id, req.params.id), eq(fosterAgreementSessions.tenantId, req.tenant!.id), eq(fosterAgreementSessions.status, 'pending'))).limit(1);
+      if (!session) return res.status(400).json({ error: 'Only pending agreements can be resent' });
+      const method = session.sendMethod || 'email';
+      const { resolveDeliveredSendMethod } = await import('./services/direct-foster-agreement');
+      if ((method === 'email' || method === 'both') && !session.fosterEmail) return res.status(400).json({ error: 'Agreement recipient has no email address' });
+      if ((method === 'sms' || method === 'both') && !session.fosterPhone) return res.status(400).json({ error: 'Agreement recipient has no phone number' });
+      const [claimedSession] = await db
+        .update(fosterAgreementSessions)
+        .set({ status: 'resending', updatedAt: new Date() })
+        .where(and(
+          eq(fosterAgreementSessions.id, session.id),
+          eq(fosterAgreementSessions.tenantId, req.tenant!.id),
+          eq(fosterAgreementSessions.status, 'pending'),
+          eq(fosterAgreementSessions.secureTokenHash, session.secureTokenHash),
+        ))
+        .returning({ id: fosterAgreementSessions.id });
+      if (!claimedSession) {
+        return res.status(409).json({ error: 'This agreement is already being resent or is no longer pending' });
+      }
+      const crypto = await import('crypto');
+      const token = crypto.randomBytes(32).toString('hex');
+      const expiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+      const base = req.tenant!.customDomain ? `https://${req.tenant!.customDomain}` :
+        `${process.env.REPLIT_DEPLOYMENT === '1' ? 'https://irescue.life' : process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : 'http://localhost:5000'}/${req.tenant!.subdomain}`;
+      const url = `${base}/foster-agreement/sign/${token}`;
+      const deliveredMethods: Array<'email' | 'sms'> = [];
+      const failures: Error[] = [];
+      if (method === 'email' || method === 'both') try {
+        const { EmailService } = await import('./lib/email-service');
+        const email = await EmailService.forTenant(req.tenant!.id);
+        if (!email) throw new Error('Email service is not configured');
+        await email.send({ to: session.fosterEmail, subject: `Reminder: Sign Foster Agreement - ${escapeHtml(req.tenant!.name)}`, html: `<p>Hello ${escapeHtml(session.fosterName)},</p><p><a href="${url}">Sign your foster agreement</a>.</p>` });
+        deliveredMethods.push('email');
+      } catch (error: any) { failures.push(error); }
+      if (method === 'sms' || method === 'both') try {
+        const { sendSms } = await import('./lib/twilio-service');
+        await sendSms(req.tenant!.id, session.fosterPhone!, `${req.tenant!.name}: Please sign your foster agreement: ${url}`, 'notification', { source: 'foster_agreement', sessionId: session.id });
+        deliveredMethods.push('sms');
+      } catch (error: any) { failures.push(error); }
+      // Do not invalidate a usable old URL until at least one requested delivery succeeded.
+      if (deliveredMethods.length === 0) {
+        await db
+          .update(fosterAgreementSessions)
+          .set({ status: 'pending', updatedAt: new Date() })
+          .where(and(
+            eq(fosterAgreementSessions.id, session.id),
+            eq(fosterAgreementSessions.status, 'resending'),
+            eq(fosterAgreementSessions.secureTokenHash, session.secureTokenHash),
+          ));
+        return res.status(400).json({ error: failures[0]?.message || 'Failed to resend foster agreement' });
+      }
+      const deliveredSendMethod = resolveDeliveredSendMethod(deliveredMethods)!;
+      const [rotatedSession] = await db.update(fosterAgreementSessions).set({
+        secureTokenHash: crypto.createHash('sha256').update(token).digest('hex'),
+        expiresAt,
+        sendMethod: deliveredSendMethod,
+        status: 'pending',
+        updatedAt: new Date(),
+      }).where(and(
+        eq(fosterAgreementSessions.id, session.id),
+        eq(fosterAgreementSessions.status, 'resending'),
+        eq(fosterAgreementSessions.secureTokenHash, session.secureTokenHash),
+      )).returning({ id: fosterAgreementSessions.id });
+      if (!rotatedSession) {
+        return res.status(409).json({ error: 'The agreement changed while the new link was being delivered' });
+      }
+      res.json({
+        success: true,
+        expiresAt,
+        sendMethod: deliveredSendMethod,
+        warning: failures.length > 0 ? failures.map((failure) => failure.message).join(' ') : undefined,
+      });
+    } catch (error) { next(error); }
   });
 
   /**
@@ -21211,6 +21462,10 @@ ${renderedHtml}
               tenantId: req.tenant!.id,
               fosterApplicationId: updatedApplication.id,
               templateId: template.id,
+              origin: 'application',
+              templateName: template.name,
+              templateHtmlSnapshot: template.htmlTemplate,
+              sendMethod: agreementSendMethod,
               fosterName: updatedApplication.applicantName,
               fosterEmail: updatedApplication.applicantEmail,
               fosterPhone: updatedApplication.applicantPhone || null,

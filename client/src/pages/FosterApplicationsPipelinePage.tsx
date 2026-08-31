@@ -3,10 +3,12 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import FosterKanbanBoard from "@/components/FosterKanbanBoard";
 import { ViewApplicationDialog } from "@/components/ViewApplicationDialog";
 import { MoveAndSendFosterAgreementDialog } from "@/components/MoveAndSendFosterAgreementDialog";
+import { DirectFosterAgreementDialog } from "@/components/DirectFosterAgreementDialog";
+import { FosterAgreementHistory } from "@/components/FosterAgreementHistory";
 import { useAuth } from "@/contexts/AuthContext";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Users, Filter, UserCheck, XCircle, Eye } from "lucide-react";
+import { Loader2, Users, Filter, UserCheck, XCircle, Eye, FileSignature } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -43,11 +45,12 @@ export default function FosterApplicationsPipelinePage() {
   const { toast } = useToast();
   const [sendingAgreementId, setSendingAgreementId] = useState<string | null>(null);
   const [downloadingAgreementId, setDownloadingAgreementId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"pipeline" | "active_pool" | "rejected">("pipeline");
+  const [activeTab, setActiveTab] = useState<"pipeline" | "active_pool" | "rejected" | "agreement_history">("pipeline");
   const [searchQuery, setSearchQuery] = useState("");
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [applicationToView, setApplicationToView] = useState<ViewApplicationData | null>(null);
   const [agreementDialogOpen, setAgreementDialogOpen] = useState(false);
+  const [directAgreementDialogOpen, setDirectAgreementDialogOpen] = useState(false);
   const [applicationForAgreement, setApplicationForAgreement] = useState<{
     id: string;
     applicantName: string;
@@ -338,6 +341,10 @@ export default function FosterApplicationsPipelinePage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <Button onClick={() => setDirectAgreementDialogOpen(true)} data-testid="button-send-foster-agreement-directly-header">
+              <FileSignature className="h-4 w-4 mr-2" />
+              Send Agreement Directly
+            </Button>
             <Badge variant="outline" className="gap-1" data-testid="badge-total-applications">
               <Users className="h-4 w-4" />
               {applications.length} Applications
@@ -350,7 +357,7 @@ export default function FosterApplicationsPipelinePage() {
         </div>
 
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
-          <TabsList>
+          <TabsList className="h-auto flex flex-wrap">
             <TabsTrigger value="pipeline" data-testid="tab-pipeline">
               Pipeline View
             </TabsTrigger>
@@ -360,6 +367,9 @@ export default function FosterApplicationsPipelinePage() {
             <TabsTrigger value="rejected" data-testid="tab-rejected">
               <XCircle className="h-4 w-4 mr-1" />
               Rejected ({rejectedApplications.length})
+            </TabsTrigger>
+            <TabsTrigger value="agreement_history" data-testid="tab-foster-agreement-history">
+              Agreement History
             </TabsTrigger>
           </TabsList>
 
@@ -566,6 +576,9 @@ export default function FosterApplicationsPipelinePage() {
               </CardContent>
             </Card>
           </TabsContent>
+          <TabsContent value="agreement_history" className="mt-4">
+            <FosterAgreementHistory />
+          </TabsContent>
         </Tabs>
       </div>
 
@@ -594,6 +607,10 @@ export default function FosterApplicationsPipelinePage() {
         onSuccess={() => {
           queryClient.invalidateQueries({ queryKey: ['/api/foster-applications'] });
         }}
+      />
+      <DirectFosterAgreementDialog
+        open={directAgreementDialogOpen}
+        onOpenChange={setDirectAgreementDialogOpen}
       />
     </DashboardLayout>
   );

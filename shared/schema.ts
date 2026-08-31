@@ -1591,7 +1591,7 @@ export const contacts = pgTable("contacts", {
   phone: text("phone"),
   address: text("address"),
   // Source tracking - where did this contact come from
-  source: text("source").array().notNull().default(sql`ARRAY[]::text[]`).$type<("adoption_application" | "foster_application" | "volunteer_application" | "user" | "donation" | "manual" | "newsletter")[]>(),
+  source: text("source").array().notNull().default(sql`ARRAY[]::text[]`).$type<("adoption_application" | "foster_application" | "direct_foster_agreement" | "volunteer_application" | "user" | "donation" | "manual" | "newsletter")[]>(),
   // Role information if they're a user
   role: text("role").array().$type<("admin" | "board_member" | "staff" | "foster" | "volunteer")[]>(),
   // Donation tracking
@@ -3375,12 +3375,21 @@ export type FosterContractTemplate = typeof fosterContractTemplates.$inferSelect
 export const fosterAgreementSessions = pgTable("foster_agreement_sessions", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
-  fosterApplicationId: uuid("foster_application_id").notNull().references(() => fosterApplications.id, { onDelete: 'cascade' }),
+  // Direct agreements are sent to an existing approved adopter and therefore
+  // intentionally have no foster application.
+  fosterApplicationId: uuid("foster_application_id").references(() => fosterApplications.id, { onDelete: 'cascade' }),
   templateId: integer("template_id").references(() => fosterContractTemplates.id, { onDelete: 'set null' }),
+  origin: text("origin").notNull().default("application").$type<"application" | "direct">(),
+  staffInitiatedBy: uuid("staff_initiated_by").references(() => users.id, { onDelete: 'set null' }),
+  directContactId: uuid("direct_contact_id").references(() => contacts.id, { onDelete: 'set null' }),
+  fosterAddress: text("foster_address"),
+  templateName: text("template_name"),
+  templateHtmlSnapshot: text("template_html_snapshot"),
+  sendMethod: text("send_method").$type<"email" | "sms" | "both">(),
   fosterName: text("foster_name").notNull(),
   fosterEmail: text("foster_email").notNull(),
   fosterPhone: text("foster_phone"),
-  status: text("status").notNull().default("pending").$type<"pending" | "signed" | "expired" | "cancelled">(),
+  status: text("status").notNull().default("pending").$type<"pending" | "resending" | "signed" | "expired" | "cancelled">(),
   secureTokenHash: text("secure_token_hash").notNull(),
   expiresAt: timestamp("expires_at").notNull(),
   signedAt: timestamp("signed_at"),
@@ -3390,7 +3399,11 @@ export const fosterAgreementSessions = pgTable("foster_agreement_sessions", {
   contractPdfUrl: text("contract_pdf_url"), // URL to the generated PDF in object storage
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+}, (table) => ({
+  oneActiveDirectAgreementPerContact: uniqueIndex("foster_agreement_sessions_active_direct_contact_unique")
+    .on(table.tenantId, table.directContactId)
+    .where(sql`${table.origin} = 'direct' AND ${table.directContactId} IS NOT NULL AND ${table.status} IN ('pending', 'resending')`),
+}));
 
 export const insertFosterAgreementSessionSchema = createInsertSchema(fosterAgreementSessions).omit({
   id: true,

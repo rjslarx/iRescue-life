@@ -2,7 +2,7 @@ import { db } from '../db';
 import { contacts } from '@shared/schema';
 import { eq, and } from 'drizzle-orm';
 
-export type ContactSource = 'adoption_application' | 'foster_application' | 'volunteer_application' | 'user' | 'donation' | 'manual' | 'newsletter';
+export type ContactSource = 'adoption_application' | 'foster_application' | 'direct_foster_agreement' | 'volunteer_application' | 'user' | 'donation' | 'manual' | 'newsletter';
 export type ContactRole = 'admin' | 'board_member' | 'staff' | 'foster' | 'volunteer';
 
 /**
@@ -174,8 +174,9 @@ export async function activateFosterInDirectory(params: {
   applicantPhone?: string;
   address?: string;
   fosterApplicationId?: string;
+  existingContactId?: string;
 }) {
-  const { tenantId, applicantName, applicantEmail, applicantPhone, address } = params;
+  const { tenantId, applicantName, applicantEmail, applicantPhone, address, existingContactId } = params;
   const { users } = await import('@shared/schema');
   const { eq, and, sql } = await import('drizzle-orm');
 
@@ -189,16 +190,58 @@ export async function activateFosterInDirectory(params: {
 
   let contact = null;
   try {
-    contact = await upsertContact({
-      tenantId,
-      email: normalizedEmail,
-      name: applicantName,
-      phone: applicantPhone,
-      address,
-      source: 'foster_application',
-      role: ['foster'],
-      tags: ['Active Foster'],
-    });
+    if (existingContactId) {
+      const [selectedContact] = await db
+        .select()
+        .from(contacts)
+        .where(and(
+          eq(contacts.id, existingContactId),
+          eq(contacts.tenantId, tenantId),
+          sql`LOWER(TRIM(${contacts.email})) = ${normalizedEmail}`,
+        ))
+        .limit(1);
+
+      if (!selectedContact) {
+        throw new Error('Selected direct-agreement contact no longer matches the recipient');
+      }
+
+      // A direct agreement authorizes this exact existing contact. Preserve the
+      // adopter's master identity and all existing history while merging only
+      // the additional foster access markers.
+      [contact] = await db
+        .update(contacts)
+        .set({
+          source: sql`CASE
+            WHEN COALESCE(${contacts.source}, ARRAY[]::text[]) @> ARRAY['direct_foster_agreement']::text[]
+              THEN COALESCE(${contacts.source}, ARRAY[]::text[])
+            ELSE array_append(COALESCE(${contacts.source}, ARRAY[]::text[]), 'direct_foster_agreement')
+          END`,
+          role: sql`CASE
+            WHEN COALESCE(${contacts.role}, ARRAY[]::text[]) @> ARRAY['foster']::text[]
+              THEN COALESCE(${contacts.role}, ARRAY[]::text[])
+            ELSE array_append(COALESCE(${contacts.role}, ARRAY[]::text[]), 'foster')
+          END`,
+          tags: sql`CASE
+            WHEN COALESCE(${contacts.tags}, ARRAY[]::text[]) @> ARRAY['Active Foster']::text[]
+              THEN COALESCE(${contacts.tags}, ARRAY[]::text[])
+            ELSE array_append(COALESCE(${contacts.tags}, ARRAY[]::text[]), 'Active Foster')
+          END`,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(contacts.id, existingContactId), eq(contacts.tenantId, tenantId)))
+        .returning();
+    } else {
+      contact = await upsertContact({
+        tenantId,
+        email: normalizedEmail,
+        name: applicantName,
+        phone: applicantPhone,
+        address,
+        source: 'foster_application',
+        role: ['foster'],
+        tags: ['Active Foster'],
+      });
+    }
     console.log(`[Foster Directory Sync] Contact upserted for ${normalizedEmail}, id: ${contact?.id}`);
   } catch (contactError) {
     console.error(`[Foster Directory Sync] Failed to upsert contact for ${normalizedEmail}:`, contactError);

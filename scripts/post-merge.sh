@@ -2,6 +2,26 @@
 set -e
 npm install
 
+# Task #298: foster agreements can be sent directly to an existing approved
+# adopter. These additive ALTERs preserve legacy application-backed sessions.
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' || echo "[post-merge] foster direct agreement columns skipped (already applied or DB unreachable)."
+ALTER TABLE foster_agreement_sessions ALTER COLUMN foster_application_id DROP NOT NULL;
+ALTER TABLE foster_agreement_sessions ADD COLUMN IF NOT EXISTS origin text NOT NULL DEFAULT 'application';
+ALTER TABLE foster_agreement_sessions ADD COLUMN IF NOT EXISTS staff_initiated_by uuid REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE foster_agreement_sessions ADD COLUMN IF NOT EXISTS direct_contact_id uuid REFERENCES contacts(id) ON DELETE SET NULL;
+ALTER TABLE foster_agreement_sessions ADD COLUMN IF NOT EXISTS foster_address text;
+ALTER TABLE foster_agreement_sessions ADD COLUMN IF NOT EXISTS template_name text;
+ALTER TABLE foster_agreement_sessions ADD COLUMN IF NOT EXISTS template_html_snapshot text;
+ALTER TABLE foster_agreement_sessions ADD COLUMN IF NOT EXISTS send_method text;
+CREATE INDEX IF NOT EXISTS foster_agreement_sessions_direct_contact_idx
+  ON foster_agreement_sessions (tenant_id, direct_contact_id);
+CREATE UNIQUE INDEX IF NOT EXISTS foster_agreement_sessions_active_direct_contact_unique
+  ON foster_agreement_sessions (tenant_id, direct_contact_id)
+  WHERE origin = 'direct'
+    AND direct_contact_id IS NOT NULL
+    AND status IN ('pending', 'resending');
+SQL
+
 # drizzle-kit push reliably hangs against the live Neon pool on this project,
 # so tasks that need schema changes apply SQL ALTERs directly. We still try
 # the push (it auto-resolves additive drift when it does run) but cap it at

@@ -28,7 +28,8 @@ const RESERVED_PATHS = [
   'medical-fund', 'contract', 'collaboration', 'reset-password', 'fundraise',
   'forgot-password', 'verify-email', 'unsubscribe', 'volunteer-waiver', 'contest',
   'vip-club', 'wall-of-heroes', 'surgery-day-request', 'matchmaker',
-  'five-dollar-friday'
+  'five-dollar-friday', 'foster-agreement', 'surrender-agreement',
+  'adoption-agreement'
 ];
 
 // Helper to check if a path segment is reserved
