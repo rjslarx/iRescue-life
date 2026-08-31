@@ -13,7 +13,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 interface Adopter { id: string; name: string; email?: string | null; phone?: string | null; address?: string | null; }
 interface Template { id: number; name: string; isActive: boolean; isDefault?: boolean; }
 
-export function DirectFosterAgreementDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+export function DirectFosterAgreementDialog({
+  open,
+  onOpenChange,
+  initialTemplateId,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  initialTemplateId?: number | null;
+}) {
   const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [contact, setContact] = useState<Adopter | null>(null);
@@ -35,9 +43,12 @@ export function DirectFosterAgreementDialog({ open, onOpenChange }: { open: bool
   );
 
   useEffect(() => {
-    if (open) return;
+    if (open) {
+      setTemplateId(initialTemplateId ? String(initialTemplateId) : "");
+      return;
+    }
     setSearch(""); setContact(null); setTemplateId(""); setSendMethod("email");
-  }, [open]);
+  }, [open, initialTemplateId]);
   useEffect(() => {
     if (!hasEmail && hasSms) setSendMethod("sms");
     else if (hasEmail && !hasSms && sendMethod !== "email") setSendMethod("email");

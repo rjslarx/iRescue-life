@@ -43,6 +43,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { SmartTemplateEditor, type DocumentType } from "@/components/SmartTemplateEditor";
 import type { EditableVariable } from "@shared/schema";
 import { ContractTemplateWizard } from "@/components/ContractTemplateWizard";
+import { DirectFosterAgreementDialog } from "@/components/DirectFosterAgreementDialog";
 
 interface ContractTemplateSection {
   id: string;
@@ -427,6 +428,7 @@ export default function ContractTemplatesPage() {
   const [sendRecipientEmail, setSendRecipientEmail] = useState("");
   const [sendAnimalId, setSendAnimalId] = useState<string>("none");
   const [pdfLoadingId, setPdfLoadingId] = useState<string | null>(null);
+  const [directFosterTemplate, setDirectFosterTemplate] = useState<ContractTemplate | null>(null);
 
   // Get current merge fields and default sections based on active contract type
   const currentMergeFields = activeContractType === 'adoption' ? ADOPTION_MERGE_FIELDS : activeContractType === 'foster' ? FOSTER_MERGE_FIELDS : activeContractType === 'surrender' ? SURRENDER_MERGE_FIELDS : PLACEMENT_MERGE_FIELDS;
@@ -1581,6 +1583,14 @@ export default function ContractTemplatesPage() {
           </DialogContent>
         </Dialog>
 
+        <DirectFosterAgreementDialog
+          open={!!directFosterTemplate}
+          onOpenChange={(open) => {
+            if (!open) setDirectFosterTemplate(null);
+          }}
+          initialTemplateId={directFosterTemplate?.id}
+        />
+
         {/* Delete Confirmation Dialog */}
         <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
           <AlertDialogContent data-testid="dialog-confirm-delete">
@@ -1797,6 +1807,17 @@ export default function ContractTemplatesPage() {
                 >
                   <Send className="h-4 w-4 mr-1" />
                   Send to Someone
+                </Button>
+              )}
+              {activeContractType === 'foster' && template.isActive && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setDirectFosterTemplate(template)}
+                  data-testid={`button-send-foster-agreement-${template.id}`}
+                >
+                  <Send className="h-4 w-4 mr-1" />
+                  Send Agreement
                 </Button>
               )}
               {!template.isDefault && (
