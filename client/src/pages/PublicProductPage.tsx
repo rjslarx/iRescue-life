@@ -22,6 +22,9 @@ import {
   Minus,
   Plus,
   Trophy,
+  HeartHandshake,
+  Sparkles,
+  ArrowRight,
 } from "lucide-react";
 import { SiFacebook, SiX } from "react-icons/si";
 import type { ShopProduct, ShopProductVariant, Tenant } from "@shared/schema";
@@ -275,18 +278,18 @@ export default function PublicProductPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className={`min-h-screen ${isSplitPot ? 'bg-gradient-to-b from-purple-50/70 via-background to-background dark:from-purple-950/20' : 'bg-background'}`}>
       <PublicHeader rescueName={rescueName} logoUrl={tenant?.logoUrl} />
 
-      <main className="container max-w-4xl mx-auto px-4 py-8">
+      <main className="container max-w-6xl mx-auto px-4 py-6 sm:py-10">
         <Link href="/shop" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground mb-6">
           <ArrowLeft className="h-4 w-4 mr-1" />
           Back to Shop
         </Link>
 
-        <div className="grid md:grid-cols-2 gap-8">
+        <div className="grid items-start gap-8 md:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)] lg:gap-12">
           <div className="space-y-4">
-            <div className="aspect-square rounded-lg overflow-hidden bg-muted">
+            <div className={`aspect-square overflow-hidden bg-muted shadow-sm ${isSplitPot ? 'rounded-3xl ring-1 ring-purple-200/80 dark:ring-purple-800' : 'rounded-lg'}`}>
               {product.imageUrls && product.imageUrls.length > 0 ? (
                 <img
                   src={product.imageUrls[0]}
@@ -294,8 +297,18 @@ export default function PublicProductPage() {
                   className="w-full h-full object-cover"
                 />
               ) : (
-                <div className="w-full h-full flex items-center justify-center">
-                  {getProductTypeIcon(product.productType)}
+                <div className={`flex h-full w-full items-center justify-center ${isSplitPot ? 'bg-gradient-to-br from-purple-700 via-violet-600 to-fuchsia-500 text-white' : ''}`}>
+                  {isSplitPot ? (
+                    <div className="space-y-4 text-center">
+                      <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-white/15 ring-1 ring-white/30 backdrop-blur">
+                        <Trophy className="h-12 w-12" />
+                      </div>
+                      <div>
+                        <p className="text-4xl font-black tracking-tight">50 / 50</p>
+                        <p className="mt-1 text-sm font-semibold uppercase tracking-[0.25em] text-white/80">Split the Pot</p>
+                      </div>
+                    </div>
+                  ) : getProductTypeIcon(product.productType)}
                 </div>
               )}
             </div>
@@ -314,7 +327,7 @@ export default function PublicProductPage() {
             )}
           </div>
 
-          <div className="space-y-6">
+          <div className={`space-y-6 ${isSplitPot ? 'md:sticky md:top-6' : ''}`}>
             <div>
               <div className="flex items-center gap-2 mb-2 flex-wrap">
                 <Badge variant="secondary" className="gap-1">
@@ -336,11 +349,11 @@ export default function PublicProductPage() {
                 {product.featured && <Badge>Featured</Badge>}
               </div>
 
-              <h1 className="text-2xl font-bold" data-testid="product-name">
+              <h1 className={`${isSplitPot ? 'text-3xl sm:text-4xl font-black tracking-tight' : 'text-2xl font-bold'}`} data-testid="product-name">
                 {product.name}
               </h1>
 
-              <div className="flex items-baseline gap-2 mt-2">
+              <div className="flex items-baseline gap-2 mt-3">
                 <span className="text-2xl font-bold" data-testid="product-price">
                   {formatPrice(currentPrice)}
                 </span>
@@ -355,36 +368,89 @@ export default function PublicProductPage() {
               </div>
             </div>
 
+            {isSplitPot && (
+              <section
+                className={`relative overflow-hidden rounded-3xl border p-5 shadow-sm sm:p-6 ${
+                  isDrawn
+                    ? 'border-amber-300 bg-gradient-to-br from-amber-50 to-yellow-100 dark:border-amber-800 dark:from-amber-950/50 dark:to-yellow-950/30'
+                    : 'border-purple-200 bg-gradient-to-br from-purple-700 via-violet-700 to-fuchsia-600 text-white dark:border-purple-700'
+                }`}
+                data-testid="split-pot-product-info"
+              >
+                <Sparkles className={`absolute -right-4 -top-4 h-28 w-28 ${isDrawn ? 'text-amber-300/30' : 'text-white/10'}`} aria-hidden="true" />
+                <div className="relative">
+                  <div className="mb-4 flex items-center gap-2 text-sm font-bold uppercase tracking-[0.16em]">
+                    <Trophy className="h-5 w-5" />
+                    {isDrawn ? 'Drawing complete' : 'Live 50/50 jackpot'}
+                  </div>
+                  <p className={`text-sm font-medium ${isDrawn ? 'text-amber-900/70 dark:text-amber-100/70' : 'text-white/75'}`}>
+                    {isDrawn ? 'Final winner prize' : 'Current winner pot'}
+                  </p>
+                  <p
+                    className={`mt-1 text-5xl font-black tracking-tight sm:text-6xl ${isDrawn ? 'text-amber-950 dark:text-amber-50' : 'text-white'}`}
+                    data-testid="text-winner-pot-product"
+                  >
+                    ${(winnerPot ?? 0).toFixed(2)}
+                  </p>
+                  {!isDrawn && (
+                    <>
+                      <p className="mt-2 font-semibold text-white/90">The pot grows with every ticket sold.</p>
+                      <div className="mt-5 grid grid-cols-[1fr_auto_1fr] items-center gap-3 rounded-2xl bg-white/10 p-4 ring-1 ring-white/20 backdrop-blur-sm">
+                        <div className="text-center">
+                          <Trophy className="mx-auto mb-1.5 h-5 w-5 text-yellow-200" />
+                          <p className="text-xl font-black">50%</p>
+                          <p className="text-xs text-white/70">to the winner</p>
+                        </div>
+                        <div className="h-12 w-px bg-white/25" aria-hidden="true" />
+                        <div className="text-center">
+                          <HeartHandshake className="mx-auto mb-1.5 h-5 w-5 text-pink-200" />
+                          <p className="text-xl font-black">50%</p>
+                          <p className="text-xs text-white/70">supports the rescue</p>
+                        </div>
+                      </div>
+                      <p className="mt-3 text-center text-xs text-white/65">
+                        No added card fee — processing costs come from the rescue's share.
+                      </p>
+                    </>
+                  )}
+                </div>
+              </section>
+            )}
+
             {product.description && (
-              <p className="text-muted-foreground">{product.description}</p>
+              <p className="text-base leading-relaxed text-muted-foreground">{product.description}</p>
             )}
 
             {product.productType === 'raffle' && (
-              <Card>
-                <CardContent className="p-4 space-y-2">
+              <Card className={isSplitPot ? "rounded-2xl border-purple-100 shadow-sm dark:border-purple-900" : ""}>
+                <CardContent className="p-4 space-y-4">
                   {product.raffleDrawDate && (
-                    <div className="flex items-center gap-2">
-                      <Clock className="h-4 w-4 text-primary" />
-                      <span>
-                        {isClosed ? 'Drawn' : 'Drawing'}:{' '}
-                        {new Date(
-                          (isDrawn && product.splitPot?.drawnAt) || product.raffleDrawDate
-                        ).toLocaleDateString('en-US', {
-                          weekday: 'long',
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric',
-                        })}
-                      </span>
+                    <div className="flex items-center gap-3 rounded-xl bg-muted/50 p-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                        <Clock className="h-5 w-5 text-primary" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{isClosed ? 'Drawn' : 'Drawing date'}</p>
+                        <p className="font-semibold">
+                          {new Date(
+                            (isDrawn && product.splitPot?.drawnAt) || product.raffleDrawDate
+                          ).toLocaleDateString('en-US', {
+                            weekday: 'long',
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric',
+                          })}
+                        </p>
+                      </div>
                     </div>
                   )}
 
                   <div
-                    className="rounded-md border bg-primary/5 px-3 py-3 space-y-2"
+                    className="rounded-xl border bg-primary/5 px-4 py-4 space-y-3"
                     data-testid="raffle-ticket-progress"
                   >
                     <div className="flex items-baseline justify-between gap-3">
-                      <span className="font-semibold">Ticket goal</span>
+                      <span className="font-semibold">Raffle momentum</span>
                       <span className="text-sm font-medium" data-testid="text-raffle-ticket-progress">
                         {ticketsSold.toLocaleString()} of {ticketGoal.toLocaleString()} tickets sold
                       </span>
@@ -402,35 +468,7 @@ export default function PublicProductPage() {
                     )}
                   </div>
 
-                  {/* Split-pot explanation and winner pot / final prize */}
-                  {isSplitPot ? (
-                    <div className="space-y-2" data-testid="split-pot-product-info">
-                      <div className="flex items-center gap-2 text-purple-700 dark:text-purple-300">
-                        <Trophy className="h-4 w-4" />
-                        <span className="font-semibold">50/50 Split the Pot</span>
-                      </div>
-                      {!isDrawn && (
-                        <p className="text-sm text-muted-foreground">
-                          The winner takes <strong>half of all ticket sales</strong>. The rescue keeps the other half — and card processing fees come out of the rescue's portion, so you pay nothing extra.
-                        </p>
-                      )}
-                      {winnerPot !== null ? (
-                        <div className="rounded-md bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 px-3 py-2">
-                          <p className="text-xs text-purple-700 dark:text-purple-300 font-medium">
-                            {isDrawn ? 'Final winner prize' : 'Current winner pot'}
-                          </p>
-                          <p className="text-2xl font-bold text-purple-900 dark:text-purple-100" data-testid="text-winner-pot-product">
-                            ${winnerPot.toFixed(2)}
-                          </p>
-                          {!isDrawn && <p className="text-xs text-muted-foreground">Grows with every ticket sold!</p>}
-                        </div>
-                      ) : !isDrawn ? (
-                        <p className="text-sm text-muted-foreground">
-                          Be the first to enter — the pot grows with every ticket sold!
-                        </p>
-                      ) : null}
-                    </div>
-                  ) : (
+                  {!isSplitPot && (
                     product.rafflePrizeDescription && (
                       <div className="text-sm">
                         <span className="font-semibold">Prize: </span>
@@ -471,13 +509,16 @@ export default function PublicProductPage() {
             )}
 
             {bundleTiers.length > 0 && (
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Ticket Bundles</label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div className={`space-y-3 ${isSplitPot ? 'rounded-2xl border border-purple-100 bg-card p-4 shadow-sm dark:border-purple-900' : ''}`}>
+                <div>
+                  <label className="font-semibold">Choose your tickets</label>
+                  {isSplitPot && <p className="text-sm text-muted-foreground">More tickets mean more chances to win — and a bigger pot.</p>}
+                </div>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                   <button
                     type="button"
                     onClick={() => setQuantity(1)}
-                    className={`rounded-md border p-3 text-left hover-elevate active-elevate-2 ${quantity === 1 ? 'border-primary bg-primary/5' : ''}`}
+                    className={`rounded-xl border p-3 text-left transition-all hover:-translate-y-0.5 hover:shadow-sm active-elevate-2 ${quantity === 1 ? 'border-primary bg-primary/10 ring-1 ring-primary' : 'bg-background'}`}
                     data-testid="button-bundle-single"
                   >
                     <div className="font-semibold">1 Ticket</div>
@@ -490,13 +531,13 @@ export default function PublicProductPage() {
                         key={tier.quantity}
                         type="button"
                         onClick={() => setQuantity(Math.min(maxQuantity, tier.quantity))}
-                        className={`rounded-md border p-3 text-left hover-elevate active-elevate-2 ${quantity === tier.quantity ? 'border-primary bg-primary/5' : ''}`}
+                        className={`relative rounded-xl border p-3 text-left transition-all hover:-translate-y-0.5 hover:shadow-sm active-elevate-2 ${quantity === tier.quantity ? 'border-primary bg-primary/10 ring-1 ring-primary' : 'bg-background'}`}
                         data-testid={`button-bundle-${tier.quantity}`}
                       >
-                        <div className="font-semibold flex items-center gap-2 flex-wrap">
+                        <div className="flex flex-wrap items-center gap-2 font-semibold">
                           {tier.quantity} Tickets
                           {savings > 0 && (
-                            <Badge variant="secondary" className="text-xs">Save {savings}%</Badge>
+                            <Badge variant="secondary" className="bg-green-100 text-xs text-green-800 dark:bg-green-900 dark:text-green-100">Save {savings}%</Badge>
                           )}
                         </div>
                         <div className="text-sm text-muted-foreground">{formatPrice(parseFloat(tier.price))}</div>
@@ -508,7 +549,7 @@ export default function PublicProductPage() {
             )}
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">Quantity</label>
+              <label className="text-sm font-semibold">{product.productType === 'raffle' ? 'Or choose a custom quantity' : 'Quantity'}</label>
               <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
@@ -545,21 +586,32 @@ export default function PublicProductPage() {
               </div>
             </div>
 
-            <div className="flex flex-col gap-3">
+            <div className={`flex flex-col gap-3 ${isSplitPot ? 'rounded-2xl border border-purple-200 bg-purple-50/70 p-4 shadow-sm dark:border-purple-800 dark:bg-purple-950/30' : ''}`}>
+              {isSplitPot && !isClosed && (
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Your entry</p>
+                    <p className="font-bold">{quantity} ticket{quantity > 1 ? 's' : ''}</p>
+                  </div>
+                  <p className="text-2xl font-black">{formatPrice(orderTotal)}</p>
+                </div>
+              )}
               <Button
                 size="lg"
-                className="w-full"
+                className={isSplitPot ? "h-14 w-full rounded-xl text-base font-bold shadow-md" : "w-full"}
                 disabled={isClosed || isOutOfStock || (product.variants.length > 0 && !selectedVariantId)}
                 onClick={isClosed ? undefined : handleAddToCheckout}
                 data-testid="button-buy-now"
               >
-                <ShoppingBag className="h-4 w-4 mr-2" />
+                {product.productType === 'raffle' ? <Ticket className="mr-2 h-5 w-5" /> : <ShoppingBag className="h-4 w-4 mr-2" />}
                 {isClosed
                   ? 'Drawing Complete'
                   : isOutOfStock
                     ? 'Sold Out'
                     : product.productType === 'raffle'
-                      ? `Buy ${quantity} Ticket${quantity > 1 ? 's' : ''} - ${formatPrice(orderTotal)}`
+                      ? isSplitPot
+                        ? <>Get My Tickets <ArrowRight className="ml-2 h-5 w-5" /></>
+                        : `Buy ${quantity} Ticket${quantity > 1 ? 's' : ''} - ${formatPrice(orderTotal)}`
                       : `Buy Now - ${formatPrice(orderTotal)}`}
               </Button>
 

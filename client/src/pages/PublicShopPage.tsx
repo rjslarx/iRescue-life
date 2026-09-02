@@ -153,7 +153,7 @@ export default function PublicShopPage() {
                   className="block"
                 >
                   <Card
-                    className="overflow-hidden hover-elevate cursor-pointer h-full flex flex-col"
+                    className={`overflow-hidden hover-elevate cursor-pointer h-full flex flex-col ${isSplitPot ? 'rounded-2xl border-purple-200 shadow-sm dark:border-purple-800' : ''}`}
                     data-testid={`product-card-${product.id}`}
                   >
                     <div className="relative aspect-square bg-muted">
@@ -222,14 +222,15 @@ export default function PublicShopPage() {
 
                       {/* Split-pot winner pot / final prize */}
                       {isSplitPot && winnerPot !== null && (
-                        <div className="mt-2 rounded-md bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 px-2 py-1.5" data-testid={`split-pot-card-${product.id}`}>
-                          <p className="text-xs text-purple-700 dark:text-purple-300 font-medium">
+                        <div className="relative mt-3 overflow-hidden rounded-xl border border-purple-200 bg-gradient-to-br from-purple-700 to-fuchsia-600 px-4 py-3 text-white shadow-sm dark:border-purple-800" data-testid={`split-pot-card-${product.id}`}>
+                          <Trophy className="absolute -right-2 -top-2 h-16 w-16 text-white/10" />
+                          <p className="relative text-xs font-semibold uppercase tracking-wide text-white/75">
                             {isDrawn ? 'Final winner prize' : 'Current winner pot'}
                           </p>
-                          <p className="text-base font-bold text-purple-900 dark:text-purple-100" data-testid={`text-winner-pot-card-${product.id}`}>
+                          <p className="relative text-3xl font-black" data-testid={`text-winner-pot-card-${product.id}`}>
                             ${winnerPot.toFixed(2)}
                           </p>
-                          {!isDrawn && <p className="text-xs text-muted-foreground">Winner gets half of all sales</p>}
+                          {!isDrawn && <p className="relative text-xs text-white/75">Winner gets half · rescue gets half</p>}
                         </div>
                       )}
                       {isSplitPot && winnerPot === null && !isDrawn && (
