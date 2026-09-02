@@ -35,6 +35,14 @@ import { useTenant } from "@/contexts/TenantContext";
 
 import dogPhoto from '@assets/generated_images/Golden_retriever_dog_portrait_fdeb8a78.png';
 
+function getThumbnailUrl(url: string): string {
+  if (!url.startsWith('/objects/') || url.endsWith('-thumb')) {
+    return url;
+  }
+
+  return `${url}-thumb`;
+}
+
 export default function PublicAnimalProfilePage() {
   const { animalId } = useParams<{ animalId: string }>();
   const { basePath, tenantId } = useTenant();
@@ -303,6 +311,8 @@ export default function PublicAnimalProfilePage() {
                       src={displayPhotoArray[currentPhotoIndex]}
                       alt={`${animal.name}, photo ${currentPhotoIndex + 1} of ${displayPhotoArray.length}`}
                       className="w-full h-full object-cover"
+                      loading="eager"
+                      decoding="async"
                       onError={() => handlePhotoError(displayPhotoArray[currentPhotoIndex])}
                       data-testid="img-animal-profile"
                     />
@@ -357,10 +367,19 @@ export default function PublicAnimalProfilePage() {
                         data-testid={`thumbnail-photo-${index}`}
                       >
                         <img
-                          src={url}
+                          src={getThumbnailUrl(url)}
                           alt=""
                           className="h-full w-full object-cover"
-                          onError={() => handlePhotoError(url)}
+                          loading="lazy"
+                          decoding="async"
+                          onError={(event) => {
+                            const image = event.currentTarget;
+                            if (image.src.endsWith('-thumb')) {
+                              image.src = url;
+                              return;
+                            }
+                            handlePhotoError(url);
+                          }}
                         />
                         <span className="sr-only">
                           {index === currentPhotoIndex ? 'Currently selected' : ''}
@@ -522,6 +541,7 @@ export default function PublicAnimalProfilePage() {
               src={displayPhotoArray[currentPhotoIndex]}
               alt={`${animal.name}, enlarged photo ${currentPhotoIndex + 1} of ${displayPhotoArray.length}`}
               className="max-h-full max-w-full select-none object-contain"
+              decoding="async"
               onError={() => handlePhotoError(displayPhotoArray[currentPhotoIndex])}
               draggable={false}
             />
