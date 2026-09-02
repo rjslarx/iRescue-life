@@ -13,6 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { PersonalityFitEditor } from "@/components/PersonalityFitEditor";
 import { useForm } from "react-hook-form";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormDescription } from "@/components/ui/form";
 import { 
@@ -160,7 +161,18 @@ export default function FosterAnimalDetailPage() {
         </TabsContent>
 
         <TabsContent value="bio">
-          <BioBuilderTab animalId={animalId!} animalName={animal.name} />
+          <div className="space-y-6">
+            <BioBuilderTab animalId={animalId!} animalName={animal.name} />
+            <PersonalityFitEditor
+              animalId={animalId!}
+              animalName={animal.name}
+              initialProfile={{
+                personalityTags: animal.personalityTags,
+                superpowerBadges: animal.superpowerBadges,
+                revealCards: animal.revealCards,
+              }}
+            />
+          </div>
         </TabsContent>
 
         <TabsContent value="medications">

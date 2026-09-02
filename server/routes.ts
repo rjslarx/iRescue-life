@@ -9,7 +9,7 @@ import { registerReceiptSignatureRoutes } from "./routes/receipt-signature";
 import { loginUser, createTenantWithAdmin, createUser } from "./services/auth";
 import { PushNotificationService } from "./services/push-notifications";
 import { db } from "./db";
-import { tenants, users, demoRequests, insertDemoRequestSchema, smsMessageLogs, emailEvents, animals, platformIntegrations, newsletterCampaigns, newsletterSubscribers, happyTails, animalMergeHistory, activityLogs, medicalExams, medicalPrescriptions, medicalBills, medicalFiles, animalNotes, applications, adoptionCheckoutSessions, adoptions, partnerOrganizations, microchipRecords, surrenderRequests, surrenderFormFields, insertSurrenderRequestSchema, insertSurrenderFormFieldSchema, inboundEmails, calendars, careInstructionSnippets, fosterApplications, volunteerApplications, adoptionContracts, fosterAgreementSessions, volunteerAgreementSessions, surrenderAgreementSessions, customFormSubmissions, customForms, placementAgreementSessions, medicationTasks, medicationPlans, fosterAnimals, messageQueue, contacts, campaignIntakeTokens, surgeryDayRequests, surgeryDayRequestAnimals, formSettings, customPages, shopProducts, peerCampaigns, expenseCampaigns, votingContests, subscriptions, donationLinks as donationLinksTable } from "@shared/schema";
+import { tenants, users, demoRequests, insertDemoRequestSchema, smsMessageLogs, emailEvents, animals, animalProfileSubmissions, platformIntegrations, newsletterCampaigns, newsletterSubscribers, happyTails, animalMergeHistory, activityLogs, medicalExams, medicalPrescriptions, medicalBills, medicalFiles, animalNotes, applications, adoptionCheckoutSessions, adoptions, partnerOrganizations, microchipRecords, surrenderRequests, surrenderFormFields, insertSurrenderRequestSchema, insertSurrenderFormFieldSchema, inboundEmails, calendars, careInstructionSnippets, fosterApplications, volunteerApplications, adoptionContracts, fosterAgreementSessions, volunteerAgreementSessions, surrenderAgreementSessions, customFormSubmissions, customForms, placementAgreementSessions, medicationTasks, medicationPlans, fosterAnimals, messageQueue, contacts, campaignIntakeTokens, surgeryDayRequests, surgeryDayRequestAnimals, formSettings, customPages, shopProducts, peerCampaigns, expenseCampaigns, votingContests, subscriptions, donationLinks as donationLinksTable } from "@shared/schema";
 import { eq, and, desc, asc, sql, inArray, lt, lte, gte, not, notInArray, or, ne, isNull, isNotNull } from "drizzle-orm";
 import { z } from "zod";
 import { authLimiter, signupLimiter, passwordResetLimiter, emailLimiter } from "./config/security";
@@ -7388,6 +7388,150 @@ Crawl-delay: 1
     }
   });
 
+  const profilePayloadSchema = z.object({
+    personalityTags: z.array(z.string().trim().min(1).max(40)).max(12).optional(),
+    superpowerBadges: z.array(z.object({
+      key: z.string().trim().min(1).max(40).regex(/^[a-z0-9]+(?:[-_][a-z0-9]+)*$/),
+      label: z.string().trim().min(1).max(60),
+      explanation: z.string().trim().min(1).max(240),
+    }).strict()).max(8).optional(),
+    revealCards: z.array(z.object({
+      title: z.string().trim().min(1).max(80),
+      body: z.string().trim().min(1).max(500),
+    }).strict()).max(8).optional(),
+  }).strict().refine((payload) => Object.keys(payload).length > 0, {
+    message: 'At least one profile field is required',
+  });
+
+  /**
+   * GET /api/animal-profile-submissions
+   * Review queue. Proposed content is never returned from a public route.
+   */
+  app.get('/api/animal-profile-submissions', requireTenant, requireAuth, requireRole('admin', 'owner'), async (req, res, next) => {
+    try {
+      const status = z.enum(['pending', 'approved', 'rejected']).optional().parse(req.query.status);
+      const conditions = [eq(animalProfileSubmissions.tenantId, req.tenant!.id)];
+      if (status) conditions.push(eq(animalProfileSubmissions.status, status));
+      const submissions = await db.select()
+        .from(animalProfileSubmissions)
+        .where(and(...conditions))
+        .orderBy(desc(animalProfileSubmissions.createdAt));
+      res.json({ submissions });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get('/api/animals/:id/profile-submissions', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const tenantId = req.tenant!.id;
+      const activeRole = req.user!.activeRole;
+      const isReviewer = ['owner', 'admin'].includes(activeRole);
+      const isStaff = ['owner', 'admin', 'staff'].includes(activeRole);
+      const [animal] = await db.select({ id: animals.id })
+        .from(animals)
+        .where(and(eq(animals.id, req.params.id), eq(animals.tenantId, tenantId)))
+        .limit(1);
+      if (!animal) return res.status(404).json({ error: 'Animal not found' });
+
+      let permitted = isStaff;
+      if (activeRole === 'foster') {
+        const [assignment] = await db.select({ id: fosterAnimals.id })
+          .from(fosterAnimals)
+          .where(and(
+            eq(fosterAnimals.tenantId, tenantId),
+            eq(fosterAnimals.animalId, animal.id),
+            eq(fosterAnimals.fosterId, req.user!.id),
+            eq(fosterAnimals.status, 'active'),
+          ))
+          .limit(1);
+        permitted = !!assignment;
+      } else if (activeRole === 'volunteer') {
+        const { publicAnimalFilter } = await import('./services/animals');
+        const [publicAnimal] = await db.select({ id: animals.id })
+          .from(animals)
+          .where(and(publicAnimalFilter(tenantId), eq(animals.id, animal.id)))
+          .limit(1);
+        permitted = !!publicAnimal;
+      }
+      if (!permitted) return res.status(403).json({ error: 'You cannot view submissions for this animal' });
+
+      const conditions = [
+        eq(animalProfileSubmissions.tenantId, tenantId),
+        eq(animalProfileSubmissions.animalId, animal.id),
+      ];
+      if (!isReviewer && !isStaff) {
+        conditions.push(eq(animalProfileSubmissions.contributorId, req.user!.id));
+      }
+      const submissions = await db.select()
+        .from(animalProfileSubmissions)
+        .where(and(...conditions))
+        .orderBy(desc(animalProfileSubmissions.createdAt));
+      res.json({ submissions });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  const reviewProfileSubmission = (decision: 'approved' | 'rejected') =>
+    async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+      try {
+        const { reviewNotes } = z.object({
+          reviewNotes: z.string().trim().max(1000).optional(),
+        }).strict().parse(req.body ?? {});
+
+        const reviewed = await db.transaction(async (tx) => {
+          const [submission] = await tx.select()
+            .from(animalProfileSubmissions)
+            .where(and(
+              eq(animalProfileSubmissions.id, req.params.id),
+              eq(animalProfileSubmissions.tenantId, req.tenant!.id),
+            ))
+            .limit(1);
+          if (!submission) return null;
+          if (submission.status !== 'pending') {
+            const conflict: any = new Error('Submission has already been reviewed');
+            conflict.status = 409;
+            throw conflict;
+          }
+          if (decision === 'approved') {
+            await tx.update(animals)
+              .set({ ...submission.proposedPayload, updatedAt: new Date() })
+              .where(and(
+                eq(animals.id, submission.animalId),
+                eq(animals.tenantId, req.tenant!.id),
+              ));
+          }
+          const [result] = await tx.update(animalProfileSubmissions)
+            .set({
+              status: decision,
+              reviewedBy: req.user!.id,
+              reviewedAt: new Date(),
+              reviewNotes: reviewNotes || null,
+              updatedAt: new Date(),
+            })
+            .where(and(
+              eq(animalProfileSubmissions.id, submission.id),
+              eq(animalProfileSubmissions.status, 'pending'),
+            ))
+            .returning();
+          if (!result) {
+            const conflict: any = new Error('Submission has already been reviewed');
+            conflict.status = 409;
+            throw conflict;
+          }
+          return result;
+        });
+        if (!reviewed) return res.status(404).json({ error: 'Submission not found' });
+        res.json({ submission: reviewed });
+      } catch (error) {
+        next(error);
+      }
+    };
+
+  app.post('/api/animal-profile-submissions/:id/approve', requireTenant, requireAuth, requireRole('admin', 'owner'), reviewProfileSubmission('approved'));
+  app.post('/api/animal-profile-submissions/:id/reject', requireTenant, requireAuth, requireRole('admin', 'owner'), reviewProfileSubmission('rejected'));
+
   /**
    * GET /api/animals/:id
    * Get specific animal
@@ -7453,6 +7597,146 @@ Crawl-delay: 1
           activeFosterId,
           kennelBuildingName,
         }
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * POST /api/animals/:id/profile-submissions
+   * Staff can contribute to any tenant animal; fosters are restricted to an
+   * active assignment; volunteers are restricted to a currently public animal.
+   */
+  app.post('/api/animals/:id/profile-submissions', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const tenantId = req.tenant!.id;
+      const payload = profilePayloadSchema.parse(req.body);
+      const activeRole = req.user!.activeRole;
+      const isStaff = ['owner', 'admin', 'staff'].includes(activeRole);
+
+      const [animal] = await db.select({ id: animals.id })
+        .from(animals)
+        .where(and(eq(animals.id, req.params.id), eq(animals.tenantId, tenantId)))
+        .limit(1);
+      if (!animal) return res.status(404).json({ error: 'Animal not found' });
+
+      let permitted = isStaff;
+      if (activeRole === 'foster') {
+        const [assignment] = await db.select({ id: fosterAnimals.id })
+          .from(fosterAnimals)
+          .where(and(
+            eq(fosterAnimals.tenantId, tenantId),
+            eq(fosterAnimals.animalId, animal.id),
+            eq(fosterAnimals.fosterId, req.user!.id),
+            eq(fosterAnimals.status, 'active'),
+          ))
+          .limit(1);
+        permitted = !!assignment;
+      } else if (activeRole === 'volunteer') {
+        const { publicAnimalFilter } = await import('./services/animals');
+        const [publicAnimal] = await db.select({ id: animals.id })
+          .from(animals)
+          .where(and(publicAnimalFilter(tenantId), eq(animals.id, animal.id)))
+          .limit(1);
+        permitted = !!publicAnimal;
+      }
+      if (!permitted) return res.status(403).json({ error: 'You cannot submit a profile for this animal' });
+
+      const [tenant] = await db.select({
+        requiresApproval: tenants.requireAnimalProfileSubmissionApproval,
+      }).from(tenants).where(eq(tenants.id, tenantId)).limit(1);
+      const requiresApproval = tenant?.requiresApproval === true;
+
+      const submission = await db.transaction(async (tx) => {
+        const [created] = await tx.insert(animalProfileSubmissions).values({
+          tenantId,
+          animalId: animal.id,
+          proposedPayload: payload,
+          contributorId: req.user!.id,
+          contributorName: req.user!.fullName,
+          contributorRoles: [activeRole],
+          status: requiresApproval ? 'pending' : 'approved',
+          reviewedBy: requiresApproval ? null : req.user!.id,
+          reviewedAt: requiresApproval ? null : new Date(),
+          reviewNotes: requiresApproval ? null : 'Automatically approved by tenant policy',
+        }).returning();
+        if (!requiresApproval) {
+          await tx.update(animals)
+            .set({ ...payload, updatedAt: new Date() })
+            .where(and(eq(animals.id, animal.id), eq(animals.tenantId, tenantId)));
+        }
+        return created;
+      });
+      res.status(201).json({ submission, status: submission.status });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /api/animals/:id/related
+   * Public, tenant-scoped recommendations using only public-safe animal data.
+   */
+  app.get([
+    '/api/animals/:id/related',
+    '/api/animals/:id/surprise',
+    '/api/public/animals/:id/discover',
+  ], requireTenant, async (req, res, next) => {
+    try {
+      const requestedTrait = z.string().trim().max(80).catch('').parse(req.query.trait);
+      const { publicAnimalFilter, publicAnimalSelect } = await import('./services/animals');
+      const tenantId = req.tenant!.id;
+      const [current] = await db.select(publicAnimalSelect).from(animals)
+        .where(and(publicAnimalFilter(tenantId), eq(animals.id, req.params.id))).limit(1);
+      if (!current) return res.status(404).json({ error: 'Animal not found' });
+      const candidates = await db.select(publicAnimalSelect).from(animals)
+        .where(and(publicAnimalFilter(tenantId), ne(animals.id, current.id)))
+        .orderBy(desc(animals.createdAt))
+        .limit(50);
+      const overlap = (left: unknown, right: unknown) =>
+        Array.isArray(left) && Array.isArray(right) && left.some((value) => right.includes(value));
+      const matches = (
+        candidate: typeof current,
+        key: 'species' | 'breed' | 'activityLevel' | 'personalityTags' | 'colors',
+      ) => {
+        const left = current[key];
+        const right = candidate[key];
+        return Array.isArray(left) ? overlap(left, right) : !!left && left === right;
+      };
+      const normalizedTrait = requestedTrait.toLowerCase();
+      const personalityTrait = current.personalityTags.find(
+        (tag) => tag.toLowerCase() === normalizedTrait,
+      );
+      const traitScore = (candidate: typeof current) => {
+        if (personalityTrait) {
+          return candidate.personalityTags.some(
+            (tag) => tag.toLowerCase() === personalityTrait.toLowerCase(),
+          ) ? 100 : 0;
+        }
+        if (normalizedTrait === 'dog friendly') return candidate.dogFriendly ? 100 : 0;
+        if (normalizedTrait === 'cat friendly') return candidate.catFriendly ? 100 : 0;
+        if (normalizedTrait === 'good with kids') return candidate.childFriendly ? 100 : 0;
+        if (normalizedTrait === 'similar energy') return matches(candidate, 'activityLevel') ? 100 : 0;
+        if (normalizedTrait === 'similar size') return current.weight && candidate.weight
+          && Math.abs(Number(current.weight) - Number(candidate.weight)) <= 15 ? 100 : 0;
+        return matches(candidate, 'species') ? 100 : 0;
+      };
+      const ranked = candidates
+        .map((candidate, index) => ({
+          candidate,
+          score: traitScore(candidate)
+            + (matches(candidate, 'species') ? 20 : 0)
+            + (matches(candidate, 'activityLevel') ? 5 : 0)
+            - index / 1000,
+        }))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 4)
+        .map(({ candidate }) => candidate);
+      res.json({
+        animals: ranked,
+        trait: requestedTrait || 'species',
+        ...(req.path.endsWith('/surprise') ? { animal: ranked[0] ?? null } : {}),
       });
     } catch (error) {
       next(error);
@@ -27081,6 +27365,7 @@ Submitted: ${new Date().toLocaleString()}
         autoSendTaxReceipts: z.boolean().optional(),
         shopEnabled: z.boolean().optional(),
         impactLoopEnabled: z.boolean().optional(),
+        requireAnimalProfileSubmissionApproval: z.boolean().optional(),
         adopterReminderFrequencyDays: z.number().int().min(0).max(90).optional(),
         heartwormWarningFrequencyDays: z.number().int().min(0).max(180).optional(),
         fosterReminderLeadDays: z.number().int().min(1).max(30).optional(),
@@ -27097,6 +27382,7 @@ Submitted: ${new Date().toLocaleString()}
       if (parsedSettings.autoSendTaxReceipts !== undefined) settingsToUpdate.autoSendTaxReceipts = parsedSettings.autoSendTaxReceipts;
       if (parsedSettings.shopEnabled !== undefined) settingsToUpdate.shopEnabled = parsedSettings.shopEnabled;
       if (parsedSettings.impactLoopEnabled !== undefined) settingsToUpdate.impactLoopEnabled = parsedSettings.impactLoopEnabled;
+      if (parsedSettings.requireAnimalProfileSubmissionApproval !== undefined) settingsToUpdate.requireAnimalProfileSubmissionApproval = parsedSettings.requireAnimalProfileSubmissionApproval;
       if (parsedSettings.adopterReminderFrequencyDays !== undefined) settingsToUpdate.adopterReminderFrequencyDays = parsedSettings.adopterReminderFrequencyDays;
       if (parsedSettings.heartwormWarningFrequencyDays !== undefined) settingsToUpdate.heartwormWarningFrequencyDays = parsedSettings.heartwormWarningFrequencyDays;
       if (parsedSettings.fosterReminderLeadDays !== undefined) settingsToUpdate.fosterReminderLeadDays = parsedSettings.fosterReminderLeadDays;

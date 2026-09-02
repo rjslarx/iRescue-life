@@ -2,6 +2,34 @@
 set -e
 npm install
 
+# Phase 1 interactive animal profiles and their tenant-controlled review queue.
+# All changes are additive and safe to rerun.
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' || echo "[post-merge] interactive animal profile schema skipped (already applied or DB unreachable)."
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS require_animal_profile_submission_approval boolean NOT NULL DEFAULT false;
+ALTER TABLE animals ADD COLUMN IF NOT EXISTS personality_tags text[] NOT NULL DEFAULT ARRAY[]::text[];
+ALTER TABLE animals ADD COLUMN IF NOT EXISTS superpower_badges jsonb NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE animals ADD COLUMN IF NOT EXISTS reveal_cards jsonb NOT NULL DEFAULT '[]'::jsonb;
+CREATE TABLE IF NOT EXISTS animal_profile_submissions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  animal_id uuid NOT NULL REFERENCES animals(id) ON DELETE CASCADE,
+  proposed_payload jsonb NOT NULL,
+  contributor_id uuid REFERENCES users(id) ON DELETE SET NULL,
+  contributor_name text NOT NULL,
+  contributor_roles text[] NOT NULL,
+  status text NOT NULL DEFAULT 'pending',
+  reviewed_by uuid REFERENCES users(id) ON DELETE SET NULL,
+  reviewed_at timestamp,
+  review_notes text,
+  created_at timestamp NOT NULL DEFAULT now(),
+  updated_at timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS animal_profile_submissions_tenant_status_idx
+  ON animal_profile_submissions (tenant_id, status);
+CREATE INDEX IF NOT EXISTS animal_profile_submissions_animal_idx
+  ON animal_profile_submissions (tenant_id, animal_id);
+SQL
+
 # Task #298: foster agreements can be sent directly to an existing approved
 # adopter. These additive ALTERs preserve legacy application-backed sessions.
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' || echo "[post-merge] foster direct agreement columns skipped (already applied or DB unreachable)."

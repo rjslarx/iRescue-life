@@ -9,7 +9,7 @@ export const excludeTnr = or(isNull(animals.recordType), ne(animals.recordType, 
 
 export const publicAnimalStatuses = ['available', 'adoption_pending', 'in_trial'] as const;
 
-const publicAnimalSelect = {
+export const publicAnimalSelect = {
   id: animals.id,
   name: animals.name,
   species: animals.species,
@@ -29,6 +29,9 @@ const publicAnimalSelect = {
   catFriendly: animals.catFriendly,
   dogFriendly: animals.dogFriendly,
   needsFence: animals.needsFence,
+  personalityTags: animals.personalityTags,
+  superpowerBadges: animals.superpowerBadges,
+  revealCards: animals.revealCards,
 };
 
 export const publicAnimalFilter = (tenantId: string) => and(

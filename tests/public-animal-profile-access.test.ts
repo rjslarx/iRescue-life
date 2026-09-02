@@ -94,7 +94,8 @@ test('public profiles remain whitelist-only for logged-in non-staff users', asyn
     assert.deepEqual(Object.keys(animal).sort(), [
       'activityLevel', 'age', 'bio', 'breed', 'catFriendly', 'childFriendly',
       'colors', 'dogFriendly', 'houseTrained', 'id', 'name', 'needsFence',
-      'photoUrls', 'sex', 'shotsCurrent', 'specialNeeds', 'species', 'status', 'weight',
+      'personalityTags', 'photoUrls', 'revealCards', 'sex', 'shotsCurrent',
+      'specialNeeds', 'species', 'status', 'superpowerBadges', 'weight',
     ]);
   }
 });

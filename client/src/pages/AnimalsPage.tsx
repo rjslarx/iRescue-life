@@ -49,6 +49,7 @@ import { HeartwormTreatmentModal } from "@/components/HeartwormTreatmentModal";
 import { AnimalHudCard } from "@/components/AnimalHudCard";
 import { TransferAnimalDialog } from "@/components/TransferAnimalDialog";
 import { ReclaimWizardDialog } from "@/components/ReclaimWizardDialog";
+import { PersonalityFitEditor } from "@/components/PersonalityFitEditor";
 
 const MAX_PHOTOS = 6;
 const MAX_PHOTO_SIZE_MB = 25;
@@ -3100,6 +3101,16 @@ export default function AnimalsPage() {
                   setUploadedPhotos={setEditUploadedPhotos}
                   initialData={editingAnimal}
                   isEditing={true}
+                />
+                <PersonalityFitEditor
+                  animalId={editingAnimal.id}
+                  animalName={editingAnimal.name}
+                  initialProfile={{
+                    personalityTags: editingAnimal.personalityTags,
+                    superpowerBadges: editingAnimal.superpowerBadges,
+                    revealCards: editingAnimal.revealCards,
+                  }}
+                  canReview={user?.activeRole === "admin" || user?.activeRole === "owner"}
                 />
                 
                 {/* Notes Section */}

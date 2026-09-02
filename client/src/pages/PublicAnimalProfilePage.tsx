@@ -6,6 +6,7 @@ import PublicHeader from "@/components/PublicHeader";
 import { PublicAdoptionDialog } from "@/components/PublicAdoptionDialog";
 import DonationForm from "@/components/DonationForm";
 import PublicFooter from "@/components/PublicFooter";
+import { PersonalityFitEditor } from "@/components/PersonalityFitEditor";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +22,10 @@ import {
   MessageCircle,
   ChevronLeft,
   ChevronRight,
+  Sparkles,
+  ShieldCheck,
+  Dice5,
+  PawPrint,
 } from "lucide-react";
 import { SiX } from "react-icons/si";
 import {
@@ -30,8 +35,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 import type { Animal, Tenant } from "@shared/schema";
 import { useTenant } from "@/contexts/TenantContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 import dogPhoto from '@assets/generated_images/Golden_retriever_dog_portrait_fdeb8a78.png';
 
@@ -46,6 +53,7 @@ function getThumbnailUrl(url: string): string {
 export default function PublicAnimalProfilePage() {
   const { animalId } = useParams<{ animalId: string }>();
   const { basePath, tenantId } = useTenant();
+  const { user } = useAuth();
   const { toast } = useToast();
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const [photoViewerOpen, setPhotoViewerOpen] = useState(false);
@@ -54,6 +62,8 @@ export default function PublicAnimalProfilePage() {
   const [adoptionDialogOpen, setAdoptionDialogOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [failedPhotoUrls, setFailedPhotoUrls] = useState<Set<string>>(() => new Set());
+  const [revealedCards, setRevealedCards] = useState<Set<number>>(() => new Set());
+  const [selectedTrait, setSelectedTrait] = useState<string | null>(null);
 
   // Include tenantId in queryKey to prevent stale data flash when switching between tenant sites
   const { data: animalData, isLoading: isLoadingAnimal } = useQuery<{ animal: Animal }>({
@@ -68,6 +78,28 @@ export default function PublicAnimalProfilePage() {
   const animal = animalData?.animal;
   const tenant = tenantData?.tenant;
   const rescueName = tenant?.name || "Animal Rescue";
+  const canContributeToProfiles = !!user?.activeRole
+    && ['owner', 'admin', 'staff', 'volunteer'].includes(user.activeRole);
+  const canReviewProfileSubmissions = !!user?.activeRole
+    && ['owner', 'admin'].includes(user.activeRole);
+  const personalityTags = ((animal as any)?.personalityTags || []) as string[];
+  const superpowers = ((animal as any)?.superpowerBadges || []) as { key: string; label: string; explanation: string }[];
+  const revealCards = ((animal as any)?.revealCards || []) as { title: string; body: string }[];
+  const compatibilityTraits = [
+    animal?.dogFriendly ? "Dog friendly" : null,
+    animal?.catFriendly ? "Cat friendly" : null,
+    animal?.childFriendly ? "Good with kids" : null,
+    animal?.activityLevel ? "Similar energy" : null,
+    animal?.weight ? "Similar size" : null,
+  ].filter((trait): trait is string => !!trait);
+  const traitChoices = Array.from(new Set([...personalityTags, ...compatibilityTraits])).slice(0, 5);
+  const { data: discoveries, isFetching: isDiscovering } = useQuery<{ animals: Animal[] }>({
+    queryKey: ["/api/public/animals", animalId, "discover", selectedTrait],
+    queryFn: async () => (await apiRequest("GET", `/api/public/animals/${animalId}/discover?trait=${encodeURIComponent(selectedTrait || "")}`)).json(),
+    enabled: !!animalId && !!selectedTrait,
+  });
+  const chooseTrait = (trait: string) => setSelectedTrait(trait);
+  const surpriseMe = () => chooseTrait(traitChoices[Math.floor(Math.random() * traitChoices.length)] || "Similar energy");
 
   const isLiteTier = (tenant as any)?.subscriptionTier === 'lite';
   const jotformAdoptionUrl = (tenant as any)?.jotformAdoptionUrl;
@@ -493,6 +525,31 @@ export default function PublicAnimalProfilePage() {
               </CardContent>
             </div>
           </Card>
+
+          {(personalityTags.length > 0 || superpowers.length > 0 || revealCards.length > 0) && (
+            <section className="mt-7 space-y-5" aria-labelledby="personality-heading">
+              <div className="flex items-end justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[.18em] text-primary">Beyond the basics</p><h2 id="personality-heading" className="mt-1 text-2xl font-bold">Getting to know {animal.name}</h2></div><PawPrint className="h-7 w-7 text-primary/50" aria-hidden="true" /></div>
+              {personalityTags.length > 0 && <div className="flex flex-wrap gap-2">{personalityTags.map((tag) => <Badge key={tag} className="rounded-full bg-primary/10 px-3 py-1 text-primary" variant="secondary">{tag}</Badge>)}</div>}
+              {superpowers.length > 0 && <div className="grid gap-3 sm:grid-cols-2">{superpowers.map((power) => <div key={power.key} className="rounded-xl border border-primary/15 bg-card p-4 transition-transform duration-200 hover:-translate-y-0.5"><div className="flex gap-3"><Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-primary" /><div><h3 className="font-semibold">{power.label}</h3><p className="mt-1 text-sm leading-relaxed text-muted-foreground">{power.explanation}</p></div></div></div>)}</div>}
+              {revealCards.length > 0 && <div className="grid gap-3 sm:grid-cols-2">{revealCards.map((card, index) => { const revealed = revealedCards.has(index); return <button type="button" key={`${card.title}-${index}`} onClick={() => setRevealedCards((current) => { const next = new Set(current); next.has(index) ? next.delete(index) : next.add(index); return next; })} className="min-h-32 rounded-xl border border-dashed border-primary/30 bg-primary/5 p-5 text-left transition-transform duration-200 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-expanded={revealed}><span className="text-xs font-semibold uppercase tracking-[.15em] text-primary">{revealed ? "A little more" : "Tap to reveal"}</span><h3 className="mt-2 font-semibold">{card.title}</h3>{revealed ? <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{card.body}</p> : <p className="mt-2 text-sm text-muted-foreground">A small clue awaits</p>}</button>; })}</div>}
+            </section>
+          )}
+          <section className="mt-7 rounded-2xl border border-primary/15 bg-primary/[.045] p-5 sm:p-6" aria-labelledby="fit-heading">
+            <div className="flex flex-wrap items-start justify-between gap-4"><div><div className="flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-primary" /><h2 id="fit-heading" className="text-xl font-bold">Who should I meet next?</h2></div><p className="mt-1 text-sm text-muted-foreground">Start with a feeling. We will introduce you to other animals with a similar fit.</p></div><Button type="button" variant="outline" size="sm" onClick={surpriseMe} disabled={isDiscovering}><Dice5 className="h-4 w-4" />Surprise me</Button></div>
+            <div className="mt-4 flex flex-wrap gap-2">{traitChoices.map((trait) => <Button key={trait} type="button" size="sm" variant={selectedTrait === trait ? "default" : "outline"} onClick={() => chooseTrait(trait)} aria-pressed={selectedTrait === trait}>{trait}</Button>)}</div>
+            {selectedTrait && <div className="mt-5" aria-live="polite">{isDiscovering ? <div className="flex gap-3">{[1, 2].map((item) => <Skeleton key={item} className="h-20 w-40 rounded-xl" />)}</div> : discoveries?.animals?.length ? <div className="grid gap-3 sm:grid-cols-2">{discoveries.animals.slice(0, 4).map((match) => <button type="button" key={match.id} onClick={() => window.location.assign(`${basePath}/animal/${match.id}`)} className="flex items-center gap-3 rounded-xl border bg-card p-3 text-left transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><div className="h-12 w-12 overflow-hidden rounded-lg bg-muted">{match.photoUrls?.[0] && <img src={match.photoUrls[0]} alt="" className="h-full w-full object-cover" />}</div><span><strong className="block">{match.name}</strong><span className="text-sm text-muted-foreground">{match.breed}</span></span></button>)}</div> : <p className="text-sm text-muted-foreground">We are still finding the right introductions. Try another trait.</p>}</div>}
+          </section>
+
+          {canContributeToProfiles && (
+            <section className="mt-7" aria-label={`Contribute to ${animal.name}'s public profile`}>
+              <PersonalityFitEditor
+                animalId={animal.id}
+                animalName={animal.name}
+                initialProfile={{ personalityTags, superpowerBadges: superpowers, revealCards }}
+                canReview={canReviewProfileSubmissions}
+              />
+            </section>
+          )}
 
           <div className="mt-6 text-center text-sm text-muted-foreground">
             <p>

@@ -233,6 +233,17 @@ function AutoSendTaxReceiptsToggle({ tenant }: { tenant?: Tenant }) {
   );
 }
 
+function AnimalProfileApprovalToggle({ tenant }: { tenant?: Tenant }) {
+  const { toast } = useToast();
+  const update = useMutation({
+    mutationFn: async (requireAnimalProfileSubmissionApproval: boolean) => (await apiRequest("PATCH", "/api/tenant/settings", { requireAnimalProfileSubmissionApproval })).json(),
+    onSuccess: (_, enabled) => { queryClient.invalidateQueries({ queryKey: ["/api/tenant/settings"] }); toast({ title: enabled ? "Profile review enabled" : "Profile review disabled", description: enabled ? "New animal personality profiles will wait for an admin decision." : "New animal personality profiles will publish immediately." }); },
+    onError: (error: Error) => toast({ title: "Could not update profile policy", description: error.message, variant: "destructive" }),
+  });
+  const enabled = (tenant as any)?.requireAnimalProfileSubmissionApproval ?? false;
+  return <Card className="border-primary/20"><CardHeader><div className="flex items-center gap-2"><Heart className="h-5 w-5 text-primary" /><CardTitle>Animal Profile Review</CardTitle></div><CardDescription>Choose whether personality details submitted by staff, fosters, and volunteers need an admin approval before they appear publicly. When off, authorized submissions publish immediately.</CardDescription></CardHeader><CardContent><div className="flex items-center justify-between gap-4 rounded-lg bg-muted/50 p-4"><Label htmlFor="animal-profile-approval" className="flex-1">Require approval for public profile submissions</Label><Switch id="animal-profile-approval" checked={enabled} disabled={update.isPending} onCheckedChange={(checked) => update.mutate(checked)} data-testid="switch-animal-profile-approval" /></div></CardContent></Card>;
+}
+
 function ImpactLoopToggle({ tenant }: { tenant?: Tenant }) {
   const { toast } = useToast();
 
@@ -556,6 +567,7 @@ export default function NotificationsSettingsPage() {
           <AutoSendTaxReceiptsToggle tenant={data?.tenant} />
 
           <ImpactLoopToggle tenant={data?.tenant} />
+           <AnimalProfileApprovalToggle tenant={data?.tenant} />
 
           <ReminderFrequencySettings tenant={data?.tenant} />
 

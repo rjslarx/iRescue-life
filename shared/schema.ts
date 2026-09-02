@@ -63,6 +63,7 @@ export const tenants = pgTable("tenants", {
   // applicant address (Street + City + State + ZIP) and the server enforces it.
   // Set to false to exempt a tenant (e.g. Haseya's New Beginning).
   requireCompleteAddress: boolean("require_complete_address").notNull().default(true),
+  requireAnimalProfileSubmissionApproval: boolean("require_animal_profile_submission_approval").notNull().default(false),
   defaultSurrenderFee: decimal("default_surrender_fee", { precision: 10, scale: 2 }), // Default owner surrender fee amount (null = no fee)
   // Email service settings (encrypted API keys per tenant)
   resendApiKeyEncrypted: text("resend_api_key_encrypted"), // Resend API key for transactional emails
@@ -567,6 +568,16 @@ export const animals = pgTable("animals", {
   scheduledSurgeryDate: timestamp("scheduled_surgery_date"), // For spay/neuter scheduling
   photoUrls: text("photo_urls").array(),
   bio: text("bio"),
+  personalityTags: text("personality_tags").array().notNull().default(sql`ARRAY[]::text[]`),
+  superpowerBadges: jsonb("superpower_badges").notNull().$type<Array<{
+    key: string;
+    label: string;
+    explanation: string;
+  }>>().default([]),
+  revealCards: jsonb("reveal_cards").notNull().$type<Array<{
+    title: string;
+    body: string;
+  }>>().default([]),
   
   // Petfinder-compatible fields (required for sync)
   petfinderType: text("petfinder_type").$type<PetfinderType>(), // Dog, Cat, Rabbit, etc.
@@ -685,6 +696,38 @@ export const insertAnimalSchema = createInsertSchema(animals).omit({
 });
 export type InsertAnimal = z.infer<typeof insertAnimalSchema>;
 export type Animal = typeof animals.$inferSelect;
+
+export type AnimalProfilePayload = Pick<Animal, "personalityTags" | "superpowerBadges" | "revealCards">;
+
+// Auditable profile contributions from staff, fosters, and volunteers. Proposed
+// content remains isolated here until it is approved.
+export const animalProfileSubmissions = pgTable("animal_profile_submissions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  animalId: uuid("animal_id").notNull().references(() => animals.id, { onDelete: "cascade" }),
+  proposedPayload: jsonb("proposed_payload").notNull().$type<Partial<AnimalProfilePayload>>(),
+  contributorId: uuid("contributor_id").references(() => users.id, { onDelete: "set null" }),
+  contributorName: text("contributor_name").notNull(),
+  contributorRoles: text("contributor_roles").array().notNull(),
+  status: text("status").notNull().default("pending").$type<"pending" | "approved" | "rejected">(),
+  reviewedBy: uuid("reviewed_by").references(() => users.id, { onDelete: "set null" }),
+  reviewedAt: timestamp("reviewed_at"),
+  reviewNotes: text("review_notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  tenantStatusIdx: index("animal_profile_submissions_tenant_status_idx").on(table.tenantId, table.status),
+  animalIdx: index("animal_profile_submissions_animal_idx").on(table.tenantId, table.animalId),
+}));
+
+export const insertAnimalProfileSubmissionSchema = createInsertSchema(animalProfileSubmissions).omit({
+  id: true,
+  reviewedBy: true,
+  reviewedAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type AnimalProfileSubmission = typeof animalProfileSubmissions.$inferSelect;
 
 export type AnimalStatus = Animal["status"];
 

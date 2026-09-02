@@ -69,6 +69,9 @@ router.get('/animals/:animalId', requireAuth, async (req: Request, res: Response
         birthDate: animals.birthDate,
         sex: animals.sex,
         description: animals.description,
+        personalityTags: animals.personalityTags,
+        superpowerBadges: animals.superpowerBadges,
+        revealCards: animals.revealCards,
         fosterStartDate: fosterAnimals.startDate,
       })
       .from(fosterAnimals)
@@ -94,6 +97,9 @@ router.get('/animals/:animalId', requireAuth, async (req: Request, res: Response
       birthDate: assignment.birthDate?.toISOString() || null,
       sex: assignment.sex || 'unknown',
       description: assignment.description || null,
+      personalityTags: assignment.personalityTags || [],
+      superpowerBadges: assignment.superpowerBadges || [],
+      revealCards: assignment.revealCards || [],
       fosterStartDate: assignment.fosterStartDate?.toISOString() || new Date().toISOString(),
     });
   } catch (error) {
