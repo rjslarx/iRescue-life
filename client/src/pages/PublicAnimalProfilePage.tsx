@@ -5,6 +5,7 @@ import { useSEO, useJsonLd } from "@/hooks/useSEO";
 import PublicHeader from "@/components/PublicHeader";
 import { PublicAdoptionDialog } from "@/components/PublicAdoptionDialog";
 import DonationForm from "@/components/DonationForm";
+import PublicFooter from "@/components/PublicFooter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -268,7 +269,7 @@ export default function PublicAnimalProfilePage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background flex flex-col">
       <PublicHeader rescueName={rescueName} logoUrl={tenant?.logoUrl || undefined} />
       
       <main className="container mx-auto px-4 py-8">
@@ -481,6 +482,8 @@ export default function PublicAnimalProfilePage() {
           </div>
         </div>
       </main>
+
+      <PublicFooter tenant={tenant} basePath={basePath} />
 
       <PublicAdoptionDialog
         animal={animal}
