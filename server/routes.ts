@@ -559,6 +559,7 @@ User-agent: *
 # Allow public pages
 Allow: /
 Allow: /animals
+Allow: /animal/
 Allow: /adopt
 Allow: /donate
 Allow: /volunteer
@@ -627,6 +628,7 @@ Allow: /platform/integrations
 
 # Allow tenant public pages (path-based routing: /subdomain/page)
 Allow: /*/animals
+Allow: /*/animal/
 Allow: /*/adopt
 Allow: /*/donate
 Allow: /*/foster
@@ -707,7 +709,7 @@ Crawl-delay: 1
 
       // Helper: fetch all public dynamic URLs for a given tenant ID
       async function fetchTenantDynamicUrls(tenantId: string, base: string): Promise<string> {
-        const [custPages, activeShopItems, activePeerCampaigns, activeExpenseCampaigns, activeContests, activeDonationCampaigns] =
+        const [custPages, activeShopItems, activePeerCampaigns, activeExpenseCampaigns, activeContests, activeDonationCampaigns, publicAnimals] =
           await Promise.all([
             db.select({ slug: customPages.slug })
               .from(customPages)
@@ -728,6 +730,18 @@ Crawl-delay: 1
             db.select({ id: donationLinksTable.id })
               .from(donationLinksTable)
               .where(and(eq(donationLinksTable.tenantId, tenantId), eq(donationLinksTable.isActive, true))),
+            db.select({ id: animals.id })
+              .from(animals)
+              .where(and(
+                eq(animals.tenantId, tenantId),
+                or(
+                  eq(animals.status, 'available'),
+                  eq(animals.status, 'adoption_pending'),
+                  eq(animals.status, 'in_trial' as any),
+                ),
+                eq(animals.medicalHold, false),
+                or(isNull(animals.recordType), ne(animals.recordType, 'tnr')),
+              )),
           ]);
 
         let xml = '';
@@ -742,6 +756,7 @@ Crawl-delay: 1
         for (const p of activeExpenseCampaigns) xml += xmlUrlBasic(`${base}/expense-campaign/${p.slug}`);
         for (const p of activeContests) xml += xmlUrlBasic(`${base}/contest/${p.slug}`);
         for (const p of activeDonationCampaigns) xml += xmlUrlBasic(`${base}/campaigns/${p.id}`);
+        for (const animal of publicAnimals) xml += xmlUrlBasic(`${base}/animal/${animal.id}`);
         return xml;
       }
 
@@ -7379,13 +7394,18 @@ Crawl-delay: 1
    */
   app.get('/api/animals/:id', requireTenant, async (req, res, next) => {
     try {
-      const { getAnimalById } = await import('./services/animals');
-      const animal = await getAnimalById(req.tenant!.id, req.params.id);
+      const { canAccessInternalAnimalProfile, getAnimalForProfileRequest } = await import('./services/animals');
+      const canAccessInternalProfile = canAccessInternalAnimalProfile(req.user);
+      const animal = await getAnimalForProfileRequest(req.tenant!.id, req.params.id, req.user);
       
       if (!animal) {
         return res.status(404).json({ error: 'Animal not found' });
       }
       
+      if (!canAccessInternalProfile) {
+        return res.json({ animal });
+      }
+
       const { fosterAnimals, users, kennelBuildings } = await import('@shared/schema');
       
       let activeFosterName: string | null = null;

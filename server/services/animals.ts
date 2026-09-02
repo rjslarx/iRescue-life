@@ -7,6 +7,41 @@ import { generateLocalShelterId } from '../utils/shelterId';
 /** Reusable filter that excludes TNR animals from all standard rescue views */
 export const excludeTnr = or(isNull(animals.recordType), ne(animals.recordType, 'tnr'));
 
+export const publicAnimalStatuses = ['available', 'adoption_pending', 'in_trial'] as const;
+
+const publicAnimalSelect = {
+  id: animals.id,
+  name: animals.name,
+  species: animals.species,
+  breed: animals.breed,
+  age: animals.age,
+  sex: animals.sex,
+  photoUrls: animals.photoUrls,
+  bio: animals.bio,
+  status: animals.status,
+  weight: animals.weight,
+  colors: animals.colors,
+  activityLevel: animals.activityLevel,
+  houseTrained: animals.houseTrained,
+  specialNeeds: animals.specialNeeds,
+  shotsCurrent: animals.shotsCurrent,
+  childFriendly: animals.childFriendly,
+  catFriendly: animals.catFriendly,
+  dogFriendly: animals.dogFriendly,
+  needsFence: animals.needsFence,
+};
+
+export const publicAnimalFilter = (tenantId: string) => and(
+  eq(animals.tenantId, tenantId),
+  or(
+    eq(animals.status, 'available'),
+    eq(animals.status, 'adoption_pending'),
+    eq(animals.status, 'in_trial' as any),
+  ),
+  eq(animals.medicalHold, false),
+  excludeTnr,
+);
+
 async function checkDuplicateAnimalName(tenantId: string, name: string, excludeAnimalId?: string): Promise<void> {
   const conditions = [
     eq(animals.tenantId, tenantId),
@@ -112,17 +147,35 @@ export async function getAnimalsByTenant(tenantId: string): Promise<(Animal & { 
  * Get available animals for adoption (public view)
  * Shows animals with 'available' status regardless of location (shelter or foster)
  */
-export async function getAvailableAnimals(tenantId: string): Promise<Animal[]> {
+export async function getAvailableAnimals(tenantId: string) {
   return db
-    .select()
+    .select(publicAnimalSelect)
     .from(animals)
-    .where(and(
-      eq(animals.tenantId, tenantId),
-      eq(animals.status, 'available'),
-      eq(animals.medicalHold, false),
-      excludeTnr
-    ))
-    .orderBy(desc(animals.createdAt)) as any;
+    .where(publicAnimalFilter(tenantId))
+    .orderBy(desc(animals.createdAt));
+}
+
+export async function getPublicAnimalById(tenantId: string, animalId: string) {
+  const [animal] = await db
+    .select(publicAnimalSelect)
+    .from(animals)
+    .where(and(publicAnimalFilter(tenantId), eq(animals.id, animalId)))
+    .limit(1);
+  return animal || null;
+}
+
+export function canAccessInternalAnimalProfile(viewer: { roles?: string[] | null } | null | undefined): boolean {
+  return !!viewer?.roles?.some((role) => role === 'owner' || role === 'admin' || role === 'staff');
+}
+
+export async function getAnimalForProfileRequest(
+  tenantId: string,
+  animalId: string,
+  viewer: { roles?: string[] | null } | null | undefined,
+) {
+  return canAccessInternalAnimalProfile(viewer)
+    ? getAnimalById(tenantId, animalId)
+    : getPublicAnimalById(tenantId, animalId);
 }
 
 /**

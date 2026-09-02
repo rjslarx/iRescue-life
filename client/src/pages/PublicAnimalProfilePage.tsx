@@ -94,12 +94,19 @@ export default function PublicAnimalProfilePage() {
       : `Find your perfect companion at ${rescueName}.`;
 
   const ogImage = photoArray[0] || undefined;
+  const canonicalUrl = typeof window !== 'undefined'
+    ? `${window.location.origin}${basePath}/animal/${animalId}`
+    : undefined;
+  const absoluteOgImage = ogImage && typeof window !== 'undefined'
+    ? new URL(ogImage, window.location.origin).toString()
+    : ogImage;
 
   useSEO({
     title: pageTitle,
     description: pageDescription,
     siteName: rescueName,
-    image: ogImage,
+    image: absoluteOgImage,
+    url: canonicalUrl,
     type: 'website',
   });
 
@@ -118,7 +125,14 @@ export default function PublicAnimalProfilePage() {
         "name": rescueName,
         "url": tenantOriginAnimal,
         ...(tenant?.logoUrl ? { "logo": tenant.logoUrl } : {})
-      }
+      },
+      ...(animal ? [{
+        "@type": "WebPage",
+        "name": pageTitle,
+        "url": canonicalUrl,
+        "description": pageDescription,
+        ...(absoluteOgImage ? { "image": absoluteOgImage } : {})
+      }] : [])
     ]
   });
 
@@ -240,6 +254,7 @@ export default function PublicAnimalProfilePage() {
                         size="icon"
                         className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white rounded-full"
                         onClick={prevPhoto}
+                        aria-label={`Show previous photo of ${animal.name}`}
                         data-testid="button-prev-photo"
                       >
                         <ChevronLeft className="h-6 w-6" />
@@ -249,6 +264,7 @@ export default function PublicAnimalProfilePage() {
                         size="icon"
                         className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white rounded-full"
                         onClick={nextPhoto}
+                        aria-label={`Show next photo of ${animal.name}`}
                         data-testid="button-next-photo"
                       >
                         <ChevronRight className="h-6 w-6" />
@@ -263,6 +279,8 @@ export default function PublicAnimalProfilePage() {
                                 : 'bg-white/50'
                             }`}
                             onClick={() => setCurrentPhotoIndex(index)}
+                            aria-label={`Show photo ${index + 1} of ${animal.name}`}
+                            aria-current={index === currentPhotoIndex ? "true" : undefined}
                             data-testid={`indicator-photo-${index}`}
                           />
                         ))}

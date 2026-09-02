@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction, Router } from 'express';
 import { db } from '../db';
 import { animals, calendars, tenants, donationLinks, shopProducts, customPages, peerCampaigns, type PageBlock } from '@shared/schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, or, isNull, ne } from 'drizzle-orm';
 import fs from 'fs';
 import path from 'path';
 
@@ -896,7 +896,14 @@ export async function injectOGTags(req: Request, res: Response, next: NextFuncti
           const animal = await db.select().from(animals)
             .where(and(
               eq(animals.id, animalId),
-              eq(animals.tenantId, tenant.id)
+              eq(animals.tenantId, tenant.id),
+              or(
+                eq(animals.status, 'available'),
+                eq(animals.status, 'adoption_pending'),
+                eq(animals.status, 'in_trial' as any),
+              ),
+              eq(animals.medicalHold, false),
+              or(isNull(animals.recordType), ne(animals.recordType, 'tnr')),
             ))
             .limit(1);
 
@@ -925,7 +932,7 @@ export async function injectOGTags(req: Request, res: Response, next: NextFuncti
               `<h1>Meet ${escapeHtml(animalData.name)}</h1>` +
               (metaParts.length ? `<p>${metaParts.join(' &middot; ')}</p>` : '') +
               `<p>${escapeHtml(animalDesc)}</p>` +
-              `<p>Available for adoption at ${escapeHtml(tenant.name)}. Visit our website to learn more and submit an adoption application.</p>`
+              `<p>${animalData.status === 'available' ? 'Available for adoption' : 'Learn more'} at ${escapeHtml(tenant.name)}.</p>`
             );
           }
         }

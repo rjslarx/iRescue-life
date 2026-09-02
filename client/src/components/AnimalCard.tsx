@@ -118,6 +118,7 @@ export default function AnimalCard({
   const getShareUrl = () => {
     return `${window.location.origin}${basePath}/animal/${id}`;
   };
+  const profileUrl = `${basePath}/animal/${id}`;
 
   const getShareText = () => {
     return `Meet ${name}, a ${age} ${breed} looking for a loving home!`;
@@ -212,7 +213,9 @@ export default function AnimalCard({
       <CardContent className="px-4 pt-5 pb-2 space-y-3 flex-1 text-center">
         <div className="space-y-1.5">
           <h3 className="font-display text-2xl font-bold" data-testid={`text-animal-name-${name.toLowerCase().replace(/\s/g, '-')}`}>
-            {name}
+            <a href={profileUrl} className="hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm">
+              {name}
+            </a>
           </h3>
           <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground font-medium uppercase tracking-wider">
             <span>{breed}</span>
@@ -252,6 +255,12 @@ export default function AnimalCard({
         )}
       </CardContent>
       <CardFooter className="flex flex-col gap-2 px-4 pb-4 pt-0 mt-auto">
+        <Button variant="ghost" className="w-full" asChild>
+          <a href={profileUrl} data-testid="button-view-profile">
+            View Profile
+            <ExternalLink className="h-4 w-4 ml-2" aria-hidden="true" />
+          </a>
+        </Button>
         <div className="flex gap-2 w-full">
           {isUnavailable ? (
             <Button 
