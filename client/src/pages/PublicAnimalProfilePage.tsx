@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "wouter";
 import { useSEO, useJsonLd } from "@/hooks/useSEO";
@@ -8,7 +8,7 @@ import DonationForm from "@/components/DonationForm";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { 
   Heart, 
@@ -39,6 +39,8 @@ export default function PublicAnimalProfilePage() {
   const { basePath, tenantId } = useTenant();
   const { toast } = useToast();
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
+  const [photoViewerOpen, setPhotoViewerOpen] = useState(false);
+  const photoTouchStartX = useRef<number | null>(null);
   const [donationDialogOpen, setDonationDialogOpen] = useState(false);
   const [adoptionDialogOpen, setAdoptionDialogOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -206,6 +208,15 @@ export default function PublicAnimalProfilePage() {
     setCurrentPhotoIndex((prev) => (prev - 1 + displayPhotoArray.length) % displayPhotoArray.length);
   };
 
+  const handlePhotoTouchEnd = (clientX: number) => {
+    if (photoTouchStartX.current === null) return;
+    const distance = clientX - photoTouchStartX.current;
+    photoTouchStartX.current = null;
+    if (Math.abs(distance) < 50 || !hasMultiplePhotos) return;
+    if (distance < 0) nextPhoto();
+    else prevPhoto();
+  };
+
   const handlePhotoError = (url: string) => {
     if (url === dogPhoto) return;
     setFailedPhotoUrls((current) => {
@@ -280,13 +291,21 @@ export default function PublicAnimalProfilePage() {
                     }
                   }}
                 >
-                  <img
-                    src={displayPhotoArray[currentPhotoIndex]}
-                    alt={`${animal.name}, photo ${currentPhotoIndex + 1} of ${displayPhotoArray.length}`}
-                    className="w-full h-full object-cover"
-                    onError={() => handlePhotoError(displayPhotoArray[currentPhotoIndex])}
-                    data-testid="img-animal-profile"
-                  />
+                  <button
+                    type="button"
+                    className="block h-full w-full cursor-zoom-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                    onClick={() => setPhotoViewerOpen(true)}
+                    aria-label={`Enlarge photo ${currentPhotoIndex + 1} of ${animal.name}`}
+                    data-testid="button-enlarge-animal-photo"
+                  >
+                    <img
+                      src={displayPhotoArray[currentPhotoIndex]}
+                      alt={`${animal.name}, photo ${currentPhotoIndex + 1} of ${displayPhotoArray.length}`}
+                      className="w-full h-full object-cover"
+                      onError={() => handlePhotoError(displayPhotoArray[currentPhotoIndex])}
+                      data-testid="img-animal-profile"
+                    />
+                  </button>
                   
                   {hasMultiplePhotos && (
                     <>
@@ -468,6 +487,71 @@ export default function PublicAnimalProfilePage() {
         open={adoptionDialogOpen}
         onOpenChange={setAdoptionDialogOpen}
       />
+
+      <Dialog open={photoViewerOpen} onOpenChange={setPhotoViewerOpen}>
+        <DialogContent
+          className="h-[100dvh] w-screen max-w-none border-0 bg-black p-0 text-white shadow-none sm:h-[95dvh] sm:w-[95vw] sm:rounded-lg [&>button]:right-4 [&>button]:top-4 [&>button]:z-20 [&>button]:rounded-full [&>button]:bg-black/70 [&>button]:p-3 [&>button]:text-white [&>button]:opacity-100"
+          onKeyDown={(event) => {
+            if (event.key === 'ArrowLeft') {
+              event.preventDefault();
+              prevPhoto();
+            } else if (event.key === 'ArrowRight') {
+              event.preventDefault();
+              nextPhoto();
+            }
+          }}
+          onTouchStart={(event) => {
+            photoTouchStartX.current = event.touches[0]?.clientX ?? null;
+          }}
+          onTouchEnd={(event) => {
+            handlePhotoTouchEnd(event.changedTouches[0]?.clientX ?? 0);
+          }}
+          data-testid="animal-photo-viewer"
+        >
+          <DialogTitle className="sr-only">{animal.name} photo viewer</DialogTitle>
+          <div
+            className="relative flex h-full min-h-0 w-full items-center justify-center overflow-hidden"
+            role="group"
+            aria-label={`${animal.name}, photo ${currentPhotoIndex + 1} of ${displayPhotoArray.length}`}
+            aria-live="polite"
+          >
+            <img
+              src={displayPhotoArray[currentPhotoIndex]}
+              alt={`${animal.name}, enlarged photo ${currentPhotoIndex + 1} of ${displayPhotoArray.length}`}
+              className="max-h-full max-w-full select-none object-contain"
+              onError={() => handlePhotoError(displayPhotoArray[currentPhotoIndex])}
+              draggable={false}
+            />
+            {hasMultiplePhotos && (
+              <>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="absolute left-3 top-1/2 h-12 w-12 -translate-y-1/2 rounded-full bg-black/70 text-white hover:bg-black/90 hover:text-white"
+                  onClick={prevPhoto}
+                  aria-label={`Show previous photo of ${animal.name}`}
+                  data-testid="button-viewer-prev-photo"
+                >
+                  <ChevronLeft className="h-7 w-7" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-3 top-1/2 h-12 w-12 -translate-y-1/2 rounded-full bg-black/70 text-white hover:bg-black/90 hover:text-white"
+                  onClick={nextPhoto}
+                  aria-label={`Show next photo of ${animal.name}`}
+                  data-testid="button-viewer-next-photo"
+                >
+                  <ChevronRight className="h-7 w-7" />
+                </Button>
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-black/70 px-3 py-1.5 text-sm font-medium">
+                  {currentPhotoIndex + 1} / {displayPhotoArray.length}
+                </div>
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={donationDialogOpen} onOpenChange={setDonationDialogOpen}>
         <DialogContent className="max-w-md max-h-[90dvh] overflow-y-auto">
