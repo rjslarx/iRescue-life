@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "wouter";
 import { useSEO, useJsonLd } from "@/hooks/useSEO";
@@ -42,6 +42,7 @@ export default function PublicAnimalProfilePage() {
   const [donationDialogOpen, setDonationDialogOpen] = useState(false);
   const [adoptionDialogOpen, setAdoptionDialogOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [failedPhotoUrls, setFailedPhotoUrls] = useState<Set<string>>(() => new Set());
 
   // Include tenantId in queryKey to prevent stale data flash when switching between tenant sites
   const { data: animalData, isLoading: isLoadingAnimal } = useQuery<{ animal: Animal }>({
@@ -77,11 +78,27 @@ export default function PublicAnimalProfilePage() {
     }
   };
 
-  const photoArray = animal?.photoUrls && animal.photoUrls.length > 0 
-    ? animal.photoUrls 
-    : [dogPhoto];
+  const validPhotoUrls = useMemo(
+    () => (animal?.photoUrls || []).filter(
+      (url): url is string => typeof url === 'string' && url.trim().length > 0,
+    ),
+    [animal?.photoUrls],
+  );
+  const photoArray = validPhotoUrls.filter((url) => !failedPhotoUrls.has(url));
+  const displayPhotoArray = photoArray.length > 0 ? photoArray : [dogPhoto];
 
-  const hasMultiplePhotos = photoArray.length > 1;
+  const hasMultiplePhotos = displayPhotoArray.length > 1;
+
+  useEffect(() => {
+    setCurrentPhotoIndex(0);
+    setFailedPhotoUrls(new Set());
+  }, [animal?.id]);
+
+  useEffect(() => {
+    if (currentPhotoIndex >= displayPhotoArray.length) {
+      setCurrentPhotoIndex(Math.max(0, displayPhotoArray.length - 1));
+    }
+  }, [currentPhotoIndex, displayPhotoArray.length]);
 
   const pageTitle = animal 
     ? `Meet ${animal.name} - ${animal.breed} | ${rescueName}`
@@ -93,7 +110,7 @@ export default function PublicAnimalProfilePage() {
       ? `${animal.name} is a ${animal.age} year old ${animal.breed} looking for a forever home at ${rescueName}.`
       : `Find your perfect companion at ${rescueName}.`;
 
-  const ogImage = photoArray[0] || undefined;
+  const ogImage = displayPhotoArray[0] || undefined;
   const canonicalUrl = typeof window !== 'undefined'
     ? `${window.location.origin}${basePath}/animal/${animalId}`
     : undefined;
@@ -182,11 +199,20 @@ export default function PublicAnimalProfilePage() {
   };
 
   const nextPhoto = () => {
-    setCurrentPhotoIndex((prev) => (prev + 1) % photoArray.length);
+    setCurrentPhotoIndex((prev) => (prev + 1) % displayPhotoArray.length);
   };
 
   const prevPhoto = () => {
-    setCurrentPhotoIndex((prev) => (prev - 1 + photoArray.length) % photoArray.length);
+    setCurrentPhotoIndex((prev) => (prev - 1 + displayPhotoArray.length) % displayPhotoArray.length);
+  };
+
+  const handlePhotoError = (url: string) => {
+    if (url === dogPhoto) return;
+    setFailedPhotoUrls((current) => {
+      const next = new Set(current);
+      next.add(url);
+      return next;
+    });
   };
 
   if (isLoadingAnimal) {
@@ -238,12 +264,27 @@ export default function PublicAnimalProfilePage() {
         <div className="max-w-4xl mx-auto">
           <Card className="overflow-hidden">
             <div className="md:flex">
-              <div className="relative md:w-1/2">
-                <div className="aspect-square relative overflow-hidden">
+              <div className="relative md:w-1/2 p-3">
+                <div
+                  className="aspect-square relative overflow-hidden rounded-lg bg-muted"
+                  role="group"
+                  aria-label={`${animal.name} photo gallery`}
+                  tabIndex={hasMultiplePhotos ? 0 : undefined}
+                  onKeyDown={(event) => {
+                    if (event.key === 'ArrowLeft') {
+                      event.preventDefault();
+                      prevPhoto();
+                    } else if (event.key === 'ArrowRight') {
+                      event.preventDefault();
+                      nextPhoto();
+                    }
+                  }}
+                >
                   <img
-                    src={photoArray[currentPhotoIndex]}
-                    alt={animal.name}
+                    src={displayPhotoArray[currentPhotoIndex]}
+                    alt={`${animal.name}, photo ${currentPhotoIndex + 1} of ${displayPhotoArray.length}`}
                     className="w-full h-full object-cover"
+                    onError={() => handlePhotoError(displayPhotoArray[currentPhotoIndex])}
                     data-testid="img-animal-profile"
                   />
                   
@@ -252,7 +293,7 @@ export default function PublicAnimalProfilePage() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white rounded-full"
+                        className="absolute z-10 left-2 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white rounded-full shadow-md"
                         onClick={prevPhoto}
                         aria-label={`Show previous photo of ${animal.name}`}
                         data-testid="button-prev-photo"
@@ -262,32 +303,52 @@ export default function PublicAnimalProfilePage() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white rounded-full"
+                        className="absolute z-10 right-2 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white rounded-full shadow-md"
                         onClick={nextPhoto}
                         aria-label={`Show next photo of ${animal.name}`}
                         data-testid="button-next-photo"
                       >
                         <ChevronRight className="h-6 w-6" />
                       </Button>
-                      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
-                        {photoArray.map((_, index) => (
-                          <button
-                            key={index}
-                            className={`h-2 w-2 rounded-full transition-all ${
-                              index === currentPhotoIndex 
-                                ? 'bg-white w-4' 
-                                : 'bg-white/50'
-                            }`}
-                            onClick={() => setCurrentPhotoIndex(index)}
-                            aria-label={`Show photo ${index + 1} of ${animal.name}`}
-                            aria-current={index === currentPhotoIndex ? "true" : undefined}
-                            data-testid={`indicator-photo-${index}`}
-                          />
-                        ))}
+                      <div className="absolute z-10 bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-black/65 px-3 py-1 text-xs font-medium text-white">
+                        {currentPhotoIndex + 1} / {displayPhotoArray.length}
                       </div>
                     </>
                   )}
                 </div>
+                {hasMultiplePhotos && (
+                  <div
+                    className="mt-3 flex gap-2 overflow-x-auto pb-1"
+                    aria-label={`Choose a photo of ${animal.name}`}
+                    data-testid="animal-photo-thumbnails"
+                  >
+                    {displayPhotoArray.map((url, index) => (
+                      <button
+                        type="button"
+                        key={`${url}-${index}`}
+                        className={`relative h-16 w-16 shrink-0 overflow-hidden rounded-md border-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+                          index === currentPhotoIndex
+                            ? 'border-primary ring-1 ring-primary'
+                            : 'border-transparent opacity-75 hover:opacity-100'
+                        }`}
+                        onClick={() => setCurrentPhotoIndex(index)}
+                        aria-label={`Show photo ${index + 1} of ${animal.name}`}
+                        aria-pressed={index === currentPhotoIndex}
+                        data-testid={`thumbnail-photo-${index}`}
+                      >
+                        <img
+                          src={url}
+                          alt=""
+                          className="h-full w-full object-cover"
+                          onError={() => handlePhotoError(url)}
+                        />
+                        <span className="sr-only">
+                          {index === currentPhotoIndex ? 'Currently selected' : ''}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <CardContent className="md:w-1/2 p-6 flex flex-col justify-between">
