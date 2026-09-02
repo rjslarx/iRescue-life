@@ -2,6 +2,8 @@ import { Link } from "wouter";
 import { SiFacebook, SiInstagram, SiTiktok, SiYoutube } from "react-icons/si";
 import type { Tenant } from "@shared/schema";
 import NewsletterSubscribe from "@/components/NewsletterSubscribe";
+import MobileSponsorCarousel from "@/components/MobileSponsorCarousel";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface PublicFooterProps {
   tenant?: Tenant;
@@ -9,6 +11,7 @@ interface PublicFooterProps {
 }
 
 export default function PublicFooter({ tenant, basePath = "" }: PublicFooterProps) {
+  const isMobile = useIsMobile();
   const rescueName = tenant?.name || "Animal Rescue";
   const path = (route: string) => `${basePath}${route}`;
   const sponsors = ((tenant as any)?.sponsorLogos || []) as Array<{
@@ -69,14 +72,18 @@ export default function PublicFooter({ tenant, basePath = "" }: PublicFooterProp
         {sponsors.length > 0 && (
           <div className="mt-8 border-t pt-8">
             <h4 className="mb-4 text-center text-sm font-medium text-muted-foreground">Our Sponsors &amp; Partners</h4>
-            <div className="flex flex-wrap items-center justify-center gap-6">
-              {sponsors.map((sponsor) => {
-                const logo = <img src={sponsor.imageUrl} alt={sponsor.altText} className="h-14 w-auto object-contain" />;
-                return sponsor.linkUrl
-                  ? <a key={sponsor.id} href={sponsor.linkUrl} target="_blank" rel="noopener noreferrer" className="opacity-70 grayscale transition-all hover:opacity-100 hover:grayscale-0">{logo}</a>
-                  : <div key={sponsor.id} className="opacity-70 grayscale">{logo}</div>;
-              })}
-            </div>
+            {isMobile ? (
+              <MobileSponsorCarousel sponsors={sponsors} />
+            ) : (
+              <div className="flex flex-wrap items-center justify-center gap-6">
+                {sponsors.map((sponsor) => {
+                  const logo = <img src={sponsor.imageUrl} alt={sponsor.altText} className="h-14 w-auto object-contain" />;
+                  return sponsor.linkUrl
+                    ? <a key={sponsor.id} href={sponsor.linkUrl} target="_blank" rel="noopener noreferrer" className="opacity-70 grayscale transition-all hover:opacity-100 hover:grayscale-0">{logo}</a>
+                    : <div key={sponsor.id} className="opacity-70 grayscale">{logo}</div>;
+                })}
+              </div>
+            )}
           </div>
         )}
 
