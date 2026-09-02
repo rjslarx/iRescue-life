@@ -597,6 +597,7 @@ export default function Home() {
                       bio={animal.bio ?? undefined}
                       basePath={basePath}
                       useThumbnails
+                      featuredActions
                       onAdopt={() => handleAdopt(animal)}
                       onSponsor={() => handleSponsor(animal.name)}
                     />

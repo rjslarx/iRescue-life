@@ -86,6 +86,7 @@ export default function MobileAnimalCarousel({
                 bio={animal.bio ?? undefined}
                 basePath={basePath}
                 useThumbnails
+                featuredActions
                 onAdopt={() => onAdopt(animal)}
                 onSponsor={() => onSponsor(animal.name)}
               />

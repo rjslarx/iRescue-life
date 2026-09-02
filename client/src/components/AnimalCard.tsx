@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Share2, Facebook, MessageCircle, Mail, Link as LinkIcon, Check, Heart, ExternalLink, FileText } from "lucide-react";
+import { Share2, Facebook, MessageCircle, Mail, Link as LinkIcon, Check, Heart, ExternalLink, FileText, PawPrint, ArrowRight } from "lucide-react";
 import { SiX } from "react-icons/si";
 import {
   DropdownMenu,
@@ -35,6 +35,7 @@ interface AnimalCardProps {
   basePath?: string;
   status?: string;
   useThumbnails?: boolean;
+  featuredActions?: boolean;
   onAdopt?: () => void;
   onSponsor?: () => void;
 }
@@ -51,6 +52,7 @@ export default function AnimalCard({
   basePath = '',
   status,
   useThumbnails = false,
+  featuredActions = false,
   onAdopt,
   onSponsor 
 }: AnimalCardProps) {
@@ -254,17 +256,28 @@ export default function AnimalCard({
           </div>
         )}
       </CardContent>
-      <CardFooter className="flex flex-col gap-2 px-4 pb-4 pt-0 mt-auto">
-        <Button variant="ghost" className="w-full" asChild>
+      <CardFooter className={`flex flex-col px-4 pb-4 pt-1 mt-auto ${featuredActions ? 'gap-3' : 'gap-2'}`}>
+        <Button
+          variant="ghost"
+          className={featuredActions
+            ? "group w-full gap-2 rounded-xl text-base font-semibold text-foreground hover:bg-primary/5 hover:text-primary"
+            : "w-full"
+          }
+          asChild
+        >
           <a href={profileUrl} data-testid="button-view-profile">
+            {featuredActions && <PawPrint className="h-4 w-4 text-primary/70" aria-hidden="true" />}
             View Profile
-            <ExternalLink className="h-4 w-4 ml-2" aria-hidden="true" />
+            {featuredActions
+              ? <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" aria-hidden="true" />
+              : <ExternalLink className="h-4 w-4 ml-2" aria-hidden="true" />
+            }
           </a>
         </Button>
-        <div className="flex gap-2 w-full">
+        <div className={featuredActions ? "contents" : "flex gap-2 w-full"}>
           {isUnavailable ? (
             <Button 
-              className="flex-1" 
+              className={featuredActions ? "h-12 w-full rounded-xl text-base font-semibold" : "flex-1"}
               variant="secondary"
               disabled
               data-testid="button-adopt-disabled"
@@ -273,13 +286,71 @@ export default function AnimalCard({
             </Button>
           ) : (
             <Button 
-              className="flex-1" 
+              className={featuredActions
+                ? "h-12 w-full rounded-xl text-base font-bold shadow-sm transition-transform hover:-translate-y-0.5"
+                : "flex-1"
+              }
               onClick={onAdopt}
               data-testid="button-adopt"
             >
               Adopt Me
+              {featuredActions && <Heart className="ml-2 h-5 w-5" aria-hidden="true" />}
             </Button>
           )}
+          {featuredActions && (
+            <div className="grid w-full grid-cols-2 gap-2">
+              {onSponsor && (
+                <Button 
+                  variant="outline"
+                  className="h-11 min-w-0 rounded-xl border-primary/25 px-2 font-semibold text-foreground hover:border-primary/50 hover:bg-primary/5 hover:text-primary"
+                  onClick={handleSponsorClick}
+                  data-testid="button-sponsor"
+                >
+                  <Heart className="mr-1.5 h-4 w-4 shrink-0 text-primary/75" aria-hidden="true" />
+                  <span className="truncate">Sponsor {name}</span>
+                </Button>
+              )}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="h-11 rounded-xl border-primary/15 font-semibold text-foreground hover:border-primary/40 hover:bg-primary/5 hover:text-primary"
+                    data-testid="button-share"
+                  >
+                    {copied ? <Check className="mr-1.5 h-4 w-4 text-primary" /> : <Share2 className="mr-1.5 h-4 w-4 text-primary/75" />}
+                    Share
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem onClick={() => handleShare('facebook')} data-testid="share-facebook">
+                    <Facebook className="h-4 w-4 mr-2" />
+                    Share on Facebook
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleShare('twitter')} data-testid="share-twitter">
+                    <SiX className="h-4 w-4 mr-2" />
+                    Share on X
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleShare('whatsapp')} data-testid="share-whatsapp">
+                    <MessageCircle className="h-4 w-4 mr-2" />
+                    Share on WhatsApp
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleShare('email')} data-testid="share-email">
+                    <Mail className="h-4 w-4 mr-2" />
+                    Share via Email
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleShare('copy')} data-testid="share-copy">
+                    <LinkIcon className="h-4 w-4 mr-2" />
+                    Copy Link
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleShare('text')} data-testid="share-text">
+                    <FileText className="h-4 w-4 mr-2" />
+                    Copy as Text
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          )}
+          {!featuredActions && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button 
@@ -317,9 +388,10 @@ export default function AnimalCard({
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          )}
         </div>
         
-        {onSponsor && (
+        {onSponsor && !featuredActions && (
           <Button 
             variant="outline"
             className="w-full"
