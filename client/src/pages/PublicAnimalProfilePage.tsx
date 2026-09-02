@@ -556,10 +556,8 @@ export default function PublicAnimalProfilePage() {
       <Dialog open={donationDialogOpen} onOpenChange={setDonationDialogOpen}>
         <DialogContent className="max-w-md max-h-[90dvh] overflow-y-auto">
           <DonationForm
-            animalToSponsor={animal.name}
-            onClose={() => {
-              setDonationDialogOpen(false);
-            }}
+            tenant={tenant}
+            sponsoredAnimalName={animal.name}
           />
         </DialogContent>
       </Dialog>
