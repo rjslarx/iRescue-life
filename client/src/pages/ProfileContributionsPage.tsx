@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { CheckCircle2, Loader2, Search, Sparkles } from "lucide-react";
+import { CheckCircle2, Heart, Loader2, Search, Sparkles } from "lucide-react";
 import type { Animal, FosterAnimal, User } from "@shared/schema";
 import DashboardLayout from "@/components/DashboardLayout";
 import { PersonalityFitEditor } from "@/components/PersonalityFitEditor";
@@ -106,6 +106,18 @@ export default function ProfileContributionsPage() {
                     onClick={() => setSelectedId(animal.id)}
                     className={`h-auto w-full justify-start p-3 text-left ${selected ? "border-primary bg-primary/5" : ""}`}
                   >
+                    <div className="mr-3 flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted">
+                      {animal.photoUrls?.[0] ? (
+                        <img
+                          src={animal.photoUrls[0]}
+                          alt=""
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <Heart className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+                      )}
+                    </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-2">
                         <span className="truncate font-semibold">{animal.name}</span>
