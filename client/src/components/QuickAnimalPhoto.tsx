@@ -11,8 +11,8 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { Camera, Upload, X, Loader2, Image, Check, Replace } from "lucide-react";
-import type { Animal } from "@shared/schema";
+import { Camera, Upload, X, Loader2, Image, Replace } from "lucide-react";
+import { MAX_ANIMAL_PHOTOS, type Animal } from "@shared/schema";
 
 interface QuickAnimalPhotoProps {
   open: boolean;
@@ -35,7 +35,7 @@ export default function QuickAnimalPhoto({
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const existingPhotos = animal.photoUrls || [];
-  const hasMaxPhotos = existingPhotos.length >= 4;
+  const hasMaxPhotos = existingPhotos.length >= MAX_ANIMAL_PHOTOS;
 
   const resetState = () => {
     setSelectedFile(null);
@@ -175,8 +175,8 @@ export default function QuickAnimalPhoto({
       let updatedPhotoUrls: string[];
       if (replaceExisting) {
         updatedPhotoUrls = [uploadedPaths[0]];
-      } else if (existingPhotos.length >= 4) {
-        updatedPhotoUrls = [...existingPhotos.slice(1), uploadedPaths[0]];
+      } else if (existingPhotos.length >= MAX_ANIMAL_PHOTOS) {
+        throw new Error(`This animal already has ${MAX_ANIMAL_PHOTOS} photos. Use Edit Animal to remove or replace one first.`);
       } else {
         updatedPhotoUrls = [...existingPhotos, uploadedPaths[0]];
       }
@@ -272,7 +272,7 @@ export default function QuickAnimalPhoto({
               {existingPhotos.length > 0 && (
                 <div className="pt-2 border-t">
                   <p className="text-sm text-muted-foreground mb-2">
-                    Current photos ({existingPhotos.length}/4):
+                     Current photos ({existingPhotos.length}/{MAX_ANIMAL_PHOTOS}):
                   </p>
                   <div className="flex gap-2">
                     {existingPhotos.map((url, index) => (
@@ -311,7 +311,7 @@ export default function QuickAnimalPhoto({
               {hasMaxPhotos && (
                 <div className="p-3 bg-muted rounded-lg">
                   <p className="text-sm font-medium mb-2">
-                    This animal already has 4 photos. Choose an option:
+                    This animal already has {MAX_ANIMAL_PHOTOS} photos. Choose an option:
                   </p>
                   <div className="flex gap-2">
                     <Button
@@ -324,21 +324,11 @@ export default function QuickAnimalPhoto({
                       <Replace className="h-4 w-4 mr-1" />
                       Replace All
                     </Button>
-                    <Button
-                      variant={!replaceExisting ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setReplaceExisting(false)}
-                      className="flex-1"
-                      data-testid="button-keep-latest"
-                    >
-                      <Check className="h-4 w-4 mr-1" />
-                      Keep Latest
-                    </Button>
                   </div>
                   <p className="text-xs text-muted-foreground mt-2">
-                    {replaceExisting 
+                    {replaceExisting
                       ? "All existing photos will be replaced with this new one."
-                      : "The oldest photo will be removed to make room for this one."
+                      : "Choose Replace All, or use Edit Animal to remove an individual photo first."
                     }
                   </p>
                 </div>

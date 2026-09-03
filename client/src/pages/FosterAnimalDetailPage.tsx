@@ -170,6 +170,8 @@ export default function FosterAnimalDetailPage() {
                 personalityTags: animal.personalityTags,
                 superpowerBadges: animal.superpowerBadges,
                 revealCards: animal.revealCards,
+                profileVideos: animal.profileVideos,
+                photoUrls: animal.photoUrls || [],
               }}
             />
           </div>

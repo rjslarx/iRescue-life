@@ -9,7 +9,7 @@ import { registerReceiptSignatureRoutes } from "./routes/receipt-signature";
 import { loginUser, createTenantWithAdmin, createUser } from "./services/auth";
 import { PushNotificationService } from "./services/push-notifications";
 import { db } from "./db";
-import { tenants, users, demoRequests, insertDemoRequestSchema, smsMessageLogs, emailEvents, animals, animalProfileSubmissions, platformIntegrations, newsletterCampaigns, newsletterSubscribers, happyTails, animalMergeHistory, activityLogs, medicalExams, medicalPrescriptions, medicalBills, medicalFiles, animalNotes, applications, adoptionCheckoutSessions, adoptions, partnerOrganizations, microchipRecords, surrenderRequests, surrenderFormFields, insertSurrenderRequestSchema, insertSurrenderFormFieldSchema, inboundEmails, calendars, careInstructionSnippets, fosterApplications, volunteerApplications, adoptionContracts, fosterAgreementSessions, volunteerAgreementSessions, surrenderAgreementSessions, customFormSubmissions, customForms, placementAgreementSessions, medicationTasks, medicationPlans, fosterAnimals, messageQueue, contacts, campaignIntakeTokens, surgeryDayRequests, surgeryDayRequestAnimals, formSettings, customPages, shopProducts, peerCampaigns, expenseCampaigns, votingContests, subscriptions, donationLinks as donationLinksTable } from "@shared/schema";
+import { tenants, users, demoRequests, insertDemoRequestSchema, smsMessageLogs, emailEvents, animals, animalProfileSubmissions, platformIntegrations, newsletterCampaigns, newsletterSubscribers, happyTails, animalMergeHistory, activityLogs, medicalExams, medicalPrescriptions, medicalBills, medicalFiles, animalNotes, applications, adoptionCheckoutSessions, adoptions, partnerOrganizations, microchipRecords, surrenderRequests, surrenderFormFields, insertSurrenderRequestSchema, insertSurrenderFormFieldSchema, inboundEmails, calendars, careInstructionSnippets, fosterApplications, volunteerApplications, adoptionContracts, fosterAgreementSessions, volunteerAgreementSessions, surrenderAgreementSessions, customFormSubmissions, customForms, placementAgreementSessions, medicationTasks, medicationPlans, fosterAnimals, messageQueue, contacts, campaignIntakeTokens, surgeryDayRequests, surgeryDayRequestAnimals, formSettings, customPages, shopProducts, peerCampaigns, expenseCampaigns, votingContests, subscriptions, donationLinks as donationLinksTable, MAX_ANIMAL_PHOTOS } from "@shared/schema";
 import { eq, and, desc, asc, sql, inArray, lt, lte, gte, not, notInArray, or, ne, isNull, isNotNull } from "drizzle-orm";
 import { z } from "zod";
 import { authLimiter, signupLimiter, passwordResetLimiter, emailLimiter } from "./config/security";
@@ -7479,9 +7479,48 @@ Crawl-delay: 1
       label: z.string().trim().min(1).max(60),
       description: z.string().trim().min(1).max(240),
     }).strict()).max(3).optional(),
+    profilePhotos: z.array(z.object({
+      url: z.string().trim().min(1).max(500),
+      altText: z.string().trim().min(1).max(240),
+    }).strict()).max(6).optional(),
   }).strict().refine((payload) => Object.keys(payload).length > 0, {
     message: 'At least one profile field is required',
   });
+
+  const applyProfilePayload = async (tx: any, tenantId: string, animalId: string, payload: any) => {
+    const { MAX_ANIMAL_PHOTOS } = await import('@shared/schema');
+    const { mergeProfileContributionPhotos } = await import('./lib/profile-contribution-photos');
+    const [current] = await tx.select({
+      photoUrls: animals.photoUrls,
+      photoAltTexts: animals.photoAltTexts,
+    }).from(animals).where(and(
+      eq(animals.id, animalId),
+      eq(animals.tenantId, tenantId),
+    )).limit(1).for('update');
+    if (!current) {
+      const error: any = new Error('Animal not found');
+      error.status = 404;
+      throw error;
+    }
+    const profilePhotos = payload.profilePhotos || [];
+    const existingPhotos = current.photoUrls || [];
+    const mergedPhotos = mergeProfileContributionPhotos(
+      existingPhotos,
+      profilePhotos.map((photo: any) => photo.url),
+      MAX_ANIMAL_PHOTOS,
+    );
+    const addedUrls = new Set(mergedPhotos.filter((url) => !existingPhotos.includes(url)));
+    const { profilePhotos: _profilePhotos, ...replaceableFields } = payload;
+    const photoAltTexts = {
+      ...(current.photoAltTexts || {}),
+      ...Object.fromEntries(profilePhotos.filter((photo: any) => addedUrls.has(photo.url)).map((photo: any) => [photo.url, photo.altText])),
+    };
+    await tx.update(animals).set({
+      ...replaceableFields,
+      ...(profilePhotos.length ? { photoUrls: mergedPhotos, photoAltTexts } : {}),
+      updatedAt: new Date(),
+    }).where(and(eq(animals.id, animalId), eq(animals.tenantId, tenantId)));
+  };
 
   /**
    * GET /api/animal-profile-submissions
@@ -7567,7 +7606,8 @@ Crawl-delay: 1
               eq(animalProfileSubmissions.id, req.params.id),
               eq(animalProfileSubmissions.tenantId, req.tenant!.id),
             ))
-            .limit(1);
+            .limit(1)
+            .for('update');
           if (!submission) return null;
           if (submission.status !== 'pending') {
             const conflict: any = new Error('Submission has already been reviewed');
@@ -7575,12 +7615,34 @@ Crawl-delay: 1
             throw conflict;
           }
           if (decision === 'approved') {
-            await tx.update(animals)
-              .set({ ...submission.proposedPayload, updatedAt: new Date() })
-              .where(and(
-                eq(animals.id, submission.animalId),
-                eq(animals.tenantId, req.tenant!.id),
-              ));
+            const photos = (submission.proposedPayload as any)?.profilePhotos || [];
+            if (photos.length) {
+              const { ObjectStorageService } = await import('./objectStorage');
+              const { getObjectAclPolicy } = await import('./objectAcl');
+              const storage = new ObjectStorageService();
+              for (const photo of photos) {
+                try {
+                  const file = await storage.getObjectEntityFile(photo.url);
+                  const [[exists], policy] = await Promise.all([file.exists(), getObjectAclPolicy(file)]);
+                  if (!exists || policy?.tenantId !== req.tenant!.id || !photo.url.startsWith(`/objects/${req.tenant!.id}/animal-profile-photos/${submission.animalId}-`)) {
+                    const error: any = new Error('One or more contributed photos are no longer available. Ask the contributor to upload them again.');
+                    error.status = 409;
+                    throw error;
+                  }
+                } catch (verificationError: any) {
+                  if (verificationError?.status === 409) throw verificationError;
+                  const error: any = new Error('One or more contributed photos are no longer available. Ask the contributor to upload them again.');
+                  error.status = 409;
+                  throw error;
+                }
+              }
+            }
+            await applyProfilePayload(tx, req.tenant!.id, submission.animalId, submission.proposedPayload);
+          } else {
+            await tx.select({ id: animals.id }).from(animals).where(and(
+              eq(animals.id, submission.animalId),
+              eq(animals.tenantId, req.tenant!.id),
+            )).limit(1).for('update');
           }
           const [result] = await tx.update(animalProfileSubmissions)
             .set({
@@ -7599,6 +7661,33 @@ Crawl-delay: 1
             const conflict: any = new Error('Submission has already been reviewed');
             conflict.status = 409;
             throw conflict;
+          }
+          if (decision === 'rejected') {
+            const photos = (submission.proposedPayload as any)?.profilePhotos || [];
+            const { ObjectStorageService } = await import('./objectStorage');
+            const { getObjectAclPolicy } = await import('./objectAcl');
+            const storage = new ObjectStorageService();
+            for (const photo of photos) {
+              const [attached] = await tx.select({ id: animals.id }).from(animals).where(and(
+                eq(animals.tenantId, req.tenant!.id),
+                sql`${animals.photoUrls} @> ARRAY[${photo.url}]::text[]`,
+              )).limit(1);
+              const [otherPending] = await tx.select({ id: animalProfileSubmissions.id }).from(animalProfileSubmissions).where(and(
+                eq(animalProfileSubmissions.tenantId, req.tenant!.id),
+                eq(animalProfileSubmissions.status, 'pending'),
+                ne(animalProfileSubmissions.id, submission.id),
+                sql`jsonb_path_exists(${animalProfileSubmissions.proposedPayload}, '$.profilePhotos[*] ? (@.url == $url)', jsonb_build_object('url', to_jsonb(${photo.url}::text)))`,
+              )).limit(1);
+              if (!attached && !otherPending && photo.url.startsWith(`/objects/${req.tenant!.id}/animal-profile-photos/${submission.animalId}-`)) {
+                try {
+                  const file = await storage.getObjectEntityFile(photo.url);
+                  const policy = await getObjectAclPolicy(file);
+                  if (policy?.tenantId === req.tenant!.id) await file.delete({ ignoreNotFound: true });
+                } catch (cleanupError) {
+                  console.warn('[PROFILE-PHOTO] Rejected upload cleanup failed:', cleanupError);
+                }
+              }
+            }
           }
           return result;
         });
@@ -7688,6 +7777,100 @@ Crawl-delay: 1
     }
   });
 
+  app.post('/api/animals/:id/profile-photos/upload', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const tenantId = req.tenant!.id;
+      const activeRole = req.user!.activeRole;
+      const [animal] = await db.select({ id: animals.id }).from(animals)
+        .where(and(eq(animals.id, req.params.id), eq(animals.tenantId, tenantId))).limit(1);
+      if (!animal) return res.status(404).json({ error: 'Animal not found' });
+      let permitted = ['owner', 'admin', 'staff'].includes(activeRole);
+      if (activeRole === 'foster') {
+        const [assignment] = await db.select({ id: fosterAnimals.id }).from(fosterAnimals).where(and(
+          eq(fosterAnimals.tenantId, tenantId), eq(fosterAnimals.animalId, animal.id),
+          eq(fosterAnimals.fosterId, req.user!.id), eq(fosterAnimals.status, 'active'),
+        )).limit(1);
+        permitted = !!assignment;
+      } else if (activeRole === 'volunteer') {
+        const { publicAnimalFilter } = await import('./services/animals');
+        const [publicAnimal] = await db.select({ id: animals.id }).from(animals)
+          .where(and(publicAnimalFilter(tenantId), eq(animals.id, animal.id))).limit(1);
+        permitted = !!publicAnimal;
+      }
+      if (!permitted) return res.status(403).json({ error: 'You cannot upload profile photos for this animal' });
+      const multer = (await import('multer')).default;
+      const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+      const upload = multer({
+        storage: multer.memoryStorage(),
+        limits: { files: 6, fileSize: 25 * 1024 * 1024 },
+        fileFilter: (_request, file, callback) => callback(allowed.includes(file.mimetype) ? null : new Error('Only JPG, PNG, GIF, and WebP images are allowed'), allowed.includes(file.mimetype)),
+      }).array('files', 6);
+      upload(req, res, async (error) => {
+        if (error) return res.status(400).json({ error: error.message });
+        const files = req.files as Express.Multer.File[] | undefined;
+        if (!files?.length) return res.status(400).json({ error: 'No photo provided' });
+        try {
+          const { ObjectStorageService } = await import('./objectStorage');
+          const storage = new ObjectStorageService();
+          const uploadedPaths = await Promise.all(files.map(async (file) => {
+            const extension = file.mimetype === 'image/png' ? 'png' : file.mimetype === 'image/gif' ? 'gif' : file.mimetype === 'image/webp' ? 'webp' : 'jpg';
+            return (await storage.uploadTenantFile(tenantId, 'animal-profile-photos', file.buffer, file.mimetype, `${animal.id}-${crypto.randomUUID()}.${extension}`, {
+              owner: req.user!.id, visibility: 'private', tenantId,
+            })).objectPath;
+          }));
+          res.json({ uploadedPaths });
+        } catch (uploadError) { next(uploadError); }
+      });
+    } catch (error) { next(error); }
+  });
+
+  app.delete('/api/animals/:id/profile-photos/staged', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { url } = z.object({ url: z.string().trim().min(1).max(500) }).parse(req.body);
+      const expectedPrefix = `/objects/${req.tenant!.id}/animal-profile-photos/${req.params.id}-`;
+      if (!url.startsWith(expectedPrefix)) return res.status(400).json({ error: 'Invalid staged photo path' });
+      await db.transaction(async (tx) => {
+        const [animal] = await tx.select({ id: animals.id, photoUrls: animals.photoUrls }).from(animals).where(and(
+          eq(animals.id, req.params.id),
+          eq(animals.tenantId, req.tenant!.id),
+        )).limit(1).for('update');
+        if (!animal) {
+          const error: any = new Error('Animal not found');
+          error.status = 404;
+          throw error;
+        }
+        if ((animal.photoUrls || []).includes(url)) {
+          const error: any = new Error('Published photos can only be removed in Edit Animal');
+          error.status = 409;
+          throw error;
+        }
+        const [pendingReference] = await tx.select({ id: animalProfileSubmissions.id }).from(animalProfileSubmissions).where(and(
+          eq(animalProfileSubmissions.tenantId, req.tenant!.id),
+          eq(animalProfileSubmissions.animalId, animal.id),
+          eq(animalProfileSubmissions.status, 'pending'),
+          sql`jsonb_path_exists(${animalProfileSubmissions.proposedPayload}, '$.profilePhotos[*] ? (@.url == $url)', jsonb_build_object('url', to_jsonb(${url}::text)))`,
+        )).limit(1);
+        if (pendingReference) {
+          const error: any = new Error('This photo is already awaiting review and cannot be removed');
+          error.status = 409;
+          throw error;
+        }
+        const { ObjectStorageService } = await import('./objectStorage');
+        const { getObjectAclPolicy } = await import('./objectAcl');
+        const storage = new ObjectStorageService();
+        const file = await storage.getObjectEntityFile(url);
+        const policy = await getObjectAclPolicy(file);
+        if (policy?.tenantId !== req.tenant!.id || policy.owner !== req.user!.id) {
+          const error: any = new Error('You cannot remove this staged photo');
+          error.status = 403;
+          throw error;
+        }
+        await file.delete({ ignoreNotFound: true });
+      });
+      res.sendStatus(204);
+    } catch (error) { next(error); }
+  });
+
   /**
    * GET /api/animals/:id
    * Get specific animal
@@ -7771,7 +7954,7 @@ Crawl-delay: 1
       const activeRole = req.user!.activeRole;
       const isStaff = ['owner', 'admin', 'staff'].includes(activeRole);
 
-      const [animal] = await db.select({ id: animals.id, profileVideos: animals.profileVideos })
+      const [animal] = await db.select({ id: animals.id, profileVideos: animals.profileVideos, photoUrls: animals.photoUrls })
         .from(animals)
         .where(and(eq(animals.id, req.params.id), eq(animals.tenantId, tenantId)))
         .limit(1);
@@ -7795,6 +7978,26 @@ Crawl-delay: 1
             }
           } catch {
             return res.status(400).json({ error: 'One or more profile videos could not be verified' });
+          }
+        }
+      }
+      const expectedPhotoPrefix = `/objects/${tenantId}/animal-profile-photos/${animal.id}-`;
+      if (payload.profilePhotos?.some((photo) => !photo.url.startsWith(expectedPhotoPrefix))) {
+        return res.status(400).json({ error: 'Profile photos must be uploaded through this rescue account' });
+      }
+      if (payload.profilePhotos?.length) {
+        const { ObjectStorageService } = await import('./objectStorage');
+        const { getObjectAclPolicy } = await import('./objectAcl');
+        const storage = new ObjectStorageService();
+        for (const photo of payload.profilePhotos) {
+          try {
+            const objectFile = await storage.getObjectEntityFile(photo.url);
+            const [[exists], policy] = await Promise.all([objectFile.exists(), getObjectAclPolicy(objectFile)]);
+            if (!exists || policy?.tenantId !== tenantId || policy.owner !== req.user!.id) {
+              return res.status(400).json({ error: 'One or more profile photos could not be verified' });
+            }
+          } catch {
+            return res.status(400).json({ error: 'One or more profile photos could not be verified' });
           }
         }
       }
@@ -7827,6 +8030,36 @@ Crawl-delay: 1
       const requiresApproval = tenant?.requiresApproval === true;
 
       const submission = await db.transaction(async (tx) => {
+        const [lockedAnimal] = await tx.select({ id: animals.id }).from(animals).where(and(
+          eq(animals.id, animal.id),
+          eq(animals.tenantId, tenantId),
+        )).limit(1).for('update');
+        if (!lockedAnimal) {
+          const error: any = new Error('Animal not found');
+          error.status = 404;
+          throw error;
+        }
+        if (payload.profilePhotos?.length) {
+          const { ObjectStorageService } = await import('./objectStorage');
+          const { getObjectAclPolicy } = await import('./objectAcl');
+          const storage = new ObjectStorageService();
+          for (const photo of payload.profilePhotos) {
+            try {
+              const objectFile = await storage.getObjectEntityFile(photo.url);
+              const [[exists], policy] = await Promise.all([objectFile.exists(), getObjectAclPolicy(objectFile)]);
+              if (!exists || policy?.tenantId !== tenantId || policy.owner !== req.user!.id) {
+                const error: any = new Error('One or more profile photos could not be verified');
+                error.status = 400;
+                throw error;
+              }
+            } catch (verificationError: any) {
+              if (verificationError?.status === 400) throw verificationError;
+              const error: any = new Error('One or more profile photos could not be verified');
+              error.status = 400;
+              throw error;
+            }
+          }
+        }
         const [created] = await tx.insert(animalProfileSubmissions).values({
           tenantId,
           animalId: animal.id,
@@ -7840,9 +8073,7 @@ Crawl-delay: 1
           reviewNotes: requiresApproval ? null : 'Automatically approved by tenant policy',
         }).returning();
         if (!requiresApproval) {
-          await tx.update(animals)
-            .set({ ...payload, updatedAt: new Date() })
-            .where(and(eq(animals.id, animal.id), eq(animals.tenantId, tenantId)));
+          await applyProfilePayload(tx, tenantId, animal.id, payload);
         }
         return created;
       });
@@ -8741,6 +8972,9 @@ Crawl-delay: 1
       
       const data = insertAnimalSchema.omit({ tenantId: true }).parse(payload);
       
+      if (Array.isArray(data.photoUrls) && data.photoUrls.length > MAX_ANIMAL_PHOTOS) {
+        return res.status(400).json({ error: `Animals can have up to ${MAX_ANIMAL_PHOTOS} photos` });
+      }
       if (data.photoUrls && data.photoUrls.length > 0) {
         const photoValidation = validatePhotoUrls(data.photoUrls);
         if (!photoValidation.valid) {
@@ -8974,6 +9208,9 @@ Crawl-delay: 1
       }
       
       // Validate and normalize photo URLs if provided
+      if (Array.isArray(data.photoUrls) && data.photoUrls.length > MAX_ANIMAL_PHOTOS) {
+        return res.status(400).json({ error: `Animals can have up to ${MAX_ANIMAL_PHOTOS} photos` });
+      }
       if (data.photoUrls && data.photoUrls.length > 0) {
         const photoValidation = validatePhotoUrls(data.photoUrls);
         if (!photoValidation.valid) {
@@ -10336,6 +10573,9 @@ Crawl-delay: 1
       if (!req.body.photoUrls || !Array.isArray(req.body.photoUrls)) {
         return res.status(400).json({ error: 'photoUrls array is required' });
       }
+      if (req.body.photoUrls.length > MAX_ANIMAL_PHOTOS) {
+        return res.status(400).json({ error: `Animals can have up to ${MAX_ANIMAL_PHOTOS} photos` });
+      }
 
       const photoValidation = validatePhotoUrls(req.body.photoUrls);
       if (!photoValidation.valid) {
@@ -10445,6 +10685,17 @@ Crawl-delay: 1
           ))
           .limit(1);
         if (publishedVideo) {
+          await objectStorageService.downloadObject(objectFile, res);
+          return;
+        }
+      }
+      if (!canAccess && pathTenantId && req.path.startsWith(`/objects/${pathTenantId}/animal-profile-photos/`)) {
+        const { publicAnimalFilter } = await import('./services/animals');
+        const [publishedPhoto] = await db.select({ id: animals.id }).from(animals).where(and(
+          publicAnimalFilter(pathTenantId),
+          sql`${animals.photoUrls} @> ARRAY[${req.path}]::text[]`,
+        )).limit(1);
+        if (publishedPhoto) {
           await objectStorageService.downloadObject(objectFile, res);
           return;
         }

@@ -19,7 +19,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertAnimalSchema, type Animal, type Tenant, PETFINDER_TYPES, PETFINDER_AGES, PETFINDER_SIZES, PETFINDER_GENDERS, TERMINAL_STATUSES } from "@shared/schema";
+import { insertAnimalSchema, type Animal, type Tenant, PETFINDER_TYPES, PETFINDER_AGES, PETFINDER_SIZES, PETFINDER_GENDERS, TERMINAL_STATUSES, MAX_ANIMAL_PHOTOS } from "@shared/schema";
 import { PETFINDER_BREEDS, getBreedsForType, mapSpeciesToPetfinderType } from "@shared/petfinder-breeds";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -51,7 +51,7 @@ import { TransferAnimalDialog } from "@/components/TransferAnimalDialog";
 import { ReclaimWizardDialog } from "@/components/ReclaimWizardDialog";
 import { PersonalityFitEditor } from "@/components/PersonalityFitEditor";
 
-const MAX_PHOTOS = 6;
+const MAX_PHOTOS = MAX_ANIMAL_PHOTOS;
 const MAX_PHOTO_SIZE_MB = 25;
 const MAX_PHOTO_SIZE_BYTES = MAX_PHOTO_SIZE_MB * 1024 * 1024;
 
@@ -3109,7 +3109,10 @@ export default function AnimalsPage() {
                     personalityTags: editingAnimal.personalityTags,
                     superpowerBadges: editingAnimal.superpowerBadges,
                     revealCards: editingAnimal.revealCards,
+                    profileVideos: editingAnimal.profileVideos,
+                    photoUrls: editingAnimal.photoUrls || [],
                   }}
+                  maxPhotos={MAX_PHOTOS}
                   canReview={user?.activeRole === "admin" || user?.activeRole === "owner"}
                 />
                 

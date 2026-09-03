@@ -10,6 +10,7 @@ ALTER TABLE animals ADD COLUMN IF NOT EXISTS personality_tags text[] NOT NULL DE
 ALTER TABLE animals ADD COLUMN IF NOT EXISTS superpower_badges jsonb NOT NULL DEFAULT '[]'::jsonb;
 ALTER TABLE animals ADD COLUMN IF NOT EXISTS reveal_cards jsonb NOT NULL DEFAULT '[]'::jsonb;
 ALTER TABLE animals ADD COLUMN IF NOT EXISTS profile_videos jsonb NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE animals ADD COLUMN IF NOT EXISTS photo_alt_texts jsonb NOT NULL DEFAULT '{}'::jsonb;
 CREATE TABLE IF NOT EXISTS animal_profile_submissions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,

@@ -138,6 +138,9 @@ export default function PublicAnimalProfilePage() {
   );
   const photoArray = validPhotoUrls.filter((url) => !failedPhotoUrls.has(url));
   const displayPhotoArray = photoArray.length > 0 ? photoArray : [dogPhoto];
+  const photoAlt = (url: string, index: number, enlarged = false) =>
+    animal?.photoAltTexts?.[url]
+      || `${animal?.name || 'Animal'}, ${enlarged ? 'enlarged ' : ''}photo ${index + 1} of ${displayPhotoArray.length}`;
 
   const hasMultiplePhotos = displayPhotoArray.length > 1;
 
@@ -357,7 +360,7 @@ export default function PublicAnimalProfilePage() {
                   >
                     <img
                       src={displayPhotoArray[currentPhotoIndex]}
-                      alt={`${animal.name}, photo ${currentPhotoIndex + 1} of ${displayPhotoArray.length}`}
+                      alt={photoAlt(displayPhotoArray[currentPhotoIndex], currentPhotoIndex)}
                       className="h-full w-full object-cover transition-transform duration-700 hover:scale-[1.025]"
                       loading="eager"
                       decoding="async"
@@ -655,7 +658,7 @@ export default function PublicAnimalProfilePage() {
           >
             <img
               src={displayPhotoArray[currentPhotoIndex]}
-              alt={`${animal.name}, enlarged photo ${currentPhotoIndex + 1} of ${displayPhotoArray.length}`}
+              alt={photoAlt(displayPhotoArray[currentPhotoIndex], currentPhotoIndex, true)}
               className="max-h-full max-w-full select-none object-contain"
               decoding="async"
               onError={() => handlePhotoError(displayPhotoArray[currentPhotoIndex])}

@@ -1,5 +1,5 @@
 import { db } from '../db';
-import { animals, kennelRows, fosterAnimals, users, type InsertAnimal, type Animal } from '@shared/schema';
+import { animals, kennelRows, fosterAnimals, users, MAX_ANIMAL_PHOTOS, type InsertAnimal, type Animal } from '@shared/schema';
 import { eq, and, or, desc, sql, ne, inArray, isNull } from 'drizzle-orm';
 
 import { generateLocalShelterId } from '../utils/shelterId';
@@ -17,6 +17,7 @@ export const publicAnimalSelect = {
   age: animals.age,
   sex: animals.sex,
   photoUrls: animals.photoUrls,
+  photoAltTexts: animals.photoAltTexts,
   bio: animals.bio,
   status: animals.status,
   weight: animals.weight,
@@ -217,6 +218,9 @@ export async function getAnimalById(tenantId: string, animalId: string): Promise
  * Create a new animal
  */
 export async function createAnimal(tenantId: string, data: Omit<InsertAnimal, 'animalId' | 'tenantId'>): Promise<Animal> {
+  if (data.photoUrls && data.photoUrls.length > MAX_ANIMAL_PHOTOS) {
+    throw Object.assign(new Error(`Animals can have up to ${MAX_ANIMAL_PHOTOS} photos`), { status: 400 });
+  }
   await checkDuplicateAnimalName(tenantId, data.name);
   const animalId = await generateAnimalId();
   const localShelterId = await generateLocalShelterId(tenantId, data.species);
@@ -238,6 +242,9 @@ export async function createAnimal(tenantId: string, data: Omit<InsertAnimal, 'a
  * Update an existing animal
  */
 export async function updateAnimal(tenantId: string, animalId: string, data: Partial<InsertAnimal>): Promise<Animal | null> {
+  if (data.photoUrls && data.photoUrls.length > MAX_ANIMAL_PHOTOS) {
+    throw Object.assign(new Error(`Animals can have up to ${MAX_ANIMAL_PHOTOS} photos`), { status: 400 });
+  }
   if (data.name) {
     await checkDuplicateAnimalName(tenantId, data.name, animalId);
   }

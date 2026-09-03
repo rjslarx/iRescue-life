@@ -567,6 +567,7 @@ export const animals = pgTable("animals", {
   medicalStatus: text("medical_status").$type<"healthy" | "needs_vetting" | "surgery_pending" | "recovering" | "palliative">().default("healthy"),
   scheduledSurgeryDate: timestamp("scheduled_surgery_date"), // For spay/neuter scheduling
   photoUrls: text("photo_urls").array(),
+  photoAltTexts: jsonb("photo_alt_texts").notNull().$type<Record<string, string>>().default({}),
   bio: text("bio"),
   personalityTags: text("personality_tags").array().notNull().default(sql`ARRAY[]::text[]`),
   superpowerBadges: jsonb("superpower_badges").notNull().$type<Array<{
@@ -702,7 +703,11 @@ export const insertAnimalSchema = createInsertSchema(animals).omit({
 export type InsertAnimal = z.infer<typeof insertAnimalSchema>;
 export type Animal = typeof animals.$inferSelect;
 
-export type AnimalProfilePayload = Pick<Animal, "personalityTags" | "superpowerBadges" | "revealCards" | "profileVideos">;
+export const MAX_ANIMAL_PHOTOS = 6;
+export type AnimalProfilePhoto = { url: string; altText: string };
+export type AnimalProfilePayload = Pick<Animal, "personalityTags" | "superpowerBadges" | "revealCards" | "profileVideos"> & {
+  profilePhotos: AnimalProfilePhoto[];
+};
 
 // Auditable profile contributions from staff, fosters, and volunteers. Proposed
 // content remains isolated here until it is approved.
