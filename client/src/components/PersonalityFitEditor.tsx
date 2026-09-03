@@ -8,9 +8,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import {
+  appendUniqueTag,
+  insertBadgeExample,
+  insertRevealExample,
+  type BadgeDraft,
+  type RevealDraft,
+} from "./personalityFitExamples";
 
-type BadgeDraft = { key: string; label: string; explanation: string };
-type RevealDraft = { title: string; body: string };
 type ProfileDraft = { personalityTags?: string[]; superpowerBadges?: BadgeDraft[]; revealCards?: RevealDraft[] };
 type Submission = { id: string; status: string; proposedPayload?: ProfileDraft };
 
@@ -95,25 +100,13 @@ export function PersonalityFitEditor({
 
   const statusIsPending = latest?.status === "pending";
   const addTagExample = (example: string) => {
-    const existing = tags.split(",").map((tag) => tag.trim()).filter(Boolean);
-    if (existing.some((tag) => tag.toLowerCase() === example.toLowerCase())) return;
-    setTags([...existing, example].join(", "));
+    setTags((current) => appendUniqueTag(current, example));
   };
   const addBadgeExample = (example: BadgeDraft) => {
-    const emptyIndex = badges.findIndex((badge) => !badge.label.trim() && !badge.explanation.trim());
-    if (emptyIndex >= 0) {
-      setBadges(badges.map((badge, index) => index === emptyIndex ? { ...example } : badge));
-    } else {
-      setBadges([...badges, { ...example }]);
-    }
+    setBadges((current) => insertBadgeExample(current, example));
   };
   const addRevealExample = (example: RevealDraft) => {
-    const emptyIndex = reveals.findIndex((reveal) => !reveal.title.trim() && !reveal.body.trim());
-    if (emptyIndex >= 0) {
-      setReveals(reveals.map((reveal, index) => index === emptyIndex ? { ...example } : reveal));
-    } else {
-      setReveals([...reveals, { ...example }]);
-    }
+    setReveals((current) => insertRevealExample(current, example));
   };
 
   return (
