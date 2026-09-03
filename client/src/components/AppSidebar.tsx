@@ -271,6 +271,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
       title: "Operations",
       items: [
         { title: "Animals", url: "/dashboard/animals", icon: Heart, usesGoogleDrive: true },
+        { title: "Profile Contributions", url: "/dashboard/profile-contributions", icon: Sparkles },
         { title: "Litter Intake", url: "/dashboard/animals?action=bulk-intake", icon: LitterPawsIcon },
         { title: "Animal Lookup", url: "/dashboard/animal-lookup", icon: Search },
         { title: "Kennels", url: "/dashboard/kennels", icon: Home },
@@ -521,6 +522,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
       title: "My Foster Animals",
       items: [
         { title: "My Fosters", url: "/dashboard/my-fosters", icon: Heart, usesGoogleDrive: true },
+        { title: "Profile Contributions", url: "/dashboard/profile-contributions", icon: Sparkles },
         { title: "Quick Updates", url: "/dashboard/foster-mobile", icon: Smartphone, usesGoogleDrive: true },
         { title: "Kennels", url: "/dashboard/kennels", icon: Home },
         { title: "Temperature", url: "/dashboard/temperature", icon: Thermometer },
@@ -536,6 +538,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
       title: "My Activities",
       items: [
         { title: "Calendar", url: "/dashboard/calendar", icon: Calendar },
+        { title: "Profile Contributions", url: "/dashboard/profile-contributions", icon: Sparkles },
         { title: "Volunteer Pipeline", url: "/dashboard/volunteer-pipeline", icon: Kanban },
         { title: "Opportunities", url: "/dashboard/opportunities", icon: UserCircle },
         { title: "Today's Medications", url: "/dashboard/volunteer-medications", icon: Pill },
@@ -551,6 +554,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
   const urlToPageId: Record<string, string> = {
     '/dashboard': 'dashboard',
     '/dashboard/animals': 'animals',
+    '/dashboard/profile-contributions': 'animals',
     '/dashboard/kennels': 'animals',
     '/dashboard/transfers': 'animals',
     '/dashboard/medical-pipeline': 'medical-tasks',
