@@ -38,7 +38,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Loader2, UserPlus, Shield, Users as UsersIcon, Trash2, Mail, Clock, Send, Pencil, UserCheck, Copy, KeyRound, Bell, BellOff, MessageSquare, Smartphone, Tag, X, Plus, Filter } from "lucide-react";
+import { Loader2, UserPlus, Shield, Users as UsersIcon, Trash2, Mail, Clock, Send, Pencil, UserCheck, Copy, KeyRound, Bell, BellOff, MessageSquare, Smartphone, Tag, X, Plus, Filter, PauseCircle, PlayCircle } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Switch } from "@/components/ui/switch";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -55,6 +55,7 @@ interface User {
   dailySmsOptIn: boolean;
   smsRecruitmentOptIn?: boolean;
   hasPushSubscription: boolean;
+  isActive: boolean;
 }
 
 interface Invitation {
@@ -97,6 +98,7 @@ export default function TeamManagementPage() {
   const [invitationsDialogOpen, setInvitationsDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
+  const [userAccessToChange, setUserAccessToChange] = useState<User | null>(null);
   const [invitationToCancel, setInvitationToCancel] = useState<Invitation | null>(null);
   const [editingInvitationEmail, setEditingInvitationEmail] = useState<{ id: string; email: string } | null>(null);
   const [selectedRoleTab, setSelectedRoleTab] = useState<string>("all");
@@ -302,6 +304,25 @@ export default function TeamManagementPage() {
         description: error.message,
         variant: "destructive",
       });
+    },
+  });
+
+  const updateAccessMutation = useMutation({
+    mutationFn: async ({ id, isActive }: { id: string; isActive: boolean }) => {
+      return await apiRequest("PATCH", `/api/users/${id}/access`, { isActive });
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/users'] });
+      setUserAccessToChange(null);
+      toast({
+        title: variables.isActive ? "Access restored" : "Access placed on hold",
+        description: variables.isActive
+          ? "This team member can sign in again."
+          : "This team member can no longer access the rescue portal.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Access could not be changed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -900,6 +921,9 @@ export default function TeamManagementPage() {
                               {user.id === currentUser?.id && (
                                 <Badge variant="outline" className="shrink-0">You</Badge>
                               )}
+                              {!user.isActive && (
+                                <Badge variant="destructive" className="shrink-0" data-testid={`badge-access-hold-mobile-${user.id}`}>Access on hold</Badge>
+                              )}
                             </div>
                             <p className="text-sm text-muted-foreground truncate mt-1">{user.email}</p>
                             <div className="flex flex-wrap gap-1 mt-2">
@@ -1136,7 +1160,7 @@ export default function TeamManagementPage() {
                                 </div>
                               </DialogContent>
                             </Dialog>
-                            {canImpersonate(user) && (
+                            {user.isActive && canImpersonate(user) && (
                               <Button
                                 size="icon"
                                 variant="outline"
@@ -1146,6 +1170,17 @@ export default function TeamManagementPage() {
                                 title={`View as ${user.fullName}`}
                               >
                                 <UserCheck className="h-4 w-4" />
+                              </Button>
+                            )}
+                            {user.id !== currentUser?.id && !user.roles.includes("owner") && (
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                onClick={() => setUserAccessToChange(user)}
+                                data-testid={`button-access-mobile-${user.id}`}
+                                title={user.isActive ? "Put access on hold" : "Restore access"}
+                              >
+                                {user.isActive ? <PauseCircle className="h-4 w-4" /> : <PlayCircle className="h-4 w-4" />}
                               </Button>
                             )}
                             {user.id !== currentUser?.id && (
@@ -1185,6 +1220,9 @@ export default function TeamManagementPage() {
                                 {user.fullName}
                                 {user.id === currentUser?.id && (
                                   <Badge variant="outline" className="ml-2">You</Badge>
+                                )}
+                                {!user.isActive && (
+                                  <Badge variant="destructive" className="ml-2" data-testid={`badge-access-hold-${user.id}`}>Access on hold</Badge>
                                 )}
                               </TableCell>
                               <TableCell>{user.email}</TableCell>
@@ -1415,7 +1453,7 @@ export default function TeamManagementPage() {
                                       </div>
                                     </DialogContent>
                                   </Dialog>
-                                  {canImpersonate(user) && (
+                                  {user.isActive && canImpersonate(user) && (
                                     <Button
                                       size="sm"
                                       variant="outline"
@@ -1426,6 +1464,16 @@ export default function TeamManagementPage() {
                                     >
                                       <UserCheck className="h-4 w-4 mr-1" />
                                       View As
+                                    </Button>
+                                  )}
+                                  {user.id !== currentUser?.id && !user.roles.includes("owner") && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => setUserAccessToChange(user)}
+                                      data-testid={`button-access-${user.id}`}
+                                    >
+                                      {user.isActive ? <><PauseCircle className="mr-1 h-4 w-4" />Hold Access</> : <><PlayCircle className="mr-1 h-4 w-4" />Restore Access</>}
                                     </Button>
                                   )}
                                   {user.id !== currentUser?.id && (
@@ -1470,6 +1518,31 @@ export default function TeamManagementPage() {
               data-testid="button-confirm-delete"
             >
               {deleteUserMutation.isPending ? "Deleting..." : "Delete User"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Reversible Access Hold Confirmation */}
+      <AlertDialog open={!!userAccessToChange} onOpenChange={(open) => !open && setUserAccessToChange(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{userAccessToChange?.isActive ? "Put Access on Hold?" : "Restore Access?"}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {userAccessToChange?.isActive
+                ? `${userAccessToChange.fullName} will no longer be able to sign in or use the rescue portal. Their account and historical records will be preserved.`
+                : `${userAccessToChange?.fullName} will be able to sign in and use the rescue portal again with their existing roles.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => userAccessToChange && updateAccessMutation.mutate({ id: userAccessToChange.id, isActive: !userAccessToChange.isActive })}
+              data-testid="button-confirm-access-change"
+            >
+              {updateAccessMutation.isPending
+                ? "Saving..."
+                : userAccessToChange?.isActive ? "Put Access on Hold" : "Restore Access"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

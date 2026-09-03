@@ -5529,6 +5529,7 @@ Crawl-delay: 1
           email: users.email,
           fullName: users.fullName,
           roles: users.roles,
+          isActive: users.isActive,
           tags: users.tags,
           phone: sql<string | null>`COALESCE(${users.phone}, ${contacts.phone})`,
           createdAt: users.createdAt,
@@ -5739,6 +5740,80 @@ Crawl-delay: 1
 
       res.json({ success: true, user: updatedUser });
     } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * PATCH /api/users/:id/access
+   * Reversibly place a team member's access on hold or restore it.
+   */
+  app.patch('/api/users/:id/access', requireTenant, requireAuth, requireRole('owner', 'admin'), async (req, res, next) => {
+    try {
+      const { users } = await import('@shared/schema');
+      const { isActive } = z.object({ isActive: z.boolean() }).parse(req.body);
+
+      if (req.params.id === req.user!.id) {
+        return res.status(400).json({ error: 'You cannot put your own access on hold' });
+      }
+      if (req.impersonation?.active || req.session.impersonating) {
+        return res.status(403).json({ error: 'End View As mode before changing a team member’s access' });
+      }
+
+      const updatedUser = await db.transaction(async (tx) => {
+        const { auditLogs } = await import('@shared/schema');
+        const [targetUser] = await tx
+          .select({
+            id: users.id,
+            email: users.email,
+            fullName: users.fullName,
+            roles: users.roles,
+            isActive: users.isActive,
+          })
+          .from(users)
+          .where(and(eq(users.id, req.params.id), eq(users.tenantId, req.tenant!.id)))
+          .limit(1)
+          .for('update');
+
+        if (!targetUser) {
+          throw Object.assign(new Error('User not found'), { accessStatus: 404 });
+        }
+        if (targetUser.roles.includes('owner')) {
+          throw Object.assign(new Error('Owner access cannot be placed on hold from Team Management'), { accessStatus: 403 });
+        }
+
+        const [updated] = await tx
+          .update(users)
+          .set({ isActive })
+          .where(and(eq(users.id, targetUser.id), eq(users.tenantId, req.tenant!.id)))
+          .returning({
+            id: users.id,
+            email: users.email,
+            fullName: users.fullName,
+            roles: users.roles,
+            isActive: users.isActive,
+          });
+
+        const forwardedFor = req.get('x-forwarded-for');
+        await tx.insert(auditLogs).values({
+          userId: req.user!.id,
+          tenantId: req.tenant!.id,
+          action: isActive ? 'user.access_restored' : 'user.access_suspended',
+          entityType: 'user',
+          entityId: targetUser.id,
+          changes: { before: { isActive: targetUser.isActive }, after: { isActive } },
+          metadata: { targetUserEmail: targetUser.email, targetUserName: targetUser.fullName },
+          ipAddress: forwardedFor ? forwardedFor.split(',')[0].trim() : req.socket.remoteAddress,
+          userAgent: req.get('user-agent'),
+        });
+        return updated;
+      });
+
+      res.json({ success: true, user: updatedUser });
+    } catch (error: any) {
+      if (error?.accessStatus) {
+        return res.status(error.accessStatus).json({ error: error.message });
+      }
       next(error);
     }
   });
