@@ -6,7 +6,6 @@ import PublicHeader from "@/components/PublicHeader";
 import { PublicAdoptionDialog } from "@/components/PublicAdoptionDialog";
 import DonationForm from "@/components/DonationForm";
 import PublicFooter from "@/components/PublicFooter";
-import { PersonalityFitEditor } from "@/components/PersonalityFitEditor";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -38,7 +37,6 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import type { Animal, Tenant } from "@shared/schema";
 import { useTenant } from "@/contexts/TenantContext";
-import { useAuth } from "@/contexts/AuthContext";
 
 import dogPhoto from '@assets/generated_images/Golden_retriever_dog_portrait_fdeb8a78.png';
 
@@ -53,7 +51,6 @@ function getThumbnailUrl(url: string): string {
 export default function PublicAnimalProfilePage() {
   const { animalId } = useParams<{ animalId: string }>();
   const { basePath, tenantId } = useTenant();
-  const { user } = useAuth();
   const { toast } = useToast();
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const [photoViewerOpen, setPhotoViewerOpen] = useState(false);
@@ -78,10 +75,6 @@ export default function PublicAnimalProfilePage() {
   const animal = animalData?.animal;
   const tenant = tenantData?.tenant;
   const rescueName = tenant?.name || "Animal Rescue";
-  const canContributeToProfiles = !!user?.activeRole
-    && ['owner', 'admin', 'staff', 'volunteer'].includes(user.activeRole);
-  const canReviewProfileSubmissions = !!user?.activeRole
-    && ['owner', 'admin'].includes(user.activeRole);
   const personalityTags = ((animal as any)?.personalityTags || []) as string[];
   const superpowers = ((animal as any)?.superpowerBadges || []) as { key: string; label: string; explanation: string }[];
   const revealCards = ((animal as any)?.revealCards || []) as { title: string; body: string }[];
@@ -539,17 +532,6 @@ export default function PublicAnimalProfilePage() {
             <div className="mt-4 flex flex-wrap gap-2">{traitChoices.map((trait) => <Button key={trait} type="button" size="sm" variant={selectedTrait === trait ? "default" : "outline"} onClick={() => chooseTrait(trait)} aria-pressed={selectedTrait === trait}>{trait}</Button>)}</div>
             {selectedTrait && <div className="mt-5" aria-live="polite">{isDiscovering ? <div className="flex gap-3">{[1, 2].map((item) => <Skeleton key={item} className="h-20 w-40 rounded-xl" />)}</div> : discoveries?.animals?.length ? <div className="grid gap-3 sm:grid-cols-2">{discoveries.animals.slice(0, 4).map((match) => <button type="button" key={match.id} onClick={() => window.location.assign(`${basePath}/animal/${match.id}`)} className="flex items-center gap-3 rounded-xl border bg-card p-3 text-left transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><div className="h-12 w-12 overflow-hidden rounded-lg bg-muted">{match.photoUrls?.[0] && <img src={match.photoUrls[0]} alt="" className="h-full w-full object-cover" />}</div><span><strong className="block">{match.name}</strong><span className="text-sm text-muted-foreground">{match.breed}</span></span></button>)}</div> : <p className="text-sm text-muted-foreground">We are still finding the right introductions. Try another trait.</p>}</div>}
           </section>
-
-          {canContributeToProfiles && (
-            <section className="mt-7" aria-label={`Contribute to ${animal.name}'s public profile`}>
-              <PersonalityFitEditor
-                animalId={animal.id}
-                animalName={animal.name}
-                initialProfile={{ personalityTags, superpowerBadges: superpowers, revealCards }}
-                canReview={canReviewProfileSubmissions}
-              />
-            </section>
-          )}
 
           <div className="mt-6 text-center text-sm text-muted-foreground">
             <p>
