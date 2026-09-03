@@ -32,6 +32,7 @@ export const publicAnimalSelect = {
   personalityTags: animals.personalityTags,
   superpowerBadges: animals.superpowerBadges,
   revealCards: animals.revealCards,
+  profileVideos: animals.profileVideos,
 };
 
 export const publicAnimalFilter = (tenantId: string) => and(

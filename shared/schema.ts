@@ -655,6 +655,11 @@ export const animals = pgTable("animals", {
     heartwormDueDate?: string;
     fleaTickDueDate?: string;
   }>(),
+  profileVideos: jsonb("profile_videos").notNull().default([]).$type<Array<{
+    url: string;
+    label: string;
+    description: string;
+  }>>(),
   // Medical fund tracking (via Stripe donations)
   medicalFundGoal: decimal("medical_fund_goal", { precision: 10, scale: 2 }), // Target fundraising amount
   medicalFundRaised: decimal("medical_fund_raised", { precision: 10, scale: 2 }).default("0.00"), // Amount raised via donations
@@ -697,7 +702,7 @@ export const insertAnimalSchema = createInsertSchema(animals).omit({
 export type InsertAnimal = z.infer<typeof insertAnimalSchema>;
 export type Animal = typeof animals.$inferSelect;
 
-export type AnimalProfilePayload = Pick<Animal, "personalityTags" | "superpowerBadges" | "revealCards">;
+export type AnimalProfilePayload = Pick<Animal, "personalityTags" | "superpowerBadges" | "revealCards" | "profileVideos">;
 
 // Auditable profile contributions from staff, fosters, and volunteers. Proposed
 // content remains isolated here until it is approved.

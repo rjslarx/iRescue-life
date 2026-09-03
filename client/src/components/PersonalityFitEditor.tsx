@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { CheckCircle2, Clock3, Lightbulb, Plus, Send, Sparkles, XCircle } from "lucide-react";
+import { CheckCircle2, Clock3, Lightbulb, Plus, Send, Sparkles, Video, X, XCircle } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { ObjectUploader } from "@/components/ObjectUploader";
 import {
   appendUniqueTag,
   insertBadgeExample,
@@ -16,7 +17,8 @@ import {
   type RevealDraft,
 } from "./personalityFitExamples";
 
-type ProfileDraft = { personalityTags?: string[]; superpowerBadges?: BadgeDraft[]; revealCards?: RevealDraft[] };
+type ProfileVideoDraft = { url: string; label: string; description: string };
+type ProfileDraft = { personalityTags?: string[]; superpowerBadges?: BadgeDraft[]; revealCards?: RevealDraft[]; profileVideos?: ProfileVideoDraft[] };
 type Submission = { id: string; status: string; proposedPayload?: ProfileDraft };
 
 const TAG_EXAMPLES = [
@@ -55,6 +57,7 @@ export function PersonalityFitEditor({
   const [tags, setTags] = useState("");
   const [badges, setBadges] = useState<BadgeDraft[]>([{ key: "", label: "", explanation: "" }]);
   const [reveals, setReveals] = useState<RevealDraft[]>([{ title: "", body: "" }]);
+  const [videos, setVideos] = useState<ProfileVideoDraft[]>([]);
   const { data } = useQuery<{ submissions: Submission[] }>({ queryKey: ["/api/animals", animalId, "profile-submissions"] });
   const latest = data?.submissions?.[0];
   const latestProfile = latest?.proposedPayload || initialProfile;
@@ -64,15 +67,20 @@ export function PersonalityFitEditor({
     setTags((latestProfile.personalityTags || []).join(", "));
     setBadges(latestProfile.superpowerBadges?.length ? latestProfile.superpowerBadges : [{ key: "", label: "", explanation: "" }]);
     setReveals(latestProfile.revealCards?.length ? latestProfile.revealCards : [{ title: "", body: "" }]);
+    setVideos(latestProfile.profileVideos || []);
   }, [
     latest?.id,
     initialProfile?.personalityTags,
     initialProfile?.superpowerBadges,
     initialProfile?.revealCards,
+    initialProfile?.profileVideos,
   ]);
 
   const submit = useMutation({
     mutationFn: async () => {
+      if (videos.some((video) => !video.label.trim() || !video.description.trim())) {
+        throw new Error("Add an action label and an accessible description for every uploaded video.");
+      }
       const response = await apiRequest("POST", `/api/animals/${animalId}/profile-submissions`, {
         personalityTags: tags.split(",").map((tag) => tag.trim()).filter(Boolean),
         superpowerBadges: badges
@@ -82,6 +90,7 @@ export function PersonalityFitEditor({
             key: badge.key.trim() || badge.label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""),
           })),
         revealCards: reveals.filter((card) => card.title.trim() && card.body.trim()),
+        profileVideos: videos.map((video) => ({ ...video, label: video.label.trim(), description: video.description.trim() })),
       });
       return response.json() as Promise<{ status: string }>;
     },
@@ -159,6 +168,41 @@ export function PersonalityFitEditor({
               ))}
             </div>
           </details>
+        </div>
+        <div className="space-y-3">
+          <div>
+            <Label>See me in action</Label>
+            <p className="mt-1 text-xs text-muted-foreground">Add up to three candid clips. Aim for 5–10 seconds and show one clear action in each.</p>
+          </div>
+          {videos.map((video, index) => (
+            <div key={video.url} className="grid gap-3 rounded-lg border border-border/70 bg-background/60 p-3 sm:grid-cols-[160px_1fr_auto] sm:items-start">
+              <video src={video.url} className="aspect-video w-full rounded-md bg-black object-cover" muted playsInline controls preload="metadata" aria-label={`Preview of action clip ${index + 1}`} />
+              <div className="space-y-3">
+                <div className="space-y-1">
+                <Label htmlFor={`profile-video-label-${index}`}>What is {animalName} doing?</Label>
+                <Input id={`profile-video-label-${index}`} value={video.label} maxLength={60} onChange={(event) => setVideos(videos.map((item, itemIndex) => itemIndex === index ? { ...item, label: event.target.value } : item))} placeholder="Playing fetch in the yard" />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor={`profile-video-description-${index}`}>Describe the clip for someone who cannot hear or see it</Label>
+                  <Textarea id={`profile-video-description-${index}`} value={video.description} maxLength={240} onChange={(event) => setVideos(videos.map((item, itemIndex) => itemIndex === index ? { ...item, description: event.target.value } : item))} placeholder={`${animalName} trots after a yellow ball, brings it back, and wags while waiting for another throw.`} />
+                </div>
+              </div>
+              <Button type="button" variant="ghost" size="icon" onClick={() => setVideos(videos.filter((_, itemIndex) => itemIndex !== index))} aria-label={`Remove action clip ${index + 1}`}><X className="h-4 w-4" /></Button>
+            </div>
+          ))}
+          {videos.length < 3 && (
+            <ObjectUploader
+              value={videos.map((video) => video.url)}
+              onChange={(urls) => setVideos(urls.map((url) => videos.find((video) => video.url === url) || { url, label: "", description: "" }))}
+              maxFiles={3}
+              maxFileSize={20 * 1024 * 1024}
+              uploadEndpoint={`/api/animals/${animalId}/profile-videos/upload`}
+              accept="video/mp4,video/webm,video/quicktime,.mov"
+              buttonText="Upload action clip"
+              showPreview={false}
+            />
+          )}
+          <p className="flex items-center gap-2 text-xs text-muted-foreground"><Video className="h-4 w-4" aria-hidden="true" />Clips play muted until a visitor chooses sound. MP4, WebM, or MOV; 20 MB maximum each.</p>
         </div>
         <div className="space-y-3">
           <Label>Tap-to-reveal moments</Label>

@@ -1,7 +1,7 @@
 // Based on blueprint: javascript_object_storage
 import { File } from "@google-cloud/storage";
 
-const ACL_POLICY_METADATA_KEY = "custom:aclPolicy";
+export const ACL_POLICY_METADATA_KEY = "custom:aclPolicy";
 
 export enum ObjectAccessGroupType {}
 

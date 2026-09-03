@@ -4,6 +4,7 @@ import { Response } from "express";
 import { randomUUID } from "crypto";
 import {
   ObjectAclPolicy,
+  ACL_POLICY_METADATA_KEY,
   ObjectPermission,
   canAccessObject,
   getObjectAclPolicy,
@@ -307,7 +308,8 @@ export class ObjectStorageService {
     category: string,
     content: Buffer,
     contentType: string,
-    customFilename?: string
+    customFilename?: string,
+    aclPolicy?: ObjectAclPolicy,
   ): Promise<{ objectPath: string; fullPath: string }> {
     const privateObjectDir = this.getPrivateObjectDir();
     if (!privateObjectDir) {
@@ -327,6 +329,13 @@ export class ObjectStorageService {
     await file.save(content, {
       contentType,
       resumable: false,
+      ...(aclPolicy ? {
+        metadata: {
+          metadata: {
+            [ACL_POLICY_METADATA_KEY]: JSON.stringify(aclPolicy),
+          },
+        },
+      } : {}),
     });
 
     return {

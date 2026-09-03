@@ -377,7 +377,7 @@ export function ObjectUploader({
       <Dialog open={showModal} onOpenChange={setShowModal}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Upload {accept?.includes('image') ? 'Images' : 'Files'}</DialogTitle>
+            <DialogTitle>Upload {accept?.includes('image') ? 'Images' : accept?.includes('video') ? 'Videos' : 'Files'}</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4">
@@ -442,6 +442,16 @@ export function ObjectUploader({
                           <FileText className="h-10 w-10 text-muted-foreground" />
                           <span className="text-xs text-muted-foreground px-2 text-center truncate max-w-full">{preview.replace('__doc__:', '')}</span>
                         </div>
+                      ) : accept?.includes('video') ? (
+                        <video
+                          src={preview}
+                          aria-label={`Video preview ${index + 1}`}
+                          className="h-40 w-full bg-black object-cover"
+                          muted
+                          playsInline
+                          controls
+                          preload="metadata"
+                        />
                       ) : (
                         <img
                           src={preview}

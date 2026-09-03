@@ -26,6 +26,7 @@ import {
   ShieldCheck,
   Dice5,
   PawPrint,
+  Play,
 } from "lucide-react";
 import { SiX } from "react-icons/si";
 import {
@@ -90,6 +91,7 @@ export default function PublicAnimalProfilePage() {
   const personalityTags = ((animal as any)?.personalityTags || []) as string[];
   const superpowers = ((animal as any)?.superpowerBadges || []) as { key: string; label: string; explanation: string }[];
   const revealCards = ((animal as any)?.revealCards || []) as { title: string; body: string }[];
+  const profileVideos = ((animal as any)?.profileVideos || []) as { url: string; label: string; description: string }[];
   const compatibilityTraits = [
     animal?.dogFriendly ? "Dog friendly" : null,
     animal?.catFriendly ? "Cat friendly" : null,
@@ -539,6 +541,38 @@ export default function PublicAnimalProfilePage() {
               <h2 id="story-heading" className="mt-2 font-display text-3xl font-bold">The story of {animal.name}</h2>
               <div className={`mt-4 whitespace-pre-line text-[1.02rem] leading-8 text-muted-foreground ${bioExpanded ? "" : "line-clamp-4"}`} data-testid="text-animal-bio">{animal.bio}</div>
               {animal.bio.length > 360 && <Button type="button" variant="ghost" className="mt-2 h-auto px-0 font-semibold text-primary hover:bg-transparent hover:text-primary/75" onClick={() => setBioExpanded((value) => !value)}>{bioExpanded ? "Show less" : `Read ${animal.name}'s full story`}</Button>}
+            </section>
+          )}
+
+          {profileVideos.length > 0 && (
+            <section className="mt-10" aria-labelledby="action-clips-heading">
+              <div className="mb-5 flex items-end justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[.18em] text-primary">A glimpse of everyday life</p>
+                  <h2 id="action-clips-heading" className="mt-1 font-display text-3xl font-bold">See {animal.name} in action</h2>
+                </div>
+                <Play className="h-8 w-8 text-primary/50" aria-hidden="true" />
+              </div>
+              <div className={`grid gap-4 ${profileVideos.length > 1 ? "sm:grid-cols-2" : "max-w-2xl"}`}>
+                {profileVideos.map((video, index) => (
+                  <figure key={`${video.url}-${index}`} className="overflow-hidden rounded-2xl border border-primary/15 bg-card shadow-sm">
+                    <video
+                      src={video.url}
+                      className="aspect-video w-full bg-black object-cover"
+                      controls
+                      muted
+                      playsInline
+                      preload="metadata"
+                      aria-label={`${animal.name}: ${video.label}`}
+                      aria-describedby={`profile-video-description-${index}`}
+                    />
+                    <figcaption className="space-y-1 p-4">
+                      <p className="font-semibold">{video.label}</p>
+                      <p id={`profile-video-description-${index}`} className="text-sm leading-relaxed text-muted-foreground">{video.description}</p>
+                    </figcaption>
+                  </figure>
+                ))}
+              </div>
             </section>
           )}
 

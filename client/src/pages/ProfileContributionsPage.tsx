@@ -24,6 +24,7 @@ function completionFor(animal: Animal) {
     { label: "personality tags", complete: (animal.personalityTags?.length || 0) > 0 },
     { label: "a superpower", complete: (animal.superpowerBadges?.length || 0) > 0 },
     { label: "a reveal moment", complete: (animal.revealCards?.length || 0) > 0 },
+    { label: "an action clip", complete: (animal.profileVideos?.length || 0) > 0 },
   ];
   return {
     completed: sections.filter((section) => section.complete).length,
@@ -63,7 +64,7 @@ export default function ProfileContributionsPage() {
   }, [animalsQuery.data?.animals, fosterQuery.data?.fosterAnimals, isFoster, search]);
 
   const selectedAnimal = animals.find((animal) => animal.id === selectedId)
-    || animals.find((animal) => completionFor(animal).completed < 3)
+    || animals.find((animal) => completionFor(animal).completed < 4)
     || animals[0];
   const isLoading = isFoster ? fosterQuery.isLoading : animalsQuery.isLoading;
 
@@ -79,7 +80,7 @@ export default function ProfileContributionsPage() {
               <p className="flex items-center gap-2 font-semibold"><Sparkles className="h-5 w-5 text-primary" />A few minutes can make a profile memorable</p>
               <p className="mt-1 text-sm text-muted-foreground">Choose an animal below. We put the profiles needing help first.</p>
             </div>
-            <Badge variant="secondary" className="w-fit">{animals.filter((animal) => completionFor(animal).completed < 3).length} profiles need details</Badge>
+            <Badge variant="secondary" className="w-fit">{animals.filter((animal) => completionFor(animal).completed < 4).length} profiles need details</Badge>
           </CardContent>
         </Card>
 
@@ -121,7 +122,7 @@ export default function ProfileContributionsPage() {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-2">
                         <span className="truncate font-semibold">{animal.name}</span>
-                        <span className="text-xs text-muted-foreground">{progress.completed}/3</span>
+                        <span className="text-xs text-muted-foreground">{progress.completed}/4</span>
                       </div>
                       <p className="mt-1 whitespace-normal text-xs font-normal text-muted-foreground">
                         {progress.next ? `Next: add ${progress.next}` : "Profile essentials complete"}
@@ -150,6 +151,7 @@ export default function ProfileContributionsPage() {
                     personalityTags: selectedAnimal.personalityTags || [],
                     superpowerBadges: selectedAnimal.superpowerBadges || [],
                     revealCards: selectedAnimal.revealCards || [],
+                    profileVideos: selectedAnimal.profileVideos || [],
                   }}
                   canReview={canReview}
                 />

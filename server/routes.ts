@@ -7474,6 +7474,11 @@ Crawl-delay: 1
       title: z.string().trim().min(1).max(80),
       body: z.string().trim().min(1).max(500),
     }).strict()).max(8).optional(),
+    profileVideos: z.array(z.object({
+      url: z.string().trim().min(1).max(500),
+      label: z.string().trim().min(1).max(60),
+      description: z.string().trim().min(1).max(240),
+    }).strict()).max(3).optional(),
   }).strict().refine((payload) => Object.keys(payload).length > 0, {
     message: 'At least one profile field is required',
   });
@@ -7607,6 +7612,82 @@ Crawl-delay: 1
   app.post('/api/animal-profile-submissions/:id/approve', requireTenant, requireAuth, requireRole('admin', 'owner'), reviewProfileSubmission('approved'));
   app.post('/api/animal-profile-submissions/:id/reject', requireTenant, requireAuth, requireRole('admin', 'owner'), reviewProfileSubmission('rejected'));
 
+  app.post('/api/animals/:id/profile-videos/upload', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const tenantId = req.tenant!.id;
+      const activeRole = req.user!.activeRole;
+      const isStaff = ['owner', 'admin', 'staff'].includes(activeRole);
+      const [animal] = await db.select({ id: animals.id })
+        .from(animals)
+        .where(and(eq(animals.id, req.params.id), eq(animals.tenantId, tenantId)))
+        .limit(1);
+      if (!animal) return res.status(404).json({ error: 'Animal not found' });
+
+      let permitted = isStaff;
+      if (activeRole === 'foster') {
+        const [assignment] = await db.select({ id: fosterAnimals.id })
+          .from(fosterAnimals)
+          .where(and(
+            eq(fosterAnimals.tenantId, tenantId),
+            eq(fosterAnimals.animalId, animal.id),
+            eq(fosterAnimals.fosterId, req.user!.id),
+            eq(fosterAnimals.status, 'active'),
+          ))
+          .limit(1);
+        permitted = !!assignment;
+      } else if (activeRole === 'volunteer') {
+        const { publicAnimalFilter } = await import('./services/animals');
+        const [publicAnimal] = await db.select({ id: animals.id })
+          .from(animals)
+          .where(and(publicAnimalFilter(tenantId), eq(animals.id, animal.id)))
+          .limit(1);
+        permitted = !!publicAnimal;
+      }
+      if (!permitted) return res.status(403).json({ error: 'You cannot upload profile videos for this animal' });
+
+      const multer = (await import('multer')).default;
+      const upload = multer({
+        storage: multer.memoryStorage(),
+        limits: { files: 3, fileSize: 20 * 1024 * 1024 },
+        fileFilter: (_request, file, callback) => {
+          const allowed = ['video/mp4', 'video/webm', 'video/quicktime'];
+          callback(allowed.includes(file.mimetype) ? null : new Error('Only MP4, WebM, and MOV video files are allowed'), allowed.includes(file.mimetype));
+        },
+      }).array('files', 3);
+
+      upload(req, res, async (error) => {
+        if (error) return res.status(400).json({ error: error.message });
+        const files = req.files as Express.Multer.File[] | undefined;
+        if (!files?.length) return res.status(400).json({ error: 'No video file provided' });
+        try {
+          const { ObjectStorageService } = await import('./objectStorage');
+          const storage = new ObjectStorageService();
+          const uploadedPaths = await Promise.all(files.map(async (file) => {
+            const extension = file.mimetype === 'video/webm' ? 'webm' : file.mimetype === 'video/quicktime' ? 'mov' : 'mp4';
+            const result = await storage.uploadTenantFile(
+              tenantId,
+              'animal-profile-videos',
+              file.buffer,
+              file.mimetype,
+              `${animal.id}-${crypto.randomUUID()}.${extension}`,
+              {
+                owner: req.user!.id,
+                visibility: 'private',
+                tenantId,
+              },
+            );
+            return result.objectPath;
+          }));
+          res.json({ uploadedPaths });
+        } catch (uploadError) {
+          next(uploadError);
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   /**
    * GET /api/animals/:id
    * Get specific animal
@@ -7690,11 +7771,33 @@ Crawl-delay: 1
       const activeRole = req.user!.activeRole;
       const isStaff = ['owner', 'admin', 'staff'].includes(activeRole);
 
-      const [animal] = await db.select({ id: animals.id })
+      const [animal] = await db.select({ id: animals.id, profileVideos: animals.profileVideos })
         .from(animals)
         .where(and(eq(animals.id, req.params.id), eq(animals.tenantId, tenantId)))
         .limit(1);
       if (!animal) return res.status(404).json({ error: 'Animal not found' });
+
+      const expectedVideoPrefix = `/objects/${tenantId}/animal-profile-videos/${animal.id}-`;
+      if (payload.profileVideos?.some((video) => !video.url.startsWith(expectedVideoPrefix))) {
+        return res.status(400).json({ error: 'Profile videos must be uploaded through this rescue account' });
+      }
+      if (payload.profileVideos?.length) {
+        const { ObjectStorageService } = await import('./objectStorage');
+        const { getObjectAclPolicy } = await import('./objectAcl');
+        const storage = new ObjectStorageService();
+        const approvedUrls = new Set((animal.profileVideos || []).map((video) => video.url));
+        for (const video of payload.profileVideos) {
+          try {
+            const objectFile = await storage.getObjectEntityFile(video.url);
+            const [[exists], policy] = await Promise.all([objectFile.exists(), getObjectAclPolicy(objectFile)]);
+            if (!exists || policy?.tenantId !== tenantId || (policy.owner !== req.user!.id && !approvedUrls.has(video.url))) {
+              return res.status(400).json({ error: 'One or more profile videos could not be verified' });
+            }
+          } catch {
+            return res.status(400).json({ error: 'One or more profile videos could not be verified' });
+          }
+        }
+      }
 
       let permitted = isStaff;
       if (activeRole === 'foster') {
@@ -10331,6 +10434,21 @@ Crawl-delay: 1
         objectFile,
         requestedPermission: ObjectPermission.READ,
       });
+
+      if (!canAccess && pathTenantId && req.path.startsWith(`/objects/${pathTenantId}/animal-profile-videos/`)) {
+        const { publicAnimalFilter } = await import('./services/animals');
+        const [publishedVideo] = await db.select({ id: animals.id })
+          .from(animals)
+          .where(and(
+            publicAnimalFilter(pathTenantId),
+            sql`${animals.profileVideos} @> ${JSON.stringify([{ url: req.path }])}::jsonb`,
+          ))
+          .limit(1);
+        if (publishedVideo) {
+          await objectStorageService.downloadObject(objectFile, res);
+          return;
+        }
+      }
       
       if (isCrawler) {
         console.log(`[OBJECT-ACCESS] canAccess result: ${canAccess}`);
