@@ -1639,7 +1639,7 @@ export const contacts = pgTable("contacts", {
   phone: text("phone"),
   address: text("address"),
   // Source tracking - where did this contact come from
-  source: text("source").array().notNull().default(sql`ARRAY[]::text[]`).$type<("adoption_application" | "foster_application" | "direct_foster_agreement" | "volunteer_application" | "user" | "donation" | "manual" | "newsletter")[]>(),
+  source: text("source").array().notNull().default(sql`ARRAY[]::text[]`).$type<("adoption_application" | "animal_inquiry" | "foster_application" | "direct_foster_agreement" | "volunteer_application" | "user" | "donation" | "manual" | "newsletter")[]>(),
   // Role information if they're a user
   role: text("role").array().$type<("admin" | "board_member" | "staff" | "foster" | "volunteer")[]>(),
   // Donation tracking
@@ -1662,6 +1662,34 @@ export const insertContactSchema = createInsertSchema(contacts).omit({
 });
 export type InsertContact = z.infer<typeof insertContactSchema>;
 export type Contact = typeof contacts.$inferSelect;
+
+export const animalInquiries = pgTable("animal_inquiries", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  animalId: uuid("animal_id").references(() => animals.id, { onDelete: 'set null' }),
+  animalName: text("animal_name").notNull(),
+  contactId: uuid("contact_id").references(() => contacts.id, { onDelete: 'set null' }),
+  requestType: text("request_type").notNull().$type<"question" | "meet_and_greet">(),
+  name: text("name").notNull(),
+  email: text("email").notNull(),
+  phone: text("phone"),
+  preferredContact: text("preferred_contact").notNull().default("email").$type<"email" | "phone">(),
+  message: text("message").notNull(),
+  availability: text("availability"),
+  status: text("status").notNull().default("pending").$type<"pending" | "contacted" | "closed">(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  tenantCreatedIdx: index("animal_inquiries_tenant_created_idx").on(table.tenantId, table.createdAt),
+  tenantAnimalIdx: index("animal_inquiries_tenant_animal_idx").on(table.tenantId, table.animalId),
+}));
+
+export const insertAnimalInquirySchema = createInsertSchema(animalInquiries).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type AnimalInquiry = typeof animalInquiries.$inferSelect;
 
 // Happy tails table - success stories
 export const happyTails = pgTable("happy_tails", {

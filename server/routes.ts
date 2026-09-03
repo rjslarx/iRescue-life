@@ -21675,6 +21675,132 @@ ${renderedHtml}
     }
   });
 
+  app.post('/api/public/animals/:id/inquiries', requireTenant, emailLimiter, async (req, res, next) => {
+    try {
+      // Quietly absorb bot submissions without storing a lead or sending email.
+      if (typeof req.body?.website === 'string' && req.body.website.trim()) {
+        return res.status(201).json({ success: true, message: 'Thanks! The rescue will be in touch.' });
+      }
+      const schema = z.object({
+        requestType: z.enum(['question', 'meet_and_greet']),
+        name: z.string().trim().min(1, 'Name is required').max(200),
+        email: z.string().trim().email('Please enter a valid email').max(320),
+        phone: z.string().trim().max(50).optional().nullable(),
+        preferredContact: z.enum(['email', 'phone']).default('email'),
+        message: z.string().trim().min(1, 'Please add a short message').max(2000),
+        availability: z.string().trim().max(1000).optional().nullable(),
+        website: z.string().max(0).optional(),
+      }).strict().superRefine((data, context) => {
+        if (data.preferredContact === 'phone' && !data.phone) {
+          context.addIssue({ code: z.ZodIssueCode.custom, path: ['phone'], message: 'Phone is required when phone is your preferred contact method' });
+        }
+        if (data.requestType === 'meet_and_greet' && !data.availability) {
+          context.addIssue({ code: z.ZodIssueCode.custom, path: ['availability'], message: 'Please share a few preferred days or times' });
+        }
+      });
+      const data = schema.parse(req.body);
+      const tenantId = req.tenant!.id;
+      const { publicAnimalFilter } = await import('./services/animals');
+      const [animal] = await db.select({ id: animals.id, name: animals.name })
+        .from(animals)
+        .where(and(publicAnimalFilter(tenantId), eq(animals.id, req.params.id)))
+        .limit(1);
+      if (!animal) return res.status(404).json({ error: 'Animal not found or no longer available' });
+
+      const normalizedEmail = data.email.toLowerCase();
+      const { animalInquiries } = await import('@shared/schema');
+      const result = await db.transaction(async (tx) => {
+        // Serialize both contact creation and equivalent inquiries. The contact
+        // lock is always acquired first to keep lock ordering deterministic.
+        const contactLock = `animal-inquiry-contact:${tenantId}:${normalizedEmail}`;
+        const inquiryLock = `animal-inquiry:${tenantId}:${animal.id}:${normalizedEmail}:${data.requestType}`;
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${contactLock}, 0))`);
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${inquiryLock}, 0))`);
+
+        const duplicateWindow = new Date(Date.now() - 5 * 60 * 1000);
+        const [recentDuplicate] = await tx.select({ id: animalInquiries.id })
+          .from(animalInquiries)
+          .where(and(
+            eq(animalInquiries.tenantId, tenantId),
+            eq(animalInquiries.animalId, animal.id),
+            eq(animalInquiries.email, normalizedEmail),
+            eq(animalInquiries.requestType, data.requestType),
+            gte(animalInquiries.createdAt, duplicateWindow),
+          ))
+          .limit(1);
+        if (recentDuplicate) return { inquiryId: recentDuplicate.id, duplicate: true };
+
+        const [existingContact] = await tx.select().from(contacts).where(and(
+          eq(contacts.tenantId, tenantId),
+          eq(contacts.email, normalizedEmail),
+        )).limit(1);
+        let contactId: string;
+        if (existingContact) {
+          contactId = existingContact.id;
+          const sources = existingContact.source || [];
+          if (!sources.includes('animal_inquiry')) {
+            await tx.update(contacts).set({
+              source: [...sources, 'animal_inquiry'],
+              updatedAt: new Date(),
+            }).where(eq(contacts.id, existingContact.id));
+          }
+          // Never let an unauthenticated form overwrite an established
+          // contact's identity fields. The submitted values remain on the inquiry.
+        } else {
+          const [contact] = await tx.insert(contacts).values({
+            tenantId,
+            email: normalizedEmail,
+            name: data.name,
+            phone: data.phone || null,
+            source: ['animal_inquiry'],
+          }).returning({ id: contacts.id });
+          contactId = contact.id;
+        }
+
+        const [inquiry] = await tx.insert(animalInquiries).values({
+          tenantId,
+          animalId: animal.id,
+          animalName: animal.name,
+          contactId,
+          requestType: data.requestType,
+          name: data.name,
+          email: normalizedEmail,
+          phone: data.phone || null,
+          preferredContact: data.preferredContact,
+          message: data.message,
+          availability: data.requestType === 'meet_and_greet' ? data.availability || null : null,
+        }).returning({ id: animalInquiries.id });
+        await tx.insert(activityLogs).values({
+          tenantId,
+          userId: null,
+          entityType: 'Animal',
+          entityId: animal.id,
+          action: data.requestType === 'meet_and_greet' ? 'meet_and_greet_requested' : 'inquiry_received',
+          description: `${data.name} ${data.requestType === 'meet_and_greet' ? 'requested a meet-and-greet with' : 'asked about'} ${animal.name}`,
+          category: 'adoption',
+          metadata: { inquiryId: inquiry.id, contactId, requestType: data.requestType },
+        });
+        return { inquiryId: inquiry.id, duplicate: false };
+      });
+      if (!result.duplicate) try {
+        const { sendAnimalInquiryNotification } = await import('./services/form-notifications');
+        await sendAnimalInquiryNotification({ tenantId, animalName: animal.name, ...data, email: normalizedEmail });
+      } catch (error) {
+        console.error('[Animal Inquiry] Notification dispatch failed:', error);
+      }
+      res.status(result.duplicate ? 200 : 201).json({
+        success: true,
+        inquiryId: result.inquiryId,
+        message: data.requestType === 'meet_and_greet'
+          ? `Thanks! The rescue will contact you to confirm a time to meet ${animal.name}.`
+          : `Thanks! The rescue will contact you about ${animal.name}.`,
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: error.errors.map((issue) => issue.message).join(', ') });
+      next(error);
+    }
+  });
+
   /**
    * GET /api/foster-applications
    * List foster applications (admin/staff only)

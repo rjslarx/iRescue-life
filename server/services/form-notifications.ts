@@ -692,3 +692,69 @@ ${responseText}
     return { sent: false, recipientCount: 0, reason: error?.message || 'Unknown error' };
   }
 }
+
+export interface AnimalInquiryNotificationData {
+  tenantId: string;
+  animalName: string;
+  requestType: "question" | "meet_and_greet";
+  name: string;
+  email: string;
+  phone?: string | null;
+  preferredContact: "email" | "phone";
+  message: string;
+  availability?: string | null;
+}
+
+export async function sendAnimalInquiryNotification(
+  data: AnimalInquiryNotificationData
+): Promise<{ sent: boolean; recipientCount: number; reason?: string }> {
+  try {
+    const [tenant] = await db.select({
+      name: tenants.name,
+      subdomain: tenants.subdomain,
+      contactEmail: tenants.contactEmail,
+    }).from(tenants).where(eq(tenants.id, data.tenantId)).limit(1);
+    if (!tenant) return { sent: false, recipientCount: 0, reason: 'Tenant not found' };
+
+    const [settings] = await db.select({ recipientEmails: matchmakerSettings.recipientEmails })
+      .from(matchmakerSettings)
+      .where(eq(matchmakerSettings.tenantId, data.tenantId))
+      .limit(1);
+    let recipients = (settings?.recipientEmails || []).map((email) => email.trim().toLowerCase()).filter((email) => email.includes('@'));
+    if (!recipients.length && tenant.contactEmail) recipients = [tenant.contactEmail.trim().toLowerCase()];
+    recipients = [...new Set(recipients)];
+    if (!recipients.length) return { sent: false, recipientCount: 0, reason: 'No recipients configured' };
+
+    const requestLabel = data.requestType === 'meet_and_greet' ? 'Meet-and-greet request' : 'Question';
+    const safeMessage = escapeHtml(data.message).replace(/\n/g, '<br>');
+    const safeAvailability = data.availability ? escapeHtml(data.availability).replace(/\n/g, '<br>') : '';
+    const html = `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;line-height:1.6;color:#1f2937;max-width:620px;margin:auto">
+      <div style="background:#2563eb;color:white;padding:20px;border-radius:8px 8px 0 0"><h1 style="margin:0;font-size:22px">${escapeHtml(requestLabel)} about ${escapeHtml(data.animalName)}</h1><p style="margin:8px 0 0">${escapeHtml(tenant.name)}</p></div>
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;padding:20px;border-radius:0 0 8px 8px">
+        <p><strong>Name:</strong> ${escapeHtml(data.name)}</p>
+        <p><strong>Email:</strong> <a href="mailto:${escapeHtml(data.email)}">${escapeHtml(data.email)}</a></p>
+        ${data.phone ? `<p><strong>Phone:</strong> ${escapeHtml(data.phone)}</p>` : ''}
+        <p><strong>Preferred contact:</strong> ${escapeHtml(data.preferredContact)}</p>
+        <p><strong>Message:</strong><br>${safeMessage}</p>
+        ${safeAvailability ? `<p><strong>Preferred days or times:</strong><br>${safeAvailability}</p>` : ''}
+      </div>
+    </div>`;
+    const text = `${requestLabel} about ${data.animalName}\n\nName: ${data.name}\nEmail: ${data.email}\n${data.phone ? `Phone: ${data.phone}\n` : ''}Preferred contact: ${data.preferredContact}\n\nMessage:\n${data.message}${data.availability ? `\n\nPreferred days or times:\n${data.availability}` : ''}`;
+    const { EmailService } = await import('../lib/email-service');
+    const emailService = await EmailService.forTenant(data.tenantId);
+    if (!emailService) return { sent: false, recipientCount: 0, reason: 'Email service not configured' };
+    let sent = 0;
+    for (const recipient of recipients) {
+      try {
+        await emailService.send({ to: recipient, subject: `${requestLabel}: ${data.animalName} — ${data.name}`, html, text, replyTo: data.email });
+        sent += 1;
+      } catch (error) {
+        console.error(`[Animal Inquiry] Failed to notify ${recipient}:`, error);
+      }
+    }
+    return { sent: sent > 0, recipientCount: sent };
+  } catch (error: any) {
+    console.error('[Animal Inquiry] Notification failed:', error);
+    return { sent: false, recipientCount: 0, reason: error?.message || 'Unknown error' };
+  }
+}

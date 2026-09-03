@@ -2,7 +2,7 @@ import { db } from '../db';
 import { contacts } from '@shared/schema';
 import { eq, and } from 'drizzle-orm';
 
-export type ContactSource = 'adoption_application' | 'foster_application' | 'direct_foster_agreement' | 'volunteer_application' | 'user' | 'donation' | 'manual' | 'newsletter';
+export type ContactSource = 'adoption_application' | 'animal_inquiry' | 'foster_application' | 'direct_foster_agreement' | 'volunteer_application' | 'user' | 'donation' | 'manual' | 'newsletter';
 export type ContactRole = 'admin' | 'board_member' | 'staff' | 'foster' | 'volunteer';
 
 /**

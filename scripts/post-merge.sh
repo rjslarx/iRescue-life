@@ -31,6 +31,31 @@ CREATE INDEX IF NOT EXISTS animal_profile_submissions_animal_idx
   ON animal_profile_submissions (tenant_id, animal_id);
 SQL
 
+# Public animal questions and meet-and-greet requests.
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' || echo "[post-merge] animal inquiries schema skipped (already applied or DB unreachable)."
+CREATE TABLE IF NOT EXISTS animal_inquiries (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  animal_id uuid REFERENCES animals(id) ON DELETE SET NULL,
+  animal_name text NOT NULL,
+  contact_id uuid REFERENCES contacts(id) ON DELETE SET NULL,
+  request_type text NOT NULL,
+  name text NOT NULL,
+  email text NOT NULL,
+  phone text,
+  preferred_contact text NOT NULL DEFAULT 'email',
+  message text NOT NULL,
+  availability text,
+  status text NOT NULL DEFAULT 'pending',
+  created_at timestamp NOT NULL DEFAULT now(),
+  updated_at timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS animal_inquiries_tenant_created_idx
+  ON animal_inquiries (tenant_id, created_at);
+CREATE INDEX IF NOT EXISTS animal_inquiries_tenant_animal_idx
+  ON animal_inquiries (tenant_id, animal_id);
+SQL
+
 # Task #298: foster agreements can be sent directly to an existing approved
 # adopter. These additive ALTERs preserve legacy application-backed sessions.
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' || echo "[post-merge] foster direct agreement columns skipped (already applied or DB unreachable)."

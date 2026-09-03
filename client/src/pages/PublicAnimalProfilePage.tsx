@@ -7,6 +7,7 @@ import { PublicAdoptionDialog } from "@/components/PublicAdoptionDialog";
 import DonationForm from "@/components/DonationForm";
 import PublicFooter from "@/components/PublicFooter";
 import { CompatibilityQuiz } from "@/components/CompatibilityQuiz";
+import { AnimalInquiryDialog } from "@/components/AnimalInquiryDialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -68,6 +69,7 @@ export default function PublicAnimalProfilePage() {
   const photoTouchStartX = useRef<number | null>(null);
   const [donationDialogOpen, setDonationDialogOpen] = useState(false);
   const [adoptionDialogOpen, setAdoptionDialogOpen] = useState(false);
+  const [inquiryDialogOpen, setInquiryDialogOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [failedPhotoUrls, setFailedPhotoUrls] = useState<Set<string>>(() => new Set());
   const [revealedCards, setRevealedCards] = useState<Set<number>>(() => new Set());
@@ -529,6 +531,16 @@ export default function PublicAnimalProfilePage() {
                     <Heart className="h-4 w-4 mr-2" />
                     Sponsor {animal.name}
                   </Button>
+                  <Button
+                    variant="secondary"
+                    className="w-full rounded-xl"
+                    size="lg"
+                    onClick={() => setInquiryDialogOpen(true)}
+                    data-testid="button-animal-inquiry"
+                  >
+                    <MessageCircle className="mr-2 h-4 w-4" />
+                    Ask about {animal.name}
+                  </Button>
                   </div>
                   <p className="mt-3 text-center text-xs text-muted-foreground">Applying is the first hello, not a commitment.</p>
                 </div>
@@ -606,6 +618,12 @@ export default function PublicAnimalProfilePage() {
         animal={animal}
         open={adoptionDialogOpen}
         onOpenChange={setAdoptionDialogOpen}
+      />
+      <AnimalInquiryDialog
+        animalId={animal.id}
+        animalName={animal.name}
+        open={inquiryDialogOpen}
+        onOpenChange={setInquiryDialogOpen}
       />
 
       <Dialog open={photoViewerOpen} onOpenChange={setPhotoViewerOpen}>
