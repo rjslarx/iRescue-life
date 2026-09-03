@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useSearch } from "wouter";
 import { CheckCircle2, Heart, Loader2, Search, Sparkles } from "lucide-react";
 import type { Animal, FosterAnimal, User } from "@shared/schema";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -33,13 +34,22 @@ function completionFor(animal: Animal) {
 }
 
 export default function ProfileContributionsPage() {
+  const queryString = useSearch();
+  const requestedAnimalId = useMemo(
+    () => new URLSearchParams(queryString).get("animalId"),
+    [queryString],
+  );
   const { user } = useAuth();
   const activeRole = user?.activeRole;
   const isFoster = activeRole === "foster";
   const isVolunteer = activeRole === "volunteer";
   const canReview = activeRole === "owner" || activeRole === "admin";
   const [search, setSearch] = useState("");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(requestedAnimalId);
+
+  useEffect(() => {
+    if (requestedAnimalId) setSelectedId(requestedAnimalId);
+  }, [requestedAnimalId]);
 
   const animalsQuery = useQuery<{ animals: Animal[] }>({
     queryKey: [isVolunteer ? "/api/animals?publicOnly=true" : "/api/animals"],

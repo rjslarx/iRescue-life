@@ -11,7 +11,7 @@ import {
   MapPin, Home, Building2, Truck, Cat, Dog, Baby, Heart,
   Scissors, AlertTriangle, Shield, ShieldAlert, ShieldX,
   Send, X, Wand2, Sparkles, FileUp, History, PawPrint, Search, Undo2, CheckCircle,
-  Calendar as CalendarIcon, Check, ExternalLink, ArrowRightLeft, Mail, Phone
+  Calendar as CalendarIcon, Check, ExternalLink, ArrowRightLeft, Mail, Phone, MessageSquarePlus
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { type Animal } from "@shared/schema";
@@ -633,6 +633,17 @@ export function AnimalHudCard({
                     >
                       <FileText className="w-3.5 h-3.5 mr-1.5" />
                       Kennel Card
+                    </Button>
+
+                    <Button
+                      onClick={() => navigate(`/dashboard/profile-contributions?animalId=${encodeURIComponent(animal.id)}`)}
+                      variant="outline"
+                      size="sm"
+                      className="justify-center text-xs sm:text-sm"
+                      data-testid={`button-profile-contributions-${animal.id}`}
+                    >
+                      <MessageSquarePlus className="w-3.5 h-3.5 mr-1.5 shrink-0" />
+                      Profile Contributions
                     </Button>
                   </>
                 )}
