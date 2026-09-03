@@ -149,15 +149,15 @@ export function CompatibilityQuiz({ animal, onApply }: { animal: Animal; onApply
 
   return (
     <section className="mt-7" aria-labelledby="compatibility-quiz-heading">
-      <Card className="overflow-hidden border-primary/20 bg-gradient-to-br from-card via-card to-primary/5">
-        <CardContent className="p-5 sm:p-7">
+      <Card className="overflow-hidden rounded-[1.5rem] border-primary/20 bg-gradient-to-br from-card via-card to-primary/10 shadow-sm">
+        <CardContent className="p-6 sm:p-8">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[.18em] text-primary">Would we click?</p>
-              <h2 id="compatibility-quiz-heading" className="mt-1 text-2xl font-bold">See how life with {animal.name} might feel</h2>
+              <h2 id="compatibility-quiz-heading" className="mt-1 font-display text-3xl font-bold">See how life with {animal.name} might feel</h2>
               <p className="mt-2 max-w-2xl text-sm text-muted-foreground">Four quick questions offer a starting point—not an adoption decision. The rescue always has the fullest picture.</p>
             </div>
-            <Badge variant="secondary">{complete ? "Complete" : `${step + 1} of ${questions.length}`}</Badge>
+            <Badge variant="secondary" className="rounded-full px-3 py-1">{complete ? "Complete" : `${step + 1} of ${questions.length}`}</Badge>
           </div>
 
           <Progress className="mt-5 h-2" value={complete ? 100 : ((step + 1) / questions.length) * 100} aria-label="Quiz progress" />
@@ -172,7 +172,7 @@ export function CompatibilityQuiz({ animal, onApply }: { animal: Animal; onApply
                     key={option.value}
                     type="button"
                     variant="outline"
-                    className="h-auto min-h-12 justify-between whitespace-normal py-3 text-left"
+                    className="h-auto min-h-14 justify-between rounded-xl border-primary/20 bg-background/60 py-3 text-left transition-transform duration-200 hover:-translate-y-0.5 hover:bg-primary/5"
                     onClick={() => {
                       hasAnsweredRef.current = true;
                       setAnswers((current) => ({ ...current, [questions[step].key]: option.value }));
@@ -196,7 +196,7 @@ export function CompatibilityQuiz({ animal, onApply }: { animal: Animal; onApply
                 </div>
               )}
               {(result.conversations.length > 0 || result.unknowns.length > 0) && (
-                <div className="mt-5 rounded-xl border bg-background/70 p-4">
+                <div className="mt-5 rounded-2xl border border-amber-500/20 bg-amber-500/5 p-5">
                   <p className="font-semibold">Good things to ask the rescue</p>
                   <div className="mt-2 space-y-2">
                     {[...result.conversations, ...result.unknowns].map((message) => <p key={message} className="flex gap-2 text-sm text-muted-foreground"><HelpCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />{message}</p>)}
