@@ -57,7 +57,7 @@ export default function ProfileContributionsPage() {
       : animalsQuery.data?.animals || [];
 
     return eligible
-      .filter((animal) => animal.status !== "adopted" && animal.status !== "deceased")
+      .filter((animal) => !["adopted", "deceased", "transported"].includes(animal.status))
       .filter((animal) => animal.name.toLowerCase().includes(search.trim().toLowerCase()))
       .sort((a, b) => completionFor(a).completed - completionFor(b).completed || a.name.localeCompare(b.name));
   }, [animalsQuery.data?.animals, fosterQuery.data?.fosterAnimals, isFoster, search]);
