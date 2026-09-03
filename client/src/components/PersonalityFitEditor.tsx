@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { CheckCircle2, Clock3, Send, Sparkles, XCircle } from "lucide-react";
+import { CheckCircle2, Clock3, Lightbulb, Plus, Send, Sparkles, XCircle } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,6 +13,27 @@ type BadgeDraft = { key: string; label: string; explanation: string };
 type RevealDraft = { title: string; body: string };
 type ProfileDraft = { personalityTags?: string[]; superpowerBadges?: BadgeDraft[]; revealCards?: RevealDraft[] };
 type Submission = { id: string; status: string; proposedPayload?: ProfileDraft };
+
+const TAG_EXAMPLES = [
+  "Gentle greeter",
+  "Window watcher",
+  "Treat motivated",
+  "Couch cuddler",
+  "Toy collector",
+  "Curious explorer",
+];
+
+const SUPERPOWER_EXAMPLES: BadgeDraft[] = [
+  { key: "", label: "Champion nap buddy", explanation: "Settles beside you while you read, work, or watch TV." },
+  { key: "", label: "Toy-finding expert", explanation: "Can always locate a favorite toy, even when it rolls under the couch." },
+  { key: "", label: "Morning motivator", explanation: "Greets the day with a happy stretch and is ready for a walk." },
+];
+
+const REVEAL_EXAMPLES: RevealDraft[] = [
+  { title: "The fastest way to my heart", body: "Sit on the floor and offer a small treat. I usually come over for a gentle hello." },
+  { title: "My favorite little routine", body: "After dinner, I carry my favorite toy to the living room and settle nearby." },
+  { title: "Something I am still learning", body: "New visitors can make me shy, but I relax when they give me a little space." },
+];
 
 export function PersonalityFitEditor({
   animalId,
@@ -73,6 +94,28 @@ export function PersonalityFitEditor({
   });
 
   const statusIsPending = latest?.status === "pending";
+  const addTagExample = (example: string) => {
+    const existing = tags.split(",").map((tag) => tag.trim()).filter(Boolean);
+    if (existing.some((tag) => tag.toLowerCase() === example.toLowerCase())) return;
+    setTags([...existing, example].join(", "));
+  };
+  const addBadgeExample = (example: BadgeDraft) => {
+    const emptyIndex = badges.findIndex((badge) => !badge.label.trim() && !badge.explanation.trim());
+    if (emptyIndex >= 0) {
+      setBadges(badges.map((badge, index) => index === emptyIndex ? { ...example } : badge));
+    } else {
+      setBadges([...badges, { ...example }]);
+    }
+  };
+  const addRevealExample = (example: RevealDraft) => {
+    const emptyIndex = reveals.findIndex((reveal) => !reveal.title.trim() && !reveal.body.trim());
+    if (emptyIndex >= 0) {
+      setReveals(reveals.map((reveal, index) => index === emptyIndex ? { ...example } : reveal));
+    } else {
+      setReveals([...reveals, { ...example }]);
+    }
+  };
+
   return (
     <Card className="mt-6 overflow-hidden border-primary/20 bg-gradient-to-br from-card via-card to-primary/5">
       <CardHeader className="pb-4">
@@ -80,7 +123,27 @@ export function PersonalityFitEditor({
         <CardDescription>Give visitors the small details that help them imagine life with {animalName}.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
-        <div className="space-y-2"><Label htmlFor="personality-tags">Personality tags</Label><Input id="personality-tags" value={tags} onChange={(event) => setTags(event.target.value)} placeholder="Gentle greeter, Window watcher, Treat motivated" /><p className="text-xs text-muted-foreground">Separate short, welcoming traits with commas.</p></div>
+        <div className="space-y-2">
+          <Label htmlFor="personality-tags">Personality tags</Label>
+          <Input id="personality-tags" value={tags} onChange={(event) => setTags(event.target.value)} placeholder="Gentle greeter, Window watcher, Treat motivated" />
+          <p className="text-xs text-muted-foreground">Separate short, welcoming traits with commas.</p>
+          <details className="group rounded-lg border border-dashed border-primary/30 bg-primary/5">
+            <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-sm font-medium text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <Lightbulb className="h-4 w-4" aria-hidden="true" />
+              See personality tag examples
+            </summary>
+            <div className="border-t border-primary/15 px-3 py-3">
+              <p className="mb-3 text-xs text-muted-foreground">Choose only traits you have personally observed, then adjust the wording to fit {animalName}.</p>
+              <div className="flex flex-wrap gap-2">
+                {TAG_EXAMPLES.map((example) => (
+                  <Button key={example} type="button" variant="outline" size="sm" onClick={() => addTagExample(example)} aria-label={`Add personality tag example: ${example}`}>
+                    <Plus className="h-3.5 w-3.5" aria-hidden="true" />{example}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          </details>
+        </div>
         <div className="space-y-3">
           <Label>Superpowers</Label>
           {badges.map((badge, index) => <div key={index} className="grid gap-2 rounded-lg border border-border/70 bg-background/60 p-3 sm:grid-cols-[1fr_2fr]">
@@ -88,6 +151,21 @@ export function PersonalityFitEditor({
             <Input value={badge.explanation} onChange={(event) => setBadges(badges.map((item, i) => i === index ? { ...item, explanation: event.target.value } : item))} placeholder="What does this look like at home?" aria-label={`Superpower ${index + 1} explanation`} />
           </div>)}
           <Button type="button" variant="ghost" size="sm" onClick={() => setBadges([...badges, { key: "", label: "", explanation: "" }])}>Add superpower</Button>
+          <details className="group rounded-lg border border-dashed border-primary/30 bg-primary/5">
+            <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-sm font-medium text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <Lightbulb className="h-4 w-4" aria-hidden="true" />
+              See superpower examples
+            </summary>
+            <div className="space-y-2 border-t border-primary/15 px-3 py-3">
+              <p className="text-xs text-muted-foreground">A superpower pairs a fun display name with what an adopter would actually see at home. Use only something you have observed.</p>
+              {SUPERPOWER_EXAMPLES.map((example) => (
+                <button key={example.label} type="button" onClick={() => addBadgeExample(example)} className="flex w-full items-start gap-2 rounded-md border bg-background p-3 text-left transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`Add superpower example: ${example.label}. ${example.explanation}`}>
+                  <Plus className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                  <span><span className="block text-sm font-medium">{example.label}</span><span className="block text-xs text-muted-foreground">{example.explanation}</span></span>
+                </button>
+              ))}
+            </div>
+          </details>
         </div>
         <div className="space-y-3">
           <Label>Tap-to-reveal moments</Label>
@@ -96,6 +174,21 @@ export function PersonalityFitEditor({
             <Textarea value={reveal.body} onChange={(event) => setReveals(reveals.map((item, i) => i === index ? { ...item, body: event.target.value } : item))} placeholder="A specific, honest little detail" aria-label={`Reveal ${index + 1} detail`} className="min-h-10" />
           </div>)}
           <Button type="button" variant="ghost" size="sm" onClick={() => setReveals([...reveals, { title: "", body: "" }])}>Add reveal</Button>
+          <details className="group rounded-lg border border-dashed border-primary/30 bg-primary/5">
+            <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-sm font-medium text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <Lightbulb className="h-4 w-4" aria-hidden="true" />
+              See tap-to-reveal examples
+            </summary>
+            <div className="space-y-2 border-t border-primary/15 px-3 py-3">
+              <p className="text-xs text-muted-foreground">Share one specific, honest moment that helps someone picture daily life with {animalName}. Customize any example you add.</p>
+              {REVEAL_EXAMPLES.map((example) => (
+                <button key={example.title} type="button" onClick={() => addRevealExample(example)} className="flex w-full items-start gap-2 rounded-md border bg-background p-3 text-left transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`Add tap-to-reveal example: ${example.title}. ${example.body}`}>
+                  <Plus className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                  <span><span className="block text-sm font-medium">{example.title}</span><span className="block text-xs text-muted-foreground">{example.body}</span></span>
+                </button>
+              ))}
+            </div>
+          </details>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
           <p className="flex items-center gap-2 text-sm text-muted-foreground">{statusIsPending ? <><Clock3 className="h-4 w-4 text-amber-600" />Awaiting an admin review</> : latest ? <><CheckCircle2 className="h-4 w-4 text-primary" />Latest version is published</> : "Draft your first public personality profile."}</p>
