@@ -554,7 +554,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
   const urlToPageId: Record<string, string> = {
     '/dashboard': 'dashboard',
     '/dashboard/animals': 'animals',
-    '/dashboard/profile-contributions': 'animals',
+    '/dashboard/profile-contributions': 'profile-contributions',
     '/dashboard/kennels': 'animals',
     '/dashboard/transfers': 'animals',
     '/dashboard/medical-pipeline': 'medical-tasks',

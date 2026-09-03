@@ -20,6 +20,7 @@ interface UserPagePermission {
 // or per-tenant permission configuration. Use sparingly — only for
 // universally-safe, read-only or self-service pages.
 const ALWAYS_ACCESSIBLE_PAGES = new Set<string>([
+  'profile-contributions',
   'temperature',
 ]);
 

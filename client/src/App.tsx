@@ -303,7 +303,7 @@ function RouterSwitch() {
       {/* Protected dashboard routes */}
       <ProtectedRoute path="/dashboard" pageId="dashboard" component={Dashboard} />
       <ProtectedRoute path="/dashboard/animals" pageId="animals" component={AnimalsPage} />
-      <ProtectedRoute path="/dashboard/profile-contributions" pageId="animals" component={ProfileContributionsPage} />
+      <ProtectedRoute path="/dashboard/profile-contributions" pageId="profile-contributions" component={ProfileContributionsPage} />
       <ProtectedRoute path="/dashboard/applications" pageId="applications" component={ApplicationsPage} proOnly proFeatureName="Adoption Applications" />
       <ProtectedRoute path="/dashboard/intake" pageId="intake" component={IntakeManagerPage} proOnly proFeatureName="Intake Manager" />
       <ProtectedRoute path="/dashboard/surgery-day-requests" pageId="intake" component={SurgeryDayRequestsPage} />
