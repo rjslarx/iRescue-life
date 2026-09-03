@@ -374,7 +374,7 @@ export default function PublicAnimalProfilePage() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="absolute z-10 left-3 top-1/2 -translate-y-1/2 rounded-full bg-background/90 text-foreground shadow-md backdrop-blur hover:bg-background"
+                        className="absolute z-10 left-3 top-[45%] -translate-y-1/2 rounded-full bg-background/90 text-foreground shadow-md backdrop-blur hover:bg-background"
                         onClick={prevPhoto}
                         aria-label={`Show previous photo of ${animal.name}`}
                         data-testid="button-prev-photo"
@@ -384,7 +384,7 @@ export default function PublicAnimalProfilePage() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="absolute z-10 right-3 top-1/2 -translate-y-1/2 rounded-full bg-background/90 text-foreground shadow-md backdrop-blur hover:bg-background"
+                        className="absolute z-10 right-3 top-[45%] -translate-y-1/2 rounded-full bg-background/90 text-foreground shadow-md backdrop-blur hover:bg-background"
                         onClick={nextPhoto}
                         aria-label={`Show next photo of ${animal.name}`}
                         data-testid="button-next-photo"
