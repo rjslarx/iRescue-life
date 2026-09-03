@@ -6,6 +6,7 @@ import PublicHeader from "@/components/PublicHeader";
 import { PublicAdoptionDialog } from "@/components/PublicAdoptionDialog";
 import DonationForm from "@/components/DonationForm";
 import PublicFooter from "@/components/PublicFooter";
+import { CompatibilityQuiz } from "@/components/CompatibilityQuiz";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -527,6 +528,7 @@ export default function PublicAnimalProfilePage() {
               {revealCards.length > 0 && <div className="grid gap-3 sm:grid-cols-2">{revealCards.map((card, index) => { const revealed = revealedCards.has(index); return <button type="button" key={`${card.title}-${index}`} onClick={() => setRevealedCards((current) => { const next = new Set(current); next.has(index) ? next.delete(index) : next.add(index); return next; })} className="min-h-32 rounded-xl border border-dashed border-primary/30 bg-primary/5 p-5 text-left transition-transform duration-200 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-expanded={revealed}><span className="text-xs font-semibold uppercase tracking-[.15em] text-primary">{revealed ? "A little more" : "Tap to reveal"}</span><h3 className="mt-2 font-semibold">{card.title}</h3>{revealed ? <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{card.body}</p> : <p className="mt-2 text-sm text-muted-foreground">A small clue awaits</p>}</button>; })}</div>}
             </section>
           )}
+          <CompatibilityQuiz animal={animal} onApply={handleAdoptClick} />
           <section className="mt-7 rounded-2xl border border-primary/15 bg-primary/[.045] p-5 sm:p-6" aria-labelledby="fit-heading">
             <div className="flex flex-wrap items-start justify-between gap-4"><div><div className="flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-primary" /><h2 id="fit-heading" className="text-xl font-bold">Who should I meet next?</h2></div><p className="mt-1 text-sm text-muted-foreground">Start with a feeling. We will introduce you to other animals with a similar fit.</p></div><Button type="button" variant="outline" size="sm" onClick={surpriseMe} disabled={isDiscovering}><Dice5 className="h-4 w-4" />Surprise me</Button></div>
             <div className="mt-4 flex flex-wrap gap-2">{traitChoices.map((trait) => <Button key={trait} type="button" size="sm" variant={selectedTrait === trait ? "default" : "outline"} onClick={() => chooseTrait(trait)} aria-pressed={selectedTrait === trait}>{trait}</Button>)}</div>
