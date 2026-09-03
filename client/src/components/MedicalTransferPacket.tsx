@@ -365,7 +365,11 @@ export default function MedicalTransferPacket({
       doc.text('SECTION 3: DIAGNOSTIC TESTING', margin, yPos);
       yPos += 6;
 
-      const testRecords = preventativeCare.filter((r: any) => r.careCategory === 'test' && !protocolTestIds.has(r.id));
+      const testRecords = preventativeCare.filter((r: any) =>
+        r.careCategory === 'test'
+        && !protocolTestIds.has(r.id)
+        && (r.status === 'pending' || Boolean(r.testResult?.trim()))
+      );
       const allTests = [...diagnostics, ...testRecords];
 
       if (allTests.length > 0) {
