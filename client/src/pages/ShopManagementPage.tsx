@@ -111,11 +111,10 @@ export default function ShopManagementPage() {
   const handleShareProduct = (product: ShopProduct) => {
     const url = getProductUrl(product.slug);
     const facebookUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`;
-    const shareWindow = window.open(
-      facebookUrl,
-      "_blank",
-      "width=680,height=620,noopener,noreferrer",
-    );
+    // Open synchronously from the click so iOS/Safari does not treat the
+    // navigation as an unsolicited popup. Setting opener manually preserves
+    // tab isolation without making window.open falsely return null.
+    const shareWindow = window.open("", "_blank", "width=680,height=620");
     if (!shareWindow) {
       toast({
         title: "Facebook sharing was blocked",
@@ -124,6 +123,8 @@ export default function ShopManagementPage() {
       });
       return;
     }
+    shareWindow.opener = null;
+    shareWindow.location.href = facebookUrl;
     toast({
       title: "Facebook sharing opened",
       description: "Finish your post in Facebook. The raffle image is included in the link preview.",
