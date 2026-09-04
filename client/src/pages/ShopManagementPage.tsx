@@ -15,7 +15,7 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { copyTextToClipboard, shareOrCopy } from "@/lib/share";
+import { copyTextToClipboard } from "@/lib/share";
 import {
   ShoppingBag,
   Plus,
@@ -108,39 +108,26 @@ export default function ShopManagementPage() {
     });
   };
 
-  const handleShareProduct = async (product: ShopProduct) => {
+  const handleShareProduct = (product: ShopProduct) => {
     const url = getProductUrl(product.slug);
-    if (!navigator.share) {
-      window.open(
-        `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`,
-        "_blank",
-        "width=680,height=620,noopener,noreferrer",
-      );
+    const facebookUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`;
+    const shareWindow = window.open(
+      facebookUrl,
+      "_blank",
+      "width=680,height=620,noopener,noreferrer",
+    );
+    if (!shareWindow) {
       toast({
-        title: "Facebook sharing opened",
-        description: "The raffle link includes its uploaded image preview.",
+        title: "Facebook sharing was blocked",
+        description: "Allow pop-ups for this site, or use Copy Link.",
+        variant: "destructive",
       });
       return;
     }
-    try {
-      const result = await shareOrCopy({
-        title: product.name,
-        text: `Enter the ${product.name} raffle and support our rescue!`,
-        url,
-      }, url, product.imageUrls?.[0]);
-      if (result === "copied") {
-        toast({
-          title: "Raffle link copied",
-          description: "Paste it into a text, email, or social post to share.",
-        });
-      }
-    } catch {
-      toast({
-        title: "Couldn't share raffle",
-        description: "Please use Copy Link instead.",
-        variant: "destructive",
-      });
-    }
+    toast({
+      title: "Facebook sharing opened",
+      description: "Finish your post in Facebook. The raffle image is included in the link preview.",
+    });
   };
   const [activeTab, setActiveTab] = useState("products");
   const [viewTicketsRaffle, setViewTicketsRaffle] = useState<ProductWithVariants | null>(null);
@@ -1130,7 +1117,7 @@ export default function ShopManagementPage() {
                             )}
                             <Button variant="outline" onClick={() => handleShareProduct(raffle)} data-testid={`button-share-raffle-${raffle.id}`}>
                               <Share2 className="h-4 w-4 mr-2" />
-                              Share
+                              Share to Facebook
                             </Button>
                             <Button variant="outline" onClick={() => handleCopyProductLink(raffle.slug)} data-testid={`button-copy-link-raffle-${raffle.id}`}>
                               <Copy className="h-4 w-4 mr-2" />
