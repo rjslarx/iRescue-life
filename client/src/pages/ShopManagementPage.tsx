@@ -110,12 +110,24 @@ export default function ShopManagementPage() {
 
   const handleShareProduct = async (product: ShopProduct) => {
     const url = getProductUrl(product.slug);
+    if (!navigator.share) {
+      window.open(
+        `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`,
+        "_blank",
+        "width=680,height=620,noopener,noreferrer",
+      );
+      toast({
+        title: "Facebook sharing opened",
+        description: "The raffle link includes its uploaded image preview.",
+      });
+      return;
+    }
     try {
       const result = await shareOrCopy({
         title: product.name,
         text: `Enter the ${product.name} raffle and support our rescue!`,
         url,
-      }, url);
+      }, url, product.imageUrls?.[0]);
       if (result === "copied") {
         toast({
           title: "Raffle link copied",

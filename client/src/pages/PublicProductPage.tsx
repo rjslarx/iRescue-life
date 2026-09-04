@@ -187,7 +187,11 @@ export default function PublicProductPage() {
     const text = product ? `Check out ${product.name} from ${rescueName}!` : '';
     
     try {
-      const result = await shareOrCopy({ title: product?.name, text, url }, url);
+      const result = await shareOrCopy(
+        { title: product?.name, text, url },
+        url,
+        product?.imageUrls?.[0],
+      );
       if (result !== "copied") return;
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
