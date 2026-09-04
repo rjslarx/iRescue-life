@@ -108,18 +108,32 @@ export default function ShopManagementPage() {
     });
   };
 
-  const handleShareProduct = (product: ShopProduct) => {
+  const handleShareProduct = async (product: ShopProduct) => {
     const url = getProductUrl(product.slug);
     const quote = `Enter the ${product.name} raffle and support our rescue!`;
+
+    // On iOS, Facebook accepts a shared URL but is excluded when Web Share
+    // includes both a URL and an image file. Share the URL only; Facebook then
+    // loads the raffle's uploaded image from its Open Graph metadata.
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: product.name, text: quote, url });
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        await copyTextToClipboard(url);
+        toast({
+          title: "Raffle link copied",
+          description: "Paste the link into Facebook to share it with the raffle image.",
+        });
+      }
+      return;
+    }
+
     const facebookUrl =
       `https://www.facebook.com/sharer/sharer.php?display=popup` +
       `&u=${encodeURIComponent(url)}` +
       `&quote=${encodeURIComponent(quote)}`;
-
-    // A direct navigation preserves Facebook's query parameters on iPad/iOS.
-    // Pre-opening a blank tab and redirecting it can launch Facebook without
-    // carrying the raffle link into the composer.
-    window.location.assign(facebookUrl);
+    window.open(facebookUrl, "_blank", "width=680,height=620");
   };
   const [activeTab, setActiveTab] = useState("products");
   const [viewTicketsRaffle, setViewTicketsRaffle] = useState<ProductWithVariants | null>(null);
@@ -1109,7 +1123,7 @@ export default function ShopManagementPage() {
                             )}
                             <Button variant="outline" onClick={() => handleShareProduct(raffle)} data-testid={`button-share-raffle-${raffle.id}`}>
                               <Share2 className="h-4 w-4 mr-2" />
-                              Share to Facebook
+                              Share Raffle
                             </Button>
                             <Button variant="outline" onClick={() => handleCopyProductLink(raffle.slug)} data-testid={`button-copy-link-raffle-${raffle.id}`}>
                               <Copy className="h-4 w-4 mr-2" />
