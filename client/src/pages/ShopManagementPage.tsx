@@ -110,25 +110,16 @@ export default function ShopManagementPage() {
 
   const handleShareProduct = (product: ShopProduct) => {
     const url = getProductUrl(product.slug);
-    const facebookUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`;
-    // Open synchronously from the click so iOS/Safari does not treat the
-    // navigation as an unsolicited popup. Setting opener manually preserves
-    // tab isolation without making window.open falsely return null.
-    const shareWindow = window.open("", "_blank", "width=680,height=620");
-    if (!shareWindow) {
-      toast({
-        title: "Facebook sharing was blocked",
-        description: "Allow pop-ups for this site, or use Copy Link.",
-        variant: "destructive",
-      });
-      return;
-    }
-    shareWindow.opener = null;
-    shareWindow.location.href = facebookUrl;
-    toast({
-      title: "Facebook sharing opened",
-      description: "Finish your post in Facebook. The raffle image is included in the link preview.",
-    });
+    const quote = `Enter the ${product.name} raffle and support our rescue!`;
+    const facebookUrl =
+      `https://www.facebook.com/sharer/sharer.php?display=popup` +
+      `&u=${encodeURIComponent(url)}` +
+      `&quote=${encodeURIComponent(quote)}`;
+
+    // A direct navigation preserves Facebook's query parameters on iPad/iOS.
+    // Pre-opening a blank tab and redirecting it can launch Facebook without
+    // carrying the raffle link into the composer.
+    window.location.assign(facebookUrl);
   };
   const [activeTab, setActiveTab] = useState("products");
   const [viewTicketsRaffle, setViewTicketsRaffle] = useState<ProductWithVariants | null>(null);
