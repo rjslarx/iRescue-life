@@ -29,6 +29,7 @@ import {
 import { SiFacebook, SiX } from "react-icons/si";
 import type { ShopProduct, ShopProductVariant, Tenant } from "@shared/schema";
 import { computeBundledPrice, bundleSavingsPercent } from "@shared/raffle-pricing";
+import { shareOrCopy } from "@/lib/share";
 
 type SplitPotInfo = {
   ticketSalesAmount: string;
@@ -185,16 +186,13 @@ export default function PublicProductPage() {
     const url = getShareUrl();
     const text = product ? `Check out ${product.name} from ${rescueName}!` : '';
     
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: product?.name, text, url });
-      } catch (err) {
-        // User cancelled or error
-      }
-    } else {
-      await navigator.clipboard.writeText(url);
+    try {
+      const result = await shareOrCopy({ title: product?.name, text, url }, url);
+      if (result !== "copied") return;
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
     }
   };
 

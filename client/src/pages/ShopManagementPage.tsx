@@ -15,6 +15,7 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { copyTextToClipboard, shareOrCopy } from "@/lib/share";
 import {
   ShoppingBag,
   Plus,
@@ -100,19 +101,33 @@ export default function ShopManagementPage() {
     `${window.location.origin}${basePath}/shop/${slug}`;
 
   const handleCopyProductLink = (slug: string) => {
-    navigator.clipboard.writeText(getProductUrl(slug)).then(() => {
+    copyTextToClipboard(getProductUrl(slug)).then(() => {
       toast({ title: "Link copied to clipboard!" });
     }).catch(() => {
       toast({ title: "Couldn't copy link", variant: "destructive" });
     });
   };
 
-  const handleShareProduct = (product: ShopProduct) => {
+  const handleShareProduct = async (product: ShopProduct) => {
     const url = getProductUrl(product.slug);
-    if (navigator.share) {
-      navigator.share({ title: product.name, url }).catch(() => {});
-    } else {
-      handleCopyProductLink(product.slug);
+    try {
+      const result = await shareOrCopy({
+        title: product.name,
+        text: `Enter the ${product.name} raffle and support our rescue!`,
+        url,
+      }, url);
+      if (result === "copied") {
+        toast({
+          title: "Raffle link copied",
+          description: "Paste it into a text, email, or social post to share.",
+        });
+      }
+    } catch {
+      toast({
+        title: "Couldn't share raffle",
+        description: "Please use Copy Link instead.",
+        variant: "destructive",
+      });
     }
   };
   const [activeTab, setActiveTab] = useState("products");
