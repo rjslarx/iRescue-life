@@ -948,6 +948,7 @@ export async function injectOGTags(req: Request, res: Response, next: NextFuncti
             name: shopProducts.name,
             description: shopProducts.description,
             imageUrls: shopProducts.imageUrls,
+            socialImageUrl: shopProducts.socialImageUrl,
             basePrice: shopProducts.basePrice,
           })
           .from(shopProducts)
@@ -959,8 +960,9 @@ export async function injectOGTags(req: Request, res: Response, next: NextFuncti
           .limit(1);
 
           if (product) {
-            const productImage = product.imageUrls?.[0]
-              ? (resolveImageUrl(product.imageUrls[0]) || defaultImage)
+            const preferredImage = product.socialImageUrl || product.imageUrls?.[0];
+            const productImage = preferredImage
+              ? (resolveImageUrl(preferredImage) || defaultImage)
               : defaultImage;
             const priceStr = product.basePrice ? `$${parseFloat(product.basePrice).toFixed(2)}` : '';
             const productDesc = product.description

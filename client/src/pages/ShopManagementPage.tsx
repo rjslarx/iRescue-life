@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { copyTextToClipboard } from "@/lib/share";
@@ -163,9 +164,46 @@ export default function ShopManagementPage() {
     raffleMaxReferrals: '3',
     raffleTicketGoal: '100',
     imageUrls: [] as string[],
+    socialImageUrl: '',
     bundleTiers: [] as { quantity: string; price: string }[],
   });
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [socialCropOpen, setSocialCropOpen] = useState(false);
+  const [socialCropSource, setSocialCropSource] = useState('');
+  const [socialCropX, setSocialCropX] = useState(50);
+  const [socialCropY, setSocialCropY] = useState(50);
+  const [socialCropZoom, setSocialCropZoom] = useState(1);
+  const [savingSocialCrop, setSavingSocialCrop] = useState(false);
+  const socialCropCanvasRef = useRef<HTMLCanvasElement>(null);
+
+  const drawSocialCrop = async (canvas: HTMLCanvasElement, width: number, height: number) => {
+    if (!socialCropSource) throw new Error("No image selected");
+    const image = new Image();
+    image.crossOrigin = "anonymous";
+    image.src = socialCropSource;
+    await image.decode();
+
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Image editor is unavailable");
+
+    const scale = Math.max(width / image.naturalWidth, height / image.naturalHeight) * socialCropZoom;
+    const drawnWidth = image.naturalWidth * scale;
+    const drawnHeight = image.naturalHeight * scale;
+    const left = -(drawnWidth - width) * (socialCropX / 100);
+    const top = -(drawnHeight - height) * (socialCropY / 100);
+
+    context.clearRect(0, 0, width, height);
+    context.drawImage(image, left, top, drawnWidth, drawnHeight);
+  };
+
+  useEffect(() => {
+    if (!socialCropOpen || !socialCropCanvasRef.current || !socialCropSource) return;
+    drawSocialCrop(socialCropCanvasRef.current, 600, 315).catch(() => {
+      toast({ title: "Couldn't preview image", variant: "destructive" });
+    });
+  }, [socialCropOpen, socialCropSource, socialCropX, socialCropY, socialCropZoom]);
 
   const buildBundlePricing = (tiers: { quantity: string; price: string }[]) => {
     const cleaned = tiers
@@ -520,6 +558,7 @@ export default function ShopManagementPage() {
       raffleMaxReferrals: '3',
       raffleTicketGoal: '100',
       imageUrls: [],
+      socialImageUrl: '',
       bundleTiers: [],
     });
   };
@@ -539,11 +578,15 @@ export default function ShopManagementPage() {
         throw new Error(err.error || "Upload failed");
       }
       const data = await res.json();
+      const shouldOfferSocialCrop = productForm.imageUrls.length === 0;
       setProductForm(prev => ({
         ...prev,
         imageUrls: [...prev.imageUrls, data.imageUrl],
       }));
       toast({ title: "Image uploaded" });
+      if (shouldOfferSocialCrop) {
+        openSocialCrop(data.imageUrl);
+      }
     } catch (err: any) {
       toast({ title: "Upload failed", description: err.message, variant: "destructive" });
     } finally {
@@ -555,7 +598,47 @@ export default function ShopManagementPage() {
     setProductForm(prev => ({
       ...prev,
       imageUrls: prev.imageUrls.filter((_, i) => i !== index),
+      socialImageUrl: index === 0 ? '' : prev.socialImageUrl,
     }));
+  };
+
+  const openSocialCrop = (source: string) => {
+    setSocialCropSource(source);
+    setSocialCropX(50);
+    setSocialCropY(50);
+    setSocialCropZoom(1);
+    setSocialCropOpen(true);
+  };
+
+  const saveSocialCrop = async () => {
+    setSavingSocialCrop(true);
+    try {
+      const canvas = document.createElement("canvas");
+      await drawSocialCrop(canvas, 1200, 630);
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob(value => value ? resolve(value) : reject(new Error("Could not create preview image")), "image/jpeg", 0.9);
+      });
+      const body = new FormData();
+      body.append("file", blob, `facebook-preview-${Date.now()}.jpg`);
+
+      const response = await fetch("/api/shop/admin/products/images/social-preview", {
+        method: "POST",
+        body,
+        credentials: "include",
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to save Facebook preview");
+      }
+      const data = await response.json();
+      setProductForm(prev => ({ ...prev, socialImageUrl: data.imageUrl }));
+      setSocialCropOpen(false);
+      toast({ title: "Facebook preview saved", description: "Save the fundraiser to publish this preview." });
+    } catch (error: any) {
+      toast({ title: "Couldn't save Facebook preview", description: error.message, variant: "destructive" });
+    } finally {
+      setSavingSocialCrop(false);
+    }
   };
 
   const resetVariantForm = () => {
@@ -590,6 +673,7 @@ export default function ShopManagementPage() {
       raffleMaxReferrals: (product.raffleMaxReferrals ?? 3).toString(),
       raffleTicketGoal: (product.raffleTicketGoal ?? 100).toString(),
       imageUrls: product.imageUrls || [],
+      socialImageUrl: product.socialImageUrl || '',
       bundleTiers: (product.bundlePricing || []).map(t => ({ quantity: String(t.quantity), price: t.price })),
     });
     setProductDialogOpen(true);
@@ -1336,6 +1420,52 @@ export default function ShopManagementPage() {
                   </label>
                 </div>
                 <p className="text-xs text-muted-foreground">Upload up to 5 images. First image is used as the main product photo.</p>
+                {productForm.imageUrls[0] && (
+                  <div className="rounded-lg border p-3 space-y-3" data-testid="social-preview-editor">
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                      <div>
+                        <Label>Facebook Link Preview</Label>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Recommended size: 1200 × 630 pixels. Position a landscape crop to fill Facebook's link card without stretching the original image.
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openSocialCrop(productForm.imageUrls[0])}
+                        data-testid="button-edit-social-preview"
+                      >
+                        <Pencil className="h-4 w-4 mr-2" />
+                        {productForm.socialImageUrl ? "Reposition" : "Create Preview"}
+                      </Button>
+                    </div>
+                    <div className="relative aspect-[1.91/1] max-w-md overflow-hidden rounded-md border bg-[radial-gradient(circle,_hsl(var(--muted-foreground)/0.18)_1.5px,_transparent_1.5px)] bg-[length:24px_24px] bg-muted">
+                      <img
+                        src={productForm.socialImageUrl || productForm.imageUrls[0]}
+                        alt="Facebook link preview"
+                        className={`h-full w-full ${productForm.socialImageUrl ? "object-cover" : "object-contain"}`}
+                      />
+                    </div>
+                    {!productForm.socialImageUrl && (
+                      <p className="text-xs text-muted-foreground">
+                        Current fallback preserves the entire image and may show patterned space at the sides.
+                      </p>
+                    )}
+                    {productForm.socialImageUrl && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="px-0 text-muted-foreground"
+                        onClick={() => setProductForm(prev => ({ ...prev, socialImageUrl: '' }))}
+                        data-testid="button-use-social-fallback"
+                      >
+                        Use full-image fallback instead
+                      </Button>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -1628,6 +1758,80 @@ export default function ShopManagementPage() {
                 </Button>
               </DialogFooter>
             </form>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={socialCropOpen} onOpenChange={setSocialCropOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Position Facebook Preview</DialogTitle>
+              <DialogDescription>
+                Everything inside this 1200 × 630 frame will appear in the shared link image. The original fundraiser image will not be changed.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-5">
+              <canvas
+                ref={socialCropCanvasRef}
+                width={600}
+                height={315}
+                className="w-full aspect-[1.91/1] rounded-md border bg-muted"
+                data-testid="canvas-social-preview"
+              />
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <Label>Horizontal position</Label>
+                  <span className="text-muted-foreground">{Math.round(socialCropX)}%</span>
+                </div>
+                <Slider
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={[socialCropX]}
+                  onValueChange={([value]) => setSocialCropX(value)}
+                  aria-label="Horizontal image position"
+                  data-testid="slider-social-crop-x"
+                />
+              </div>
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <Label>Vertical position</Label>
+                  <span className="text-muted-foreground">{Math.round(socialCropY)}%</span>
+                </div>
+                <Slider
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={[socialCropY]}
+                  onValueChange={([value]) => setSocialCropY(value)}
+                  aria-label="Vertical image position"
+                  data-testid="slider-social-crop-y"
+                />
+              </div>
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <Label>Zoom</Label>
+                  <span className="text-muted-foreground">{socialCropZoom.toFixed(1)}×</span>
+                </div>
+                <Slider
+                  min={1}
+                  max={3}
+                  step={0.1}
+                  value={[socialCropZoom]}
+                  onValueChange={([value]) => setSocialCropZoom(value)}
+                  aria-label="Image zoom"
+                  data-testid="slider-social-crop-zoom"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setSocialCropOpen(false)} disabled={savingSocialCrop}>
+                Keep Full Image
+              </Button>
+              <Button type="button" onClick={saveSocialCrop} disabled={savingSocialCrop} data-testid="button-save-social-preview">
+                {savingSocialCrop && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Save Facebook Preview
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
 

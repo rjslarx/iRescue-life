@@ -2556,16 +2556,16 @@ export default function AnimalsPage() {
       return [...list].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
     } else if (sortOrder === "name_desc") {
       return [...list].sort((a, b) => (b.name || "").localeCompare(a.name || ""));
-    } else if (sortOrder === "breed_asc" || sortOrder === "breed_desc") {
+    } else if (sortOrder === "type_asc" || sortOrder === "type_desc") {
       return [...list].sort((a, b) => {
-        const aBreed = (a.petfinderBreed || a.breed || "").trim();
-        const bBreed = (b.petfinderBreed || b.breed || "").trim();
+        const aType = (a.petfinderType || a.species || "").trim();
+        const bType = (b.petfinderType || b.species || "").trim();
 
-        if (!aBreed && bBreed) return 1;
-        if (aBreed && !bBreed) return -1;
+        if (!aType && bType) return 1;
+        if (aType && !bType) return -1;
 
-        const comparison = aBreed.localeCompare(bBreed, undefined, { sensitivity: "base" });
-        const direction = sortOrder === "breed_asc" ? 1 : -1;
+        const comparison = aType.localeCompare(bType, undefined, { sensitivity: "base" });
+        const direction = sortOrder === "type_asc" ? 1 : -1;
         return comparison !== 0
           ? comparison * direction
           : (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" });
@@ -3032,8 +3032,8 @@ export default function AnimalsPage() {
                                 <SelectItem value="recent">Recently Added</SelectItem>
                                 <SelectItem value="name_asc">Name A-Z</SelectItem>
                                 <SelectItem value="name_desc">Name Z-A</SelectItem>
-                                 <SelectItem value="breed_asc">Breed A-Z</SelectItem>
-                                 <SelectItem value="breed_desc">Breed Z-A</SelectItem>
+                                 <SelectItem value="type_asc">Type A-Z</SelectItem>
+                                 <SelectItem value="type_desc">Type Z-A</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>

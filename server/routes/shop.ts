@@ -1216,7 +1216,7 @@ router.post('/admin/products', requireTenant, requireAuth, requireRoleOrPageAcce
 router.patch('/admin/products/:id', requireTenant, requireAuth, requireRoleOrPageAccess('shop', 'admin', 'staff'), async (req, res, next) => {
   try {
     const updateData = insertShopProductSchema.partial().parse(req.body);
-    const product = await db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
       await tx.execute(
         sql`SELECT id FROM shop_products WHERE id = ${req.params.id} AND tenant_id = ${req.tenant!.id} FOR UPDATE`
       );
@@ -1279,10 +1279,30 @@ router.patch('/admin/products/:id', requireTenant, requireAuth, requireRoleOrPag
           eq(shopProducts.tenantId, req.tenant!.id),
         ))
         .returning();
-      return updated;
+      return {
+        product: updated,
+        previousSocialImageUrl: existing.socialImageUrl,
+      };
     });
 
-    res.json({ product });
+    if (
+      result.previousSocialImageUrl
+      && result.previousSocialImageUrl !== result.product.socialImageUrl
+      && result.previousSocialImageUrl.startsWith(`/objects/${req.tenant!.id}/website-assets/`)
+    ) {
+      try {
+        const { TenantFileStorage } = await import('../lib/tenantFileStorage');
+        const storage = new TenantFileStorage(req.tenant!.id);
+        const deletion = await storage.deleteFile(result.previousSocialImageUrl);
+        if (!deletion.success) {
+          console.warn('[SHOP SOCIAL IMAGE] Could not delete superseded preview:', deletion.error);
+        }
+      } catch (deletionError) {
+        console.warn('[SHOP SOCIAL IMAGE] Superseded preview cleanup failed:', deletionError);
+      }
+    }
+
+    res.json({ product: result.product });
   } catch (error) {
     if (error instanceof ShopProductNotFoundError) {
       return res.status(404).json({ error: 'Product not found' });
@@ -2117,6 +2137,60 @@ router.post('/admin/products/images/upload', requireTenant, requireAuth, require
       } catch (uploadError: any) {
         console.error('Error uploading shop product image:', uploadError);
         res.status(500).json({ error: 'Failed to upload image' });
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/shop/admin/products/images/social-preview
+ * Store a dedicated 1200x630 social image without changing the original product image.
+ */
+router.post('/admin/products/images/social-preview', requireTenant, requireAuth, requireRoleOrPageAccess('shop', 'admin', 'staff'), async (req, res, next) => {
+  try {
+    const multer = (await import('multer')).default;
+    const sharp = (await import('sharp')).default;
+    const { TenantFileStorage } = await import('../lib/tenantFileStorage');
+
+    const upload = multer({
+      storage: multer.memoryStorage(),
+      limits: { fileSize: 10 * 1024 * 1024 },
+      fileFilter: (_req, file, cb) => {
+        if (file.mimetype.startsWith('image/')) {
+          cb(null, true);
+        } else {
+          cb(new Error('Only image files are allowed'));
+        }
+      },
+    });
+
+    upload.single('file')(req, res, async (err: any) => {
+      if (err) return res.status(400).json({ error: err.message });
+      if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+      try {
+        const content = await sharp(req.file.buffer)
+          .rotate()
+          .resize(1200, 630, { fit: 'cover', position: 'center' })
+          .jpeg({ quality: 88 })
+          .toBuffer();
+        const storage = new TenantFileStorage(req.tenant!.id);
+        const result = await storage.uploadFile({
+          tenantId: req.tenant!.id,
+          userId: req.user!.id,
+          category: 'website-assets',
+          visibility: 'public',
+          fileName: `shop-social-${Date.now()}.jpg`,
+          mimeType: 'image/jpeg',
+          content,
+        });
+
+        res.json({ imageUrl: result.fileUrl });
+      } catch (uploadError) {
+        console.error('Error uploading shop social preview:', uploadError);
+        res.status(500).json({ error: 'Failed to upload social preview' });
       }
     });
   } catch (error) {

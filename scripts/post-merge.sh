@@ -362,3 +362,10 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' || echo "[post-merge] raffle tic
 ALTER TABLE shop_products
   ADD COLUMN IF NOT EXISTS raffle_ticket_goal integer NOT NULL DEFAULT 100;
 SQL
+
+# Dedicated 1200x630 social-preview derivative for shop products and raffles.
+# The original product image remains unchanged; legacy products fall back to it.
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' || echo "[post-merge] shop product social image column skipped (already applied or DB unreachable)."
+ALTER TABLE shop_products
+  ADD COLUMN IF NOT EXISTS social_image_url text;
+SQL

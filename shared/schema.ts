@@ -4025,6 +4025,7 @@ export const shopProducts = pgTable("shop_products", {
   compareAtPrice: text("compare_at_price"), // Original price for showing discounts
   // Images
   imageUrls: text("image_urls").array().notNull().default(sql`ARRAY[]::text[]`),
+  socialImageUrl: text("social_image_url"),
   // Inventory (for physical products)
   trackInventory: boolean("track_inventory").notNull().default(false),
   totalInventory: integer("total_inventory"), // Only used if trackInventory is true
