@@ -2556,6 +2556,20 @@ export default function AnimalsPage() {
       return [...list].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
     } else if (sortOrder === "name_desc") {
       return [...list].sort((a, b) => (b.name || "").localeCompare(a.name || ""));
+    } else if (sortOrder === "breed_asc" || sortOrder === "breed_desc") {
+      return [...list].sort((a, b) => {
+        const aBreed = (a.petfinderBreed || a.breed || "").trim();
+        const bBreed = (b.petfinderBreed || b.breed || "").trim();
+
+        if (!aBreed && bBreed) return 1;
+        if (aBreed && !bBreed) return -1;
+
+        const comparison = aBreed.localeCompare(bBreed, undefined, { sensitivity: "base" });
+        const direction = sortOrder === "breed_asc" ? 1 : -1;
+        return comparison !== 0
+          ? comparison * direction
+          : (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" });
+      });
     }
     return list;
   };
@@ -3018,6 +3032,8 @@ export default function AnimalsPage() {
                                 <SelectItem value="recent">Recently Added</SelectItem>
                                 <SelectItem value="name_asc">Name A-Z</SelectItem>
                                 <SelectItem value="name_desc">Name Z-A</SelectItem>
+                                 <SelectItem value="breed_asc">Breed A-Z</SelectItem>
+                                 <SelectItem value="breed_desc">Breed Z-A</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
