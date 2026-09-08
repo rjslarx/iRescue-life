@@ -1191,6 +1191,25 @@ export const insertPaymentSchema = createInsertSchema(payments).omit({
 export type InsertPayment = z.infer<typeof insertPaymentSchema>;
 export type Payment = typeof payments.$inferSelect;
 
+// Exactly-once local accounting for Stripe refunds. The Stripe refund ID is the
+// durable boundary between irreversible external money movement and local
+// payment/donor totals.
+export const paymentRefundAccounting = pgTable("payment_refund_accounting", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  stripeRefundId: text("stripe_refund_id").notNull().unique(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  paymentId: uuid("payment_id").notNull().references(() => payments.id, { onDelete: 'cascade' }),
+  donorId: uuid("donor_id").references(() => donors.id, { onDelete: 'set null' }),
+  refundedAmount: integer("refunded_amount").notNull(),
+  fullRefund: boolean("full_refund").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  tenantPaymentIdx: index("payment_refund_accounting_tenant_payment_idx")
+    .on(table.tenantId, table.paymentId),
+}));
+
+export type PaymentRefundAccounting = typeof paymentRefundAccounting.$inferSelect;
+
 // Subscriptions table - recurring donation subscriptions
 export const subscriptions = pgTable("subscriptions", {
   id: uuid("id").primaryKey().defaultRandom(),

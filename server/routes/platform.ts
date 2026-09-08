@@ -17,6 +17,7 @@ import Stripe from 'stripe';
 import { z } from 'zod';
 import { resetDemoData } from '../lib/demo-reset';
 import { EmailService } from '../lib/email-service';
+import { buildStripeEconomicsReport } from '../lib/stripe-economics-report';
 
 // Initialize Stripe
 // In development, use test keys; in production, use live keys
@@ -435,6 +436,47 @@ router.get('/featured-rescues', async (req, res, next) => {
 
 // All other platform admin routes require authentication and platform admin role
 router.use(requireAuth, requirePlatformAdmin);
+
+const stripeEconomicsQuerySchema = z.object({
+  days: z.coerce.number().int().min(1).max(90).default(30),
+  limit: z.coerce.number().int().min(1).max(250).default(100),
+});
+
+/**
+ * GET /api/platform/stripe-economics
+ * Read-only, PII-free Stripe Connect economics report.
+ */
+router.get('/stripe-economics', async (req, res, next) => {
+  try {
+    const parsed = stripeEconomicsQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: 'Invalid report query',
+        details: parsed.error.flatten().fieldErrors,
+      });
+    }
+
+    const report = await buildStripeEconomicsReport(parsed.data.days, parsed.data.limit);
+    if (req.user) {
+      await createAuditLog({
+        userId: req.user.id,
+        tenantId: req.user.tenantId,
+        action: 'stripe_economics_report_view',
+        entityType: 'platform_report',
+        entityId: 'stripe_economics',
+        metadata: {
+          days: parsed.data.days,
+          limit: parsed.data.limit,
+          resultCount: report.resultCount,
+        },
+        req,
+      });
+    }
+    res.json(report);
+  } catch (error) {
+    next(error);
+  }
+});
 
 /**
  * POST /api/platform/demo/reset

@@ -31,3 +31,4 @@
 - [Public lead contact safety](public-lead-contact-safety.md) — anonymous forms must preserve existing contact identity and atomically dedupe lead side effects.
 - [Staged media cleanup races](staged-media-cleanup-races.md) — cleanup and new references must share one parent-record lock plus in-lock object re-verification.
 - [Facebook sharing on iOS](facebook-sharing-ios.md) — share raffle URLs without attached files; Facebook reads the uploaded image from Open Graph metadata.
+- [Destination-charge economics](destination-charge-economics.md) — route whenever a destination exists; keep processing recovery separate; reconcile disputes from actual Stripe cashflows.

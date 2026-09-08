@@ -499,8 +499,8 @@ export default function FundraisersPage() {
 
             <div className="flex items-center justify-between gap-2 rounded-md border p-3">
               <div className="space-y-0.5">
-                <Label htmlFor="pass-fees" className="text-sm font-medium">Pass processing fees to buyer</Label>
-                <p className="text-xs text-muted-foreground">Stripe fees will be added to the buyer's total so the rescue receives the full listed price</p>
+                <Label htmlFor="pass-fees" className="text-sm font-medium">Pass transaction costs to buyer</Label>
+                <p className="text-xs text-muted-foreground">Estimated payment and service costs will be added so the rescue receives the full listed price</p>
               </div>
               <Switch
                 id="pass-fees"

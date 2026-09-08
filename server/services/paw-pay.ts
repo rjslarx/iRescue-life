@@ -44,6 +44,8 @@ import {
   getPlatformConfig,
   getPlatformFeePercent,
   calculatePlatformFee,
+  calculateDestinationChargeEconomics,
+  getDestinationChargeEconomicsMetadata,
   getStripeConnectPlatformAccountId,
   isStripeConnectConfigured,
   getPlatformStripeSecretKey,
@@ -144,6 +146,31 @@ async function getTenantById(tenantId: string): Promise<Tenant | null> {
 }
 
 /**
+ * Apply destination-charge routing and retain both components that belong on
+ * the platform: iRescue revenue and the Stripe processing-cost estimate.
+ * Routing must never depend on the iRescue revenue component being positive.
+ */
+export function applyDestinationChargeEconomics(
+  paymentIntentParams: Stripe.PaymentIntentCreateParams,
+  connectedAccountId: string,
+  grossAmountCents: number,
+  iRescueRevenueCents: number,
+): void {
+  const economics = calculateDestinationChargeEconomics(
+    grossAmountCents,
+    iRescueRevenueCents,
+  );
+
+  paymentIntentParams.on_behalf_of = connectedAccountId;
+  paymentIntentParams.transfer_data = { destination: connectedAccountId };
+  paymentIntentParams.application_fee_amount = economics.applicationFeeTotalCents;
+  paymentIntentParams.metadata = {
+    ...(paymentIntentParams.metadata || {}),
+    ...getDestinationChargeEconomicsMetadata(economics),
+  };
+}
+
+/**
  * Process a donation payment with platform fee logic
  * 
  * This function handles the payment flow with platform fees:
@@ -155,7 +182,7 @@ async function getTenantById(tenantId: string): Promise<Tenant | null> {
  * 
  * Donor Covers Fees: If params.donorCoversFees is true, the charge amount
  * is grossed-up to include both Stripe processing fees and platform fees,
- * so the rescue receives 100% of the intended donation amount.
+ * so the rescue receives the intended donation amount after transaction costs.
  */
 export async function processDonationPayment(
   params: DonationPaymentParams
@@ -210,7 +237,7 @@ export async function processDonationPayment(
         platformFeeAmount,
         platformFeePercent,
         platformFeeCollected: false,
-        donorCoveredFees,
+        donorCoveredFees: donorCoversFees,
         feesCoveredAmount,
         chargeAmount,
         baseAmount: params.amount,
@@ -243,7 +270,7 @@ export async function processDonationPayment(
         platformFeeAmount,
         platformFeePercent,
         platformFeeCollected: false,
-        donorCoveredFees,
+        donorCoveredFees: donorCoversFees,
         feesCoveredAmount,
         chargeAmount,
         baseAmount: params.amount,
@@ -275,14 +302,14 @@ export async function processDonationPayment(
       },
     };
 
-    // Apply Stripe Connect parameters if configured
-    if (useStripeConnect && tenantConnectedAccountId && platformFeeAmount > 0) {
-      // Destination charge: funds go to tenant's connected account
-      // minus the application fee which stays with platform
-      paymentIntentParams.application_fee_amount = platformFeeAmount;
-      paymentIntentParams.transfer_data = {
-        destination: tenantConnectedAccountId,
-      };
+    // Apply Stripe Connect destination routing even when iRescue's fee is 0%.
+    if (useStripeConnect && tenantConnectedAccountId) {
+      applyDestinationChargeEconomics(
+        paymentIntentParams,
+        tenantConnectedAccountId,
+        chargeAmount,
+        platformFeeAmount,
+      );
     } else if (!useStripeConnect && platformFeeAmount > 0) {
       // Log that fees are calculated but not collected
       console.log(`[Paw Pay] Donation to ${tenant.name}: $${(params.amount / 100).toFixed(2)}`);
@@ -298,7 +325,7 @@ export async function processDonationPayment(
       platformFeeAmount,
       platformFeePercent,
       platformFeeCollected: useStripeConnect,
-      donorCoveredFees,
+      donorCoveredFees: donorCoversFees,
       feesCoveredAmount,
       chargeAmount,
       baseAmount: params.amount,
@@ -375,7 +402,7 @@ export async function processAdoptionFeePayment(
         platformFeeAmount,
         platformFeePercent,
         platformFeeCollected: false,
-        donorCoveredFees,
+        donorCoveredFees: donorCoversFees,
         feesCoveredAmount,
         chargeAmount,
         baseAmount: params.amount,
@@ -405,7 +432,7 @@ export async function processAdoptionFeePayment(
         platformFeeAmount,
         platformFeePercent,
         platformFeeCollected: false,
-        donorCoveredFees,
+        donorCoveredFees: donorCoversFees,
         feesCoveredAmount,
         chargeAmount,
         baseAmount: params.amount,
@@ -441,11 +468,13 @@ export async function processAdoptionFeePayment(
       },
     };
 
-    if (useStripeConnect && tenantConnectedAccountId && platformFeeAmount > 0) {
-      paymentIntentParams.application_fee_amount = platformFeeAmount;
-      paymentIntentParams.transfer_data = {
-        destination: tenantConnectedAccountId,
-      };
+    if (useStripeConnect && tenantConnectedAccountId) {
+      applyDestinationChargeEconomics(
+        paymentIntentParams,
+        tenantConnectedAccountId,
+        chargeAmount,
+        platformFeeAmount,
+      );
     } else if (!useStripeConnect && platformFeeAmount > 0) {
       console.log(`[Paw Pay] Adoption fee for ${tenant.name}: $${(params.amount / 100).toFixed(2)}`);
       console.log(`[Paw Pay] Platform fee: $${(platformFeeAmount / 100).toFixed(2)} (${platformFeePercent}%) - NOT COLLECTED (Stripe Connect not configured)`);
@@ -460,7 +489,7 @@ export async function processAdoptionFeePayment(
       platformFeeAmount,
       platformFeePercent,
       platformFeeCollected: useStripeConnect,
-      donorCoveredFees,
+      donorCoveredFees: donorCoversFees,
       feesCoveredAmount,
       chargeAmount,
       baseAmount: params.amount,
@@ -588,11 +617,13 @@ export async function processShopPayment(
       },
     };
 
-    if (useStripeConnect && tenantConnectedAccountId && platformFeeAmount > 0) {
-      paymentIntentParams.application_fee_amount = platformFeeAmount;
-      paymentIntentParams.transfer_data = {
-        destination: tenantConnectedAccountId,
-      };
+    if (useStripeConnect && tenantConnectedAccountId) {
+      applyDestinationChargeEconomics(
+        paymentIntentParams,
+        tenantConnectedAccountId,
+        amount,
+        platformFeeAmount,
+      );
     } else if (!useStripeConnect && platformFeeAmount > 0) {
       console.log(`[Paw Pay] Shop order for ${tenant.name}: $${(amount / 100).toFixed(2)}`);
       console.log(`[Paw Pay] Platform fee: $${(platformFeeAmount / 100).toFixed(2)} (${platformFeePercent}%) - NOT COLLECTED (Stripe Connect not configured)`);

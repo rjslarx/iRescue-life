@@ -11,7 +11,7 @@ import {
   SidebarFooter,
 } from "@/components/ui/sidebar";
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, Building2, Users, Settings, LogOut, Flag, FileText, Megaphone, Activity, BookOpen, Video, Globe } from "lucide-react";
+import { LayoutDashboard, Building2, Users, Settings, LogOut, Flag, FileText, Megaphone, Activity, BookOpen, Video, Globe, BadgeDollarSign } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -52,6 +52,11 @@ const navigationItems = [
     title: "System Health",
     url: "/platform/health",
     icon: Activity,
+  },
+  {
+    title: "Stripe Economics",
+    url: "/platform/stripe-economics",
+    icon: BadgeDollarSign,
   },
   {
     title: "Settings",

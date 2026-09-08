@@ -413,11 +413,11 @@ export default function DonationForm({ sponsoredAnimalName, tenant, campaignTag,
                   <div className="flex items-center gap-2 mb-1">
                     <HeartHandshake className="h-4 w-4 text-primary" />
                     <span className="text-sm font-medium">
-                      Add ${feesCoveredDisplay} to cover processing fees
+                      Add ${feesCoveredDisplay} to cover transaction costs
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    100% of your ${amount || customAmount || '0'} donation goes directly to helping animals
+                    Helps the rescue receive your full intended ${amount || customAmount || '0'} gift
                   </p>
                 </label>
               </div>

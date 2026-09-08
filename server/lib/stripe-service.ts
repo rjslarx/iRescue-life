@@ -1,7 +1,12 @@
 import Stripe from 'stripe';
 import { decrypt } from './encryption';
 import type { Tenant } from '@shared/schema';
-import { getPlatformStripeSecretKey } from '../config/platform';
+import {
+  calculateDestinationChargeEconomics,
+  calculateSubscriptionApplicationFeePercent,
+  getDestinationChargeEconomicsMetadata,
+  getPlatformStripeSecretKey,
+} from '../config/platform';
 import { isAchEligible, type AchSurface } from '@shared/ach-eligibility';
 
 /**
@@ -94,6 +99,19 @@ export class StripeService {
     }
   }
 
+  getPlatformStripeClient(): Stripe | null {
+    const platformKey = getPlatformStripeKey();
+    if (!platformKey) return null;
+    const cachedClient = this.stripeClients.get('__platform__');
+    if (cachedClient) return cachedClient;
+    const client = new Stripe(platformKey, {
+      apiVersion: '2025-09-30.clover',
+      typescript: true,
+    });
+    this.stripeClients.set('__platform__', client);
+    return client;
+  }
+
   clearCache(tenantId: string) {
     this.stripeClients.delete(tenantId);
   }
@@ -121,16 +139,8 @@ export class StripeService {
     const direct = this.getStripeClient(tenant as Tenant);
     if (direct) contexts.push({ stripe: direct, stripeArgs: {}, label: 'tenant-key' });
 
-    const platformKey = getPlatformStripeKey();
-    if (platformKey) {
-      let platformClient = this.stripeClients.get('__platform__');
-      if (!platformClient) {
-        platformClient = new Stripe(platformKey, {
-          apiVersion: '2025-09-30.clover',
-          typescript: true,
-        });
-        this.stripeClients.set('__platform__', platformClient);
-      }
+    const platformClient = this.getPlatformStripeClient();
+    if (platformClient) {
       if (tenant.stripeConnectedAccountId) {
         contexts.push({
           stripe: platformClient,
@@ -220,25 +230,27 @@ export class StripeService {
   ): Promise<Stripe.Checkout.Session | null> {
     // Determine which Stripe client to use
     let stripe: Stripe;
-    const platformKey = getPlatformStripeKey();
+    const platformStripe = this.getPlatformStripeClient();
     
     // Check if tenant has their own Stripe key configured
     const tenantHasOwnStripeKey = tenant.stripeEnabled && tenant.stripeSecretKeyEncrypted;
-    const useStripeConnect = Boolean(params.connectedAccountId && platformKey);
-    const collectPlatformFee = useStripeConnect && params.platformFeeAmount && params.platformFeeAmount > 0;
+    const useStripeConnect = Boolean(params.connectedAccountId && platformStripe);
+    const economics = useStripeConnect
+      ? calculateDestinationChargeEconomics(params.amount, params.platformFeeAmount ?? 0)
+      : null;
+    const economicsMetadata = economics
+      ? getDestinationChargeEconomicsMetadata(economics)
+      : {};
 
-    if (useStripeConnect && platformKey) {
-      stripe = new Stripe(platformKey, {
-        apiVersion: '2025-09-30.clover',
-        typescript: true,
-      });
+    if (useStripeConnect && platformStripe) {
+      stripe = platformStripe;
     } else if (tenantHasOwnStripeKey) {
       const tenantStripe = this.getStripeClient(tenant);
       if (!tenantStripe) {
         throw new Error('Failed to initialize tenant Stripe client');
       }
       stripe = tenantStripe;
-    } else if (params.connectedAccountId && !platformKey) {
+    } else if (params.connectedAccountId && !platformStripe) {
       throw new Error(
         'This organization uses Stripe Connect but the platform Stripe key is not configured. ' +
         'Please set PLATFORM_STRIPE_SECRET_KEY environment variable to enable donations.'
@@ -276,6 +288,7 @@ export class StripeService {
       metadata: {
         tenantId: tenant.id,
         ...params.metadata,
+        ...economicsMetadata,
         achSurface: surface,
         achOffered: offerAch ? 'true' : 'false',
       },
@@ -330,6 +343,7 @@ export class StripeService {
         metadata: {
           tenantId: tenant.id,
           ...(params.metadata || {}),
+          ...economicsMetadata,
         },
         // Subscription must accept us_bank_account when ACH is offered.
         ...(offerAch ? {
@@ -343,10 +357,14 @@ export class StripeService {
           transfer_data: {
             destination: params.connectedAccountId,
           },
-          // Apply platform fee percent for recurring payments (only if fee > 0)
-          // Stripe requires application_fee_percent to have at most 2 decimal places
-          ...(collectPlatformFee && params.platformFeeAmount ? {
-            application_fee_percent: Math.round((params.platformFeeAmount / params.amount) * 10000) / 100,
+          // Destination-charge processing costs are debited from iRescue.
+          // Retain their estimate separately from iRescue revenue, even for a
+          // paid tenant whose own platform fee is 0%.
+          ...(economics && economics.applicationFeeTotalCents > 0 ? {
+            application_fee_percent: calculateSubscriptionApplicationFeePercent(
+              params.amount,
+              economics.applicationFeeTotalCents,
+            ),
           } : {}),
         } : {}),
       };
@@ -372,8 +390,13 @@ export class StripeService {
             destination: params.connectedAccountId,
           },
           statement_descriptor_suffix: toStripeStatementDescriptor(tenant.name),
-          ...(collectPlatformFee && params.platformFeeAmount ? {
-            application_fee_amount: params.platformFeeAmount,
+          metadata: {
+            tenantId: tenant.id,
+            ...(params.metadata || {}),
+            ...economicsMetadata,
+          },
+          ...(economics && economics.applicationFeeTotalCents > 0 ? {
+            application_fee_amount: economics.applicationFeeTotalCents,
           } : {}),
         };
       } else {
@@ -413,19 +436,21 @@ export class StripeService {
     }
   ): Promise<Stripe.PaymentIntent> {
     let stripe: Stripe;
-    const platformKey = getPlatformStripeKey();
+    const platformStripe = this.getPlatformStripeClient();
     
     // Check if tenant has their own Stripe key configured
     const tenantHasOwnStripeKey = tenant.stripeEnabled && tenant.stripeSecretKeyEncrypted;
     
-    const useStripeConnect = Boolean(params.connectedAccountId && platformKey);
-    const collectPlatformFee = useStripeConnect && params.platformFeeAmount && params.platformFeeAmount > 0;
+    const useStripeConnect = Boolean(params.connectedAccountId && platformStripe);
+    const economics = useStripeConnect
+      ? calculateDestinationChargeEconomics(params.amount, params.platformFeeAmount ?? 0)
+      : null;
+    const economicsMetadata = economics
+      ? getDestinationChargeEconomicsMetadata(economics)
+      : {};
 
-    if (useStripeConnect && platformKey) {
-      stripe = new Stripe(platformKey, {
-        apiVersion: '2025-09-30.clover',
-        typescript: true,
-      });
+    if (useStripeConnect && platformStripe) {
+      stripe = platformStripe;
     } else if (tenantHasOwnStripeKey) {
       const tenantStripe = this.getStripeClient(tenant);
       if (!tenantStripe) {
@@ -448,18 +473,21 @@ export class StripeService {
       metadata: {
         tenantId: tenant.id,
         ...params.metadata,
+        ...economicsMetadata,
       },
     };
     
-    // Add Stripe Connect destination charge with platform fee if applicable
+    // Destination routing is independent from iRescue's own fee. Paid tenants
+    // still need transfer_data, and Stripe still debits processing costs from
+    // the platform balance.
     if (useStripeConnect && params.connectedAccountId) {
+      paymentIntentParams.on_behalf_of = params.connectedAccountId;
       paymentIntentParams.transfer_data = {
         destination: params.connectedAccountId,
       };
       
-      // Add application fee if there is one (free tier has fee, pro tier has 0)
-      if (collectPlatformFee && params.platformFeeAmount) {
-        paymentIntentParams.application_fee_amount = params.platformFeeAmount;
+      if (economics && economics.applicationFeeTotalCents > 0) {
+        paymentIntentParams.application_fee_amount = economics.applicationFeeTotalCents;
       }
     }
 

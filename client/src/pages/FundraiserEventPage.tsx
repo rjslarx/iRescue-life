@@ -401,7 +401,7 @@ export default function FundraiserEventPage() {
                 <span className="text-xl font-bold" data-testid="text-order-total">{formatCents(total)}</span>
               </div>
               {event.passFeesToBuyer && (
-                <p className="text-xs text-muted-foreground" data-testid="text-fees-notice">Processing fees will be added at checkout so the full amount goes to the rescue.</p>
+                <p className="text-xs text-muted-foreground" data-testid="text-fees-notice">Estimated transaction costs will be added at checkout so the rescue receives the full listed price.</p>
               )}
             </div>
 

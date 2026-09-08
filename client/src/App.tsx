@@ -160,6 +160,7 @@ import SystemHealthPage from "@/pages/platform/SystemHealthPage";
 import PlatformSettingsPage from "@/pages/platform/PlatformSettingsPage";
 import PlatformGlobalContentPage from "@/pages/platform/PlatformGlobalContentPage";
 import PlatformVideoScriptPage from "@/pages/platform/PlatformVideoScriptPage";
+import StripeEconomicsPage from "@/pages/platform/StripeEconomicsPage";
 import PlatformPricingPage from "@/pages/PlatformPricingPage";
 import PlatformLoginPage from "@/pages/platform/PlatformLoginPage";
 import PlatformForgotPasswordPage from "@/pages/platform/PlatformForgotPasswordPage";
@@ -236,6 +237,7 @@ function RouterSwitch() {
       <Route path="/platform/settings" component={PlatformSettingsPage} />
       <Route path="/platform/global-content" component={PlatformGlobalContentPage} />
       <Route path="/platform/video-scripts" component={PlatformVideoScriptPage} />
+      <Route path="/platform/stripe-economics" component={StripeEconomicsPage} />
       <Route path="/platform/mfa-setup" component={MfaSetup} />
       <Route path="/platform/login" component={PlatformLoginPage} />
       <Route path="/platform/forgot-password" component={PlatformForgotPasswordPage} />

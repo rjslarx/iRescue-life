@@ -9,7 +9,7 @@ import { registerReceiptSignatureRoutes } from "./routes/receipt-signature";
 import { loginUser, createTenantWithAdmin, createUser } from "./services/auth";
 import { PushNotificationService } from "./services/push-notifications";
 import { db } from "./db";
-import { tenants, users, demoRequests, insertDemoRequestSchema, smsMessageLogs, emailEvents, animals, animalProfileSubmissions, platformIntegrations, newsletterCampaigns, newsletterSubscribers, happyTails, animalMergeHistory, activityLogs, medicalExams, medicalPrescriptions, medicalBills, medicalFiles, animalNotes, applications, adoptionCheckoutSessions, adoptions, partnerOrganizations, microchipRecords, surrenderRequests, surrenderFormFields, insertSurrenderRequestSchema, insertSurrenderFormFieldSchema, inboundEmails, calendars, careInstructionSnippets, fosterApplications, volunteerApplications, adoptionContracts, fosterAgreementSessions, volunteerAgreementSessions, surrenderAgreementSessions, customFormSubmissions, customForms, placementAgreementSessions, medicationTasks, medicationPlans, fosterAnimals, messageQueue, contacts, campaignIntakeTokens, surgeryDayRequests, surgeryDayRequestAnimals, formSettings, customPages, shopProducts, peerCampaigns, expenseCampaigns, votingContests, subscriptions, donationLinks as donationLinksTable, MAX_ANIMAL_PHOTOS } from "@shared/schema";
+import { tenants, users, demoRequests, insertDemoRequestSchema, smsMessageLogs, emailEvents, animals, animalProfileSubmissions, platformIntegrations, newsletterCampaigns, newsletterSubscribers, happyTails, animalMergeHistory, activityLogs, medicalExams, medicalPrescriptions, medicalBills, medicalFiles, animalNotes, applications, adoptionCheckoutSessions, adoptions, partnerOrganizations, microchipRecords, surrenderRequests, surrenderFormFields, insertSurrenderRequestSchema, insertSurrenderFormFieldSchema, inboundEmails, calendars, careInstructionSnippets, fosterApplications, volunteerApplications, adoptionContracts, fosterAgreementSessions, volunteerAgreementSessions, surrenderAgreementSessions, customFormSubmissions, customForms, placementAgreementSessions, medicationTasks, medicationPlans, fosterAnimals, messageQueue, contacts, campaignIntakeTokens, surgeryDayRequests, surgeryDayRequestAnimals, formSettings, customPages, shopProducts, peerCampaigns, expenseCampaigns, votingContests, subscriptions, payments, donors, paymentRefundAccounting, donationLinks as donationLinksTable, MAX_ANIMAL_PHOTOS } from "@shared/schema";
 import { eq, and, desc, asc, sql, inArray, lt, lte, gte, not, notInArray, or, ne, isNull, isNotNull } from "drizzle-orm";
 import { z } from "zod";
 import { authLimiter, signupLimiter, passwordResetLimiter, emailLimiter } from "./config/security";
@@ -19697,16 +19697,17 @@ ${renderedHtml}
         )).limit(1);
         payment = p;
       } else {
-        const [p] = await db.select().from(payments).where(and(
+        const candidates = await db.select().from(payments).where(and(
           eq(payments.tenantId, tenant.id),
           eq(payments.subscriptionId, sub.id),
-          eq(payments.status, 'succeeded'),
-        )).orderBy(desc(payments.createdAt)).limit(1);
-        payment = p;
+          inArray(payments.status, ['succeeded', 'refunded']),
+        )).orderBy(desc(payments.createdAt));
+        const { selectLatestRefundableVipPayment } =
+          await import('./lib/stripe-dispute-handling');
+        payment = selectLatestRefundableVipPayment(candidates);
       }
       if (!payment) return res.status(404).json({ error: 'No refundable payment found for this subscription' });
       if (payment.status === 'refunded') return res.status(409).json({ error: 'Payment already refunded' });
-
       const { stripeService } = await import('./lib/stripe-service');
       if (stripeService.getStripeContextsForTenant(tenant).length === 0) {
         return res.status(400).json({ error: 'Stripe is not configured for this rescue' });
@@ -19732,8 +19733,33 @@ ${renderedHtml}
       // Resolve a charge or payment_intent for the refund.
       const refundParams: Stripe.RefundCreateParams = { reason };
       if (amount) refundParams.amount = amount;
+      let isDestinationCharge = false;
+      let hasApplicationFee = false;
+      let destinationCharge: Stripe.Charge | null = null;
       if (payment.stripePaymentIntentId) {
         refundParams.payment_intent = payment.stripePaymentIntentId;
+        const paymentIntent = await stripe.paymentIntents.retrieve(
+          payment.stripePaymentIntentId,
+          { expand: ['latest_charge'] },
+          opts,
+        );
+        isDestinationCharge = !!paymentIntent.transfer_data;
+        hasApplicationFee = !!paymentIntent.application_fee_amount;
+        const paymentIntentWithCharge = paymentIntent as Stripe.PaymentIntent & {
+          latest_charge?: string | Stripe.Charge | null;
+        };
+        const latestCharge = paymentIntentWithCharge.latest_charge;
+        if (latestCharge) {
+          const charge = typeof latestCharge === 'string'
+            ? await stripe.charges.retrieve(latestCharge, {
+              expand: ['transfer', 'application_fee'],
+            }, opts)
+            : latestCharge;
+          if (charge.transfer) destinationCharge = charge;
+          isDestinationCharge = !!charge.transfer || isDestinationCharge;
+          hasApplicationFee =
+            !!charge.application_fee || !!charge.application_fee_amount || hasApplicationFee;
+        }
       } else if (payment.stripeInvoiceId) {
         const invoice = await stripe.invoices.retrieve(payment.stripeInvoiceId, opts);
         // The Stripe TS types omit `charge` / `payment_intent` from the Invoice
@@ -19742,20 +19768,95 @@ ${renderedHtml}
           charge?: string | Stripe.Charge | null;
           payment_intent?: string | Stripe.PaymentIntent | null;
         };
-        const chargeId = typeof invoiceWithIds.charge === 'string'
+        let chargeId = typeof invoiceWithIds.charge === 'string'
           ? invoiceWithIds.charge
           : invoiceWithIds.charge?.id;
-        const piId = typeof invoiceWithIds.payment_intent === 'string'
+        let piId = typeof invoiceWithIds.payment_intent === 'string'
           ? invoiceWithIds.payment_intent
           : invoiceWithIds.payment_intent?.id;
-        if (chargeId) refundParams.charge = chargeId;
-        else if (piId) refundParams.payment_intent = piId;
+        if (!chargeId && !piId) {
+          const invoicePayments = await stripe.invoicePayments.list({
+            invoice: invoice.id,
+            status: 'paid',
+            limit: 100,
+          }, opts);
+          const invoicePayment = invoicePayments.data.find(item =>
+            item.payment?.payment_intent || item.payment?.charge,
+          );
+          const paymentIntentReference = invoicePayment?.payment?.payment_intent;
+          const chargeReference = invoicePayment?.payment?.charge;
+          piId = typeof paymentIntentReference === 'string'
+            ? paymentIntentReference
+            : paymentIntentReference?.id;
+          chargeId = typeof chargeReference === 'string'
+            ? chargeReference
+            : chargeReference?.id;
+        }
+        if (chargeId) {
+          refundParams.charge = chargeId;
+          const charge = await stripe.charges.retrieve(chargeId, {
+            expand: ['transfer', 'application_fee'],
+          }, opts);
+          isDestinationCharge = !!charge.transfer;
+          hasApplicationFee = !!charge.application_fee || !!charge.application_fee_amount;
+          if (charge.transfer) destinationCharge = charge;
+        } else if (piId) {
+          refundParams.payment_intent = piId;
+          const paymentIntent = await stripe.paymentIntents.retrieve(
+            piId,
+            { expand: ['latest_charge'] },
+            opts,
+          );
+          isDestinationCharge = !!paymentIntent.transfer_data;
+          hasApplicationFee = !!paymentIntent.application_fee_amount;
+          const paymentIntentWithCharge = paymentIntent as Stripe.PaymentIntent & {
+            latest_charge?: string | Stripe.Charge | null;
+          };
+          const latestCharge = paymentIntentWithCharge.latest_charge;
+          if (latestCharge) {
+            const charge = typeof latestCharge === 'string'
+              ? await stripe.charges.retrieve(latestCharge, {
+                expand: ['transfer', 'application_fee'],
+              }, opts)
+              : latestCharge;
+            if (charge.transfer) destinationCharge = charge;
+            isDestinationCharge = !!charge.transfer || isDestinationCharge;
+            hasApplicationFee =
+              !!charge.application_fee || !!charge.application_fee_amount || hasApplicationFee;
+          }
+        }
         else return res.status(400).json({ error: 'No Stripe charge available to refund for this payment' });
       } else {
         return res.status(400).json({ error: 'No Stripe identifier available to refund this payment' });
       }
 
-      const refund: Stripe.Refund = await stripe.refunds.create(refundParams, opts);
+      // Destination-charge refunds otherwise debit iRescue while leaving the
+      // rescue transfer in place. Reverse the transfer and refund the combined
+      // application fee (iRescue revenue + processing recovery) proportionally.
+      const {
+        applyDestinationChargeRefundBehavior,
+        createOrResumeRestorationAwareDestinationRefund,
+        markRestorationAwareDestinationRefundComplete,
+      } = await import('./lib/stripe-dispute-handling');
+      let usedRestorationAwareRecovery = false;
+      let refund: Stripe.Refund | null = null;
+      if (destinationCharge) {
+        refund = await createOrResumeRestorationAwareDestinationRefund(stripe, {
+          charge: destinationCharge,
+          paymentId: payment.id,
+          amountCents: amount,
+          reason,
+          requestOptions: opts,
+        });
+        usedRestorationAwareRecovery = !!refund;
+      }
+      if (!refund) {
+        applyDestinationChargeRefundBehavior(refundParams, {
+          isDestinationCharge,
+          hasApplicationFee,
+        });
+        refund = await stripe.refunds.create(refundParams, opts);
+      }
 
       const refundedAmount: number = refund.amount || amount || payment.amount;
 
@@ -19787,20 +19888,59 @@ ${renderedHtml}
       }
 
       const isFullRefund = cumulativeRefunded >= payment.amount;
-      await db.update(payments).set({
-        status: isFullRefund ? 'refunded' : payment.status,
-      }).where(eq(payments.id, payment.id));
+      const accountingApplied = await db.transaction(async tx => {
+        const [claim] = await tx
+          .insert(paymentRefundAccounting)
+          .values({
+            stripeRefundId: refund.id,
+            tenantId: tenant.id,
+            paymentId: payment.id,
+            donorId: payment.donorId,
+            refundedAmount,
+            fullRefund: isFullRefund,
+          })
+          .onConflictDoNothing({
+            target: paymentRefundAccounting.stripeRefundId,
+          })
+          .returning({ id: paymentRefundAccounting.id });
+        if (!claim) return false;
 
-      // Atomically decrement donor lifetime totals so concurrent refunds don't race.
-      if (payment.donorId) {
-        await db
-          .update(donors)
-          .set({ totalDonated: sql`GREATEST(0, ${donors.totalDonated} - ${refundedAmount})` })
-          .where(eq(donors.id, payment.donorId));
+        await tx.update(payments).set({
+          status: isFullRefund ? 'refunded' : payment.status,
+        }).where(eq(payments.id, payment.id));
+
+        if (payment.donorId) {
+          await tx
+            .update(donors)
+            .set({
+              totalDonated:
+                sql`GREATEST(0, ${donors.totalDonated} - ${refundedAmount})`,
+            })
+            .where(eq(donors.id, payment.donorId));
+        }
+        return true;
+      });
+
+      if (usedRestorationAwareRecovery) {
+        try {
+          await markRestorationAwareDestinationRefundComplete(
+            stripe,
+            refund.id,
+            opts,
+          );
+        } catch (error) {
+          // Money movement and local accounting are already complete. Keep the
+          // pending marker as a safe retry target rather than failing after an
+          // irreversible refund.
+          console.warn(
+            `[VIP Refund] Could not mark restoration-aware refund ${refund.id} complete`,
+            error,
+          );
+        }
       }
 
       const actorId = (req.user as { id?: string } | undefined)?.id || 'unknown';
-      console.log(`[VIP Refund] tenant=${tenant.id} sub=${sub.id} payment=${payment.id} amount=${refundedAmount} actor=${actorId} reason=${reason}`);
+      console.log(`[VIP Refund] tenant=${tenant.id} sub=${sub.id} payment=${payment.id} amount=${refundedAmount} actor=${actorId} reason=${reason} accountingApplied=${accountingApplied}`);
       res.json({
         success: true,
         refundId: refund.id,
@@ -31879,7 +32019,77 @@ Submitted: ${new Date().toLocaleString()}
       
       let metadata = payload.data?.object?.metadata || {};
       let tenantId = metadata.tenantId;
+      let event: Stripe.Event | undefined;
+      let verified = false;
+      let verifiedWithPlatformSecret = false;
       console.log(`[STRIPE-WEBHOOK] Metadata tenantId: ${tenantId || 'not found in metadata'}`);
+
+      // Dispute objects do not carry PaymentIntent metadata, and platform
+      // destination-charge events may not include a Connect `account`. Verify
+      // with a platform webhook secret first, then retrieve the charge to
+      // resolve the tenant without trusting the unverified payload.
+      const { shouldVerifyPlatformDisputeBeforeTenantGate } =
+        await import('./lib/stripe-dispute-handling');
+      if (shouldVerifyPlatformDisputeBeforeTenantGate(payload)) {
+        const platformWebhookSecrets = [
+          process.env.STRIPE_WEBHOOK_SECRET_PLATFORM,
+          process.env.PLATFORM_STRIPE_WEBHOOK_SECRET,
+          process.env.STRIPE_WEBHOOK_SECRET,
+        ].filter((secret): secret is string => !!secret);
+
+        for (const secret of platformWebhookSecrets) {
+          try {
+            event = await stripeService.handleWebhook(rawBody, signature, secret);
+            verified = true;
+            verifiedWithPlatformSecret = true;
+            break;
+          } catch {
+            // Try the next configured platform webhook secret.
+          }
+        }
+        if (verified && event) {
+          const dispute = event.data.object as Stripe.Dispute;
+          const chargeId = typeof dispute.charge === 'string'
+            ? dispute.charge
+            : dispute.charge?.id;
+          const { getPlatformStripeSecretKey } = await import('./config/platform');
+          const platformKey = getPlatformStripeSecretKey();
+          if (chargeId && platformKey) {
+            const StripeClient = (await import('stripe')).default;
+            const platformStripe = new StripeClient(platformKey, {
+              apiVersion: '2025-09-30.clover',
+            });
+            const charge = await platformStripe.charges.retrieve(chargeId, {
+              expand: ['transfer'],
+            });
+            metadata = charge.metadata || {};
+            tenantId = metadata.tenantId;
+
+            if (!tenantId) {
+              const expandedTransfer = typeof charge.transfer === 'object' ? charge.transfer : null;
+              const connectedAccountId = typeof charge.on_behalf_of === 'string'
+                ? charge.on_behalf_of
+                : charge.on_behalf_of?.id
+                  || (typeof expandedTransfer?.destination === 'string'
+                    ? expandedTransfer.destination
+                    : expandedTransfer?.destination?.id);
+              if (connectedAccountId) {
+                const [connectTenant] = await db
+                  .select({ id: tenants.id })
+                  .from(tenants)
+                  .where(eq(tenants.stripeConnectedAccountId, connectedAccountId))
+                  .limit(1);
+                tenantId = connectTenant?.id;
+              }
+            }
+          }
+        } else {
+          // Account-less tenant-owned dispute events cannot be safely
+          // attributed here. Preserve their existing account-owned behavior
+          // and perform no platform mutation.
+          console.log('[STRIPE-WEBHOOK] Metadata-less dispute was not signed by a platform endpoint; leaving it to the owning Stripe account');
+        }
+      }
 
       if (!tenantId && payload.data?.object?.subscription) {
         const subscriptionId = payload.data.object.subscription;
@@ -31923,24 +32133,36 @@ Submitted: ${new Date().toLocaleString()}
         .where(eq(tenants.id, tenantId))
         .limit(1);
 
-      if (!tenant || !tenant.stripeEnabled) {
-        console.error('[STRIPE-WEBHOOK] ERROR: Tenant not found or Stripe not enabled:', tenantId);
+      const isPlatformOwnedDisputeEvent = Boolean(
+        event
+        && !event.account
+        && event.type.startsWith('charge.dispute.')
+        && verifiedWithPlatformSecret,
+      );
+      const { canProcessStripeEventForTenant } =
+        await import('./lib/stripe-dispute-handling');
+      if (!canProcessStripeEventForTenant({
+        tenantExists: !!tenant,
+        stripeEnabled: !!tenant?.stripeEnabled,
+        isPlatformOwnedDisputeEvent,
+      })) {
+        console.error('[STRIPE-WEBHOOK] ERROR: Tenant not found or Stripe not enabled for this event:', tenantId);
         console.error(`[STRIPE-WEBHOOK]   tenant found: ${!!tenant}, stripeEnabled: ${tenant?.stripeEnabled}`);
         return res.status(400).send('Webhook not configured for this tenant');
       }
 
-      const secretsToTry: { secret: string; label: string }[] = [];
+      const secretsToTry: { secret: string; label: string; isPlatform: boolean }[] = [];
       if (tenant.stripeWebhookSecretEncrypted) {
-        secretsToTry.push({ secret: decrypt(tenant.stripeWebhookSecretEncrypted), label: `tenant-specific (${tenant.name})` });
+        secretsToTry.push({ secret: decrypt(tenant.stripeWebhookSecretEncrypted), label: `tenant-specific (${tenant.name})`, isPlatform: false });
       }
       if (process.env.PLATFORM_STRIPE_WEBHOOK_SECRET) {
-        secretsToTry.push({ secret: process.env.PLATFORM_STRIPE_WEBHOOK_SECRET, label: 'PLATFORM_STRIPE_WEBHOOK_SECRET (Connected accounts)' });
+        secretsToTry.push({ secret: process.env.PLATFORM_STRIPE_WEBHOOK_SECRET, label: 'PLATFORM_STRIPE_WEBHOOK_SECRET (Connected accounts)', isPlatform: true });
       }
       if (process.env.STRIPE_WEBHOOK_SECRET_PLATFORM) {
-        secretsToTry.push({ secret: process.env.STRIPE_WEBHOOK_SECRET_PLATFORM, label: 'STRIPE_WEBHOOK_SECRET_PLATFORM (Your account)' });
+        secretsToTry.push({ secret: process.env.STRIPE_WEBHOOK_SECRET_PLATFORM, label: 'STRIPE_WEBHOOK_SECRET_PLATFORM (Your account)', isPlatform: true });
       }
       if (process.env.STRIPE_WEBHOOK_SECRET) {
-        secretsToTry.push({ secret: process.env.STRIPE_WEBHOOK_SECRET, label: 'STRIPE_WEBHOOK_SECRET (legacy)' });
+        secretsToTry.push({ secret: process.env.STRIPE_WEBHOOK_SECRET, label: 'STRIPE_WEBHOOK_SECRET (legacy)', isPlatform: true });
       }
 
       if (secretsToTry.length === 0) {
@@ -31950,16 +32172,17 @@ Submitted: ${new Date().toLocaleString()}
 
       console.log(`[STRIPE-WEBHOOK] Tenant ${tenant.name} (${tenant.subdomain}) has Stripe configured, ${secretsToTry.length} secret(s) to try`);
 
-      let event;
-      let verified = false;
-      for (const { secret, label } of secretsToTry) {
-        try {
-          event = await stripeService.handleWebhook(rawBody, signature, secret);
-          console.log(`[STRIPE-WEBHOOK] Event verified successfully with ${label}: ${event.type}`);
-          verified = true;
-          break;
-        } catch (err: any) {
-          console.log(`[STRIPE-WEBHOOK] Verification failed with ${label}: ${err.message}`);
+      if (!verified) {
+        for (const { secret, label, isPlatform } of secretsToTry) {
+          try {
+            event = await stripeService.handleWebhook(rawBody, signature, secret);
+            console.log(`[STRIPE-WEBHOOK] Event verified successfully with ${label}: ${event.type}`);
+            verified = true;
+            verifiedWithPlatformSecret = isPlatform;
+            break;
+          } catch (err: any) {
+            console.log(`[STRIPE-WEBHOOK] Verification failed with ${label}: ${err.message}`);
+          }
         }
       }
 
@@ -31969,6 +32192,67 @@ Submitted: ${new Date().toLocaleString()}
       }
 
       switch (event.type) {
+        case 'charge.dispute.created':
+        case 'charge.dispute.funds_withdrawn': {
+          // Direct-charge disputes belong to the connected account and arrive
+          // with event.account. This handler is intentionally limited to
+          // platform-owned destination charges.
+          if (event.account) {
+            console.log(`[STRIPE-WEBHOOK] Direct-charge dispute ${event.id} remains the connected account's responsibility`);
+            break;
+          }
+          const { getPlatformStripeSecretKey } = await import('./config/platform');
+          const platformKey = getPlatformStripeSecretKey();
+          if (!platformKey) throw new Error('Platform Stripe key unavailable for dispute recovery');
+          const StripeClient = (await import('stripe')).default;
+          const platformStripe = new StripeClient(platformKey, {
+            apiVersion: '2025-09-30.clover',
+          });
+          const { handleDestinationChargeDisputeCreated } = await import('./lib/stripe-dispute-handling');
+          try {
+            const result = await handleDestinationChargeDisputeCreated(
+              platformStripe,
+              event.data.object as Stripe.Dispute,
+            );
+            console.log(
+              `[STRIPE-WEBHOOK] Destination dispute recovery action=${result.action} amount=${result.amountCents}`,
+            );
+          } catch (error: any) {
+            if (error?.type === 'StripeInvalidRequestError' && error?.code === 'resource_missing') {
+              console.log('[STRIPE-WEBHOOK] Dispute charge is not platform-owned; no destination transfer recovery needed');
+              break;
+            }
+            throw error;
+          }
+          break;
+        }
+
+        case 'charge.dispute.closed':
+        case 'charge.dispute.funds_reinstated': {
+          if (event.account) break;
+          const dispute = event.data.object as Stripe.Dispute;
+          const { getPlatformStripeSecretKey } = await import('./config/platform');
+          const platformKey = getPlatformStripeSecretKey();
+          if (!platformKey) throw new Error('Platform Stripe key unavailable for dispute restoration');
+          const StripeClient = (await import('stripe')).default;
+          const platformStripe = new StripeClient(platformKey, {
+            apiVersion: '2025-09-30.clover',
+          });
+          const { handleDestinationChargeDisputeClosed } = await import('./lib/stripe-dispute-handling');
+          try {
+            const result = await handleDestinationChargeDisputeClosed(platformStripe, dispute);
+            console.log(
+              `[STRIPE-WEBHOOK] Dispute reinstatement action=${result.action} amount=${result.amountCents}`,
+            );
+          } catch (error: any) {
+            if (error?.type === 'StripeInvalidRequestError' && error?.code === 'resource_missing') {
+              break;
+            }
+            throw error;
+          }
+          break;
+        }
+
         case 'payment_intent.succeeded': {
           const paymentIntent = event.data.object as Stripe.PaymentIntent;
           const shopOrderId = paymentIntent.metadata?.orderId;
@@ -48311,7 +48595,7 @@ Use timestamps like [00:00] to help with pacing.`;
   app.post('/api/event-tickets/checkout', requireTenant, async (req, res, next) => {
     try {
       const { eventTickets } = await import('@shared/schema');
-      const { calculateDonorCoversFees } = await import('./config/platform');
+      const { calculateDonorCoversFees, calculatePlatformFee } = await import('./config/platform');
       
       const checkoutSchema = z.object({
         eventId: z.string().uuid(),
@@ -48356,14 +48640,17 @@ Use timestamps like [00:00] to help with pacing.`;
       // Calculate total amount
       const baseAmount = ticket.pricePerTicket * quantity;
       let finalAmount = baseAmount;
-      let platformFeeAmount = 0;
 
       if (donorCoversFees) {
         const subscriptionTier = tenant.subscriptionTier || 'free';
         const feeCalc = calculateDonorCoversFees(baseAmount, subscriptionTier, tenant.platformFeePercent);
         finalAmount = feeCalc.totalAmount;
-        platformFeeAmount = feeCalc.platformFee;
       }
+      const platformFeeAmount = calculatePlatformFee(
+        finalAmount,
+        tenant.subscriptionTier || 'free',
+        tenant.platformFeePercent,
+      );
 
       // Create Stripe checkout session
       const { stripeService } = await import('./lib/stripe-service');
@@ -48391,8 +48678,10 @@ Use timestamps like [00:00] to help with pacing.`;
           quantity: quantity.toString(),
           donorCoversFees: donorCoversFees.toString(),
           baseAmount: baseAmount.toString(),
+          chargeAmount: finalAmount.toString(),
+          platformFeeAmount: platformFeeAmount.toString(),
         },
-        platformFeeAmount: platformFeeAmount > 0 ? platformFeeAmount : undefined,
+        platformFeeAmount,
         connectedAccountId: tenant.stripeConnectedAccountId || undefined,
         productName: `${ticket.eventName} - ${quantity} ticket${quantity > 1 ? 's' : ''}`,
         productDescription: `Event tickets for ${tenant.name}`,
@@ -51772,7 +52061,12 @@ ${section('Metadata', metaRows)}
   app.post('/api/fundraiser-events/:id/checkout', requireTenant, async (req, res, next) => {
     try {
       const { fundraiserEvents, fundraiserOrders } = await import('@shared/schema');
-      const { calculatePlatformFee } = await import('./config/platform');
+      const {
+        calculateDestinationChargeEconomics,
+        calculateDonorCoversFees,
+        calculatePlatformFee,
+        getDestinationChargeEconomicsMetadata,
+      } = await import('./config/platform');
       const { id } = req.params;
       if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
         return res.status(404).json({ error: 'Event not found' });
@@ -51833,28 +52127,54 @@ ${section('Metadata', metaRows)}
       const successUrl = `${baseUrl}${tenantPath}/donate/event/${id}?status=success`;
       const cancelUrl = `${baseUrl}${tenantPath}/donate/event/${id}?status=cancelled`;
 
-      // Calculate unit amount: if passFeesToBuyer, gross up per-item price to cover Stripe + platform fees
-      let unitAmountCents = event.priceCents;
+      // Calculate the order total once. Fee gross-up must not be rounded per
+      // item because that overcharges multi-quantity orders.
+      const baseAmountCents = event.priceCents * body.quantity;
+      let totalCents = baseAmountCents;
+      let feesCoveredCents = 0;
       if (event.passFeesToBuyer) {
-        const { calculateDonorCoversFees } = await import('./config/platform');
         const feeCalc = calculateDonorCoversFees(
-          event.priceCents * body.quantity,
+          baseAmountCents,
           req.tenant!.subscriptionTier || 'free',
           req.tenant!.platformFeePercent
         );
-        unitAmountCents = Math.ceil(feeCalc.totalAmount / body.quantity);
+        totalCents = feeCalc.totalAmount;
+        feesCoveredCents = feeCalc.feesCovered;
       }
 
-      const totalCents = unitAmountCents * body.quantity;
-      const applicationFeeAmount = calculatePlatformFee(totalCents, req.tenant!.subscriptionTier || 'free', req.tenant!.platformFeePercent);
+      const iRescueRevenueCents = calculatePlatformFee(
+        totalCents,
+        req.tenant!.subscriptionTier || 'free',
+        req.tenant!.platformFeePercent,
+      );
+      const economics = calculateDestinationChargeEconomics(
+        totalCents,
+        iRescueRevenueCents,
+      );
+      const economicsMetadata = getDestinationChargeEconomicsMetadata(economics);
 
       // Create Stripe checkout session directly using platform key (Connect destination charges)
       const Stripe = (await import('stripe')).default;
       const stripeClient = new Stripe(platformKey, { apiVersion: '2025-09-30.clover' as any, typescript: true });
 
-      const lineItemName = event.passFeesToBuyer
-        ? `${event.title} (incl. processing fees)`
-        : event.title;
+      const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [{
+        price_data: {
+          currency: 'usd',
+          product_data: { name: event.title },
+          unit_amount: event.priceCents,
+        },
+        quantity: body.quantity,
+      }];
+      if (feesCoveredCents > 0) {
+        lineItems.push({
+          price_data: {
+            currency: 'usd',
+            product_data: { name: 'Transaction costs' },
+            unit_amount: feesCoveredCents,
+          },
+          quantity: 1,
+        });
+      }
 
       const session = await stripeClient.checkout.sessions.create({
         mode: 'payment',
@@ -51866,19 +52186,19 @@ ${section('Metadata', metaRows)}
         // an instant order ID + pickup confirmation, which a multi-day ACH
         // settlement window would break.
         payment_method_types: ['card'],
-        line_items: [{
-          price_data: {
-            currency: 'usd',
-            product_data: { name: lineItemName },
-            unit_amount: unitAmountCents,
-          },
-          quantity: body.quantity,
-        }],
+        line_items: lineItems,
         payment_intent_data: {
           on_behalf_of: connectedAccountId,
           transfer_data: { destination: connectedAccountId },
-          ...(applicationFeeAmount > 0 ? { application_fee_amount: applicationFeeAmount } : {}),
+          application_fee_amount: economics.applicationFeeTotalCents,
           statement_descriptor_suffix: toStripeStatementDescriptor(req.tenant!.name),
+          metadata: {
+            tenantId: req.tenant!.id,
+            fundraiserEventId: id,
+            fundraiserOrderId: order.id,
+            buyerCoveredFees: event.passFeesToBuyer ? 'true' : 'false',
+            ...economicsMetadata,
+          },
         },
         metadata: {
           fundraiser_event_id: id,
@@ -51886,6 +52206,10 @@ ${section('Metadata', metaRows)}
           tenantId: req.tenant!.id,
           achSurface: 'ticket',
           achOffered: 'false',
+          buyerCoveredFees: event.passFeesToBuyer ? 'true' : 'false',
+          baseAmount: baseAmountCents.toString(),
+          feesCovered: feesCoveredCents.toString(),
+          ...economicsMetadata,
         },
       });
 

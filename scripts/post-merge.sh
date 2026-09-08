@@ -115,6 +115,24 @@ CREATE UNIQUE INDEX IF NOT EXISTS payments_tenant_stripe_intent_unique
   WHERE stripe_payment_intent_id IS NOT NULL;
 SQL
 
+# Exactly-once local accounting for restoration-aware Stripe refunds. The
+# unique Stripe refund ID lets retries resume external recovery without
+# decrementing donor totals twice.
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' || echo "[post-merge] payment refund accounting table skipped (already applied or DB unreachable)."
+CREATE TABLE IF NOT EXISTS payment_refund_accounting (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  stripe_refund_id text NOT NULL UNIQUE,
+  tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  payment_id uuid NOT NULL REFERENCES payments(id) ON DELETE CASCADE,
+  donor_id uuid REFERENCES donors(id) ON DELETE SET NULL,
+  refunded_amount integer NOT NULL,
+  full_refund boolean NOT NULL DEFAULT false,
+  created_at timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS payment_refund_accounting_tenant_payment_idx
+  ON payment_refund_accounting (tenant_id, payment_id);
+SQL
+
 # Task #240: Donation receipt authorized signature. Tenant-level columns that
 # store the signature image path + signer name/title stamped onto every receipt
 # PDF. Idempotent — ADD COLUMN IF NOT EXISTS is a no-op when already applied.

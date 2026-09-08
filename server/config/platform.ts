@@ -86,11 +86,150 @@ export function getPlatformStripeSecretKey(): string | undefined {
 export const DEFAULT_PLATFORM_FEE_PERCENT = parseFloat(process.env.PLATFORM_FEE_PERCENT || '5');
 
 /**
- * Stripe's processing fee for nonprofits
- * Used for "Donor Covers Fees" calculations
+ * Stripe processing-cost estimates used for destination-charge allocation.
+ *
+ * Destination charges debit processing costs from the iRescue platform
+ * balance, even when `on_behalf_of` is set. These estimates are therefore
+ * retained in addition to (and reported separately from) iRescue's own
+ * application fee.
+ *
+ * The card defaults match the platform's observed domestic card pricing.
+ * They are configurable because Stripe pricing can change by contract.
+ * ACH is cheaper but may be selected only after Checkout is created, so mixed
+ * card/ACH sessions conservatively reserve the card estimate and reconcile the
+ * variance against the actual Stripe balance transaction.
  */
-export const STRIPE_PROCESSING_FEE_PERCENT = 2.2;
-export const STRIPE_PROCESSING_FEE_FIXED_CENTS = 30; // $0.30
+export const STRIPE_PROCESSING_FEE_PERCENT = parseFloat(
+  process.env.STRIPE_CARD_PROCESSING_FEE_PERCENT || '2.9',
+);
+export const STRIPE_PROCESSING_FEE_FIXED_CENTS = parseInt(
+  process.env.STRIPE_CARD_PROCESSING_FEE_FIXED_CENTS || '30',
+  10,
+);
+export const STRIPE_ACH_PROCESSING_FEE_PERCENT = parseFloat(
+  process.env.STRIPE_ACH_PROCESSING_FEE_PERCENT || '0.8',
+);
+export const STRIPE_ACH_PROCESSING_FEE_CAP_CENTS = parseInt(
+  process.env.STRIPE_ACH_PROCESSING_FEE_CAP_CENTS || '500',
+  10,
+);
+export const DESTINATION_CHARGE_ECONOMICS_VERSION = 'destination-v1';
+export const STRIPE_PROCESSING_SCHEDULE_VERSION = 'stripe-us-2026-09-v1';
+
+export type StripeProcessingMethod = 'card' | 'ach';
+
+export interface DestinationChargeEconomics {
+  grossAmountCents: number;
+  iRescueRevenueCents: number;
+  processingRecoveryCents: number;
+  applicationFeeTotalCents: number;
+  rescueProceedsCents: number;
+  expectedPlatformNetCents: number;
+  processingEstimateMethod: StripeProcessingMethod;
+  processingScheduleVersion: string;
+  economicsVersion: string;
+}
+
+function assertNonNegativeCents(value: number, label: string): void {
+  if (!Number.isInteger(value) || value < 0) {
+    throw new Error(`${label} must be a non-negative integer number of cents`);
+  }
+}
+
+/**
+ * Estimate the Stripe cost that will be debited from the platform balance.
+ * For a Checkout Session that can offer both card and ACH, use the default
+ * card estimate so iRescue cannot silently absorb the more expensive method.
+ */
+export function estimateStripeProcessingFee(
+  grossAmountCents: number,
+  method: StripeProcessingMethod = 'card',
+): number {
+  assertNonNegativeCents(grossAmountCents, 'grossAmountCents');
+  if (grossAmountCents === 0) return 0;
+
+  if (method === 'ach') {
+    return Math.min(
+      Math.round(grossAmountCents * (STRIPE_ACH_PROCESSING_FEE_PERCENT / 100)),
+      STRIPE_ACH_PROCESSING_FEE_CAP_CENTS,
+    );
+  }
+
+  return Math.round(grossAmountCents * (STRIPE_PROCESSING_FEE_PERCENT / 100))
+    + STRIPE_PROCESSING_FEE_FIXED_CENTS;
+}
+
+/**
+ * Split the amount retained from a destination charge into the platform's own
+ * revenue and Stripe processing-cost recovery. Stripe receives one combined
+ * application_fee_amount, but metadata/reporting keep the components separate.
+ */
+export function calculateDestinationChargeEconomics(
+  grossAmountCents: number,
+  iRescueRevenueCents: number,
+  processingEstimateMethod: StripeProcessingMethod = 'card',
+): DestinationChargeEconomics {
+  assertNonNegativeCents(grossAmountCents, 'grossAmountCents');
+  assertNonNegativeCents(iRescueRevenueCents, 'iRescueRevenueCents');
+
+  const processingRecoveryCents = estimateStripeProcessingFee(
+    grossAmountCents,
+    processingEstimateMethod,
+  );
+  const applicationFeeTotalCents = iRescueRevenueCents + processingRecoveryCents;
+
+  if (grossAmountCents > 0 && applicationFeeTotalCents >= grossAmountCents) {
+    throw new Error(
+      'Payment amount is too small to cover Stripe processing costs and the configured iRescue fee',
+    );
+  }
+
+  return {
+    grossAmountCents,
+    iRescueRevenueCents,
+    processingRecoveryCents,
+    applicationFeeTotalCents,
+    rescueProceedsCents: grossAmountCents - applicationFeeTotalCents,
+    expectedPlatformNetCents: iRescueRevenueCents,
+    processingEstimateMethod,
+    processingScheduleVersion: STRIPE_PROCESSING_SCHEDULE_VERSION,
+    economicsVersion: DESTINATION_CHARGE_ECONOMICS_VERSION,
+  };
+}
+
+export function getDestinationChargeEconomicsMetadata(
+  economics: DestinationChargeEconomics,
+): Record<string, string> {
+  return {
+    economicsVersion: economics.economicsVersion,
+    grossAmountCents: economics.grossAmountCents.toString(),
+    iRescueRevenueCents: economics.iRescueRevenueCents.toString(),
+    processingRecoveryCents: economics.processingRecoveryCents.toString(),
+    applicationFeeTotalCents: economics.applicationFeeTotalCents.toString(),
+    rescueProceedsCents: economics.rescueProceedsCents.toString(),
+    processingEstimateMethod: economics.processingEstimateMethod,
+    processingScheduleVersion: economics.processingScheduleVersion,
+  };
+}
+
+/**
+ * Stripe subscriptions accept an application-fee percentage rather than an
+ * exact amount. Round upward to two decimals so rounding can never make the
+ * platform absorb part of the processing estimate. Actual retained cents are
+ * reconciled from Stripe's Application Fee object.
+ */
+export function calculateSubscriptionApplicationFeePercent(
+  grossAmountCents: number,
+  applicationFeeTotalCents: number,
+): number {
+  assertNonNegativeCents(grossAmountCents, 'grossAmountCents');
+  assertNonNegativeCents(applicationFeeTotalCents, 'applicationFeeTotalCents');
+  if (grossAmountCents === 0 || applicationFeeTotalCents === 0) return 0;
+  if (applicationFeeTotalCents >= grossAmountCents) {
+    throw new Error('Subscription application fee must be less than the charge amount');
+  }
+  return Math.ceil((applicationFeeTotalCents / grossAmountCents) * 10_000) / 100;
+}
 
 /**
  * Platform fee percentages by subscription tier (for hosted platform)
@@ -265,10 +404,8 @@ export function shouldBlockPaymentWithoutFees(tenant?: { stripeConnectedAccountI
  * gross amount they should pay so the rescue receives exactly the intended amount.
  * 
  * Math: We need to "gross up" the amount to account for:
- * 1. Stripe processing fee (2.2% + $0.30 for nonprofits)
+ * 1. Configured Stripe processing-cost estimate (card or ACH)
  * 2. Platform fee (if applicable based on subscription tier)
- * 
- * Formula: grossAmount = (netAmount + fixedFee) / (1 - percentageFees)
  * 
  * @param baseAmountCents - The intended donation amount in cents
  * @param subscriptionTier - The tenant's subscription tier (affects platform fee)
@@ -277,25 +414,57 @@ export function shouldBlockPaymentWithoutFees(tenant?: { stripeConnectedAccountI
 export function calculateDonorCoversFees(
   baseAmountCents: number,
   subscriptionTier?: string,
-  tenantPlatformFeePercent?: number | null
+  tenantPlatformFeePercent?: number | null,
+  processingMethod: StripeProcessingMethod = 'card',
 ): {
   baseAmount: number;
   stripeFee: number;
   platformFee: number;
   totalAmount: number;
   feesCovered: number;
+  applicationFeeAmount: number;
+  rescueProceeds: number;
 } {
+  assertNonNegativeCents(baseAmountCents, 'baseAmountCents');
+  if (baseAmountCents === 0) {
+    return {
+      baseAmount: 0,
+      stripeFee: 0,
+      platformFee: 0,
+      totalAmount: 0,
+      feesCovered: 0,
+      applicationFeeAmount: 0,
+      rescueProceeds: 0,
+    };
+  }
   const platformFeePercent = getPlatformFeePercent(subscriptionTier, tenantPlatformFeePercent);
-  const totalPercentFee = (STRIPE_PROCESSING_FEE_PERCENT + platformFeePercent) / 100;
-  
-  // Gross-up formula: total = (base + fixed) / (1 - percentFees)
-  const grossAmount = Math.ceil(
-    (baseAmountCents + STRIPE_PROCESSING_FEE_FIXED_CENTS) / (1 - totalPercentFee)
-  );
-  
-  // Calculate individual fee components from the gross amount
-  const stripeFee = Math.round(grossAmount * (STRIPE_PROCESSING_FEE_PERCENT / 100)) + STRIPE_PROCESSING_FEE_FIXED_CENTS;
+
+  // Find the smallest gross amount whose post-fee rescue proceeds are at least
+  // the donor's intended amount. Binary search handles ACH's capped fee and all
+  // integer-cent rounding without relying on a fragile closed-form formula.
+  const rescueNet = (gross: number): number => {
+    const platformFee = Math.round(gross * (platformFeePercent / 100));
+    return gross - platformFee - estimateStripeProcessingFee(gross, processingMethod);
+  };
+  let low = baseAmountCents;
+  let high = Math.max(baseAmountCents + 1, baseAmountCents * 2);
+  while (rescueNet(high) < baseAmountCents) {
+    high *= 2;
+    if (!Number.isSafeInteger(high)) {
+      throw new Error('Payment amount is too large to calculate covered fees safely');
+    }
+  }
+  while (low < high) {
+    const mid = Math.floor((low + high) / 2);
+    if (rescueNet(mid) >= baseAmountCents) high = mid;
+    else low = mid + 1;
+  }
+
+  const grossAmount = low;
+  const stripeFee = estimateStripeProcessingFee(grossAmount, processingMethod);
   const platformFee = Math.round(grossAmount * (platformFeePercent / 100));
+  const applicationFeeAmount = stripeFee + platformFee;
+  const rescueProceeds = grossAmount - applicationFeeAmount;
   
   return {
     baseAmount: baseAmountCents,
@@ -303,6 +472,8 @@ export function calculateDonorCoversFees(
     platformFee,
     totalAmount: grossAmount,
     feesCovered: grossAmount - baseAmountCents,
+    applicationFeeAmount,
+    rescueProceeds,
   };
 }
 

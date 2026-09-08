@@ -431,7 +431,7 @@ export default function PeerCampaignPage() {
                           data-testid="checkbox-cover-fees"
                         />
                         <label htmlFor="cover-fees" className="text-sm text-muted-foreground cursor-pointer">
-                          I'll cover the processing fees so 100% goes to the rescue
+                          I'll cover transaction costs so the rescue receives my full intended gift
                         </label>
                       </div>
 
