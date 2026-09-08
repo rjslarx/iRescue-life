@@ -8,6 +8,7 @@ import {
   tenants,
 } from '@shared/schema';
 import { eq, and, desc } from 'drizzle-orm';
+import { formatAnimalSex } from '@shared/animal-sex';
 
 export async function generateAdoptionPacketPDF(animalId: string, tenantId: string): Promise<Buffer> {
   const [animal] = await db
@@ -83,7 +84,7 @@ export async function generateAdoptionPacketPDF(animalId: string, tenantId: stri
     animalSpecies: animal.species,
     animalBreed: animal.breed || '',
     animalAge: animal.age || '',
-    animalSex: animal.sex || '',
+    animalSex: formatAnimalSex(animal),
     animalDOB: animal.dateOfBirth ? new Date(animal.dateOfBirth).toLocaleDateString() : '',
     animalColor: animal.color || '',
     microchipId: animal.microchipId || '',

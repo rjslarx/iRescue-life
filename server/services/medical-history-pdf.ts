@@ -11,6 +11,7 @@ import {
   tenants 
 } from '@shared/schema';
 import { eq } from 'drizzle-orm';
+import { formatAnimalSex } from '@shared/animal-sex';
 
 /**
  * Generate medical history PDF for an animal
@@ -113,7 +114,7 @@ export async function generateMedicalHistoryPDF(animalId: string, tenantId: stri
     animalSpecies: animal.species,
     animalBreed: animal.breed || '',
     animalAge: animal.age || '',
-    animalSex: animal.sex || '',
+    animalSex: formatAnimalSex(animal),
     animalMicrochip: animal.microchipId || '',
     exams,
     vaccines,
