@@ -31,6 +31,7 @@ import {
   type AdoptionContract,
   type AdoptionPayment,
   type Tenant,
+  type CatSafetyAddendumAnswers,
 } from '@shared/schema';
 import { eq, and, or, desc, sql, isNull, ilike, inArray } from 'drizzle-orm';
 import { EmailService } from '../lib/email-service';
@@ -223,6 +224,7 @@ export async function createCheckoutSession(
     }>;
     isFeeWaived?: boolean;
     feeWaiverReason?: string;
+    includeCatSafetyAddendum?: boolean;
   }
 ): Promise<{ session: AdoptionCheckoutSession; token: string }> {
   // Validate application belongs to tenant
@@ -251,6 +253,13 @@ export async function createCheckoutSession(
 
   if (!animal) {
     throw new Error('Animal not found or does not belong to this organization');
+  }
+  let catSafetySnapshot: { html: string; version: string } | null = null;
+  if (data.includeCatSafetyAddendum) {
+    const { getOrCreateCatSafetyAddendum } = await import('./cat-safety-addendum');
+    const addendum = await getOrCreateCatSafetyAddendum(tenantId);
+    if (!addendum.enabled) throw new Error('The cat safety addendum is not enabled for this organization');
+    catSafetySnapshot = { html: addendum.htmlTemplate, version: addendum.version };
   }
 
   // Validate grant if provided
@@ -324,6 +333,8 @@ export async function createCheckoutSession(
       totals,
       isFeeWaived: data.isFeeWaived || false,
       feeWaiverReason: data.feeWaiverReason || null,
+      catSafetyAddendumHtmlSnapshot: catSafetySnapshot?.html || null,
+      catSafetyAddendumVersion: catSafetySnapshot?.version || null,
       vetAppointmentDate: data.vetAppointmentDate,
       spayNeuterDate: data.spayNeuterDate,
       staffConfirmValues: data.staffConfirmValues || null,
@@ -868,6 +879,7 @@ export async function captureSignature(
     userAgent?: string;
     templateId?: number;
     driversLicenseNumber?: string;
+    catSafetyAddendumAnswers?: CatSafetyAddendumAnswers;
   }
 ): Promise<AdoptionContract> {
   const [existingSession] = await db
@@ -879,6 +891,12 @@ export async function captureSignature(
   if (!existingSession) {
     throw new Error('Session not found');
   }
+  if (existingSession.catSafetyAddendumHtmlSnapshot && !signatureData.catSafetyAddendumAnswers) {
+    throw new Error('Cat safety addendum responses are required');
+  }
+  if (!existingSession.catSafetyAddendumHtmlSnapshot && signatureData.catSafetyAddendumAnswers) {
+    throw new Error('Cat safety addendum was not selected for this agreement');
+  }
 
   if (existingSession.status !== 'initiated' && existingSession.status !== 'awaiting_signature') {
     throw new Error('Session is not in a state to accept signatures');
@@ -887,7 +905,11 @@ export async function captureSignature(
   const signatureClaimedAt = new Date();
   const [session] = await db
     .update(adoptionCheckoutSessions)
-    .set({ signatureClaimedAt, updatedAt: signatureClaimedAt })
+    .set({
+      signatureClaimedAt,
+      catSafetyAddendumAnswers: signatureData.catSafetyAddendumAnswers || null,
+      updatedAt: signatureClaimedAt,
+    })
     .where(and(
       eq(adoptionCheckoutSessions.id, sessionId),
       inArray(adoptionCheckoutSessions.status, ['initiated', 'awaiting_signature']),
@@ -917,6 +939,7 @@ export async function captureSignature(
     driversLicenseNumber: signatureData.driversLicenseNumber,
     signerName: signatureData.signerName,
     signerEmail: signatureData.signerEmail,
+    catSafetyAddendumAnswers: signatureData.catSafetyAddendumAnswers,
   }, precomputedDataUris);
 
   // Create contract record (copy driver's license image URL from session)
@@ -924,7 +947,14 @@ export async function captureSignature(
     .insert(adoptionContracts)
     .values({
       sessionId,
-      templateSnapshot: { id: signatureData.templateId || 1, capturedAt: signedAt.toISOString() },
+      templateSnapshot: {
+        id: signatureData.templateId || 1, capturedAt: signedAt.toISOString(),
+        catSafetyAddendum: session.catSafetyAddendumHtmlSnapshot ? {
+          htmlTemplate: session.catSafetyAddendumHtmlSnapshot,
+          version: session.catSafetyAddendumVersion,
+          answers: signatureData.catSafetyAddendumAnswers,
+        } : null,
+      },
       contractPdfUrl,
       signatureImageUrl,
       signerName: signatureData.signerName,
@@ -989,7 +1019,11 @@ export async function captureSignature(
     if (!committedContract) {
       await db
         .update(adoptionCheckoutSessions)
-        .set({ signatureClaimedAt: null, updatedAt: new Date() })
+        .set({
+          signatureClaimedAt: null,
+          catSafetyAddendumAnswers: null,
+          updatedAt: new Date(),
+        })
         .where(and(
           eq(adoptionCheckoutSessions.id, sessionId),
           eq(adoptionCheckoutSessions.signatureClaimedAt, signatureClaimedAt),

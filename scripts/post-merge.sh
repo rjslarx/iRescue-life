@@ -369,3 +369,25 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' || echo "[post-merge] shop produ
 ALTER TABLE shop_products
   ADD COLUMN IF NOT EXISTS social_image_url text;
 SQL
+
+# Optional, tenant-scoped cat safety appendix. Sent agreements retain
+# an immutable template/version and the signed response evidence.
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' || echo "[post-merge] cat safety addendum schema skipped (already applied or DB unreachable)."
+CREATE TABLE IF NOT EXISTS cat_safety_addendum_settings (
+  tenant_id uuid PRIMARY KEY REFERENCES tenants(id) ON DELETE CASCADE,
+  enabled boolean NOT NULL DEFAULT false,
+  html_template text NOT NULL,
+  version text NOT NULL DEFAULT '1.0',
+  updated_at timestamp NOT NULL DEFAULT now(),
+  updated_by uuid REFERENCES users(id) ON DELETE SET NULL
+);
+ALTER TABLE adoption_checkout_sessions ADD COLUMN IF NOT EXISTS cat_safety_addendum_html_snapshot text;
+ALTER TABLE adoption_checkout_sessions ADD COLUMN IF NOT EXISTS cat_safety_addendum_version text;
+ALTER TABLE adoption_checkout_sessions ADD COLUMN IF NOT EXISTS cat_safety_addendum_answers jsonb;
+ALTER TABLE adoption_agreement_direct_sends ADD COLUMN IF NOT EXISTS recipient_phone text;
+ALTER TABLE adoption_agreement_direct_sends ADD COLUMN IF NOT EXISTS recipient_address text;
+ALTER TABLE adoption_agreement_direct_sends ADD COLUMN IF NOT EXISTS cat_safety_addendum_html_snapshot text;
+ALTER TABLE adoption_agreement_direct_sends ADD COLUMN IF NOT EXISTS cat_safety_addendum_version text;
+ALTER TABLE adoption_agreement_direct_sends ADD COLUMN IF NOT EXISTS cat_safety_addendum_answers jsonb;
+CREATE INDEX IF NOT EXISTS cat_safety_addendum_settings_enabled_idx ON cat_safety_addendum_settings (enabled);
+SQL

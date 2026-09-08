@@ -13,6 +13,7 @@ import crypto from 'crypto';
 import puppeteer from 'puppeteer';
 import DOMPurify from 'isomorphic-dompurify';
 import { objectStorageClient, signObjectURL } from '../objectStorage';
+import { setObjectAclPolicy, type ObjectAclPolicy } from '../objectAcl';
 import { db } from '../db';
 import { adoptionAgreementDirectSends, type Tenant } from '@shared/schema';
 import { eq } from 'drizzle-orm';
@@ -80,7 +81,15 @@ export async function sendDirectSendEmail(params: {
   });
 }
 
-async function uploadDirectSendPdfToStorage(pdfBuffer: Buffer): Promise<string> {
+export function buildDirectAgreementAcl(tenantId: string): ObjectAclPolicy {
+  return {
+    owner: tenantId,
+    tenantId,
+    visibility: 'private',
+  };
+}
+
+async function uploadDirectSendPdfToStorage(pdfBuffer: Buffer, tenantId: string): Promise<string> {
   const privateObjectDir = process.env.PRIVATE_OBJECT_DIR;
   if (!privateObjectDir) {
     throw new Error('PRIVATE_OBJECT_DIR not configured');
@@ -95,12 +104,21 @@ async function uploadDirectSendPdfToStorage(pdfBuffer: Buffer): Promise<string> 
   const bucket = objectStorageClient.bucket(bucketName);
   const file = bucket.file(objectName);
   await file.save(pdfBuffer, { metadata: { contentType: 'application/pdf' } });
+  try {
+    await setObjectAclPolicy(file, buildDirectAgreementAcl(tenantId));
+  } catch (error) {
+    // A stored agreement without ACL metadata is treated as public by the
+    // legacy object route, so never leave the uploaded PDF behind on failure.
+    await file.delete({ ignoreNotFound: true }).catch(() => undefined);
+    throw error;
+  }
 
   return `/objects/adoption-direct-agreements/${file.name.split('/').pop()}`;
 }
 
 export async function generateDirectSendAgreementPDF(
   sendId: string,
+  tenantId: string,
   renderedHtml: string,
   signatureMetadata?: { ipAddress?: string; signedAt?: Date },
 ): Promise<string> {
@@ -173,7 +191,7 @@ export async function generateDirectSendAgreementPDF(
       printBackground: true,
     });
 
-    const objectPath = await uploadDirectSendPdfToStorage(Buffer.from(pdfBuffer));
+    const objectPath = await uploadDirectSendPdfToStorage(Buffer.from(pdfBuffer), tenantId);
 
     await db
       .update(adoptionAgreementDirectSends)

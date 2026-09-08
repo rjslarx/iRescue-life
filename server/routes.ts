@@ -11994,9 +11994,10 @@ Crawl-delay: 1
         isFeeWaived: z.boolean().optional(),
         feeWaiverReason: z.string().max(500).optional().nullable(),
         sendMethod: z.enum(['sms', 'email']).optional(),
+        includeCatSafetyAddendum: z.boolean().optional().default(false),
       });
       
-      const { applicationId, sendContract, baseFee, grantId, contractTemplateId, vetAppointmentDate, spayNeuterDate, staffConfirmValues, medicalDueDates, carePriorities, customComplianceObligations, isFeeWaived, feeWaiverReason, sendMethod } = approveSchema.parse(req.body);
+      const { applicationId, sendContract, baseFee, grantId, contractTemplateId, vetAppointmentDate, spayNeuterDate, staffConfirmValues, medicalDueDates, carePriorities, customComplianceObligations, isFeeWaived, feeWaiverReason, sendMethod, includeCatSafetyAddendum } = approveSchema.parse(req.body);
       
       // Get the application details
       const application = await getApplicationById(req.tenant!.id, applicationId);
@@ -12070,6 +12071,7 @@ Crawl-delay: 1
           customComplianceObligations: customComplianceObligations || undefined,
           isFeeWaived: isFeeWaived || false,
           feeWaiverReason: feeWaiverReason || undefined,
+          includeCatSafetyAddendum,
         });
         checkoutSession = sessionResult.session;
         // Use the token returned by createCheckoutSession - it matches the stored hash
@@ -12133,6 +12135,7 @@ Crawl-delay: 1
         processor: z.enum(['stripe']).optional(),
         isFeeWaived: z.boolean().optional(),
         feeWaiverReason: z.string().max(500).optional().nullable(),
+        includeCatSafetyAddendum: z.boolean().optional().default(false),
       });
 
       const data = sessionSchema.parse(req.body);
@@ -12600,7 +12603,26 @@ Crawl-delay: 1
           }
         }
       }
-      
+
+      let resolvedCatSafetyAddendum: any = null;
+      if (session.catSafetyAddendumHtmlSnapshot) {
+        const { renderCatSafetyAddendum } = await import('./services/cat-safety-addendum');
+        resolvedCatSafetyAddendum = {
+          html: renderCatSafetyAddendum(session.catSafetyAddendumHtmlSnapshot, {
+            animal_name: animal?.name || '', organization_name: tenant?.name || '',
+            adopter_name: application?.applicantName || '', adopter_email: application?.applicantEmail || '',
+            adopter_phone: application?.applicantPhone || '', adopter_address: applicantAddress,
+            contract_date: new Date().toLocaleDateString(),
+          }),
+          prefill: {
+            adopterName: application?.applicantName || '',
+            adopterEmail: application?.applicantEmail || '',
+            adopterPhone: application?.applicantPhone || '',
+            adopterAddress: applicantAddress,
+          },
+          requiredFields: ['residentCatDescription', 'residentCatHousing', 'primaryBarrier', 'secondaryBarrier', 'transitionsPlan', 'responsiblePerson', 'emergencyPlan', 'adopter1Initials'],
+        };
+      }
       res.json({
         session: {
           id: session.id,
@@ -12629,6 +12651,7 @@ Crawl-delay: 1
           address: applicantAddress,
         } : null,
         contract: contractData,
+        ...(resolvedCatSafetyAddendum ? { catSafetyAddendum: resolvedCatSafetyAddendum } : {}),
         organization: tenant ? { name: tenant.name } : null,
         // Fee configuration for adopter display
         feeConfig: {
@@ -12709,15 +12732,20 @@ Crawl-delay: 1
         return res.json({ success: true, alreadySigned: true, message: 'Contract already signed' });
       }
 
+      const { catSafetyAddendumAnswersSchema } = await import('@shared/schema');
       const signatureSchema = z.object({
         signerName: z.string().min(1),
         signerEmail: z.string().email(),
         signatureImageData: z.string(), // Base64 image
         templateId: z.number().optional(),
         driversLicenseNumber: z.string().min(1, "Driver's license number is required"),
+        catSafetyAddendumAnswers: catSafetyAddendumAnswersSchema.optional(),
       });
 
       const signatureData = signatureSchema.parse(req.body);
+      if (session.catSafetyAddendumHtmlSnapshot && !/^data:image\/(png|jpe?g|webp);base64,[A-Za-z0-9+/]+={0,2}$/i.test(signatureData.signatureImageData)) {
+        return res.status(400).json({ error: 'A valid signature image is required for the cat safety addendum' });
+      }
       const contract = await captureSignature(session.id, {
         ...signatureData,
         ipAddress: req.ip,
@@ -14166,6 +14194,31 @@ Crawl-delay: 1
     }
   });
 
+  // Optional dog-to-resident-cat safety appendix. The supplied sample is informational
+  // only and organizations should have their own counsel review it.
+  app.get('/api/cat-safety-addendum', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      const { getOrCreateCatSafetyAddendum } = await import('./services/cat-safety-addendum');
+      const { CAT_SAFETY_ADDENDUM_PLACEHOLDERS } = await import('@shared/schema');
+      const addendum = await getOrCreateCatSafetyAddendum(req.tenant!.id);
+      res.json({ addendum: { enabled: addendum.enabled, htmlTemplate: addendum.htmlTemplate, version: addendum.version, updatedAt: addendum.updatedAt }, placeholders: CAT_SAFETY_ADDENDUM_PLACEHOLDERS });
+    } catch (error) { next(error); }
+  });
+  app.put('/api/cat-safety-addendum', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+    try {
+      const { catSafetyAddendumSettings } = await import('@shared/schema');
+      const { getOrCreateCatSafetyAddendum, sanitizeCatSafetyAddendumHtml, hasMeaningfulCatSafetyAddendumHtml } = await import('./services/cat-safety-addendum');
+      const parsed = z.object({ enabled: z.boolean(), htmlTemplate: z.string().max(100_000) }).strict().parse(req.body);
+      if (!hasMeaningfulCatSafetyAddendumHtml(parsed.htmlTemplate)) return res.status(400).json({ error: 'Addendum content cannot be empty' });
+      const current = await getOrCreateCatSafetyAddendum(req.tenant!.id);
+      const htmlTemplate = sanitizeCatSafetyAddendumHtml(parsed.htmlTemplate);
+      const version = htmlTemplate === current.htmlTemplate ? current.version : ((parseFloat(current.version) || 1) + .1).toFixed(1);
+      const [addendum] = await db.update(catSafetyAddendumSettings).set({ enabled: parsed.enabled, htmlTemplate, version, updatedAt: new Date(), updatedBy: req.user!.id })
+        .where(eq(catSafetyAddendumSettings.tenantId, req.tenant!.id)).returning();
+      res.json({ addendum: { enabled: addendum.enabled, htmlTemplate: addendum.htmlTemplate, version: addendum.version, updatedAt: addendum.updatedAt } });
+    } catch (error) { next(error); }
+  });
+
   /**
    * POST /api/contract-templates
    * Create new contract template (admin only)
@@ -14336,11 +14389,15 @@ Crawl-delay: 1
       const { adoptionAgreementDirectSends, animals } = await import('@shared/schema');
       const { getTemplateById } = await import('./services/contract-template');
       const { generateDirectSendToken, buildDirectSendSigningUrl, sendDirectSendEmail } = await import('./services/adoption-direct-agreement');
+      const { getOrCreateCatSafetyAddendum } = await import('./services/cat-safety-addendum');
 
       const bodySchema = z.object({
         recipientName: z.string().min(1).max(200),
         recipientEmail: z.string().email().max(320),
         animalId: z.string().uuid().optional().nullable(),
+        recipientPhone: z.string().max(50).optional().nullable(),
+        recipientAddress: z.string().max(500).optional().nullable(),
+        includeCatSafetyAddendum: z.boolean().optional().default(false),
       });
       const parsed = bodySchema.safeParse(req.body);
       if (!parsed.success) {
@@ -14364,6 +14421,13 @@ Crawl-delay: 1
         }
         animalName = animal.name;
       }
+      let catSafetySnapshot: { html: string; version: string } | null = null;
+      if (parsed.data.includeCatSafetyAddendum) {
+        if (!parsed.data.animalId) return res.status(400).json({ error: 'An animal is required when including the cat safety addendum' });
+        const addendum = await getOrCreateCatSafetyAddendum(req.tenant!.id);
+        if (!addendum.enabled) return res.status(400).json({ error: 'The cat safety addendum is not enabled for this organization' });
+        catSafetySnapshot = { html: addendum.htmlTemplate, version: addendum.version };
+      }
 
       const { token, tokenHash, expiresAt } = generateDirectSendToken();
 
@@ -14379,6 +14443,10 @@ Crawl-delay: 1
           animalId: parsed.data.animalId || null,
           recipientName: parsed.data.recipientName.trim(),
           recipientEmail: parsed.data.recipientEmail.trim().toLowerCase(),
+          recipientPhone: parsed.data.recipientPhone?.trim() || null,
+          recipientAddress: parsed.data.recipientAddress?.trim() || null,
+          catSafetyAddendumHtmlSnapshot: catSafetySnapshot?.html || null,
+          catSafetyAddendumVersion: catSafetySnapshot?.version || null,
           staffInitiatedBy: req.user!.id,
           secureTokenHash: tokenHash,
           expiresAt,
@@ -14609,6 +14677,8 @@ Crawl-delay: 1
         organization_email: tenant?.contactEmail || '',
         adopter_name: send.recipientName,
         adopter_email: send.recipientEmail,
+        adopter_phone: send.recipientPhone || '',
+        adopter_address: send.recipientAddress || '',
         animal_name: animal?.name || '',
         animal_species: animal?.species || '',
         animal_breed: animal?.breed || '',
@@ -14623,6 +14693,27 @@ Crawl-delay: 1
         ALLOWED_ATTR: ['class', 'style', 'src', 'alt'],
         ALLOW_DATA_ATTR: false,
       });
+      const { renderCatSafetyAddendum } = await import('./services/cat-safety-addendum');
+      const catSafetyAddendum = send.catSafetyAddendumHtmlSnapshot
+        ? (() => {
+          // Snapshot, not current tenant configuration, is always used here.
+          return {
+            html: renderCatSafetyAddendum(send.catSafetyAddendumHtmlSnapshot!, {
+              organization_name: tenant?.name || '', animal_name: animal?.name || '',
+              adopter_name: send.recipientName, adopter_email: send.recipientEmail,
+              adopter_phone: send.recipientPhone || '', adopter_address: send.recipientAddress || '',
+              contract_date: new Date().toLocaleDateString(),
+            }),
+            prefill: {
+              adopterName: send.recipientName,
+              adopterEmail: send.recipientEmail,
+              adopterPhone: send.recipientPhone || '',
+              adopterAddress: send.recipientAddress || '',
+            },
+            requiredFields: ['residentCatDescription', 'residentCatHousing', 'primaryBarrier', 'secondaryBarrier', 'transitionsPlan', 'responsiblePerson', 'emergencyPlan', 'adopter1Initials'],
+          };
+        })()
+        : null;
 
       res.json({
         send: {
@@ -14633,6 +14724,7 @@ Crawl-delay: 1
           recipientEmail: send.recipientEmail,
         },
         contract: { html: sanitizedHtml, name: send.templateName },
+        ...(catSafetyAddendum ? { catSafetyAddendum } : {}),
         animal: animal ? { name: animal.name } : null,
         organization: tenant ? { name: tenant.name } : null,
       });
@@ -14650,6 +14742,8 @@ Crawl-delay: 1
       const { adoptionAgreementDirectSends, animals, tenants } = await import('@shared/schema');
       const { hashDirectSendToken, generateDirectSendAgreementPDF } = await import('./services/adoption-direct-agreement');
       const { mergePlaceholders } = await import('./services/contract-template');
+      const { catSafetyAddendumAnswersSchema } = await import('@shared/schema');
+      const { renderCatSafetyAddendum, catSafetyEvidenceHtml } = await import('./services/cat-safety-addendum');
 
       const tokenHash = hashDirectSendToken(req.params.token);
       const [send] = await db
@@ -14681,8 +14775,15 @@ Crawl-delay: 1
             /^data:image\/(png|jpe?g|webp);base64,[A-Za-z0-9+/]+={0,2}$/,
             'A valid signature image is required',
           ),
+        catSafetyAddendumAnswers: catSafetyAddendumAnswersSchema.optional(),
       });
       const signatureData = signatureSchema.parse(req.body);
+      if (send.catSafetyAddendumHtmlSnapshot && !signatureData.catSafetyAddendumAnswers) {
+        return res.status(400).json({ error: 'Cat safety addendum responses are required' });
+      }
+      if (!send.catSafetyAddendumHtmlSnapshot && signatureData.catSafetyAddendumAnswers) {
+        return res.status(400).json({ error: 'Cat safety addendum was not selected for this agreement' });
+      }
 
       const [tenant] = await db
         .select({ name: tenants.name, contactEmail: tenants.contactEmail })
@@ -14707,7 +14808,7 @@ Crawl-delay: 1
       }
 
       const signedAt = new Date();
-      const renderedContract = mergePlaceholders(send.templateHtmlSnapshot, {
+      let renderedContract = mergePlaceholders(send.templateHtmlSnapshot, {
         organization_name: tenant?.name || '',
         organization_email: tenant?.contactEmail || '',
         adopter_name: signatureData.signerName,
@@ -14725,6 +14826,18 @@ Crawl-delay: 1
         signed_timestamp: signedAt.toISOString(),
         signed_ip: req.ip,
       });
+      if (send.catSafetyAddendumHtmlSnapshot && signatureData.catSafetyAddendumAnswers) {
+        const addendum = renderCatSafetyAddendum(send.catSafetyAddendumHtmlSnapshot, {
+          organization_name: tenant?.name || '', animal_name: animal?.name || '',
+          adopter_name: signatureData.signerName, adopter_email: signatureData.signerEmail,
+          adopter_phone: signatureData.signerPhone || '', adopter_address: signatureData.signerAddress || '',
+          contract_date: signedAt.toLocaleDateString(),
+        }, signatureData.catSafetyAddendumAnswers);
+        const evidence = catSafetyEvidenceHtml(signatureData.catSafetyAddendumAnswers, signedAt, signatureData.signatureImageData);
+        renderedContract = /<\/body>/i.test(renderedContract)
+          ? renderedContract.replace(/<\/body>/i, `${addendum}${evidence}</body>`)
+          : `${renderedContract}${addendum}${evidence}`;
+      }
 
       // Status precondition makes signing idempotent: only a still-pending
       // record can transition to signed, so a double-submit can't overwrite.
@@ -14741,11 +14854,13 @@ Crawl-delay: 1
           signedIp: req.ip,
           signedUserAgent: req.headers['user-agent'] || null,
           renderedContract,
+          catSafetyAddendumAnswers: signatureData.catSafetyAddendumAnswers || null,
           updatedAt: new Date(),
         })
         .where(and(
           eq(adoptionAgreementDirectSends.id, send.id),
           eq(adoptionAgreementDirectSends.status, 'pending'),
+          eq(adoptionAgreementDirectSends.secureTokenHash, tokenHash),
         ))
         .returning({ id: adoptionAgreementDirectSends.id });
       if (!updated) {
@@ -14754,7 +14869,7 @@ Crawl-delay: 1
 
       // Generate the stamped PDF (non-blocking for the signer)
       try {
-        await generateDirectSendAgreementPDF(send.id, renderedContract, { ipAddress: req.ip, signedAt });
+        await generateDirectSendAgreementPDF(send.id, send.tenantId, renderedContract, { ipAddress: req.ip, signedAt });
         console.log(`[Adoption Direct Send] Generated PDF for ${send.id}`);
       } catch (pdfError) {
         console.error('[Adoption Direct Send] Failed to generate PDF:', pdfError);

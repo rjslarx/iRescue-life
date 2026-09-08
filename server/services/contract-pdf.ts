@@ -812,6 +812,7 @@ export async function generateAdoptionContractPDF(
     driversLicenseNumber?: string;
     signerName?: string;
     signerEmail?: string;
+    catSafetyAddendumAnswers?: import('@shared/schema').CatSafetyAddendumAnswers;
   },
   precomputedDataUris?: { signatureDataUri?: string; driversLicenseDataUri?: string },
   driversLicenseImageUrlOverride?: string,
@@ -1052,7 +1053,22 @@ export async function generateAdoptionContractPDF(
   );
 
   // Merge placeholders with actual data
-  const mergedHtml = mergePlaceholders(templateHtml, mergeData);
+  let mergedHtml = mergePlaceholders(templateHtml, mergeData);
+  if (session.catSafetyAddendumHtmlSnapshot && signatureMetadata?.catSafetyAddendumAnswers) {
+    const { renderCatSafetyAddendum, catSafetyEvidenceHtml } = await import('./cat-safety-addendum');
+    const addendum = renderCatSafetyAddendum(session.catSafetyAddendumHtmlSnapshot, {
+      animal_name: animal.name || '', organization_name: tenant.name || '',
+      adopter_name: adopterName || '', adopter_email: adopterEmail || '',
+      adopter_phone: adopterPhone || '', adopter_address: adopterAddress || '',
+      contract_date: signedAt.toLocaleDateString(),
+    }, signatureMetadata.catSafetyAddendumAnswers);
+    const evidence = catSafetyEvidenceHtml(
+      signatureMetadata.catSafetyAddendumAnswers, signedAt, mergeData.signature_image_url,
+    );
+    mergedHtml = /<\/body>/i.test(mergedHtml)
+      ? mergedHtml.replace(/<\/body>/i, `${addendum}${evidence}</body>`)
+      : `${mergedHtml}${addendum}${evidence}`;
+  }
 
   // Final sanitization as defense-in-depth
   // This catches any potential XSS that might have slipped through

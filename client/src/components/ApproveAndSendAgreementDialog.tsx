@@ -132,6 +132,10 @@ export function ApproveAndSendAgreementDialog({
   const { toast } = useToast();
   const [spayNeuterNotApplicable, setSpayNeuterNotApplicable] = useState(false);
   const [sendMethod, setSendMethod] = useState<'sms' | 'email'>('email');
+  const [includeCatSafetyAddendum, setIncludeCatSafetyAddendum] = useState(false);
+  const { data: catSafetyData } = useQuery<{ addendum: { enabled: boolean } }>({
+    queryKey: ['/api/cat-safety-addendum'], enabled: open,
+  });
 
   const { data: tenantData } = useQuery<{ tenant: { twilioEnabled?: boolean } }>({
     queryKey: ['/api/tenant'],
@@ -229,6 +233,7 @@ export function ApproveAndSendAgreementDialog({
       setCustomObligations([]);
       setShowAddCustom(false);
       setNewCustom({ obligationType: "", label: "", contractualDueDate: "", notes: "" });
+      setIncludeCatSafetyAddendum(false);
     }
   }, [open, animal, form, smsEnabled, application?.applicantPhone]);
 
@@ -337,6 +342,7 @@ export function ApproveAndSendAgreementDialog({
         isFeeWaived: data.isFeeWaived || false,
         feeWaiverReason: data.feeWaiverReason || null,
         sendMethod,
+        includeCatSafetyAddendum: data.approvalAction === "approve_and_send" && includeCatSafetyAddendum,
       });
       return response.json();
     },
@@ -989,6 +995,19 @@ export function ApproveAndSendAgreementDialog({
                   </CardContent>
                 </Card>
 
+                {catSafetyData?.addendum?.enabled && (
+                  <Card className="border-amber-200 bg-amber-50/50 dark:bg-amber-950/20" data-testid="card-include-cat-safety">
+                    <CardContent className="pt-4">
+                      <div className="flex items-start gap-3">
+                        <Checkbox id="include-cat-safety" checked={includeCatSafetyAddendum} onCheckedChange={v => setIncludeCatSafetyAddendum(v === true)} data-testid="checkbox-include-cat-safety" />
+                        <div>
+                          <Label htmlFor="include-cat-safety" className="font-medium">Include cat safety addendum</Label>
+                          <p className="mt-1 text-xs text-muted-foreground">Prefilled with {animal?.name || "the animal"} and {application.applicantName}. The adopter will provide details about resident pets, transition barriers, a daily responsible person, an emergency plan, and initials before signing.</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
                 <Card className="bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
                   <CardContent className="pt-4">
                     <div className="flex gap-3">

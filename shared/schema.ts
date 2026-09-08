@@ -3427,6 +3427,60 @@ export const insertAdoptionContractTemplateSchema = createInsertSchema(adoptionC
 export type InsertAdoptionContractTemplate = z.infer<typeof insertAdoptionContractTemplateSchema>;
 export type AdoptionContractTemplate = typeof adoptionContractTemplates.$inferSelect;
 
+// Tenant-scoped, optional appendix for cat adoptions. It is deliberately
+// separate from the general agreement template so a sent agreement can freeze
+// the exact appendix independently.
+export const catSafetyAddendumSettings = pgTable("cat_safety_addendum_settings", {
+  tenantId: uuid("tenant_id").primaryKey().references(() => tenants.id, { onDelete: 'cascade' }),
+  enabled: boolean("enabled").notNull().default(false),
+  htmlTemplate: text("html_template").notNull(),
+  version: text("version").notNull().default("1.0"),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  updatedBy: uuid("updated_by").references(() => users.id, { onDelete: 'set null' }),
+});
+
+export const CAT_SAFETY_ADDENDUM_PLACEHOLDERS = {
+  '{{animal_name}}': 'Adopted animal name',
+  '{{organization_name}}': 'Rescue organization name',
+  '{{adopter_name}}': 'Primary adopter full name',
+  '{{adopter_email}}': 'Primary adopter email',
+  '{{adopter_phone}}': 'Primary adopter phone',
+  '{{adopter_address}}': 'Adoption address',
+  '{{contract_date}}': 'Agreement date',
+  '{{resident_cat_description}}': 'Resident cat name or description',
+  '{{resident_cat_housing}}': 'Where the resident cat will be securely housed',
+  '{{primary_barrier}}': 'Primary physical barrier',
+  '{{secondary_barrier}}': 'Secondary physical barrier',
+  '{{transitions_plan}}': 'How transitions and doors will be managed',
+  '{{responsible_person}}': 'Person responsible for daily separation',
+  '{{emergency_plan}}': 'Emergency plan if either animal escapes confinement',
+  '{{adopter1_initials}}': 'Primary adopter initials',
+  '{{adopter2_name}}': 'Optional second adopter full name',
+  '{{adopter2_phone}}': 'Optional second adopter phone',
+  '{{adopter2_initials}}': 'Optional second adopter initials',
+} as const;
+
+export const catSafetyAddendumAnswersSchema = z.object({
+  residentCatDescription: z.string().trim().min(1).max(2000),
+  residentCatHousing: z.string().trim().min(1).max(2000),
+  primaryBarrier: z.string().trim().min(1).max(1000),
+  secondaryBarrier: z.string().trim().min(1).max(1000),
+  transitionsPlan: z.string().trim().min(1).max(2000),
+  responsiblePerson: z.string().trim().min(1).max(500),
+  emergencyPlan: z.string().trim().min(1).max(2000),
+  adopter1Initials: z.string().trim().min(1).max(20),
+  coAdopter: z.object({
+    name: z.string().trim().min(1).max(200),
+    phone: z.string().trim().min(1).max(50),
+    initials: z.string().trim().min(1).max(20),
+    signatureImageData: z.string().max(2_000_000).regex(
+      /^data:image\/(png|jpe?g|webp);base64,[A-Za-z0-9+/]+={0,2}$/,
+      'A valid co-adopter signature image is required',
+    ),
+  }).strict().optional(),
+}).strict();
+export type CatSafetyAddendumAnswers = z.infer<typeof catSafetyAddendumAnswersSchema>;
+
 // Foster Contract Templates table - customizable foster care agreement templates per tenant
 export const fosterContractTemplates = pgTable("foster_contract_templates", {
   id: serial("id").primaryKey(),
@@ -3627,6 +3681,9 @@ export const adoptionCheckoutSessions = pgTable("adoption_checkout_sessions", {
   }>(),
   isFeeWaived: boolean("is_fee_waived").notNull().default(false),
   feeWaiverReason: text("fee_waiver_reason"),
+  catSafetyAddendumHtmlSnapshot: text("cat_safety_addendum_html_snapshot"),
+  catSafetyAddendumVersion: text("cat_safety_addendum_version"),
+  catSafetyAddendumAnswers: jsonb("cat_safety_addendum_answers").$type<CatSafetyAddendumAnswers>(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -3702,6 +3759,8 @@ export const adoptionAgreementDirectSends = pgTable("adoption_agreement_direct_s
   animalId: uuid("animal_id").references(() => animals.id, { onDelete: 'set null' }),
   recipientName: text("recipient_name").notNull(),
   recipientEmail: text("recipient_email").notNull(),
+  recipientPhone: text("recipient_phone"),
+  recipientAddress: text("recipient_address"),
   staffInitiatedBy: uuid("staff_initiated_by").references(() => users.id, { onDelete: 'set null' }),
   status: text("status").notNull().default("pending").$type<"pending" | "signed" | "cancelled" | "expired">(),
   secureTokenHash: text("secure_token_hash").notNull(), // sha256 of the raw token; raw token only travels via email
@@ -3716,6 +3775,9 @@ export const adoptionAgreementDirectSends = pgTable("adoption_agreement_direct_s
   signedUserAgent: text("signed_user_agent"),
   renderedContract: text("rendered_contract"), // Final merged HTML incl. signature
   contractPdfUrl: text("contract_pdf_url"), // /objects/... path in object storage
+  catSafetyAddendumHtmlSnapshot: text("cat_safety_addendum_html_snapshot"),
+  catSafetyAddendumVersion: text("cat_safety_addendum_version"),
+  catSafetyAddendumAnswers: jsonb("cat_safety_addendum_answers").$type<CatSafetyAddendumAnswers>(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

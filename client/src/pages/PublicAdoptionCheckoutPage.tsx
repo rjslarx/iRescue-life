@@ -19,6 +19,7 @@ import { loadStripe } from "@stripe/stripe-js";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { getTierIcon } from "@/lib/vip-tier-icon";
+import { CatSafetyAddendumFields, CatSafetyAddendumReview, emptyCatSafetyAnswers, catSafetyAnswersValid, type CatSafetyAnswers } from "@/components/CatSafetyAddendum";
 
 interface PublicVipTier {
   id: string;
@@ -80,6 +81,7 @@ interface SessionData {
     name: string;
   };
   feeConfig?: FeeConfig;
+  catSafetyAddendum?: { html: string; prefill: { adopterName: string; adopterEmail: string; adopterPhone: string; adopterAddress: string } };
 }
 
 function PaymentForm({ 
@@ -738,6 +740,8 @@ function PublicAdoptionCheckoutPageContent() {
   const [driversLicenseNumber, setDriversLicenseNumber] = useState("");
   const [driversLicenseImage, setDriversLicenseImage] = useState<string | null>(null);
   const [uploadingLicense, setUploadingLicense] = useState(false);
+  const [catAnswers, setCatAnswers] = useState<CatSafetyAnswers>(emptyCatSafetyAnswers());
+  const [coAdopterEnabled, setCoAdopterEnabled] = useState(false);
 
   const { data: sessionData, isLoading, error } = useQuery<SessionData>({
     queryKey: ['/api/public/adoption-checkouts', token],
@@ -796,6 +800,7 @@ function PublicAdoptionCheckoutPageContent() {
         signerEmail: sessionData?.applicant.email || "",
         signatureImageData: signatureData,
         driversLicenseNumber: driversLicenseNumber.trim(),
+        catSafetyAddendumAnswers: sessionData?.catSafetyAddendum ? catAnswers : undefined,
       });
       return response.json();
     },
@@ -900,6 +905,10 @@ function PublicAdoptionCheckoutPageContent() {
         description: "Please upload a photo of your driver's license",
         variant: "destructive",
       });
+      return;
+    }
+    if (sessionData?.catSafetyAddendum && !catSafetyAnswersValid(catAnswers, coAdopterEnabled)) {
+      toast({ title: "Complete the cat safety addendum", description: "Please answer every required question and complete all required initials and signatures.", variant: "destructive" });
       return;
     }
     if (signature) {
@@ -1146,6 +1155,7 @@ function PublicAdoptionCheckoutPageContent() {
                     </>
                   )}
                 </div>
+                {sessionData.catSafetyAddendum && <CatSafetyAddendumReview html={sessionData.catSafetyAddendum.html} />}
 
                 <Separator />
 
@@ -1232,6 +1242,7 @@ function PublicAdoptionCheckoutPageContent() {
                   <h4 className="font-semibold mb-4">Your Signature</h4>
                   <SignatureCanvas onSignatureChange={setSignature} disabled={signMutation.isPending} />
                 </div>
+                {sessionData.catSafetyAddendum && <CatSafetyAddendumFields value={catAnswers} onChange={setCatAnswers} coAdopterEnabled={coAdopterEnabled} onCoAdopterEnabledChange={setCoAdopterEnabled} />}
 
                 <Alert>
                   <Heart className="h-4 w-4" />

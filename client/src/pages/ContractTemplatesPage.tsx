@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/contexts/AuthContext";
@@ -37,9 +37,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { FileText, Plus, Edit, Trash2, Eye, Star, Copy, ChevronDown, GripVertical, Type, LayoutTemplate, AlertCircle, Heart, PawPrint, Sparkles, Wand2, Send, RefreshCw, XCircle, Download, Loader2 } from "lucide-react";
+import { FileText, Plus, Edit, Trash2, Eye, Star, Copy, ChevronDown, GripVertical, Type, LayoutTemplate, AlertCircle, Heart, PawPrint, Sparkles, Wand2, Send, RefreshCw, XCircle, Download, Loader2, ShieldCheck } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { SmartTemplateEditor, type DocumentType } from "@/components/SmartTemplateEditor";
 import type { EditableVariable } from "@shared/schema";
 import { ContractTemplateWizard } from "@/components/ContractTemplateWizard";
@@ -403,6 +405,7 @@ export default function ContractTemplatesPage() {
   const { user } = useAuth();
   const { tenant } = useTenant();
   const { toast } = useToast();
+  const canEditCatSafety = user?.activeRole === 'admin';
   
   // Contract type tab state
   const [activeContractType, setActiveContractType] = useState<ContractType>('adoption');
@@ -427,6 +430,11 @@ export default function ContractTemplatesPage() {
   const [sendRecipientName, setSendRecipientName] = useState("");
   const [sendRecipientEmail, setSendRecipientEmail] = useState("");
   const [sendAnimalId, setSendAnimalId] = useState<string>("none");
+  const [sendIncludeCatSafety, setSendIncludeCatSafety] = useState(false);
+  const [sendPhone, setSendPhone] = useState("");
+  const [sendAddress, setSendAddress] = useState("");
+  const [catSafetyEnabled, setCatSafetyEnabled] = useState(false);
+  const [catSafetyHtml, setCatSafetyHtml] = useState("");
   const [pdfLoadingId, setPdfLoadingId] = useState<string | null>(null);
   const [directFosterTemplate, setDirectFosterTemplate] = useState<ContractTemplate | null>(null);
 
@@ -491,13 +499,27 @@ export default function ContractTemplatesPage() {
     queryKey: ['/api/adoption-agreement-direct-sends'],
     enabled: activeContractType === 'adoption',
   });
+  const { data: catSafetyData } = useQuery<{ addendum: { enabled: boolean; htmlTemplate: string; version: string }; placeholders: Record<string, string> }>({
+    queryKey: ['/api/cat-safety-addendum'], enabled: activeContractType === "adoption",
+  });
+  const saveCatSafetyMutation = useMutation({
+    mutationFn: () => apiRequest("PUT", "/api/cat-safety-addendum", { enabled: catSafetyEnabled, htmlTemplate: catSafetyHtml }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['/api/cat-safety-addendum'] }); toast({ title: "Cat safety addendum saved" }); },
+    onError: (e: any) => toast({ title: "Could not save addendum", description: e.message, variant: "destructive" }),
+  });
+  useEffect(() => {
+    if (catSafetyData?.addendum) { setCatSafetyEnabled(catSafetyData.addendum.enabled); setCatSafetyHtml(catSafetyData.addendum.htmlTemplate || ""); }
+  }, [catSafetyData]);
 
   const sendDirectMutation = useMutation({
-    mutationFn: async (payload: { templateId: number; recipientName: string; recipientEmail: string; animalId?: string }) => {
+    mutationFn: async (payload: { templateId: number; recipientName: string; recipientEmail: string; animalId?: string; includeCatSafetyAddendum?: boolean; recipientPhone?: string; recipientAddress?: string }) => {
       const response = await apiRequest('POST', `/api/contract-templates/${payload.templateId}/direct-send`, {
         recipientName: payload.recipientName,
         recipientEmail: payload.recipientEmail,
         animalId: payload.animalId || null,
+        includeCatSafetyAddendum: payload.includeCatSafetyAddendum || false,
+        recipientPhone: payload.recipientPhone || undefined,
+        recipientAddress: payload.recipientAddress || undefined,
       });
       if (!response.ok) {
         const err = await response.json();
@@ -511,6 +533,7 @@ export default function ContractTemplatesPage() {
       setSendRecipientName("");
       setSendRecipientEmail("");
       setSendAnimalId("none");
+       setSendIncludeCatSafety(false); setSendPhone(""); setSendAddress("");
       toast({ title: "Agreement sent", description: "The signing link was emailed to the recipient." });
     },
     onError: (error: any) => {
@@ -576,6 +599,7 @@ export default function ContractTemplatesPage() {
     setSendRecipientName("");
     setSendRecipientEmail("");
     setSendAnimalId("none");
+    setSendIncludeCatSafety(false); setSendPhone(""); setSendAddress("");
     setIsSendDialogOpen(true);
   };
 
@@ -953,6 +977,14 @@ export default function ContractTemplatesPage() {
           </TabsList>
 
           <TabsContent value="adoption" className="mt-6 space-y-6">
+            <Card className="border-amber-200" data-testid="card-cat-safety-settings">
+              <CardHeader><CardTitle className="flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-amber-700" />Cat safety addendum</CardTitle><CardDescription>Optional language shown after adoption agreements. This is a starting draft; review wording with local counsel before enabling.</CardDescription></CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between rounded-md border p-3"><div><Label htmlFor="cat-safety-enabled">Make available when sending agreements</Label><p className="text-xs text-muted-foreground">Staff must still select it for each adoption. Existing and unselected agreements are unchanged.</p></div><Switch id="cat-safety-enabled" checked={catSafetyEnabled} onCheckedChange={setCatSafetyEnabled} disabled={!canEditCatSafety} data-testid="switch-cat-safety-enabled" /></div>
+                <div className="grid gap-4 lg:grid-cols-2"><div className="space-y-2"><Label htmlFor="cat-safety-html">Addendum HTML</Label><Textarea id="cat-safety-html" value={catSafetyHtml} onChange={e => setCatSafetyHtml(e.target.value)} disabled={!canEditCatSafety} className="min-h-56 font-mono text-xs" data-testid="textarea-cat-safety-html" /><p className="text-xs text-muted-foreground">Supported placeholders: {Object.keys(catSafetyData?.placeholders || {}).join(", ") || "{{animal_name}}, {{adopter_name}}"}</p></div><div className="space-y-2"><Label>Sanitized preview</Label><div className="min-h-56 rounded-md border bg-background p-4 prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(catSafetyHtml) }} data-testid="preview-cat-safety-html" /></div></div>
+                {canEditCatSafety ? <Button onClick={() => saveCatSafetyMutation.mutate()} disabled={saveCatSafetyMutation.isPending} data-testid="button-save-cat-safety">{saveCatSafetyMutation.isPending ? "Saving..." : "Save addendum settings"}</Button> : <p className="text-xs text-muted-foreground">Only an administrator can change or enable this legal wording.</p>}
+              </CardContent>
+            </Card>
             {renderTemplateGrid(adoptionTemplates, adoptionLoading)}
             {renderDirectSendsSection()}
           </TabsContent>
@@ -1524,6 +1556,11 @@ export default function ContractTemplatesPage() {
                   </SelectContent>
                 </Select>
               </div>
+              {catSafetyData?.addendum.enabled && <div className="space-y-3 rounded-md border border-amber-200 bg-amber-50/50 p-3">
+                <div className="flex items-start gap-2"><Checkbox checked={sendIncludeCatSafety} onCheckedChange={v => setSendIncludeCatSafety(v === true)} data-testid="checkbox-direct-include-cat-safety" /><div><Label>Include cat safety addendum</Label><p className="text-xs text-muted-foreground">Requires an animal so the agreement can be prefilled with the correct animal and known adopter details.</p></div></div>
+                {sendIncludeCatSafety && <p className="text-xs text-amber-900">Select an animal above. The signer will answer transition and emergency-planning questions before signing.</p>}
+              </div>}
+              <div className="grid gap-3 sm:grid-cols-2"><div className="space-y-2"><Label htmlFor="direct-send-phone">Phone (optional)</Label><Input id="direct-send-phone" value={sendPhone} onChange={e => setSendPhone(e.target.value)} data-testid="input-direct-send-phone" /></div><div className="space-y-2"><Label htmlFor="direct-send-address">Address (optional)</Label><Input id="direct-send-address" value={sendAddress} onChange={e => setSendAddress(e.target.value)} data-testid="input-direct-send-address" /></div></div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setIsSendDialogOpen(false)} data-testid="button-direct-send-cancel-dialog">
@@ -1537,9 +1574,12 @@ export default function ContractTemplatesPage() {
                     recipientName: sendRecipientName.trim(),
                     recipientEmail: sendRecipientEmail.trim(),
                     animalId: sendAnimalId === "none" ? undefined : sendAnimalId,
+                    includeCatSafetyAddendum: sendIncludeCatSafety,
+                    recipientPhone: sendPhone.trim() || undefined,
+                    recipientAddress: sendAddress.trim() || undefined,
                   });
                 }}
-                disabled={!sendRecipientName.trim() || !sendRecipientEmail.trim() || sendDirectMutation.isPending}
+                disabled={!sendRecipientName.trim() || !sendRecipientEmail.trim() || sendDirectMutation.isPending || (sendIncludeCatSafety && sendAnimalId === "none")}
                 data-testid="button-direct-send-submit"
               >
                 {sendDirectMutation.isPending ? (

@@ -12,6 +12,7 @@ import { SignatureCanvas } from "@/components/SignatureCanvas";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, CheckCircle2, ChevronLeft, ChevronRight, Heart, AlertCircle, FileText, PawPrint } from "lucide-react";
+import { CatSafetyAddendumFields, CatSafetyAddendumReview, emptyCatSafetyAnswers, catSafetyAnswersValid, type CatSafetyAnswers } from "@/components/CatSafetyAddendum";
 
 type Step = "review" | "sign" | "success";
 
@@ -30,6 +31,7 @@ interface DirectSendData {
   };
   animal?: { name: string } | null;
   organization?: { name: string } | null;
+  catSafetyAddendum?: { html: string; prefill: { adopterName: string; adopterEmail: string; adopterPhone: string; adopterAddress: string } };
 }
 
 export default function PublicAdoptionAgreementDirectPage() {
@@ -42,6 +44,8 @@ export default function PublicAdoptionAgreementDirectPage() {
   const [signerPhone, setSignerPhone] = useState("");
   const [signerAddress, setSignerAddress] = useState("");
   const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [catAnswers, setCatAnswers] = useState<CatSafetyAnswers>(emptyCatSafetyAnswers());
+  const [coAdopterEnabled, setCoAdopterEnabled] = useState(false);
 
   const { data, isLoading, error, refetch } = useQuery<DirectSendData>({
     queryKey: ['/api/public/adoption-agreement-direct', token],
@@ -53,6 +57,12 @@ export default function PublicAdoptionAgreementDirectPage() {
     if (data?.send) {
       setSignerName((prev) => prev || data.send.recipientName || "");
       setSignerEmail((prev) => prev || data.send.recipientEmail || "");
+      if (data.catSafetyAddendum?.prefill) {
+        setSignerName(prev => prev || data.catSafetyAddendum!.prefill.adopterName);
+        setSignerEmail(prev => prev || data.catSafetyAddendum!.prefill.adopterEmail);
+        setSignerPhone(prev => prev || data.catSafetyAddendum!.prefill.adopterPhone);
+        setSignerAddress(prev => prev || data.catSafetyAddendum!.prefill.adopterAddress);
+      }
     }
   }, [data]);
 
@@ -63,6 +73,7 @@ export default function PublicAdoptionAgreementDirectPage() {
       signerPhone?: string;
       signerAddress?: string;
       signatureImageData: string;
+      catSafetyAddendumAnswers?: CatSafetyAnswers;
     }) => {
       const response = await apiRequest('POST', `/api/public/adoption-agreement-direct/${token}/sign`, body);
       if (!response.ok) {
@@ -93,12 +104,16 @@ export default function PublicAdoptionAgreementDirectPage() {
       });
       return;
     }
+    if (data.catSafetyAddendum && !catSafetyAnswersValid(catAnswers, coAdopterEnabled)) {
+      toast({ title: "Complete the cat safety addendum", description: "Please answer every required question and complete all required initials and signatures.", variant: "destructive" }); return;
+    }
     signMutation.mutate({
       signerName,
       signerEmail,
       signerPhone: signerPhone || undefined,
       signerAddress: signerAddress || undefined,
       signatureImageData: signatureImage,
+      catSafetyAddendumAnswers: data.catSafetyAddendum ? catAnswers : undefined,
     });
   };
 
@@ -230,6 +245,7 @@ export default function PublicAdoptionAgreementDirectPage() {
                   </AlertDescription>
                 </Alert>
               )}
+              {data.catSafetyAddendum && <CatSafetyAddendumReview html={data.catSafetyAddendum.html} />}
               <Button
                 className="w-full bg-emerald-600 hover:bg-emerald-700"
                 onClick={() => setStep("sign")}
@@ -298,6 +314,7 @@ export default function PublicAdoptionAgreementDirectPage() {
                 <Label>Signature *</Label>
                 <SignatureCanvas onSignatureChange={setSignatureImage} />
               </div>
+              {data.catSafetyAddendum && <CatSafetyAddendumFields value={catAnswers} onChange={setCatAnswers} coAdopterEnabled={coAdopterEnabled} onCoAdopterEnabledChange={setCoAdopterEnabled} />}
 
               <div className="flex items-start space-x-2">
                 <Checkbox
