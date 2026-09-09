@@ -25,6 +25,10 @@ import {
   UserRoundCheck,
   FileText,
   Radio,
+  Building2,
+  Stethoscope,
+  CalendarDays,
+  HeartHandshake,
 } from "lucide-react";
 
 interface FeaturedRescue {
@@ -253,6 +257,30 @@ export default function PlatformLandingPage() {
                 title: "AI-Assisted Grant Work",
                 description:
                   "Draft grant content, track deadlines and compliance, and export the reports funders need.",
+              },
+              {
+                icon: Building2,
+                title: "Kennel Facility Manager",
+                description:
+                  "Design your kennel layout, see occupancy at a glance, and keep animal locations organized across your facility.",
+              },
+              {
+                icon: Stethoscope,
+                title: "Medical Records & Care",
+                description:
+                  "Track vaccinations, medications, treatments, preventatives, veterinary records, and upcoming care in one place.",
+              },
+              {
+                icon: CalendarDays,
+                title: "Volunteer Calendars",
+                description:
+                  "Publish shifts, let volunteers schedule themselves, and keep signups and coverage organized without endless messages.",
+              },
+              {
+                icon: HeartHandshake,
+                title: "Fundraising Built for Rescues",
+                description:
+                  "Accept donations and launch peer-to-peer campaigns, animal fundraisers, events, recurring giving, and more.",
               },
             ].map(({ icon: Icon, title, description }) => (
               <Card key={title} className="p-6 flex gap-4" data-testid={`feature-${title.toLowerCase().replaceAll(" ", "-")}`}>

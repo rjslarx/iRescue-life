@@ -639,11 +639,11 @@ export function AnimalHudCard({
                       onClick={() => navigate(`/dashboard/profile-contributions?animalId=${encodeURIComponent(animal.id)}`)}
                       variant="outline"
                       size="sm"
-                      className="justify-center text-xs sm:text-sm"
+                      className="h-auto min-h-9 justify-center px-2 py-1 text-xs leading-tight whitespace-normal sm:text-sm"
                       data-testid={`button-profile-contributions-${animal.id}`}
                     >
                       <MessageSquarePlus className="w-3.5 h-3.5 mr-1.5 shrink-0" />
-                      Profile Contributions
+                      <span className="text-center">Profile Contributions</span>
                     </Button>
                   </>
                 )}
