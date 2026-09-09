@@ -20,6 +20,7 @@ import {
   Play,
   Sparkles,
   ExternalLink,
+  Quote,
 } from "lucide-react";
 
 interface FeaturedRescue {
@@ -205,6 +206,42 @@ export default function PlatformLandingPage() {
               </Link>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* ======== Customer Testimonial ======== */}
+      <section className="py-12 sm:py-16" aria-labelledby="southern-pets-testimonial">
+        <div className="container max-w-4xl mx-auto px-4 sm:px-6">
+          <Card
+            className="relative overflow-hidden border-0 p-7 sm:p-10 shadow-sm"
+            style={{ backgroundColor: TEAL_LIGHT }}
+            data-testid="testimonial-southern-pets"
+          >
+            <Quote
+              className="absolute right-5 top-5 h-16 w-16 opacity-10"
+              style={{ color: TEAL }}
+              aria-hidden="true"
+            />
+            <div className="relative space-y-5">
+              <p className="text-sm font-semibold uppercase tracking-wider" style={{ color: TEAL }}>
+                What Rescues Are Saying
+              </p>
+              <blockquote
+                id="southern-pets-testimonial"
+                className="font-display text-xl sm:text-2xl font-semibold leading-relaxed text-foreground"
+              >
+                “iRescue.life brings practical, easy-to-use tools for fundraising, animal care,
+                applications, and more into one place. It saves our rescue valuable time, so we
+                can spend more of it where it matters most—helping animals.”
+              </blockquote>
+              <footer>
+                <p className="font-semibold">Southern Pets Animal Rescue</p>
+                <p className="text-sm text-muted-foreground">
+                  Nonprofit animal rescue
+                </p>
+              </footer>
+            </div>
+          </Card>
         </div>
       </section>
 
