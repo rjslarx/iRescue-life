@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { ObjectUploader } from "@/components/ObjectUploader";
+import { tenantFetch } from "@/lib/tenantApi";
 import {
   appendUniqueTag,
   insertBadgeExample,
@@ -42,6 +43,49 @@ const REVEAL_EXAMPLES: RevealDraft[] = [
   { title: "My favorite little routine", body: "After dinner, I carry my favorite toy to the living room and settle nearby." },
   { title: "Something I am still learning", body: "New visitors can make me shy, but I relax when they give me a little space." },
 ];
+
+function StagedProfilePhoto({ url }: { url: string }) {
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let disposed = false;
+    let objectUrl: string | null = null;
+
+    tenantFetch(url)
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`Photo preview failed with status ${response.status}`);
+        objectUrl = URL.createObjectURL(await response.blob());
+        if (disposed) {
+          URL.revokeObjectURL(objectUrl);
+          return;
+        }
+        setPreviewUrl(objectUrl);
+      })
+      .catch(() => {
+        if (!disposed) setFailed(true);
+      });
+
+    return () => {
+      disposed = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [url]);
+
+  if (failed) {
+    return (
+      <div className="flex aspect-square w-full items-center justify-center rounded-md border bg-muted px-3 text-center text-xs text-muted-foreground">
+        Preview unavailable
+      </div>
+    );
+  }
+
+  if (!previewUrl) {
+    return <div className="aspect-square w-full animate-pulse rounded-md border bg-muted" aria-label="Loading photo preview" />;
+  }
+
+  return <img src={previewUrl} alt="" className="aspect-square w-full rounded-md object-cover" />;
+}
 
 export function PersonalityFitEditor({
   animalId,
@@ -168,7 +212,7 @@ export function PersonalityFitEditor({
           </div>
           {existingPhotos.length > 0 && <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">{existingPhotos.map((url, index) => <img key={url} src={url} alt={`${animalName} gallery photo ${index + 1}`} className="aspect-square w-full rounded-md border object-cover" />)}</div>}
           <p className="text-xs text-muted-foreground">{existingPhotos.length} of {maxPhotos} gallery spaces used.</p>
-          {photos.map((photo, index) => <div key={photo.url} className="relative grid gap-3 rounded-lg border bg-background/60 p-3 pr-12 sm:grid-cols-[120px_1fr]"><img src={photo.url} alt="" className="aspect-square w-full rounded-md object-cover" /><div className="space-y-1"><Label htmlFor={`profile-photo-alt-${index}`}>Describe this photo for someone who cannot see it</Label><Textarea id={`profile-photo-alt-${index}`} maxLength={240} value={photo.altText} onChange={(event) => setPhotos(photos.map((item, itemIndex) => itemIndex === index ? { ...item, altText: event.target.value } : item))} placeholder={`${animalName} sitting in the grass with ears perked toward the camera.`} /></div><Button type="button" variant="ghost" size="icon" className="absolute right-2 top-2" onClick={() => updatePhotoUrls(photos.filter((_, itemIndex) => itemIndex !== index).map((item) => item.url))} aria-label={`Remove staged profile photo ${index + 1}`}><X className="h-4 w-4" /></Button></div>)}
+          {photos.map((photo, index) => <div key={photo.url} className="relative grid gap-3 rounded-lg border bg-background/60 p-3 pr-12 sm:grid-cols-[120px_1fr]"><StagedProfilePhoto url={photo.url} /><div className="space-y-1"><Label htmlFor={`profile-photo-alt-${index}`}>Describe this photo for someone who cannot see it</Label><Textarea id={`profile-photo-alt-${index}`} maxLength={240} value={photo.altText} onChange={(event) => setPhotos(photos.map((item, itemIndex) => itemIndex === index ? { ...item, altText: event.target.value } : item))} placeholder={`${animalName} sitting in the grass with ears perked toward the camera.`} /></div><Button type="button" variant="ghost" size="icon" className="absolute right-2 top-2" onClick={() => updatePhotoUrls(photos.filter((_, itemIndex) => itemIndex !== index).map((item) => item.url))} aria-label={`Remove staged profile photo ${index + 1}`}><X className="h-4 w-4" /></Button></div>)}
           {availablePhotoSlots > photos.length ? <ObjectUploader value={photos.map((photo) => photo.url)} onChange={updatePhotoUrls} maxFiles={availablePhotoSlots} maxFileSize={25 * 1024 * 1024} uploadEndpoint={`/api/animals/${animalId}/profile-photos/upload`} accept="image/jpeg,image/png,image/gif,image/webp" buttonText="Upload profile photo" showPreview={false} /> : <p className="rounded-md bg-muted p-3 text-sm">This gallery is full. A staff member can remove a photo in Edit Animal before another is added.</p>}
           <p className="flex items-center gap-2 text-xs text-muted-foreground"><Camera className="h-4 w-4" aria-hidden="true" />JPG, PNG, GIF, or WebP; 25 MB maximum each. New photos are added after the current gallery.</p>
         </div>

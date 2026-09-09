@@ -10651,7 +10651,10 @@ Crawl-delay: 1
       const pathTenantId = objectStorageService.extractTenantIdFromPath(req.path);
       
       // Get session tenant ID if available
-      const sessionTenantId = req.tenant?.id;
+      // Object requests can reach this route without a hydrated req.tenant
+      // (for example, an <img> loading a newly staged private upload). The
+      // authenticated session still carries the tenant selected at login.
+      const sessionTenantId = req.tenant?.id || req.session?.tenantId;
       const userId = req.session?.userId;
       
       // Debug: Log ACL info for troubleshooting social media crawler access
