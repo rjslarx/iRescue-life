@@ -297,7 +297,7 @@ function AnnouncementBarSettings({ brandingForm }: { brandingForm: any }) {
                   text={watchText}
                   linkText={watchLinkText}
                   linkUrl={watchLinkUrl}
-                  style={watchStyle as "info" | "warning" | "urgent"}
+                  style={watchStyle}
                   dismissible={true}
                 />
               ) : (
@@ -454,6 +454,11 @@ function AnnouncementBarSettings({ brandingForm }: { brandingForm: any }) {
                     <SelectItem value="info">Info (Blue)</SelectItem>
                     <SelectItem value="warning">Warning (Yellow)</SelectItem>
                     <SelectItem value="urgent">Urgent (Red)</SelectItem>
+                    <SelectItem value="success">Success (Green)</SelectItem>
+                    <SelectItem value="teal">Teal</SelectItem>
+                    <SelectItem value="purple">Purple</SelectItem>
+                    <SelectItem value="pink">Pink</SelectItem>
+                    <SelectItem value="neutral">Charcoal</SelectItem>
                   </SelectContent>
                 </Select>
                 <FormMessage />
@@ -488,7 +493,7 @@ const brandingSettingsSchema = z.object({
   announcementBarText: z.string().optional(),
   announcementBarLinkText: z.string().optional(),
   announcementBarLinkUrl: z.string().optional(),
-  announcementBarStyle: z.enum(["info", "warning", "urgent"]).optional(),
+  announcementBarStyle: z.enum(["info", "warning", "urgent", "success", "teal", "purple", "pink", "neutral"]).optional(),
   primaryColor: z.string().optional(),
   secondaryColor: z.string().optional(),
   accentColor: z.string().optional(),

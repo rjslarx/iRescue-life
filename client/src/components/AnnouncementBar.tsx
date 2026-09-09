@@ -7,7 +7,7 @@ interface AnnouncementBarProps {
   text: string;
   linkText?: string;
   linkUrl?: string;
-  style?: "info" | "warning" | "urgent";
+  style?: "info" | "warning" | "urgent" | "success" | "teal" | "purple" | "pink" | "neutral";
   dismissible?: boolean;
 }
 
@@ -25,25 +25,45 @@ export default function AnnouncementBar({
   const styleClasses = {
     info: "bg-blue-600 text-white",
     warning: "bg-amber-500 text-black",
-    urgent: "bg-red-600 text-white"
+    urgent: "bg-red-600 text-white",
+    success: "bg-green-600 text-white",
+    teal: "bg-teal-600 text-white",
+    purple: "bg-purple-600 text-white",
+    pink: "bg-pink-600 text-white",
+    neutral: "bg-slate-700 text-white",
   };
 
   const iconClasses = {
     info: "text-white/90",
     warning: "text-black/80",
-    urgent: "text-white/90"
+    urgent: "text-white/90",
+    success: "text-white/90",
+    teal: "text-white/90",
+    purple: "text-white/90",
+    pink: "text-white/90",
+    neutral: "text-white/90",
   };
 
   const linkClasses = {
     info: "text-white/90 hover:text-white underline underline-offset-2",
     warning: "text-black/80 hover:text-black underline underline-offset-2",
-    urgent: "text-white/90 hover:text-white underline underline-offset-2"
+    urgent: "text-white/90 hover:text-white underline underline-offset-2",
+    success: "text-white/90 hover:text-white underline underline-offset-2",
+    teal: "text-white/90 hover:text-white underline underline-offset-2",
+    purple: "text-white/90 hover:text-white underline underline-offset-2",
+    pink: "text-white/90 hover:text-white underline underline-offset-2",
+    neutral: "text-white/90 hover:text-white underline underline-offset-2",
   };
 
   const dismissClasses = {
     info: "text-white/70 hover:text-white hover:bg-white/10",
     warning: "text-black/60 hover:text-black hover:bg-black/10",
-    urgent: "text-white/70 hover:text-white hover:bg-white/10"
+    urgent: "text-white/70 hover:text-white hover:bg-white/10",
+    success: "text-white/70 hover:text-white hover:bg-white/10",
+    teal: "text-white/70 hover:text-white hover:bg-white/10",
+    purple: "text-white/70 hover:text-white hover:bg-white/10",
+    pink: "text-white/70 hover:text-white hover:bg-white/10",
+    neutral: "text-white/70 hover:text-white hover:bg-white/10",
   };
 
   const Icon = style === "urgent" ? AlertTriangle : style === "warning" ? AlertCircle : Info;

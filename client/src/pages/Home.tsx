@@ -442,7 +442,7 @@ export default function Home() {
     text?: string;
     linkText?: string;
     linkUrl?: string;
-    style?: "info" | "warning" | "urgent";
+    style?: "info" | "warning" | "urgent" | "success" | "teal" | "purple" | "pink" | "neutral";
   } | null;
 
   // Show loading state while tenant data is being fetched to prevent branding flash

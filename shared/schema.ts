@@ -136,7 +136,7 @@ export const tenants = pgTable("tenants", {
     text?: string; // e.g., "We urgently need fosters!"
     linkText?: string; // e.g., "Learn More"
     linkUrl?: string; // e.g., "/foster"
-    style?: "info" | "warning" | "urgent"; // Color scheme
+    style?: "info" | "warning" | "urgent" | "success" | "teal" | "purple" | "pink" | "neutral"; // Color scheme
   }>(),
   // Action Circle configuration for hero section (rotating CTA with hover effects)
   actionCircle: jsonb("action_circle").$type<{

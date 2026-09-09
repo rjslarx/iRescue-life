@@ -29834,7 +29834,7 @@ Submitted: ${new Date().toLocaleString()}
         announcementBarText: z.string().optional(),
         announcementBarLinkText: z.string().optional(),
         announcementBarLinkUrl: z.string().optional(),
-        announcementBarStyle: z.enum(["info", "warning", "urgent"]).optional(),
+        announcementBarStyle: z.enum(["info", "warning", "urgent", "success", "teal", "purple", "pink", "neutral"]).optional(),
         primaryColor: z.string().optional(),
         secondaryColor: z.string().optional(),
         accentColor: z.string().optional(),

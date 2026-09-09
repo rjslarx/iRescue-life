@@ -54,7 +54,7 @@ export interface TenantContext {
     text?: string;
     linkText?: string;
     linkUrl?: string;
-    style?: 'info' | 'warning' | 'urgent';
+    style?: 'info' | 'warning' | 'urgent' | 'success' | 'teal' | 'purple' | 'pink' | 'neutral';
   };
   heroHeadline?: string | null;
   heroButtonText?: string | null;
