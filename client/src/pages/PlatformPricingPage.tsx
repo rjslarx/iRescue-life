@@ -43,7 +43,11 @@ const features = [
   "Happy Tails Success Stories",
   "Analytics & Reporting",
   "PWA Mobile App",
-  "AI Help Assistant",
+  "AI Social Post Optimizer & Help Assistant",
+  "Adopter Portal & Care Reminders",
+  "Targeted Email, SMS & Push Broadcasts",
+  "AI Grant Drafting & Deadline Alerts",
+  "Free Email Support",
 ];
 
 const faqItems = [
@@ -126,7 +130,7 @@ export default function PlatformPricingPage() {
               data-testid="text-pricing-subtitle"
             >
               Get full access to all features on both plans. Just pick the billing model
-              that fits your cash flow.
+              that fits your cash flow. Free email support is included with either plan.
             </p>
           </div>
 

@@ -21,6 +21,10 @@ import {
   Sparkles,
   ExternalLink,
   Quote,
+  Megaphone,
+  UserRoundCheck,
+  FileText,
+  Radio,
 } from "lucide-react";
 
 interface FeaturedRescue {
@@ -183,9 +187,9 @@ export default function PlatformLandingPage() {
               Same Features. Two Billing Models.
             </h2>
             <p className="text-muted-foreground max-w-xl mx-auto">
-              Every rescue gets full access to every feature. Just pick the billing model that fits your cash flow.
+              Every rescue gets full access to every feature and free email support. Just pick the billing model that fits your cash flow.
             </p>
-            <div id="features" className="grid gap-4 sm:grid-cols-2 max-w-2xl mx-auto pt-6">
+            <div className="grid gap-4 sm:grid-cols-2 max-w-2xl mx-auto pt-6">
               <Card className="text-center p-6" data-testid="card-starter-summary">
                 <p className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-1">Starter</p>
                 <p className="text-3xl font-bold">$0<span className="text-base font-normal text-muted-foreground">/mo</span></p>
@@ -206,6 +210,69 @@ export default function PlatformLandingPage() {
               </Link>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* ======== Feature Highlights ======== */}
+      <section id="features" className="py-12 sm:py-16 lg:py-20 bg-muted/30">
+        <div className="container max-w-6xl mx-auto px-4 sm:px-6">
+          <div className="text-center space-y-3 mb-10">
+            <p className="text-sm font-semibold uppercase tracking-wider" style={{ color: TEAL }}>
+              More Than Rescue Management
+            </p>
+            <h2 className="font-display text-2xl sm:text-3xl lg:text-4xl font-bold">
+              Modern tools that help your rescue grow
+            </h2>
+            <p className="text-muted-foreground max-w-2xl mx-auto">
+              Save time behind the scenes, stay connected after adoption, and reach more people who can help.
+            </p>
+          </div>
+
+          <div className="grid gap-5 sm:grid-cols-2">
+            {[
+              {
+                icon: Megaphone,
+                title: "AI-Powered Social Posts",
+                description:
+                  "Create stronger posts for adoptions, fosters, volunteers, fundraisers, and urgent needs—with the right action link included.",
+              },
+              {
+                icon: UserRoundCheck,
+                title: "Adopter Portal",
+                description:
+                  "Keep adopters connected with pet records, microchip details, care reminders, and post-adoption updates.",
+              },
+              {
+                icon: Radio,
+                title: "Targeted Team Broadcasts",
+                description:
+                  "Reach the right fosters, volunteers, staff, or board members by email, SMS, and push notification.",
+              },
+              {
+                icon: FileText,
+                title: "AI-Assisted Grant Work",
+                description:
+                  "Draft grant content, track deadlines and compliance, and export the reports funders need.",
+              },
+            ].map(({ icon: Icon, title, description }) => (
+              <Card key={title} className="p-6 flex gap-4" data-testid={`feature-${title.toLowerCase().replaceAll(" ", "-")}`}>
+                <div
+                  className="h-11 w-11 rounded-lg flex shrink-0 items-center justify-center"
+                  style={{ backgroundColor: TEAL_BADGE }}
+                >
+                  <Icon className="h-5 w-5" style={{ color: TEAL }} aria-hidden="true" />
+                </div>
+                <div>
+                  <h3 className="font-display font-semibold text-lg">{title}</h3>
+                  <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{description}</p>
+                </div>
+              </Card>
+            ))}
+          </div>
+
+          <p className="mt-8 text-center text-sm font-medium text-muted-foreground">
+            Every plan includes all features and free email support.
+          </p>
         </div>
       </section>
 
