@@ -370,7 +370,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       res.json({ qrCode, url });
-    } catch (error) {
+    } catch (error: any) {
       next(error);
     }
   });
@@ -2859,24 +2859,10 @@ Crawl-delay: 1
         }
       }
 
-      if (data.email && data.email !== req.user!.email) {
-        const [existing] = await db.select({ id: users.id })
-          .from(users)
-          .where(and(
-            eq(users.tenantId, req.tenant!.id),
-            sql`LOWER(${users.email}) = LOWER(${data.email})`,
-            sql`${users.id} != ${userId}`
-          ))
-          .limit(1);
-
-        if (existing) {
-          return res.status(400).json({ error: 'That email address is already in use by another account' });
-        }
-      }
-
       const updateFields: Record<string, any> = {};
       if (data.phone !== undefined) updateFields.phone = data.phone ? data.phone.trim() : data.phone;
-      if (data.email) updateFields.email = data.email.trim().toLowerCase();
+      const normalizedEmail = data.email?.trim().toLowerCase();
+      if (normalizedEmail) updateFields.email = normalizedEmail;
       if (data.newPassword) {
         updateFields.passwordHash = await bcrypt.hash(data.newPassword, 10);
       }
@@ -2887,17 +2873,65 @@ Crawl-delay: 1
         return res.status(400).json({ error: 'No fields to update' });
       }
 
-      const [updated] = await db.update(users)
-        .set(updateFields)
-        .where(eq(users.id, userId))
-        .returning({
-          id: users.id,
-          email: users.email,
-          phone: users.phone,
-          fullName: users.fullName,
-          dailySmsOptIn: users.dailySmsOptIn,
-          smsOptIn: users.smsOptIn,
-        });
+      const { assertProfileContactEmailAvailable } = await import('./services/contacts');
+      const updated = await db.transaction(async tx => {
+        if (normalizedEmail && normalizedEmail !== req.user!.email.trim().toLowerCase()) {
+          await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${`profile-email:${req.tenant!.id}:${normalizedEmail}`}, 0))`);
+          const [existingUser] = await tx.select({ id: users.id }).from(users).where(and(
+            eq(users.tenantId, req.tenant!.id),
+            sql`lower(${users.email}) = ${normalizedEmail}`,
+            sql`${users.id} != ${userId}`,
+          )).limit(1);
+          if (existingUser) {
+            throw Object.assign(new Error('That email address is already in use by another account'), { status: 409 });
+          }
+          const ownContacts = await tx.select({ id: contacts.id }).from(contacts).where(and(
+            eq(contacts.tenantId, req.tenant!.id),
+            eq(contacts.userId, userId),
+          ));
+          const [matchingContact] = await tx.select({
+            id: contacts.id,
+            userId: contacts.userId,
+          }).from(contacts).where(and(
+            eq(contacts.tenantId, req.tenant!.id),
+            sql`lower(${contacts.email}) = ${normalizedEmail}`,
+          )).limit(1);
+          assertProfileContactEmailAvailable(matchingContact, ownContacts.map(contact => contact.id), userId);
+        }
+
+        const [updatedUser] = await tx.update(users)
+          .set(updateFields)
+          .where(and(eq(users.id, userId), eq(users.tenantId, req.tenant!.id)))
+          .returning({
+            id: users.id,
+            email: users.email,
+            phone: users.phone,
+            fullName: users.fullName,
+            dailySmsOptIn: users.dailySmsOptIn,
+            smsOptIn: users.smsOptIn,
+          });
+
+        const contactUpdate: Record<string, any> = { updatedAt: new Date() };
+        if (normalizedEmail) contactUpdate.email = normalizedEmail;
+        if (data.phone !== undefined) contactUpdate.phone = data.phone ? data.phone.trim() : data.phone;
+        if (normalizedEmail || data.phone !== undefined) {
+          await tx.update(contacts).set(contactUpdate).where(and(
+            eq(contacts.tenantId, req.tenant!.id),
+            eq(contacts.userId, userId),
+          ));
+        }
+        return updatedUser;
+      });
+      if (normalizedEmail) {
+        const linkedContacts = await db.select({ id: contacts.id }).from(contacts).where(and(
+          eq(contacts.tenantId, req.tenant!.id),
+          eq(contacts.userId, userId),
+        ));
+        const { revokeApplicantTrainingSessions } = await import('./services/volunteer-training-invitations');
+        for (const linkedContact of linkedContacts) {
+          await revokeApplicantTrainingSessions({ tenantId: req.tenant!.id, contactId: linkedContact.id });
+        }
+      }
 
       res.json({ user: updated, message: 'Profile updated successfully' });
     } catch (error: any) {
@@ -5654,16 +5688,58 @@ Crawl-delay: 1
         password: z.string().min(8),
         fullName: z.string().min(1),
         roles: z.array(z.enum(['admin', 'board_member', 'staff', 'foster', 'volunteer'])).min(1),
-      });
+        trainingOverrideReason: z.string().optional(),
+      }).strict();
 
       const data = userSchema.parse(req.body);
-      const user = await createUser(req.tenant!.id, data);
+      const { trainingOverrideReason, ...createData } = data;
+      const isVolunteer = createData.roles.includes('volunteer');
+      let hasRequiredTraining = false;
+      if (isVolunteer) {
+        const { tutorials } = await import('@shared/schema');
+        const [required] = await db.select({ id: tutorials.id }).from(tutorials).where(and(
+          eq(tutorials.tenantId, req.tenant!.id),
+          eq(tutorials.requiredForVolunteers, true),
+        )).limit(1);
+        hasRequiredTraining = !!required;
+        const reason = trainingOverrideReason?.trim();
+        if (hasRequiredTraining && (!reason || reason.length < 10 || reason.length > 1000)) {
+          const { volunteerTrainingRequiredError } = await import('./services/volunteer-training');
+          throw volunteerTrainingRequiredError("Direct volunteer creation requires a 10–1000 character audited training override reason");
+        }
+      }
+      let user = await createUser(req.tenant!.id, createData, {
+        initiallyInactive: isVolunteer,
+      });
+      if (isVolunteer) {
+        const { acquireVolunteerTrainingActivationPolicyLock, ensureUserVolunteerActivationCompliance } = await import('./services/volunteer-training');
+        const activated = await db.transaction(async tx => {
+          await acquireVolunteerTrainingActivationPolicyLock(tx, req.tenant!.id);
+          await ensureUserVolunteerActivationCompliance({
+            tenantId: req.tenant!.id,
+            userId: user.id,
+            actorId: req.user!.id,
+            overrideReason: trainingOverrideReason,
+            executor: tx,
+          });
+          const [exactUser] = await tx.update(users).set({ isActive: true }).where(and(
+            eq(users.tenantId, req.tenant!.id), eq(users.id, user.id), eq(users.isActive, false),
+          )).returning();
+          return exactUser;
+        });
+        if (!activated) throw new Error("Unable to activate volunteer after training verification");
+        const { passwordHash: _, ...safeActivated } = activated;
+        user = safeActivated;
+      }
 
       res.json({
         success: true,
         user,
       });
     } catch (error: any) {
+      if (error?.code === 'VOLUNTEER_TRAINING_REQUIRED') {
+        return res.status(error.status || 409).json({ error: error.message, message: error.message, code: error.code });
+      }
       next(error);
     }
   });
@@ -5680,28 +5756,46 @@ Crawl-delay: 1
         roles: z.array(z.enum(['admin', 'board_member', 'staff', 'foster', 'volunteer'])).min(1).optional(),
         fullName: z.string().min(1).optional(),
         tags: z.array(z.string().max(50)).max(20).optional(),
-      });
+        trainingOverrideReason: z.string().optional(),
+      }).strict();
 
       const data = updateSchema.parse(req.body);
-
-      const [updatedUser] = await db
-        .update(users)
-        .set(data)
-        .where(
-          and(
-            eq(users.id, req.params.id),
-            eq(users.tenantId, req.tenant!.id)
-          )
-        )
-        .returning({
-          id: users.id,
-          email: users.email,
-          fullName: users.fullName,
-          roles: users.roles,
-          tags: users.tags,
-          phone: users.phone,
-          createdAt: users.createdAt,
+      const { trainingOverrideReason, ...userUpdate } = data;
+      const { acquireVolunteerTrainingActivationPolicyLock, applyLockedVolunteerRoleUpdate, ensureUserVolunteerActivationCompliance } = await import('./services/volunteer-training');
+      const updatedUser = await db.transaction(async tx => {
+        await acquireVolunteerTrainingActivationPolicyLock(tx, req.tenant!.id);
+        const [lockedUser] = await tx.select({ id: users.id, roles: users.roles }).from(users).where(and(
+          eq(users.id, req.params.id), eq(users.tenantId, req.tenant!.id),
+        )).limit(1).for('no key update');
+        if (!lockedUser) return null;
+        return applyLockedVolunteerRoleUpdate({
+          lockedCurrentRoles: lockedUser.roles,
+          desiredRoles: userUpdate.roles,
+          complianceGate: async () => {
+            await ensureUserVolunteerActivationCompliance({
+              tenantId: req.tenant!.id,
+              userId: lockedUser.id,
+              actorId: req.user!.id,
+              overrideReason: trainingOverrideReason,
+              executor: tx,
+            });
+          },
+          write: async () => {
+            const [updated] = await tx.update(users).set(userUpdate).where(and(
+              eq(users.id, lockedUser.id), eq(users.tenantId, req.tenant!.id),
+            )).returning({
+              id: users.id,
+              email: users.email,
+              fullName: users.fullName,
+              roles: users.roles,
+              tags: users.tags,
+              phone: users.phone,
+              createdAt: users.createdAt,
+            });
+            return updated;
+          },
         });
+      });
 
       if (!updatedUser) {
         return res.status(404).json({ error: 'User not found' });
@@ -5730,7 +5824,7 @@ Crawl-delay: 1
           action: 'user.role_update',
           entityType: 'user',
           entityId: req.params.id,
-          changes: { after: { roles: data.roles, fullName: data.fullName } },
+          changes: { after: { roles: userUpdate.roles, fullName: userUpdate.fullName } },
           metadata: { targetUserEmail: updatedUser.email, targetUserName: updatedUser.fullName },
           req,
         });
@@ -5739,7 +5833,10 @@ Crawl-delay: 1
       }
 
       res.json({ success: true, user: updatedUser });
-    } catch (error) {
+    } catch (error: any) {
+      if (error?.code === 'VOLUNTEER_TRAINING_REQUIRED') {
+        return res.status(error.status || 409).json({ error: error.message, message: error.message, code: error.code });
+      }
       next(error);
     }
   });
@@ -5751,7 +5848,10 @@ Crawl-delay: 1
   app.patch('/api/users/:id/access', requireTenant, requireAuth, requireRole('owner', 'admin'), async (req, res, next) => {
     try {
       const { users } = await import('@shared/schema');
-      const { isActive } = z.object({ isActive: z.boolean() }).parse(req.body);
+      const { isActive, trainingOverrideReason } = z.object({
+        isActive: z.boolean(),
+        trainingOverrideReason: z.string().optional(),
+      }).strict().parse(req.body);
 
       if (req.params.id === req.user!.id) {
         return res.status(400).json({ error: 'You cannot put your own access on hold' });
@@ -5760,8 +5860,10 @@ Crawl-delay: 1
         return res.status(403).json({ error: 'End View As mode before changing a team member’s access' });
       }
 
+      const { acquireVolunteerTrainingActivationPolicyLock, applyLockedVolunteerAccessUpdate, ensureUserVolunteerActivationCompliance } = await import('./services/volunteer-training');
       const updatedUser = await db.transaction(async (tx) => {
         const { auditLogs } = await import('@shared/schema');
+        await acquireVolunteerTrainingActivationPolicyLock(tx, req.tenant!.id);
         const [targetUser] = await tx
           .select({
             id: users.id,
@@ -5773,7 +5875,7 @@ Crawl-delay: 1
           .from(users)
           .where(and(eq(users.id, req.params.id), eq(users.tenantId, req.tenant!.id)))
           .limit(1)
-          .for('update');
+          .for('no key update');
 
         if (!targetUser) {
           throw Object.assign(new Error('User not found'), { accessStatus: 404 });
@@ -5781,18 +5883,31 @@ Crawl-delay: 1
         if (targetUser.roles.includes('owner')) {
           throw Object.assign(new Error('Owner access cannot be placed on hold from Team Management'), { accessStatus: 403 });
         }
-
-        const [updated] = await tx
-          .update(users)
-          .set({ isActive })
-          .where(and(eq(users.id, targetUser.id), eq(users.tenantId, req.tenant!.id)))
-          .returning({
-            id: users.id,
-            email: users.email,
-            fullName: users.fullName,
-            roles: users.roles,
-            isActive: users.isActive,
-          });
+        const updated = await applyLockedVolunteerAccessUpdate({
+          lockedCurrentRoles: targetUser.roles,
+          restoring: isActive,
+          complianceGate: async () => {
+            await ensureUserVolunteerActivationCompliance({
+              tenantId: req.tenant!.id,
+              userId: targetUser.id,
+              actorId: req.user!.id,
+              overrideReason: trainingOverrideReason,
+              executor: tx,
+            });
+          },
+          write: async () => {
+            const [row] = await tx.update(users).set({ isActive }).where(and(
+              eq(users.id, targetUser.id), eq(users.tenantId, req.tenant!.id),
+            )).returning({
+              id: users.id,
+              email: users.email,
+              fullName: users.fullName,
+              roles: users.roles,
+              isActive: users.isActive,
+            });
+            return row;
+          },
+        });
 
         const forwardedFor = req.get('x-forwarded-for');
         await tx.insert(auditLogs).values({
@@ -5813,6 +5928,9 @@ Crawl-delay: 1
     } catch (error: any) {
       if (error?.accessStatus) {
         return res.status(error.accessStatus).json({ error: error.message });
+      }
+      if (error?.code === 'VOLUNTEER_TRAINING_REQUIRED') {
+        return res.status(error.status || 409).json({ error: error.message, message: error.message, code: error.code });
       }
       next(error);
     }
@@ -6237,6 +6355,7 @@ Crawl-delay: 1
           email: invitation.email,
           fullName: invitation.fullName,
           roles: invitation.roles,
+          isApplicationBound: !!invitation.volunteerApplicationId,
           createdAt: invitation.createdAt,
           expiresAt: invitation.expiresAt,
         },
@@ -6262,6 +6381,7 @@ Crawl-delay: 1
           email: invitation.email,
           fullName: invitation.fullName,
           roles: invitation.roles,
+          isApplicationBound: !!invitation.volunteerApplicationId,
           // Include full invitation URL for "Copy Link" feature, constructed server-side
           // to properly handle custom domains and path-based tenant routing
           invitationUrl: buildInvitationUrl(invitation.token, req.tenant!),
@@ -16457,16 +16577,43 @@ ${renderedHtml}
             .limit(1);
           
           if (volunteerApp) {
-            // Auto-advance to active_pool
-            await db
-              .update(volunteerApplications)
-              .set({
-                pipelineStatus: 'active_pool',
-                status: 'approved',
-                updatedAt: new Date(),
-              })
-              .where(eq(volunteerApplications.id, volunteerApp.id));
-            
+            const { establishVolunteerApplicationIdentity } = await import('./services/contacts');
+            await establishVolunteerApplicationIdentity({
+              tenantId: submission.tenantId,
+              applicationId: volunteerApp.id,
+              applicantName: volunteerApp.applicantName,
+              applicantEmail: volunteerApp.applicantEmail,
+              applicantPhone: volunteerApp.applicantPhone || undefined,
+              allowExistingEmailContactMatch: false,
+            });
+            const { finalizeVolunteerApplicationActivation } = await import('./services/volunteer-training');
+            const finalization = await finalizeVolunteerApplicationActivation({
+              tenantId: submission.tenantId,
+              applicationId: volunteerApp.id,
+              expectedPipelineStatuses: ['waiver_needed'],
+              blockedAsResult: true,
+            });
+            if (!finalization.activated) {
+              // The signed waiver is already persisted above. Keep the application
+              // at waiver_needed until required training is current.
+              const { logActivity } = await import('./lib/activity-logger');
+              await logActivity({
+                tenantId: submission.tenantId,
+                userId: null,
+                action: 'volunteer_activation_blocked_training',
+                category: 'user',
+                entityType: 'volunteer_application',
+                entityId: volunteerApp.id.toString(),
+                description: `Signed waiver preserved for ${volunteerApp.applicantName}; activation is waiting on required training`,
+                metadata: {
+                  formId: form.id,
+                  submissionId: updated?.id,
+                  pipelineStatus: volunteerApp.pipelineStatus,
+                  trainingStatus: finalization.compliance?.overallStatus || 'incomplete',
+                },
+              });
+              console.log(`[Volunteer Automation] Signed waiver preserved; activation blocked by required training for application ${volunteerApp.id}`);
+            } else {
             // Log activity for the auto-advancement
             const { logActivity } = await import('./lib/activity-logger');
             await logActivity({
@@ -16488,19 +16635,6 @@ ${renderedHtml}
             
             console.log(`[Volunteer Automation] Auto-advanced ${volunteerApp.applicantEmail} from waiver_needed to active_pool`);
 
-            // Sync volunteer to contacts directory
-            try {
-              const { activateVolunteerInDirectory } = await import('./services/contacts');
-              await activateVolunteerInDirectory({
-                tenantId: submission.tenantId,
-                applicantName: volunteerApp.applicantName,
-                applicantEmail: volunteerApp.applicantEmail,
-                applicantPhone: volunteerApp.applicantPhone || undefined,
-              });
-            } catch (syncError) {
-              console.error('[Volunteer Automation] Error syncing volunteer to directory:', syncError);
-            }
-            
             // Create Google Drive folder for the volunteer (if not already created)
             if (!volunteerApp.driveFolderId) {
               try {
@@ -16530,6 +16664,7 @@ ${renderedHtml}
               const { createAndSendVolunteerWelcome } = await import('./services/invitations');
               const welcomeResult = await createAndSendVolunteerWelcome(
                 submission.tenantId,
+                volunteerApp.id,
                 volunteerApp.applicantEmail,
                 volunteerApp.applicantName,
               );
@@ -16557,6 +16692,7 @@ ${renderedHtml}
               });
             } catch (notifyError) {
               console.error('[Volunteer Automation] Error dispatching staff notification:', notifyError);
+            }
             }
           }
         } catch (automationError) {
@@ -21550,11 +21686,12 @@ ${renderedHtml}
   app.post('/api/contacts', requireTenant, requireAuth, requireRole('staff'), async (req, res, next) => {
     try {
       const { contacts, insertContactSchema } = await import('@shared/schema');
-      
+      const { staffContactCreateSchema } = await import('./services/contacts');
+      const clientData = staffContactCreateSchema.parse(req.body);
       const data = insertContactSchema.parse({
-        ...req.body,
+        ...clientData,
         tenantId: req.tenant!.id,
-        source: req.body.source || ['manual'], // Default to manual if not specified
+        source: clientData.source || ['manual'], // Default to manual if not specified
       });
 
       const [contact] = await db
@@ -21575,14 +21712,16 @@ ${renderedHtml}
   app.patch('/api/contacts/:id', requireTenant, requireAuth, requireRole('staff'), async (req, res, next) => {
     try {
       const { contacts } = await import('@shared/schema');
+      const { staffContactUpdateSchema } = await import('./services/contacts');
       const contactId = req.params.id;
-      
+      const updateData = staffContactUpdateSchema.parse(req.body);
+
       const [updated] = await db
         .update(contacts)
         .set({
-          ...req.body,
+          ...updateData,
           updatedAt: new Date(),
-        })
+        } as Partial<typeof contacts.$inferInsert>)
         .where(and(
           eq(contacts.id, contactId),
           eq(contacts.tenantId, req.tenant!.id)
@@ -21591,6 +21730,10 @@ ${renderedHtml}
 
       if (!updated) {
         return res.status(404).json({ error: 'Contact not found' });
+      }
+      if (updateData.email !== undefined) {
+        const { revokeApplicantTrainingSessions } = await import('./services/volunteer-training-invitations');
+        await revokeApplicantTrainingSessions({ tenantId: req.tenant!.id, contactId });
       }
 
       res.json({ success: true, contact: updated });
@@ -22739,7 +22882,7 @@ ${renderedHtml}
       }
 
       res.json({ success: true, application: updatedApplication });
-    } catch (error) {
+    } catch (error: any) {
       next(error);
     }
   });
@@ -22862,12 +23005,9 @@ Submitted: ${new Date().toLocaleString()}
    */
   app.post('/api/volunteer-applications', requireTenant, async (req, res, next) => {
     try {
-      const { volunteerApplications, insertVolunteerApplicationSchema } = await import('@shared/schema');
+      const { volunteerApplications, publicVolunteerApplicationSchema } = await import('@shared/schema');
       
-      const data = insertVolunteerApplicationSchema.parse({
-        ...req.body,
-        tenantId: req.tenant!.id,
-      });
+      const data = publicVolunteerApplicationSchema.parse(req.body);
 
       // Task #222: Enforce complete applicant address for tenants that require it.
       if (req.tenant?.requireCompleteAddress) {
@@ -22883,7 +23023,12 @@ Submitted: ${new Date().toLocaleString()}
 
       const [application] = await db
         .insert(volunteerApplications)
-        .values([data as any])
+        .values([{
+          ...data,
+          tenantId: req.tenant!.id,
+          status: 'pending',
+          pipelineStatus: 'new_applicant',
+        } as any])
         .returning();
 
       // Create/update contact from this volunteer application
@@ -22891,10 +23036,11 @@ Submitted: ${new Date().toLocaleString()}
         const { createContactFromVolunteerApplication } = await import('./services/contacts');
         await createContactFromVolunteerApplication(
           req.tenant!.id,
+          application.id,
           data.applicantName,
           data.applicantEmail,
           data.applicantPhone,
-          data.address
+          data.address || undefined
         );
       } catch (error) {
         console.error('Failed to create contact from volunteer application:', error);
@@ -23003,7 +23149,12 @@ Submitted: ${new Date().toLocaleString()}
         });
       }
 
-      res.json({ applications: enrichedApplications });
+      const { getApplicationCompliance } = await import('./services/volunteer-training');
+      const applicationsWithTraining = await Promise.all(enrichedApplications.map(async application => ({
+        ...application,
+        trainingCompliance: await getApplicationCompliance(req.tenant!.id, application.id),
+      })));
+      res.json({ applications: applicationsWithTraining });
     } catch (error) {
       next(error);
     }
@@ -23029,6 +23180,22 @@ Submitted: ${new Date().toLocaleString()}
       if (!application) {
         return res.status(404).json({ error: 'Volunteer application not found' });
       }
+      if (application.pipelineStatus !== 'active_pool') {
+        return res.status(409).json({
+          error: 'Volunteer invitation requires an active-pool application',
+          code: 'VOLUNTEER_INVITATION_STAGE_INVALID',
+        });
+      }
+      const { getActivationTrainingGuard } = await import('./services/volunteer-training');
+      const invitationGuard = await getActivationTrainingGuard(req.tenant!.id, application.id);
+      if (!invitationGuard.allowed) {
+        return res.status(409).json({
+          error: 'Current volunteer training is required before sending an invitation',
+          code: 'VOLUNTEER_INVITATION_TRAINING_REQUIRED',
+        });
+      }
+      const { validateBoundVolunteerInvitation } = await import('./services/invitations');
+      await validateBoundVolunteerInvitation(req.tenant!.id, application.id, application.applicantEmail);
 
       const email = application.applicantEmail?.trim().toLowerCase();
       if (!email) {
@@ -23066,6 +23233,19 @@ Submitted: ${new Date().toLocaleString()}
       const tenantName = tenant?.name || 'the rescue';
 
       if (existingInvitation) {
+        if (!existingInvitation.roles.includes('volunteer')) {
+          return res.status(409).json({
+            error: 'A different pending invitation already exists for this recipient',
+            code: 'VOLUNTEER_INVITATION_APPLICATION_CONFLICT',
+          });
+        }
+        if (existingInvitation.volunteerApplicationId &&
+            existingInvitation.volunteerApplicationId !== application.id) {
+          return res.status(409).json({
+            error: 'The pending invitation belongs to another volunteer application',
+            code: 'VOLUNTEER_INVITATION_APPLICATION_CONFLICT',
+          });
+        }
         // Refresh the token and extend expiry, then send email
         const crypto = await import('crypto');
         const newToken = crypto.default.randomBytes(12).toString('base64url');
@@ -23074,18 +23254,70 @@ Submitted: ${new Date().toLocaleString()}
 
         const [refreshed] = await db
           .update(userInvitations)
-          .set({ token: newToken, expiresAt: newExpiresAt })
-          .where(eq(userInvitations.id, existingInvitation.id))
+          .set({ token: newToken, expiresAt: newExpiresAt, volunteerApplicationId: application.id })
+          .where(and(
+            eq(userInvitations.id, existingInvitation.id),
+            or(
+              isNull(userInvitations.volunteerApplicationId),
+              eq(userInvitations.volunteerApplicationId, application.id),
+            ),
+          ))
           .returning();
+        if (!refreshed) {
+          return res.status(409).json({
+            error: 'The pending invitation belongs to another volunteer application',
+            code: 'VOLUNTEER_INVITATION_APPLICATION_CONFLICT',
+          });
+        }
 
         await sendVolunteerWelcomeEmail(req.tenant!.id, refreshed, tenantName);
       } else {
         // Create a fresh invitation and send welcome email
-        await createAndSendVolunteerWelcome(req.tenant!.id, email, application.applicantName || '');
+        await createAndSendVolunteerWelcome(req.tenant!.id, application.id, email, application.applicantName || '');
       }
 
       res.json({ success: true, message: 'Invitation resent' });
     } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * Staff-only, allowlisted review of an existing contact candidate.
+   */
+  app.get('/api/volunteer-applications/:id/identity-review', requireTenant, requireAuth, requireRoleOrPageAccess(['volunteers', 'volunteer-pipeline'], 'admin', 'owner', 'board_member', 'staff'), async (req, res, next) => {
+    try {
+      const { getVolunteerIdentityReviewCandidate } = await import('./services/volunteer-identity-review');
+      const result = await getVolunteerIdentityReviewCandidate(req.tenant!.id, req.params.id);
+      if (!result) return res.status(404).json({ error: 'Volunteer application not found' });
+      res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/api/volunteer-applications/:id/identity-review', requireTenant, requireAuth, requireRoleOrPageAccess(['volunteers', 'volunteer-pipeline'], 'admin', 'owner', 'board_member', 'staff'), async (req, res, next) => {
+    try {
+      const { contactId, reason } = z.object({
+        contactId: z.string().uuid(),
+        reason: z.string().trim().min(10).max(1000),
+      }).strict().parse(req.body);
+      const { verifyVolunteerApplicationIdentity } = await import('./services/volunteer-identity-review');
+      const forwardedFor = req.get('x-forwarded-for');
+      const result = await verifyVolunteerApplicationIdentity({
+        tenantId: req.tenant!.id,
+        applicationId: req.params.id,
+        contactId,
+        actorId: req.user!.id,
+        reason,
+        ipAddress: forwardedFor ? forwardedFor.split(',')[0].trim() : req.socket.remoteAddress,
+        userAgent: req.get('user-agent'),
+      });
+      res.json({ success: true, identity: result });
+    } catch (error: any) {
+      if (error?.code === 'VOLUNTEER_IDENTITY_REVIEW_REQUIRED') {
+        return res.status(error.status || 409).json({ error: error.message, message: error.message, code: error.code });
+      }
       next(error);
     }
   });
@@ -23135,7 +23367,10 @@ Submitted: ${new Date().toLocaleString()}
       }
       
       res.json({ application });
-    } catch (error) {
+    } catch (error: any) {
+      if (error?.code === 'VOLUNTEER_IDENTITY_REVIEW_REQUIRED') {
+        return res.status(error.status || 409).json({ error: error.message, message: error.message, code: error.code });
+      }
       next(error);
     }
   });
@@ -23174,6 +23409,34 @@ Submitted: ${new Date().toLocaleString()}
       if (!currentApp) {
         return res.status(404).json({ error: 'Volunteer application not found' });
       }
+
+      // Activation is determined solely by the requested resulting values.
+      // Never let an unlocked old snapshot route an explicit active write
+      // through the generic update branch.
+      const { requestedVolunteerApplicationActivation } = await import('./services/volunteer-training');
+      const requestsActivation = requestedVolunteerApplicationActivation(data);
+      const requestsPendingIdentity = !!data.pipelineStatus &&
+        ['orientation_scheduled', 'waiver_needed'].includes(data.pipelineStatus) &&
+        data.pipelineStatus !== currentApp.pipelineStatus;
+      let activationContactId: string | null = null;
+      if (requestsActivation || requestsPendingIdentity) {
+        const [activationApplication] = await db.select().from(volunteerApplications).where(and(
+          eq(volunteerApplications.id, req.params.id),
+          eq(volunteerApplications.tenantId, req.tenant!.id),
+        )).limit(1);
+        if (!activationApplication) return res.status(404).json({ error: 'Volunteer application not found' });
+        const { establishVolunteerApplicationIdentity } = await import('./services/contacts');
+        const activationContact = await establishVolunteerApplicationIdentity({
+          tenantId: req.tenant!.id,
+          applicationId: req.params.id,
+          applicantName: activationApplication.applicantName,
+          applicantEmail: activationApplication.applicantEmail,
+          applicantPhone: activationApplication.applicantPhone || undefined,
+          address: activationApplication.address || undefined,
+          allowExistingEmailContactMatch: true,
+        });
+        activationContactId = activationContact.id;
+      }
       
       const oldStatus = currentApp.status;
       const oldPipelineStatus = currentApp.pipelineStatus;
@@ -23203,16 +23466,30 @@ Submitted: ${new Date().toLocaleString()}
         updateData.notes = data.notes;
       }
 
-      const [updatedApplication] = await db
-        .update(volunteerApplications)
-        .set(updateData)
-        .where(
-          and(
-            eq(volunteerApplications.id, req.params.id),
-            eq(volunteerApplications.tenantId, req.tenant!.id)
+      let updatedApplication: typeof volunteerApplications.$inferSelect | undefined;
+      let transitionedToActivePool = false;
+      if (requestsActivation) {
+        const { finalizeVolunteerApplicationActivation } = await import('./services/volunteer-training');
+        const finalized = await finalizeVolunteerApplicationActivation({
+          tenantId: req.tenant!.id,
+          applicationId: req.params.id,
+          expectedPipelineStatuses: ['new_applicant', 'orientation_scheduled', 'waiver_needed', 'active_pool'],
+          extraApplicationUpdate: data.notes !== undefined ? { notes: data.notes } : undefined,
+        });
+        updatedApplication = finalized.application;
+        transitionedToActivePool = finalized.transitionedToActivePool;
+      } else {
+        [updatedApplication] = await db
+          .update(volunteerApplications)
+          .set(updateData)
+          .where(
+            and(
+              eq(volunteerApplications.id, req.params.id),
+              eq(volunteerApplications.tenantId, req.tenant!.id)
+            )
           )
-        )
-        .returning();
+          .returning();
+      }
 
       if (!updatedApplication) {
         return res.status(500).json({ error: 'Failed to update volunteer application' });
@@ -23266,6 +23543,25 @@ Submitted: ${new Date().toLocaleString()}
           }
         } catch (error) {
           console.error('Failed to auto-dismiss volunteer application:', error);
+        }
+      }
+
+      if (
+        data.pipelineStatus === 'orientation_scheduled' &&
+        oldPipelineStatus !== 'orientation_scheduled' &&
+        !data.skipAutomation
+      ) {
+        try {
+          const { sendVolunteerTrainingAccess } = await import('./services/volunteer-training-invitations');
+          await sendVolunteerTrainingAccess({
+            tenantId: req.tenant!.id,
+            applicationId: updatedApplication.id,
+            createdByUserId: req.user!.id,
+          });
+        } catch (trainingEmailError) {
+          // Advancing the application remains successful; staff can use the
+          // explicit resend action after correcting email configuration.
+          console.error('[Volunteer Training] Failed to send onboarding training link:', trainingEmailError);
         }
       }
 
@@ -23421,20 +23717,7 @@ If you have any questions, please contact us.
       // ========================================================================
       // AUTOMATION: Sync volunteer to contacts directory on active_pool
       // ========================================================================
-      const statusChangedToActivePool = data.pipelineStatus === 'active_pool' && oldPipelineStatus !== 'active_pool';
-      if (statusChangedToActivePool) {
-        try {
-          const { activateVolunteerInDirectory } = await import('./services/contacts');
-          await activateVolunteerInDirectory({
-            tenantId: req.tenant!.id,
-            applicantName: updatedApplication.applicantName,
-            applicantEmail: updatedApplication.applicantEmail,
-            applicantPhone: updatedApplication.applicantPhone || undefined,
-          });
-        } catch (syncError) {
-          console.error('[Volunteer Automation] Error syncing volunteer to directory:', syncError);
-        }
-      }
+      const statusChangedToActivePool = transitionedToActivePool;
 
       // ========================================================================
       // AUTOMATION: Create Google Drive folder when volunteer moves to active_pool
@@ -23466,6 +23749,7 @@ If you have any questions, please contact us.
           const { createAndSendVolunteerWelcome } = await import('./services/invitations');
           const result = await createAndSendVolunteerWelcome(
             req.tenant!.id,
+            updatedApplication.id,
             updatedApplication.applicantEmail,
             updatedApplication.applicantName,
           );
@@ -23497,7 +23781,10 @@ If you have any questions, please contact us.
       }
 
       res.json({ success: true, application: updatedApplication });
-    } catch (error) {
+    } catch (error: any) {
+      if (error?.code === 'VOLUNTEER_IDENTITY_REVIEW_REQUIRED') {
+        return res.status(error.status || 409).json({ error: error.message, message: error.message, code: error.code });
+      }
       next(error);
     }
   });
@@ -48180,12 +48467,261 @@ Use timestamps like [00:00] to help with pacing.`;
     }
   });
 
+  app.get('/api/public/volunteer-training/:token', requireTenant, async (req, res, next) => {
+    try {
+      const { tutorials } = await import('@shared/schema');
+      const { validatePublicTrainingAccess } = await import('./services/volunteer-training-invitations');
+      const access = await validatePublicTrainingAccess(req.tenant!.id, req.params.token);
+      if (!access) return res.status(404).json({ error: 'Training link is invalid or has expired' });
+      const { session, application } = access;
+      const { getApplicationCompliance, projectPublicApplicationCompliance } = await import('./services/volunteer-training');
+      const compliance = await getApplicationCompliance(session.tenantId, application.id);
+      const publicCompliance = compliance
+        ? projectPublicApplicationCompliance(compliance)
+        : { overallStatus: 'incomplete', requirements: [] };
+      const required = await db.select({
+        id: tutorials.id,
+        title: tutorials.title,
+        description: tutorials.description,
+        youtubeUrl: tutorials.youtubeUrl,
+        requirementVersion: tutorials.requirementVersion,
+        renewalMonths: tutorials.renewalMonths,
+      }).from(tutorials).where(and(
+        eq(tutorials.tenantId, session.tenantId),
+        eq(tutorials.requiredForVolunteers, true),
+      )).orderBy(tutorials.sortOrder, tutorials.createdAt);
+      res.json({
+        applicantName: application.applicantName,
+        expiresAt: session.expiresAt,
+        overallStatus: publicCompliance.overallStatus,
+        tutorials: required.map(tutorial => ({
+          ...tutorial,
+          status: publicCompliance.requirements.find(item => item.tutorialId === tutorial.id)?.status || 'incomplete',
+          completion: (() => {
+            const requirement = publicCompliance.requirements.find(item => item.tutorialId === tutorial.id);
+            return requirement?.attestedAt && requirement?.renewalDueAt
+              ? { attestedAt: requirement.attestedAt, renewalDueAt: requirement.renewalDueAt }
+              : null;
+          })(),
+        })),
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/api/public/volunteer-training/:token/attest', requireTenant, async (req, res, next) => {
+    try {
+      const input = z.object({
+        tutorialId: z.string().uuid(),
+        requirementVersion: z.number().int().positive(),
+        attested: z.literal(true),
+      }).strict().parse(req.body);
+      const { recordPublicTrainingCompletion } = await import('./services/volunteer-training-invitations');
+      const result = await recordPublicTrainingCompletion({
+        tenantId: req.tenant!.id,
+        token: req.params.token,
+        tutorialId: input.tutorialId,
+        requirementVersion: input.requirementVersion,
+      });
+      res.json({
+        success: true,
+        trainingCompliance: result.trainingCompliance,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/api/volunteer-applications/:id/send-training', emailLimiter, requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      const { sendVolunteerTrainingAccess } = await import('./services/volunteer-training-invitations');
+      const result = await sendVolunteerTrainingAccess({
+        tenantId: req.tenant!.id,
+        applicationId: req.params.id,
+        createdByUserId: req.user!.id,
+      });
+      if (result.skipped) return res.status(400).json({ error: 'No required volunteer training is configured' });
+      res.json({ message: 'Training access link sent', expiresAt: result.expiresAt });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Volunteers explicitly attest; opening or embedding a video is deliberately
+  // not treated as evidence that it was watched.
+  app.get('/api/volunteer-training/me', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { getUserCompliance, getApplicationCompliance, getTrainingHistory, identityKeysForUser, getAuthenticatedTrainingOwner } = await import('./services/volunteer-training');
+      const owner = await getAuthenticatedTrainingOwner({
+        tenantId: req.tenant!.id,
+        userId: req.user!.id,
+        isVolunteer: req.user!.roles.includes('volunteer'),
+      });
+      if (!owner) return res.status(403).json({ error: 'Volunteer training is not available for this account' });
+      const compliance = owner.applicationId
+        ? await getApplicationCompliance(req.tenant!.id, owner.applicationId)
+        : await getUserCompliance(req.tenant!.id, req.user!.id);
+      const history = await getTrainingHistory(
+        req.tenant!.id,
+        await identityKeysForUser(req.tenant!.id, req.user!.id),
+        { userId: req.user!.id, contactId: owner.contactId || undefined, applicationId: owner.applicationId || undefined },
+      );
+      res.json({ ...compliance, history, trainingEligible: true });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/api/volunteer-training/:tutorialId/attest', requireTenant, requireAuth, async (req, res, next) => {
+    try {
+      const { authenticatedAttestationSchema, recordAuthenticatedTrainingCompletion } = await import('./services/volunteer-training');
+      const input = authenticatedAttestationSchema.parse(req.body);
+      const completion = await recordAuthenticatedTrainingCompletion({
+        tenantId: req.tenant!.id,
+        userId: req.user!.id,
+        isVolunteer: req.user!.roles.includes('volunteer'),
+        tutorialId: req.params.tutorialId,
+        requirementVersion: input.requirementVersion,
+      });
+      res.json({ completion });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get('/api/volunteer-training/tracker', requireTenant, requireAuth, requireRoleOrPageAccess('volunteers', 'admin', 'owner', 'board_member', 'staff'), async (req, res, next) => {
+    try {
+      const { getUserCompliance } = await import('./services/volunteer-training');
+      const volunteers = await db.select({
+        id: users.id, fullName: users.fullName, email: users.email,
+      }).from(users).where(and(
+        eq(users.tenantId, req.tenant!.id),
+        sql`${users.roles} @> ARRAY['volunteer']::text[]`,
+      ));
+      const tracker = await Promise.all(volunteers.map(async volunteer => ({
+        ...volunteer,
+        ...await getUserCompliance(req.tenant!.id, volunteer.id),
+      })));
+      res.json({ volunteers: tracker });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get('/api/volunteer-training/users/:userId/history', requireTenant, requireAuth, requireRoleOrPageAccess('volunteers', 'admin', 'owner', 'board_member', 'staff'), async (req, res, next) => {
+    try {
+      const [volunteer] = await db.select({ id: users.id }).from(users).where(and(
+        eq(users.id, req.params.userId), eq(users.tenantId, req.tenant!.id),
+      )).limit(1);
+      if (!volunteer) return res.status(404).json({ error: 'Volunteer not found' });
+      const { getTrainingHistory, identityKeysForUser } = await import('./services/volunteer-training');
+      res.json({
+        history: await getTrainingHistory(
+          req.tenant!.id,
+          await identityKeysForUser(req.tenant!.id, volunteer.id),
+          { userId: volunteer.id },
+        ),
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/api/volunteer-training/users/:userId/override', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      const input = z.object({
+        tutorialId: z.string().uuid(),
+        requirementVersion: z.number().int().positive(),
+        reason: z.string().trim().min(10).max(1000),
+      }).strict().parse(req.body);
+      const [volunteer] = await db.select({ id: users.id }).from(users).where(and(
+        eq(users.id, req.params.userId), eq(users.tenantId, req.tenant!.id),
+        sql`${users.roles} @> ARRAY['volunteer']::text[]`,
+      )).limit(1);
+      if (!volunteer) return res.status(404).json({ error: 'Volunteer not found' });
+      const [volunteerContact] = await db.select({ id: contacts.id }).from(contacts).where(and(
+        eq(contacts.tenantId, req.tenant!.id),
+        eq(contacts.userId, volunteer.id),
+      )).limit(1);
+      const { recordCompletion } = await import('./services/volunteer-training');
+      const completion = await recordCompletion({
+        tenantId: req.tenant!.id,
+        tutorialId: input.tutorialId,
+        identityKey: `user:${volunteer.id}`,
+        actorId: req.user!.id,
+        userId: volunteer.id,
+        contactId: volunteerContact?.id,
+        type: 'staff_override',
+        reason: input.reason,
+        requirementVersion: input.requirementVersion,
+      });
+      const { createAuditLog } = await import('./audit');
+      await createAuditLog({
+        userId: req.user!.id,
+        tenantId: req.tenant!.id,
+        action: 'volunteer_training.override',
+        entityType: 'user',
+        entityId: volunteer.id,
+        changes: { after: { tutorialId: input.tutorialId, reason: input.reason, completionId: completion?.id } },
+        req,
+      });
+      res.json({ completion });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/api/volunteer-applications/:id/training-override', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
+    try {
+      const input = z.object({
+        tutorialId: z.string().uuid(),
+        requirementVersion: z.number().int().positive(),
+        reason: z.string().trim().min(10).max(1000),
+      }).strict().parse(req.body);
+      const { identityKeysForApplication, recordCompletion, getApplicationCompliance } = await import('./services/volunteer-training');
+      const identity = await identityKeysForApplication(req.tenant!.id, req.params.id);
+      if (!identity) return res.status(404).json({ error: 'Volunteer application not found' });
+      const identityKey = identity.userId ? `user:${identity.userId}` : identity.contactId ? `contact:${identity.contactId}` : `application:${identity.application.id}`;
+      const completion = await recordCompletion({
+        tenantId: req.tenant!.id,
+        tutorialId: input.tutorialId,
+        identityKey,
+        actorId: req.user!.id,
+        userId: identity.userId,
+        contactId: identity.contactId,
+        applicationId: identity.application.id,
+        type: 'staff_override',
+        reason: input.reason,
+        requirementVersion: input.requirementVersion,
+      });
+      const { createAuditLog } = await import('./audit');
+      await createAuditLog({
+        userId: req.user!.id,
+        tenantId: req.tenant!.id,
+        action: 'volunteer_training.override',
+        entityType: 'volunteer_application',
+        entityId: identity.application.id,
+        changes: { after: { tutorialId: input.tutorialId, reason: input.reason, completionId: completion?.id } },
+      });
+      res.json({ completion, trainingCompliance: await getApplicationCompliance(req.tenant!.id, identity.application.id) });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   // GET /api/tutorials - Get all tutorials for the tenant
   app.get('/api/tutorials', requireTenant, requireAuth, async (req, res, next) => {
     try {
       const { tutorials } = await import('@shared/schema');
       const userRoles = req.user!.roles;
       const isAdmin = userRoles.includes('admin') || userRoles.includes('owner');
+      const { getAuthenticatedTrainingOwner } = await import('./services/volunteer-training');
+      const trainingOwner = isAdmin ? null : await getAuthenticatedTrainingOwner({
+        tenantId: req.tenant!.id,
+        userId: req.user!.id,
+        isVolunteer: userRoles.includes('volunteer'),
+      });
 
       const tenantCondition = or(
         eq(tutorials.tenantId, req.tenant!.id),
@@ -48198,7 +48734,8 @@ Use timestamps like [00:00] to help with pacing.`;
         : or(
             isNull(tutorials.visibleToRoles),
             sql`coalesce(array_length(${tutorials.visibleToRoles}, 1), 0) = 0`,
-            sql`${tutorials.visibleToRoles} && ARRAY[${sql.raw(userRoles.map((r: string) => `'${r}'`).join(','))}]::text[]`
+            sql`${tutorials.visibleToRoles} && ARRAY[${sql.raw(userRoles.map((r: string) => `'${r}'`).join(','))}]::text[]`,
+            ...(trainingOwner ? [eq(tutorials.requiredForVolunteers, true)] : [])
           );
 
       const whereClause = visibilityCondition
@@ -48206,7 +48743,7 @@ Use timestamps like [00:00] to help with pacing.`;
         : tenantCondition;
 
       const results = await db
-        .select({ id: tutorials.id, tenantId: tutorials.tenantId, title: tutorials.title, description: tutorials.description, youtubeUrl: tutorials.youtubeUrl, category: tutorials.category, sortOrder: tutorials.sortOrder, isGlobal: tutorials.isGlobal, visibleToRoles: tutorials.visibleToRoles })
+        .select({ id: tutorials.id, tenantId: tutorials.tenantId, title: tutorials.title, description: tutorials.description, youtubeUrl: tutorials.youtubeUrl, category: tutorials.category, sortOrder: tutorials.sortOrder, isGlobal: tutorials.isGlobal, visibleToRoles: tutorials.visibleToRoles, requiredForVolunteers: tutorials.requiredForVolunteers, renewalMonths: tutorials.renewalMonths, requirementVersion: tutorials.requirementVersion })
         .from(tutorials)
         .where(whereClause)
         .orderBy(tutorials.sortOrder, tutorials.createdAt);
@@ -48218,20 +48755,31 @@ Use timestamps like [00:00] to help with pacing.`;
   });
 
   // POST /api/tutorials - Create a new tutorial (admin only)
-  app.post('/api/tutorials', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+  app.post('/api/tutorials', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
     try {
       const { tutorials, insertTutorialSchema } = await import('@shared/schema');
+      const requiredForVolunteers = z.boolean().parse(req.body.requiredForVolunteers ?? false);
+      const requestedVisibility = z.array(z.enum(['admin', 'board_member', 'staff', 'foster', 'volunteer']))
+        .nullable().optional().parse(req.body.visibleToRoles);
       
       const data = insertTutorialSchema.parse({
         ...req.body,
+        requiredForVolunteers,
+        renewalMonths: z.coerce.number().int().min(1).max(120).parse(req.body.renewalMonths ?? 12),
+        requirementVersion: 1,
+        visibleToRoles: requiredForVolunteers
+          ? Array.from(new Set([...(requestedVisibility || []), 'admin', 'staff', 'volunteer']))
+          : requestedVisibility,
         tenantId: req.tenant!.id,
         isGlobal: false,
       });
 
-      const [tutorial] = await db
-        .insert(tutorials)
-        .values(data)
-        .returning();
+      const { createTutorialWithRequirementVersion } = await import('./services/volunteer-training');
+      const tutorial = await createTutorialWithRequirementVersion({
+        tenantId: req.tenant!.id,
+        actorId: req.user!.id,
+        data: data as typeof tutorials.$inferInsert,
+      });
 
       res.json({ tutorial });
     } catch (error) {
@@ -48240,9 +48788,8 @@ Use timestamps like [00:00] to help with pacing.`;
   });
 
   // PATCH /api/tutorials/:id - Update a tutorial (admin only)
-  app.patch('/api/tutorials/:id', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+  app.patch('/api/tutorials/:id', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
     try {
-      const { tutorials } = await import('@shared/schema');
       const tutorialId = req.params.id;
 
       // Strict validation schema - only allow specific updatable fields
@@ -48254,27 +48801,18 @@ Use timestamps like [00:00] to help with pacing.`;
         category: z.string().max(100).optional(),
         sortOrder: z.coerce.number().int().min(0).max(9999).optional(),
         visibleToRoles: z.array(z.enum(['admin', 'board_member', 'staff', 'foster', 'volunteer'])).nullable().optional(),
+        requiredForVolunteers: z.boolean().optional(),
+        renewalMonths: z.coerce.number().int().min(1).max(120).optional(),
       }).strict(); // Reject any extra fields
 
       const validatedData = updateSchema.parse(req.body);
-
-      // Build update object only with provided fields
-      const updateFields: Record<string, any> = { updatedAt: new Date() };
-      if (validatedData.title !== undefined) updateFields.title = validatedData.title;
-      if (validatedData.description !== undefined) updateFields.description = validatedData.description;
-      if (validatedData.youtubeUrl !== undefined) updateFields.youtubeUrl = validatedData.youtubeUrl;
-      if (validatedData.category !== undefined) updateFields.category = validatedData.category;
-      if (validatedData.sortOrder !== undefined) updateFields.sortOrder = validatedData.sortOrder;
-      if (validatedData.visibleToRoles !== undefined) updateFields.visibleToRoles = validatedData.visibleToRoles?.length ? validatedData.visibleToRoles : null;
-
-      const [updated] = await db
-        .update(tutorials)
-        .set(updateFields)
-        .where(and(
-          eq(tutorials.id, tutorialId),
-          eq(tutorials.tenantId, req.tenant!.id) // Only allows updates to tenant's own tutorials, not globals
-        ))
-        .returning();
+      const { updateTutorialWithRequirementVersion } = await import('./services/volunteer-training');
+      const updated = await updateTutorialWithRequirementVersion({
+        tenantId: req.tenant!.id,
+        tutorialId,
+        actorId: req.user!.id,
+        input: validatedData,
+      });
 
       if (!updated) {
         return res.status(404).json({ error: "Tutorial not found or not accessible" });
@@ -48287,20 +48825,18 @@ Use timestamps like [00:00] to help with pacing.`;
   });
 
   // DELETE /api/tutorials/:id - Delete a tutorial (admin only)
-  app.delete('/api/tutorials/:id', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
+  app.delete('/api/tutorials/:id', requireTenant, requireAuth, requireRole('admin', 'staff'), async (req, res, next) => {
     try {
-      const { tutorials } = await import('@shared/schema');
       const tutorialId = req.params.id;
-
-      const [deleted] = await db
-        .delete(tutorials)
-        .where(and(
-          eq(tutorials.id, tutorialId),
-          eq(tutorials.tenantId, req.tenant!.id)
-        ))
-        .returning();
-
-      if (!deleted) {
+      const { deleteTutorialWithTrainingPolicy } = await import('./services/volunteer-training');
+      const outcome = await deleteTutorialWithTrainingPolicy(req.tenant!.id, tutorialId);
+      if (outcome.status === 'required') {
+        return res.status(409).json({ error: 'Disable the volunteer training requirement before deleting this tutorial. Tutorials with completion history cannot be deleted.' });
+      }
+      if (outcome.status === 'history') {
+        return res.status(409).json({ error: 'This tutorial has volunteer training history and cannot be deleted. Disable the requirement to archive it.' });
+      }
+      if (outcome.status === 'not_found') {
         return res.status(404).json({ error: "Tutorial not found" });
       }
 

@@ -25,6 +25,28 @@ export async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, SALT_ROUNDS);
 }
 
+export async function insertUserWithHashedPassword(executor: any, tenantId: string, data: {
+  email: string;
+  passwordHash: string;
+  fullName: string;
+  roles: ('admin' | 'board_member' | 'staff' | 'foster' | 'volunteer')[];
+  phone?: string | null;
+  initiallyInactive?: boolean;
+}) {
+  const [user] = await executor.insert(users).values({
+    tenantId,
+    email: data.email.trim().toLowerCase(),
+    passwordHash: data.passwordHash,
+    fullName: data.fullName,
+    roles: data.roles,
+    phone: data.phone || null,
+    fosterStatus: data.roles.includes('foster') ? 'active' : null,
+    isActive: !data.initiallyInactive,
+  }).returning();
+  if (!user) throw new Error('Failed to create user');
+  return user;
+}
+
 /**
  * Verify a password against its hash
  */
@@ -242,7 +264,10 @@ export async function createUser(tenantId: string, data: {
   password: string;
   fullName: string;
   roles: ('admin' | 'board_member' | 'staff' | 'foster' | 'volunteer')[];
-}) {
+}, options: {
+  initiallyInactive?: boolean;
+  skipContactSync?: boolean;
+} = {}) {
   // Validate roles array is not empty
   if (!data.roles || data.roles.length === 0) {
     throw new Error('At least one role must be assigned to the user');
@@ -274,23 +299,25 @@ export async function createUser(tenantId: string, data: {
       passwordHash,
       fullName: data.fullName,
       roles: data.roles,
-      isActive: true,
+      isActive: !options.initiallyInactive,
     })
     .returning();
 
   // Automatically sync user to contacts directory
-  try {
-    const { syncContactFromUser } = await import('./contacts');
-    await syncContactFromUser(
-      newUser.id,
-      tenantId,
-      newUser.email,
-      newUser.fullName,
-      data.roles.filter(r => r !== 'platform_admin') as any[]
-    );
-  } catch (error) {
-    console.error('Failed to sync user to contacts:', error);
-    // Don't fail user creation if contact sync fails
+  if (!options.skipContactSync) {
+    try {
+      const { syncContactFromUser } = await import('./contacts');
+      await syncContactFromUser(
+        newUser.id,
+        tenantId,
+        newUser.email,
+        newUser.fullName,
+        data.roles
+      );
+    } catch (error) {
+      console.error('Failed to sync user to contacts:', error);
+      // Don't fail user creation if contact sync fails
+    }
   }
 
   // Return without password hash

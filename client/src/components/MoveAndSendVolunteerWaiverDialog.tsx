@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, ArrowRight, Send, Shield, AlertCircle, Zap, Mail, MessageSquare, MailPlus } from "lucide-react";
+import { VolunteerIdentityVerificationDialog } from "@/components/VolunteerIdentityVerificationDialog";
 
 interface VolunteerApplicationData {
   id: string;
@@ -31,6 +32,7 @@ export function MoveAndSendVolunteerWaiverDialog({
   const { toast } = useToast();
   const [moveAction, setMoveAction] = useState<"move_and_send" | "move_only">("move_and_send");
   const [sendMethod, setSendMethod] = useState<"email" | "sms" | "both">("email");
+  const [identityReviewOpen, setIdentityReviewOpen] = useState(false);
 
   const { data: tenantData } = useQuery<{ tenant: { twilioEnabled?: boolean } }>({
     queryKey: ['/api/tenant'],
@@ -83,6 +85,10 @@ export function MoveAndSendVolunteerWaiverDialog({
       onSuccess?.();
     },
     onError: (error: any) => {
+      if (error.code === "VOLUNTEER_IDENTITY_REVIEW_REQUIRED") {
+        setIdentityReviewOpen(true);
+        return;
+      }
       toast({
         title: "Failed to update application",
         description: error.message || "Please try again",
@@ -106,6 +112,7 @@ export function MoveAndSendVolunteerWaiverDialog({
   if (!application) return null;
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto" data-testid="dialog-move-volunteer-waiver">
         <DialogHeader>
@@ -262,5 +269,13 @@ export function MoveAndSendVolunteerWaiverDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    <VolunteerIdentityVerificationDialog
+      open={identityReviewOpen}
+      onOpenChange={setIdentityReviewOpen}
+      applicationId={application.id}
+      applicantName={application.applicantName}
+      onVerified={handleSubmit}
+    />
+    </>
   );
 }

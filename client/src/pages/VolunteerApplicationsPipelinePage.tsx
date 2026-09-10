@@ -3,6 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import VolunteerKanbanBoard from "@/components/VolunteerKanbanBoard";
 import { ViewApplicationDialog } from "@/components/ViewApplicationDialog";
 import { MoveAndSendVolunteerWaiverDialog } from "@/components/MoveAndSendVolunteerWaiverDialog";
+import { VolunteerIdentityVerificationDialog } from "@/components/VolunteerIdentityVerificationDialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -12,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -32,6 +34,16 @@ interface ResendTarget {
   applicantPhone: string | null;
 }
 
+type TrainingStatus = "current" | "due_soon" | "overdue" | "incomplete";
+type ApplicationWithTraining = VolunteerApplication & {
+  holdHarmlessFormId?: string | null;
+  holdHarmlessSignedAt?: Date | string | null;
+  trainingCompliance?: {
+    overallStatus: TrainingStatus;
+    requirements: Array<{ tutorialId: string; title: string; requirementVersion: number; status: TrainingStatus }>;
+  } | null;
+};
+
 export default function VolunteerApplicationsPipelinePage() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -48,8 +60,12 @@ export default function VolunteerApplicationsPipelinePage() {
     applicantPhone?: string;
   } | null>(null);
   const [resendPickerTarget, setResendPickerTarget] = useState<ResendTarget | null>(null);
+  const [overrideTarget, setOverrideTarget] = useState<ApplicationWithTraining | null>(null);
+  const [overrideTutorialId, setOverrideTutorialId] = useState("");
+  const [overrideReason, setOverrideReason] = useState("");
+  const [identityRetry, setIdentityRetry] = useState<{ id: string; pipelineStatus: string } | null>(null);
 
-  const { data, isLoading } = useQuery<{ applications: VolunteerApplication[] }>({
+  const { data, isLoading } = useQuery<{ applications: ApplicationWithTraining[] }>({
     queryKey: ['/api/volunteer-applications'],
   });
 
@@ -65,7 +81,11 @@ export default function VolunteerApplicationsPipelinePage() {
         description: "The volunteer application status has been updated successfully.",
       });
     },
-    onError: (error: any) => {
+    onError: (error: any, variables) => {
+      if (error.code === "VOLUNTEER_IDENTITY_REVIEW_REQUIRED") {
+        setIdentityRetry(variables);
+        return;
+      }
       toast({
         title: "Failed to update application",
         description: error.message || "Please try again later.",
@@ -107,6 +127,25 @@ export default function VolunteerApplicationsPipelinePage() {
       setSendingWaiverId(null);
     },
   });
+  const overrideMutation = useMutation({
+    mutationFn: async () => (await apiRequest('POST', `/api/volunteer-applications/${overrideTarget!.id}/training-override`, {
+      tutorialId: overrideTutorialId,
+      requirementVersion: overrideTarget!.trainingCompliance!.requirements.find(item => item.tutorialId === overrideTutorialId)!.requirementVersion,
+      reason: overrideReason,
+    })).json(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/volunteer-applications'] });
+      setOverrideTarget(null);
+      setOverrideReason("");
+      toast({ title: "Training override recorded", description: "The reason has been added to the audit history." });
+    },
+    onError: (error: any) => toast({ title: "Override failed", description: error.message, variant: "destructive" }),
+  });
+  const sendTrainingMutation = useMutation({
+    mutationFn: async (applicationId: string) => (await apiRequest('POST', `/api/volunteer-applications/${applicationId}/send-training`)).json(),
+    onSuccess: () => toast({ title: "Training link sent", description: "A new secure link was emailed and any prior link was revoked." }),
+    onError: (error: any) => toast({ title: "Unable to send training link", description: error.message, variant: "destructive" }),
+  });
 
   const applications = data?.applications || [];
 
@@ -119,11 +158,12 @@ export default function VolunteerApplicationsPipelinePage() {
         applicantEmail: app.applicantEmail,
         applicantPhone: app.applicantPhone,
         pipelineStatus: app.pipelineStatus || 'new_applicant',
-        availability: app.availability,
-        interests: app.interests,
-        skills: app.skills,
+        availability: app.availability || undefined,
+        interests: app.interests || undefined,
+        skills: app.skills || undefined,
         holdHarmlessFormId: app.holdHarmlessFormId,
         holdHarmlessSignedAt: app.holdHarmlessSignedAt?.toString(),
+        trainingStatus: app.trainingCompliance?.overallStatus,
       }));
   }, [applications]);
 
@@ -256,6 +296,35 @@ export default function VolunteerApplicationsPipelinePage() {
           </div>
 
           <TabsContent value="pipeline" className="mt-0">
+            <div className="mb-4 space-y-2">
+              {applications.filter(app => app.trainingCompliance && ['overdue', 'incomplete'].includes(app.trainingCompliance.overallStatus)).map(app => (
+                <div key={app.id} className="flex items-center justify-between gap-3 rounded-md border border-destructive/30 p-3 text-sm">
+                  <span><strong>{app.applicantName}</strong>: training {app.trainingCompliance!.overallStatus.replace('_', ' ')}. Activation is blocked.</span>
+                  <div className="flex gap-2 shrink-0">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={sendTrainingMutation.isPending}
+                      onClick={() => sendTrainingMutation.mutate(app.id)}
+                      data-testid={`button-send-training-${app.id}`}
+                    >
+                      Send training link
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setOverrideTarget(app);
+                        setOverrideTutorialId(app.trainingCompliance!.requirements.find(item => ['overdue', 'incomplete'].includes(item.status))?.tutorialId || "");
+                      }}
+                      data-testid={`button-training-override-${app.id}`}
+                    >
+                      Staff override
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
             <VolunteerKanbanBoard
               applications={kanbanApplications}
               onMoveApplication={handleMoveApplication}
@@ -301,6 +370,15 @@ export default function VolunteerApplicationsPipelinePage() {
                           <span className="truncate">{volunteer.applicantName}</span>
                           {volunteer.holdHarmlessSignedAt && (
                             <Badge variant="default" className="text-xs shrink-0">Waiver Signed</Badge>
+                          )}
+                          {volunteer.trainingCompliance && (
+                            <Badge
+                              variant={['overdue', 'incomplete'].includes(volunteer.trainingCompliance.overallStatus) ? "destructive" : "outline"}
+                              className="text-xs shrink-0"
+                              data-testid={`badge-training-${volunteer.id}`}
+                            >
+                              Training {volunteer.trainingCompliance.overallStatus.replace('_', ' ')}
+                            </Badge>
                           )}
                         </CardTitle>
                       </CardHeader>
@@ -405,7 +483,7 @@ export default function VolunteerApplicationsPipelinePage() {
       </div>
 
       <ViewApplicationDialog
-        application={applicationToView}
+        application={applicationToView as any}
         applicationType="volunteer"
         open={viewDialogOpen}
         onOpenChange={(open) => {
@@ -429,6 +507,54 @@ export default function VolunteerApplicationsPipelinePage() {
           queryClient.invalidateQueries({ queryKey: ['/api/volunteer-applications'] });
         }}
       />
+      <VolunteerIdentityVerificationDialog
+        open={!!identityRetry}
+        onOpenChange={(open) => !open && setIdentityRetry(null)}
+        applicationId={identityRetry?.id || null}
+        applicantName={applications.find(item => item.id === identityRetry?.id)?.applicantName}
+        onVerified={() => {
+          const retry = identityRetry;
+          setIdentityRetry(null);
+          if (retry) updatePipelineStatusMutation.mutate(retry);
+        }}
+      />
+      <Dialog open={!!overrideTarget} onOpenChange={(open) => !open && setOverrideTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Override required training</DialogTitle>
+            <DialogDescription>
+              This satisfies the selected requirement for {overrideTarget?.applicantName}. A detailed audit reason is required.
+            </DialogDescription>
+          </DialogHeader>
+          <select
+            className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+            value={overrideTutorialId}
+            onChange={event => setOverrideTutorialId(event.target.value)}
+            data-testid="select-pipeline-training-override"
+          >
+            {overrideTarget?.trainingCompliance?.requirements.map(item => (
+              <option key={item.tutorialId} value={item.tutorialId}>{item.title} ({item.status.replace('_', ' ')})</option>
+            ))}
+          </select>
+          <Textarea
+            value={overrideReason}
+            onChange={event => setOverrideReason(event.target.value)}
+            placeholder="Reason for authorized override (at least 10 characters)"
+            data-testid="input-pipeline-training-override-reason"
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOverrideTarget(null)}>Cancel</Button>
+            <Button
+              disabled={!overrideTutorialId || overrideReason.trim().length < 10 || overrideMutation.isPending}
+              onClick={() => overrideMutation.mutate()}
+              data-testid="button-confirm-training-override"
+            >
+              {overrideMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Record override
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={!!resendPickerTarget}

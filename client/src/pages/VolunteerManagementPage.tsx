@@ -5,6 +5,7 @@ import { useTenant } from "@/contexts/TenantContext";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, UserCircle, Calendar, Plus, FolderOpen, FileText, ExternalLink, Files, ShieldCheck, Link2, Copy, Check } from "lucide-react";
@@ -65,8 +66,12 @@ export default function VolunteerManagementPage() {
     personId: string;
     personName: string;
   } | null>(null);
+  const [trainingFilter, setTrainingFilter] = useState("all");
+  const [trainingVolunteer, setTrainingVolunteer] = useState<{ id: string; name: string } | null>(null);
+  const [overrideTutorialId, setOverrideTutorialId] = useState("");
+  const [overrideReason, setOverrideReason] = useState("");
 
-  const isAdmin = user?.roles?.includes('admin') || user?.roles?.includes('staff') || false;
+  const isAdmin = user?.roles?.includes('owner') || user?.roles?.includes('admin') || user?.roles?.includes('staff') || false;
 
   // Fetch all users
   const { data: usersData, isLoading: usersLoading } = useQuery<UsersData>({
@@ -93,6 +98,36 @@ export default function VolunteerManagementPage() {
   const { data: holdHarmlessData } = useQuery<{ holdHarmlessStatus: Record<string, { signedAt: string; title: string }> }>({
     queryKey: ['/api/volunteers/hold-harmless-status'],
   });
+  const { data: trainingData } = useQuery<{
+    volunteers: Array<{
+      id: string;
+      overallStatus: "current" | "due_soon" | "overdue" | "incomplete";
+      requirements: Array<{ tutorialId: string; title: string; requirementVersion: number; status: string; completion: { renewalDueAt: string } | null }>;
+    }>;
+  }>({ queryKey: ['/api/volunteer-training/tracker'], enabled: isAdmin });
+  const { data: historyData } = useQuery<{
+    history: Array<{ id: string; title: string; requirementVersion: number; completionType: string; attestedAt: string; renewalDueAt: string; overrideReason: string | null }>;
+  }>({
+    queryKey: ['/api/volunteer-training/users', trainingVolunteer?.id, 'history'],
+    queryFn: async () => (await apiRequest('GET', `/api/volunteer-training/users/${trainingVolunteer!.id}/history`)).json(),
+    enabled: !!trainingVolunteer,
+  });
+  const overrideMutation = useMutation({
+    mutationFn: async () => (await apiRequest('POST', `/api/volunteer-training/users/${trainingVolunteer!.id}/override`, {
+      tutorialId: overrideTutorialId,
+      requirementVersion: trainingData!.volunteers
+        .find(volunteer => volunteer.id === trainingVolunteer!.id)!.requirements
+        .find(item => item.tutorialId === overrideTutorialId)!.requirementVersion,
+      reason: overrideReason,
+    })).json(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/volunteer-training/tracker'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/volunteer-training/users', trainingVolunteer?.id, 'history'] });
+      setOverrideReason("");
+      toast({ title: "Training override recorded", description: "The reason is retained in the volunteer's audit history." });
+    },
+    onError: (e: any) => toast({ title: "Unable to record override", description: e.message, variant: "destructive" }),
+  });
 
   const holdHarmlessStatus = holdHarmlessData?.holdHarmlessStatus || {};
 
@@ -117,6 +152,10 @@ export default function VolunteerManagementPage() {
   const allUsers = usersData?.users || [];
   // Filter users to show only those with volunteer role
   const volunteers = allUsers.filter(user => user.roles?.includes('volunteer'));
+  const visibleVolunteers = volunteers.filter(volunteer => {
+    if (trainingFilter === "all") return true;
+    return trainingData?.volunteers.find(item => item.id === volunteer.id)?.overallStatus === trainingFilter;
+  });
   const opportunities = opportunitiesData?.opportunities || [];
   const volunteerApps = volunteerAppsData?.applications || [];
 
@@ -277,6 +316,22 @@ export default function VolunteerManagementPage() {
                 </p>
               </Card>
             ) : (
+              <div className="space-y-3">
+              <div className="flex justify-end">
+                <select
+                  className="h-9 rounded-md border bg-background px-3 text-sm"
+                  value={trainingFilter}
+                  onChange={event => setTrainingFilter(event.target.value)}
+                  aria-label="Filter by training status"
+                  data-testid="select-training-status-filter"
+                >
+                  <option value="all">All training statuses</option>
+                  <option value="current">Current</option>
+                  <option value="due_soon">Due soon</option>
+                  <option value="overdue">Overdue</option>
+                  <option value="incomplete">Incomplete</option>
+                </select>
+              </div>
               <Card>
                 <Table>
                   <TableHeader>
@@ -290,9 +345,10 @@ export default function VolunteerManagementPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {volunteers.map((volunteer) => {
+                    {visibleVolunteers.map((volunteer) => {
                       const folderPath = getVolunteerFolder(volunteer.email);
                       const hhStatus = hasHoldHarmless(volunteer.email);
+                      const training = trainingData?.volunteers.find(item => item.id === volunteer.id);
                       return (
                         <TableRow key={volunteer.id} data-testid={`row-volunteer-${volunteer.id}`}>
                           <TableCell className="font-medium">{volunteer.fullName}</TableCell>
@@ -314,6 +370,22 @@ export default function VolunteerManagementPage() {
                               </Tooltip>
                             ) : (
                               <span className="text-xs text-muted-foreground" data-testid={`text-no-hh-${volunteer.id}`}>No waiver on file</span>
+                            )}
+                            {training && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="ml-1 h-7 px-2"
+                                onClick={() => {
+                                  setTrainingVolunteer({ id: volunteer.id, name: volunteer.fullName || volunteer.email });
+                                  setOverrideTutorialId(training.requirements.find(item => !['current', 'due_soon'].includes(item.status))?.tutorialId || training.requirements[0]?.tutorialId || "");
+                                }}
+                                data-testid={`button-training-history-${volunteer.id}`}
+                              >
+                                <Badge variant={['overdue', 'incomplete'].includes(training.overallStatus) ? "destructive" : "outline"}>
+                                  Training {training.overallStatus.replace('_', ' ')}
+                                </Badge>
+                              </Button>
                             )}
                           </TableCell>
                           <TableCell>
@@ -354,6 +426,7 @@ export default function VolunteerManagementPage() {
                   </TableBody>
                 </Table>
               </Card>
+              </div>
             )}
           </TabsContent>
 
@@ -398,6 +471,59 @@ export default function VolunteerManagementPage() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Add/Edit Opportunity Dialog */}
+      <Dialog open={!!trainingVolunteer} onOpenChange={(open) => !open && setTrainingVolunteer(null)}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto" data-testid="dialog-training-history">
+          <DialogHeader>
+            <DialogTitle>Training history — {trainingVolunteer?.name}</DialogTitle>
+            <DialogDescription>
+              Explicit attestations and authorized overrides. Video playback is not technically verified.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            {historyData?.history.length ? historyData.history.map(item => (
+              <Card key={item.id} className="p-3">
+                <div className="font-medium">{item.title} · version {item.requirementVersion}</div>
+                <div className="text-sm text-muted-foreground">
+                  {item.completionType === "staff_override" ? "Staff override" : "Volunteer attestation"} on {new Date(item.attestedAt).toLocaleDateString()}
+                  {" · "}renewal due {new Date(item.renewalDueAt).toLocaleDateString()}
+                </div>
+                {item.overrideReason && <p className="text-sm mt-1">Reason: {item.overrideReason}</p>}
+              </Card>
+            )) : <p className="text-sm text-muted-foreground">No completion history.</p>}
+          </div>
+          {isAdmin && trainingVolunteer && (trainingData?.volunteers.find(item => item.id === trainingVolunteer.id)?.requirements.length || 0) > 0 && (
+            <div className="border-t pt-4 space-y-2">
+              <h4 className="font-medium">Authorized staff override</h4>
+              <select
+                className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+                value={overrideTutorialId}
+                onChange={event => setOverrideTutorialId(event.target.value)}
+                data-testid="select-override-training"
+              >
+                {trainingData?.volunteers.find(item => item.id === trainingVolunteer.id)?.requirements.map(item => (
+                  <option key={item.tutorialId} value={item.tutorialId}>{item.title} ({item.status.replace('_', ' ')})</option>
+                ))}
+              </select>
+              <Textarea
+                value={overrideReason}
+                onChange={event => setOverrideReason(event.target.value)}
+                placeholder="Audit reason (at least 10 characters)"
+                data-testid="input-training-override-reason"
+              />
+              <Button
+                disabled={overrideReason.trim().length < 10 || !overrideTutorialId || overrideMutation.isPending}
+                onClick={() => overrideMutation.mutate()}
+                data-testid="button-submit-training-override"
+              >
+                {overrideMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Record override
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Add/Edit Opportunity Dialog */}
       <AddOpportunityDialog

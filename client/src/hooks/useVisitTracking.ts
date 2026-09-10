@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useLocation } from 'wouter';
 import { apiRequest } from '@/lib/queryClient';
+import { isSensitiveVolunteerTrainingUrl } from '@shared/sensitive-routes';
 
 type PageType = 'home' | 'animals' | 'animal_profile' | 'donate' | 'wishlist' | 'foster' | 'volunteer' | 'surrender' | 'contact' | 'shop' | 'campaign' | 'custom' | 'other';
 
@@ -45,6 +46,7 @@ export function useVisitTracking() {
   const lastTrackedPath = useRef<string | null>(null);
 
   useEffect(() => {
+    if (isSensitiveVolunteerTrainingUrl(location)) return;
     const excludedPaths = [
       '/dashboard',
       '/login',
@@ -84,6 +86,7 @@ export function useVisitTracking() {
 }
 
 export function trackPageVisit(path: string, pageType?: PageType) {
+  if (isSensitiveVolunteerTrainingUrl(path)) return;
   const actualPageType = pageType || pathToPageType(path);
   
   apiRequest('POST', '/api/page-visits', {

@@ -5,15 +5,20 @@ async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
     let message = `${res.status}: ${text}`;
+    let details: any = undefined;
     try {
-      const json = JSON.parse(text);
-      if (json.error) {
-        message = json.error;
-      } else if (json.message) {
-        message = json.message;
+      details = JSON.parse(text);
+      if (details.error) {
+        message = details.error;
+      } else if (details.message) {
+        message = details.message;
       }
     } catch {}
-    throw new Error(message);
+    const error = new Error(message) as Error & { status: number; code?: string; details?: any };
+    error.status = res.status;
+    error.code = details?.code;
+    error.details = details;
+    throw error;
   }
 }
 

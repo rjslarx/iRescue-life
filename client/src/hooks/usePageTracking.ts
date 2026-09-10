@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useLocation } from 'wouter';
+import { isSensitiveVolunteerTrainingUrl } from '@shared/sensitive-routes';
 
 declare global {
   interface Window {
@@ -11,6 +12,7 @@ export function usePageTracking() {
   const [location] = useLocation();
 
   useEffect(() => {
+    if (isSensitiveVolunteerTrainingUrl(location)) return;
     if (typeof window.gtag !== 'undefined') {
       window.gtag('config', 'G-W9DLZZFSFX', {
         page_path: location,

@@ -84,6 +84,7 @@ import PublicWishlist from "@/pages/PublicWishlist";
 import EmailInboxPage from "@/pages/EmailInboxPage";
 import HappyTailsPage from "@/pages/HappyTailsPage";
 import TutorialsPage from "@/pages/TutorialsPage";
+import PublicVolunteerTrainingPage from "@/pages/PublicVolunteerTrainingPage";
 import PlatformIntegrationsPage from "@/pages/PlatformIntegrationsPage";
 import ComplianceSettingsPage from "@/pages/ComplianceSettingsPage";
 import PeerCampaignPage from "@/pages/PeerCampaignPage";
@@ -183,6 +184,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { usePageTracking } from "@/hooks/usePageTracking";
 import { useVisitTracking } from "@/hooks/useVisitTracking";
+import { isSensitiveVolunteerTrainingUrl, tokenFreeCanonical } from "@shared/sensitive-routes";
 
 // Component to handle root path routing
 function RootHandler() {
@@ -295,6 +297,7 @@ function RouterSwitch() {
       <Route path="/placement-agreement/sign/:token" component={PublicPlacementAgreementPage} />
       <Route path="/run-sheet/:token" component={RunSheetPage} />
       <Route path="/volunteer-waiver" component={PublicWaiverPage} />
+      <Route path="/volunteer-training/:token" component={PublicVolunteerTrainingPage} />
       <Route path="/f/:slug" component={PublicCustomFormPage} />
       <Route path="/form/:token" component={PublicFormSigningPage} />
       <Route path="/form/:token/payment" component={FormPaymentPage} />
@@ -565,9 +568,17 @@ function DemoPage() {
 
 function useCanonicalUrl() {
   useEffect(() => {
+    const sensitive = isSensitiveVolunteerTrainingUrl(window.location.href);
+    let referrerMeta = document.querySelector('meta[name="referrer"]') as HTMLMetaElement | null;
+    if (sensitive && !referrerMeta) {
+      referrerMeta = document.createElement('meta');
+      referrerMeta.name = 'referrer';
+      document.head.appendChild(referrerMeta);
+    }
+    if (sensitive && referrerMeta) referrerMeta.content = 'no-referrer';
     const canonicalLink = document.querySelector('link[rel="canonical"]') as HTMLLinkElement;
     if (canonicalLink) {
-      canonicalLink.setAttribute('href', window.location.href);
+      canonicalLink.setAttribute('href', tokenFreeCanonical(window.location.href, window.location.origin));
     }
   });
 }

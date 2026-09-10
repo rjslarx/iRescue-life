@@ -46,6 +46,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { buildContactCreatePayload } from "@/lib/contactPayload";
 
 interface Contact {
   id: string;
@@ -223,9 +224,7 @@ export default function ContactsPage() {
 
   const createContactMutation = useMutation({
     mutationFn: async (data: ContactFormData) => {
-      const tags = data.tags ? data.tags.split(',').map(t => t.trim()).filter(Boolean) : [];
-      const roles = data.roles && data.roles.length > 0 ? data.roles : undefined;
-      return apiRequest('POST', '/api/contacts', { ...data, tags, role: roles });
+      return apiRequest('POST', '/api/contacts', buildContactCreatePayload(data));
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/contacts'] });

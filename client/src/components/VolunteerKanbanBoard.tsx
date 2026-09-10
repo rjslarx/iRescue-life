@@ -41,6 +41,7 @@ interface VolunteerApplication {
   holdHarmlessSignedAt?: string | null;
   createdAt?: string;
   inviteStatus?: string;
+  trainingStatus?: "current" | "due_soon" | "overdue" | "incomplete";
 }
 
 interface VolunteerKanbanBoardProps {
@@ -198,6 +199,18 @@ export default function VolunteerKanbanBoard({
       } else {
         badges.push({ label: "Awaiting Waiver", variant: "outline" });
       }
+    }
+    if (app.trainingStatus) {
+      const labels = {
+        current: "Training Current",
+        due_soon: "Training Due Soon",
+        overdue: "Training Overdue",
+        incomplete: "Training Incomplete",
+      };
+      badges.push({
+        label: labels[app.trainingStatus],
+        variant: app.trainingStatus === "overdue" || app.trainingStatus === "incomplete" ? "destructive" : "outline",
+      });
     }
 
     if (app.pipelineStatus === "active_pool") {

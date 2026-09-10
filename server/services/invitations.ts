@@ -1,15 +1,101 @@
 import { db } from '../db';
-import { userInvitations, users, tenants } from '@shared/schema';
-import { eq, and, isNull, gt } from 'drizzle-orm';
+import { contacts, userInvitations, users, tenants, tutorials, volunteerApplications, volunteerTrainingAccessSessions } from '@shared/schema';
+import { eq, and, isNull, gt, or, sql } from 'drizzle-orm';
 import crypto from 'crypto';
 import { EmailService } from '../lib/email-service';
+
+function invitationConflict(code: string, message: string) {
+  return Object.assign(new Error(message), { status: 409, code });
+}
+
+export function decideBoundVolunteerInvitationAcceptance(args: {
+  pipelineStatus: string;
+  recipientMatches: boolean;
+  hasEstablishedContact: boolean;
+  trainingAllowed: boolean;
+}) {
+  if (args.pipelineStatus !== 'active_pool') return { allowed: false as const, code: 'VOLUNTEER_INVITATION_STAGE_INVALID' };
+  if (!args.recipientMatches) return { allowed: false as const, code: 'VOLUNTEER_INVITATION_RECIPIENT_STALE' };
+  if (!args.hasEstablishedContact) return { allowed: false as const, code: 'VOLUNTEER_INVITATION_IDENTITY_REVIEW_REQUIRED' };
+  if (!args.trainingAllowed) return { allowed: false as const, code: 'VOLUNTEER_INVITATION_TRAINING_REQUIRED' };
+  return { allowed: true as const };
+}
+
+export function decideUnboundVolunteerInvitationAcceptance(isVolunteer: boolean, requiredTrainingExists: boolean) {
+  return isVolunteer && requiredTrainingExists
+    ? { allowed: false as const, code: 'VOLUNTEER_INVITATION_APPLICATION_REQUIRED' }
+    : { allowed: true as const };
+}
+
+export const BOUND_VOLUNTEER_USER_CREATION_OPTIONS = Object.freeze({
+  initiallyInactive: true,
+  skipContactSync: true,
+});
+
+export function decideInvitationContactWrite(boundInvitation: boolean, exactContactExists: boolean) {
+  if (boundInvitation && !exactContactExists) return { action: 'identity_conflict' as const };
+  if (exactContactExists) return { action: 'update_exact' as const };
+  return { action: 'insert_new' as const };
+}
+
+async function requiredVolunteerTrainingExists(tenantId: string) {
+  const [required] = await db.select({ id: tutorials.id }).from(tutorials).where(and(
+    eq(tutorials.tenantId, tenantId),
+    eq(tutorials.requiredForVolunteers, true),
+  )).limit(1);
+  return !!required;
+}
+
+export async function validateBoundVolunteerInvitation(
+  tenantId: string,
+  applicationId: string,
+  recipientEmail: string,
+) {
+  const [application] = await db.select().from(volunteerApplications).where(and(
+    eq(volunteerApplications.tenantId, tenantId),
+    eq(volunteerApplications.id, applicationId),
+  )).limit(1);
+  if (!application) throw invitationConflict('VOLUNTEER_INVITATION_APPLICATION_INVALID', 'The volunteer application is unavailable');
+  if (application.pipelineStatus !== 'active_pool') {
+    throw invitationConflict('VOLUNTEER_INVITATION_STAGE_INVALID', 'The volunteer application is not active');
+  }
+  if (application.applicantEmail.trim().toLowerCase() !== recipientEmail.trim().toLowerCase()) {
+    throw invitationConflict('VOLUNTEER_INVITATION_RECIPIENT_STALE', 'The invitation recipient no longer matches the application');
+  }
+  const { getApplicationEstablishedIdentity, getActivationTrainingGuard } = await import('./volunteer-training');
+  const established = await getApplicationEstablishedIdentity(tenantId, applicationId);
+  if (!established.contactId) {
+    throw invitationConflict('VOLUNTEER_INVITATION_IDENTITY_REVIEW_REQUIRED', 'Volunteer identity requires staff review');
+  }
+  const [contact] = await db.select().from(contacts).where(and(
+    eq(contacts.tenantId, tenantId),
+    eq(contacts.id, established.contactId),
+  )).limit(1);
+  if (!contact || (established.userId && contact.userId && established.userId !== contact.userId)) {
+    throw invitationConflict('VOLUNTEER_INVITATION_IDENTITY_REVIEW_REQUIRED', 'Volunteer identity requires staff review');
+  }
+  if (contact.email.trim().toLowerCase() !== recipientEmail.trim().toLowerCase()) {
+    throw invitationConflict('VOLUNTEER_INVITATION_RECIPIENT_STALE', 'The established contact recipient no longer matches');
+  }
+  const guard = await getActivationTrainingGuard(tenantId, applicationId);
+  const decision = decideBoundVolunteerInvitationAcceptance({
+    pipelineStatus: application.pipelineStatus,
+    recipientMatches: application.applicantEmail.trim().toLowerCase() === recipientEmail.trim().toLowerCase(),
+    hasEstablishedContact: !!contact,
+    trainingAllowed: guard.allowed,
+  });
+  if (!decision.allowed) {
+    throw invitationConflict(decision.code, 'Current volunteer invitation eligibility must be reviewed');
+  }
+  return { application, contact, established };
+}
 
 /**
  * Get the base URL for the application based on environment
  * In production, uses irescue.life
  * Falls back to REPLIT_DEV_DOMAIN for development
  */
-function getAppBaseUrl(): string {
+export function getAppBaseUrl(): string {
   // For production deployments, always use irescue.life
   if (process.env.REPLIT_DEPLOYMENT === '1') {
     return 'https://irescue.life';
@@ -22,6 +108,16 @@ function getAppBaseUrl(): string {
   
   // Fallback to localhost
   return 'http://localhost:5000';
+}
+
+export function buildTenantPublicUrl(
+  tenant: { customDomain?: string | null; subdomain?: string | null },
+  path: string,
+): string {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  if (tenant.customDomain) return `https://${tenant.customDomain}${normalizedPath}`;
+  const tenantPath = tenant.subdomain ? `/${tenant.subdomain}` : '';
+  return `${getAppBaseUrl()}${tenantPath}${normalizedPath}`;
 }
 
 /**
@@ -51,8 +147,19 @@ export async function createInvitation(
     fullName?: string;
     phone?: string;
     roles: ('admin' | 'board_member' | 'staff' | 'foster' | 'volunteer')[];
+    volunteerApplicationId?: string;
   }
 ) {
+  if (data.roles.includes('volunteer')) {
+    if (data.volunteerApplicationId) {
+      await validateBoundVolunteerInvitation(tenantId, data.volunteerApplicationId, data.email);
+    } else {
+      const unbound = decideUnboundVolunteerInvitationAcceptance(true, await requiredVolunteerTrainingExists(tenantId));
+      if (!unbound.allowed) {
+        throw invitationConflict(unbound.code, 'Reissue this volunteer invitation from an approved application');
+      }
+    }
+  }
   // Check if user already exists
   const [existingUser] = await db
     .select()
@@ -80,6 +187,29 @@ export async function createInvitation(
     .limit(1);
 
   if (existingInvitation) {
+    if (data.roles.includes('volunteer') && data.volunteerApplicationId) {
+      if (!existingInvitation.roles.includes('volunteer')) {
+        throw invitationConflict('VOLUNTEER_INVITATION_APPLICATION_CONFLICT', 'A different pending invitation already exists for this recipient');
+      }
+      if (existingInvitation.volunteerApplicationId &&
+          existingInvitation.volunteerApplicationId !== data.volunteerApplicationId) {
+        throw invitationConflict('VOLUNTEER_INVITATION_APPLICATION_CONFLICT', 'The pending invitation belongs to another volunteer application');
+      }
+      if (!existingInvitation.volunteerApplicationId) {
+        const [bound] = await db.update(userInvitations).set({
+          volunteerApplicationId: data.volunteerApplicationId,
+        }).where(and(
+          eq(userInvitations.id, existingInvitation.id),
+          isNull(userInvitations.volunteerApplicationId),
+        )).returning();
+        if (bound) return bound;
+        const [raced] = await db.select({ volunteerApplicationId: userInvitations.volunteerApplicationId })
+          .from(userInvitations).where(eq(userInvitations.id, existingInvitation.id)).limit(1);
+        if (raced?.volunteerApplicationId !== data.volunteerApplicationId) {
+          throw invitationConflict('VOLUNTEER_INVITATION_APPLICATION_CONFLICT', 'The pending invitation belongs to another volunteer application');
+        }
+      }
+    }
     throw new Error('An invitation has already been sent to this email');
   }
 
@@ -100,6 +230,7 @@ export async function createInvitation(
       token,
       invitedBy,
       expiresAt,
+      volunteerApplicationId: data.volunteerApplicationId || null,
     })
     .returning();
 
@@ -152,14 +283,7 @@ export async function sendInvitationEmail(
   // URL-encode the token to prevent email quoted-printable encoding from misinterpreting
   // patterns like =04 as encoded characters (which breaks the link)
   const encodedToken = encodeURIComponent(invitation.token);
-  let acceptUrl: string;
-  if (tenant?.customDomain) {
-    acceptUrl = `https://${tenant.customDomain}/accept-invitation?token=${encodedToken}`;
-  } else {
-    const baseUrl = getAppBaseUrl();
-    const tenantPath = tenant?.subdomain ? `/${tenant.subdomain}` : '';
-    acceptUrl = `${baseUrl}${tenantPath}/accept-invitation?token=${encodedToken}`;
-  }
+  const acceptUrl = buildTenantPublicUrl(tenant || {}, `/accept-invitation?token=${encodedToken}`);
 
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -391,10 +515,12 @@ export async function sendVolunteerWelcomeEmail(
  */
 export async function createAndSendVolunteerWelcome(
   tenantId: string,
+  applicationId: string,
   applicantEmail: string,
   applicantName: string
 ): Promise<{ success?: boolean; skipped?: boolean; reason?: string }> {
   const normalizedEmail = applicantEmail.trim().toLowerCase();
+  await validateBoundVolunteerInvitation(tenantId, applicationId, normalizedEmail);
 
   // Guard 1: user account already exists
   const [existingUser] = await db
@@ -410,7 +536,7 @@ export async function createAndSendVolunteerWelcome(
 
   // Guard 2: a non-expired, pending invitation already exists
   const [existingInvitation] = await db
-    .select({ id: userInvitations.id })
+    .select({ id: userInvitations.id, roles: userInvitations.roles, volunteerApplicationId: userInvitations.volunteerApplicationId })
     .from(userInvitations)
     .where(and(
       eq(userInvitations.tenantId, tenantId),
@@ -421,6 +547,24 @@ export async function createAndSendVolunteerWelcome(
     .limit(1);
 
   if (existingInvitation) {
+    if (!existingInvitation.roles.includes('volunteer')) {
+      throw invitationConflict('VOLUNTEER_INVITATION_APPLICATION_CONFLICT', 'A different pending invitation already exists for this recipient');
+    }
+    if (existingInvitation.volunteerApplicationId && existingInvitation.volunteerApplicationId !== applicationId) {
+      throw invitationConflict('VOLUNTEER_INVITATION_APPLICATION_CONFLICT', 'The pending invitation belongs to another volunteer application');
+    }
+    if (!existingInvitation.volunteerApplicationId) {
+      const [bound] = await db.update(userInvitations).set({ volunteerApplicationId: applicationId })
+        .where(and(eq(userInvitations.id, existingInvitation.id), isNull(userInvitations.volunteerApplicationId)))
+        .returning({ id: userInvitations.id });
+      if (!bound) {
+        const [raced] = await db.select({ volunteerApplicationId: userInvitations.volunteerApplicationId })
+          .from(userInvitations).where(eq(userInvitations.id, existingInvitation.id)).limit(1);
+        if (raced?.volunteerApplicationId !== applicationId) {
+          throw invitationConflict('VOLUNTEER_INVITATION_APPLICATION_CONFLICT', 'The pending invitation belongs to another volunteer application');
+        }
+      }
+    }
     console.log(`[Volunteer Welcome] Skipping — pending invitation already exists for ${normalizedEmail}`);
     return { skipped: true, reason: 'invitation_pending' };
   }
@@ -455,6 +599,7 @@ export async function createAndSendVolunteerWelcome(
       token,
       invitedBy: tenantAdmin.id,
       expiresAt,
+      volunteerApplicationId: applicationId,
     })
     .returning();
 
@@ -593,6 +738,159 @@ export async function getInvitationByToken(token: string) {
 /**
  * Accept invitation and create user
  */
+async function acceptVolunteerInvitationAtomic(args: {
+  invitation: typeof userInvitations.$inferSelect;
+  passwordHash: string;
+  fullName: string;
+  phone: string;
+  address: string;
+}) {
+  const normalizedEmail = args.invitation.email.trim().toLowerCase();
+  return db.transaction(async tx => {
+    const {
+      acquireVolunteerTrainingActivationPolicyLock,
+      activationAllowed,
+      getApplicationCompliance,
+      getApplicationEstablishedIdentity,
+      reconcileTrainingIdentityWithExecutor,
+    } = await import('./volunteer-training');
+    await acquireVolunteerTrainingActivationPolicyLock(tx, args.invitation.tenantId);
+    const [invitation] = await tx.select().from(userInvitations).where(and(
+      eq(userInvitations.id, args.invitation.id),
+      eq(userInvitations.tenantId, args.invitation.tenantId),
+      eq(userInvitations.token, args.invitation.token),
+      isNull(userInvitations.acceptedAt),
+      gt(userInvitations.expiresAt, new Date()),
+    )).limit(1).for('no key update');
+    if (!invitation || !invitation.roles.includes('volunteer') ||
+        invitation.email.trim().toLowerCase() !== normalizedEmail) {
+      throw invitationConflict('VOLUNTEER_INVITATION_FINALIZATION_CONFLICT', 'The invitation changed during acceptance');
+    }
+    const existingUsers = await tx.select({ id: users.id }).from(users).where(and(
+      eq(users.tenantId, invitation.tenantId),
+      sql`lower(trim(${users.email})) = ${normalizedEmail}`,
+    ));
+    if (existingUsers.length) {
+      throw invitationConflict('VOLUNTEER_INVITATION_USER_EXISTS', 'A user with this email already exists');
+    }
+
+    let application: typeof volunteerApplications.$inferSelect | null = null;
+    let contact: typeof contacts.$inferSelect | null = null;
+    if (invitation.volunteerApplicationId) {
+      await tx.execute(sql`SELECT id FROM volunteer_applications WHERE tenant_id = ${invitation.tenantId} AND id = ${invitation.volunteerApplicationId} FOR NO KEY UPDATE`);
+      [application] = await tx.select().from(volunteerApplications).where(and(
+        eq(volunteerApplications.tenantId, invitation.tenantId),
+        eq(volunteerApplications.id, invitation.volunteerApplicationId),
+      )).limit(1);
+      if (!application || application.pipelineStatus !== 'active_pool' ||
+          application.applicantEmail.trim().toLowerCase() !== normalizedEmail) {
+        throw invitationConflict('VOLUNTEER_INVITATION_STAGE_INVALID', 'The volunteer application is no longer eligible');
+      }
+      const established = await getApplicationEstablishedIdentity(invitation.tenantId, application.id, tx);
+      if (!established.contactId || established.userId) {
+        throw invitationConflict('VOLUNTEER_INVITATION_IDENTITY_REVIEW_REQUIRED', 'Volunteer identity requires staff review');
+      }
+      await tx.execute(sql`SELECT id FROM contacts WHERE tenant_id = ${invitation.tenantId} AND id = ${established.contactId} FOR NO KEY UPDATE`);
+      const matching = await tx.select().from(contacts).where(and(
+        eq(contacts.tenantId, invitation.tenantId),
+        sql`lower(trim(${contacts.email})) = ${normalizedEmail}`,
+      ));
+      if (matching.length !== 1 || matching[0].id !== established.contactId || matching[0].userId) {
+        throw invitationConflict('VOLUNTEER_INVITATION_IDENTITY_REVIEW_REQUIRED', 'The established contact identity changed');
+      }
+      contact = matching[0];
+      const compliance = await getApplicationCompliance(invitation.tenantId, application.id, tx);
+      if (!compliance || !activationAllowed(compliance.overallStatus)) {
+        throw invitationConflict('VOLUNTEER_INVITATION_TRAINING_REQUIRED', 'Required volunteer training is not current');
+      }
+    } else {
+      const [required] = await tx.select({ id: tutorials.id }).from(tutorials).where(and(
+        eq(tutorials.tenantId, invitation.tenantId), eq(tutorials.requiredForVolunteers, true),
+      )).limit(1);
+      if (required) {
+        throw invitationConflict('VOLUNTEER_INVITATION_APPLICATION_REQUIRED', 'Staff must reissue this invitation from an eligible application');
+      }
+      const matching = await tx.select().from(contacts).where(and(
+        eq(contacts.tenantId, invitation.tenantId),
+        sql`lower(trim(${contacts.email})) = ${normalizedEmail}`,
+      ));
+      if (matching.length > 1 || matching[0]?.userId) {
+        throw invitationConflict('CONTACT_OWNERSHIP_CONFLICT', 'The invitation recipient has conflicting contact ownership');
+      }
+      contact = matching[0] || null;
+    }
+
+    const { insertUserWithHashedPassword } = await import('./auth');
+    const user = await insertUserWithHashedPassword(tx, invitation.tenantId, {
+      email: normalizedEmail,
+      passwordHash: args.passwordHash,
+      fullName: args.fullName || invitation.fullName || invitation.email,
+      roles: invitation.roles as ('admin' | 'board_member' | 'staff' | 'foster' | 'volunteer')[],
+      phone: args.phone || invitation.phone,
+      initiallyInactive: true,
+    });
+    if (contact) {
+      [contact] = await tx.update(contacts).set({
+        userId: user.id,
+        name: args.fullName,
+        email: normalizedEmail,
+        phone: args.phone,
+        address: args.address,
+        source: Array.from(new Set([...(contact.source || []), 'user' as const])),
+        role: Array.from(new Set([...(contact.role || []), ...invitation.roles])) as any,
+        updatedAt: new Date(),
+      }).where(and(
+        eq(contacts.tenantId, invitation.tenantId), eq(contacts.id, contact.id), isNull(contacts.userId),
+      )).returning();
+      if (!contact) throw invitationConflict('CONTACT_OWNERSHIP_CONFLICT', 'Contact ownership changed during acceptance');
+    } else {
+      [contact] = await tx.insert(contacts).values({
+        tenantId: invitation.tenantId,
+        userId: user.id,
+        name: args.fullName,
+        email: normalizedEmail,
+        phone: args.phone,
+        address: args.address,
+        source: ['user'],
+        role: invitation.roles as any,
+      }).returning();
+    }
+    if (application) {
+      const [linked] = await tx.update(volunteerApplications).set({
+        userId: user.id, contactId: contact.id, updatedAt: new Date(),
+      }).where(and(
+        eq(volunteerApplications.tenantId, invitation.tenantId),
+        eq(volunteerApplications.id, application.id),
+        eq(volunteerApplications.pipelineStatus, 'active_pool'),
+        isNull(volunteerApplications.userId),
+      )).returning({ id: volunteerApplications.id });
+      if (!linked) throw invitationConflict('VOLUNTEER_INVITATION_FINALIZATION_CONFLICT', 'Application ownership changed');
+    }
+    await reconcileTrainingIdentityWithExecutor(tx, {
+      tenantId: invitation.tenantId,
+      userId: user.id,
+      contactId: contact.id,
+      applicationId: application?.id,
+    });
+    if (application) {
+      await tx.update(volunteerTrainingAccessSessions).set({ revokedAt: new Date() }).where(and(
+        eq(volunteerTrainingAccessSessions.tenantId, invitation.tenantId),
+        eq(volunteerTrainingAccessSessions.volunteerApplicationId, application.id),
+        isNull(volunteerTrainingAccessSessions.revokedAt),
+      ));
+    }
+    const [accepted] = await tx.update(userInvitations).set({ acceptedAt: new Date() }).where(and(
+      eq(userInvitations.id, invitation.id), isNull(userInvitations.acceptedAt),
+    )).returning({ id: userInvitations.id });
+    const [activated] = await tx.update(users).set({ isActive: true }).where(and(
+      eq(users.id, user.id), eq(users.tenantId, invitation.tenantId), eq(users.isActive, false),
+    )).returning();
+    if (!accepted || !activated) throw invitationConflict('VOLUNTEER_INVITATION_FINALIZATION_CONFLICT', 'Invitation finalization failed');
+    const { passwordHash: _, ...safeUser } = activated;
+    return { user: safeUser, invitation };
+  });
+}
+
 export async function acceptInvitation(
   token: string,
   password: string,
@@ -601,15 +899,95 @@ export async function acceptInvitation(
   address: string
 ) {
   const invitation = await getInvitationByToken(token);
+  const normalizedEmail = invitation.email.trim().toLowerCase();
+  const isVolunteer = invitation.roles.includes('volunteer');
+  let boundVolunteer: Awaited<ReturnType<typeof validateBoundVolunteerInvitation>> | null = null;
+  if (isVolunteer) {
+    if (invitation.volunteerApplicationId) {
+      boundVolunteer = await validateBoundVolunteerInvitation(
+        invitation.tenantId,
+        invitation.volunteerApplicationId,
+        normalizedEmail,
+      );
+    } else {
+      const unbound = decideUnboundVolunteerInvitationAcceptance(true, await requiredVolunteerTrainingExists(invitation.tenantId));
+      if (!unbound.allowed) {
+        throw invitationConflict(
+          unbound.code,
+          'Staff must reissue this invitation from the approved volunteer application',
+        );
+      }
+    }
+  }
+  if (boundVolunteer) {
+    const normalizedContacts = await db.select({ id: contacts.id }).from(contacts).where(and(
+      eq(contacts.tenantId, invitation.tenantId),
+      sql`lower(trim(${contacts.email})) = ${normalizedEmail}`,
+    ));
+    if (normalizedContacts.length !== 1 || normalizedContacts[0].id !== boundVolunteer.contact.id) {
+      throw invitationConflict(
+        'VOLUNTEER_INVITATION_IDENTITY_REVIEW_REQUIRED',
+        'The invitation recipient has conflicting contact identities',
+      );
+    }
+  }
+  const emailPreflight = boundVolunteer ? [] : await db.select({
+    id: contacts.id,
+    userId: contacts.userId,
+    source: contacts.source,
+    role: contacts.role,
+  }).from(contacts).where(and(
+    eq(contacts.tenantId, invitation.tenantId),
+    sql`lower(${contacts.email}) = ${normalizedEmail}`,
+  )).limit(1);
+  const preflightContact = boundVolunteer ? boundVolunteer.contact : emailPreflight[0];
+  if (preflightContact?.userId) {
+    const error = new Error('This email is already linked to an existing contact account') as Error & { status?: number; code?: string };
+    error.status = 409;
+    error.code = 'CONTACT_OWNERSHIP_CONFLICT';
+    throw error;
+  }
+  if (preflightContact && !boundVolunteer) {
+    const linkedApplications = await db.select({ id: volunteerApplications.id })
+      .from(volunteerApplications).where(and(
+        eq(volunteerApplications.tenantId, invitation.tenantId),
+        eq(volunteerApplications.contactId, preflightContact.id),
+      ));
+    const { getApplicationEstablishedIdentity } = await import('./volunteer-training');
+    for (const application of linkedApplications) {
+      const owner = await getApplicationEstablishedIdentity(invitation.tenantId, application.id);
+      if ((owner.contactId && owner.contactId !== preflightContact.id) || owner.userId) {
+        throw Object.assign(new Error('A linked volunteer application has established conflicting ownership'), {
+          status: 409,
+          code: 'VOLUNTEER_APPLICATION_OWNERSHIP_CONFLICT',
+        });
+      }
+    }
+  }
+
+  if (isVolunteer) {
+    const { hashPassword } = await import('./auth');
+    const passwordHash = await hashPassword(password);
+    return acceptVolunteerInvitationAtomic({
+      invitation,
+      passwordHash,
+      fullName,
+      phone,
+      address,
+    });
+  }
 
   // Create the user using the auth service
   const { createUser } = await import('./auth');
   const user = await createUser(invitation.tenantId, {
-    email: invitation.email,
+    email: normalizedEmail,
     password,
     fullName: fullName || invitation.fullName || invitation.email,
     roles: invitation.roles as ('admin' | 'board_member' | 'staff' | 'foster' | 'volunteer')[],
-  });
+  }, isVolunteer ? {
+    initiallyInactive: true,
+    skipContactSync: !!boundVolunteer,
+  } : undefined);
 
   // Update user with phone number if provided (from invitation or accept form)
   // Also set fosterStatus='active' if the user has the foster role
@@ -626,37 +1004,75 @@ export async function acceptInvitation(
       .where(eq(users.id, user.id));
   }
 
-  // Mark invitation as accepted
-  await db
-    .update(userInvitations)
-    .set({ acceptedAt: new Date() })
-    .where(eq(userInvitations.id, invitation.id));
-
-  // Create a contact record for the new team member
-  const { contacts } = await import('@shared/schema');
-  await db
-    .insert(contacts)
-    .values({
+  // createUser synchronizes a contact through the ownership-safe contact
+  // service. Re-read it and only permit the same user (or still-unowned row).
+  const [postCreateContact] = await db.select({
+    id: contacts.id,
+    userId: contacts.userId,
+    source: contacts.source,
+    role: contacts.role,
+  }).from(contacts).where(boundVolunteer
+    ? and(eq(contacts.tenantId, invitation.tenantId), eq(contacts.id, boundVolunteer.contact.id))
+    : and(eq(contacts.tenantId, invitation.tenantId), sql`lower(${contacts.email}) = ${normalizedEmail}`)
+  ).limit(1);
+  const contactWrite = decideInvitationContactWrite(!!boundVolunteer, !!postCreateContact);
+  if (contactWrite.action === 'identity_conflict') {
+    throw invitationConflict(
+      'VOLUNTEER_INVITATION_IDENTITY_REVIEW_REQUIRED',
+      'The established volunteer contact changed during acceptance',
+    );
+  }
+  if (postCreateContact?.userId && postCreateContact.userId !== user.id) {
+    throw Object.assign(new Error('Contact ownership changed while accepting the invitation'), {
+      status: 409,
+      code: 'CONTACT_OWNERSHIP_CONFLICT',
+    });
+  }
+  let contact: { id: string } | undefined;
+  if (postCreateContact && boundVolunteer) {
+    contact = { id: postCreateContact.id };
+  } else if (postCreateContact) {
+    [contact] = await db.update(contacts).set({
+      userId: user.id,
+      name: fullName,
+      email: normalizedEmail,
+      phone,
+      address,
+      source: Array.from(new Set([...(postCreateContact.source || []), 'user' as const])),
+      role: Array.from(new Set([...(postCreateContact.role || []), ...invitation.roles])) as ('admin' | 'board_member' | 'staff' | 'foster' | 'volunteer')[],
+      updatedAt: new Date(),
+    }).where(and(
+      eq(contacts.id, postCreateContact.id),
+      or(isNull(contacts.userId), eq(contacts.userId, user.id)),
+    )).returning({ id: contacts.id });
+    if (!contact) {
+      throw Object.assign(new Error('Contact ownership changed while accepting the invitation'), {
+        status: 409,
+        code: 'CONTACT_OWNERSHIP_CONFLICT',
+      });
+    }
+  } else if (!boundVolunteer) {
+    [contact] = await db.insert(contacts).values({
       tenantId: invitation.tenantId,
       userId: user.id,
       name: fullName,
-      email: invitation.email,
+      email: normalizedEmail,
       phone: phone,
       address: address,
       source: ['user'],
       role: invitation.roles as ('admin' | 'board_member' | 'staff' | 'foster' | 'volunteer')[],
-    })
-    .onConflictDoUpdate({
-      target: [contacts.tenantId, contacts.email],
-      set: {
-        userId: user.id,
-        name: fullName,
-        phone: phone,
-        address: address,
-        role: invitation.roles as ('admin' | 'board_member' | 'staff' | 'foster' | 'volunteer')[],
-        updatedAt: new Date(),
-      },
-    });
+    }).returning({ id: contacts.id });
+  }
+  if (!contact) {
+    throw invitationConflict(
+      'VOLUNTEER_INVITATION_IDENTITY_REVIEW_REQUIRED',
+      'The established volunteer contact could not be linked',
+    );
+  }
+
+  await db.update(userInvitations)
+    .set({ acceptedAt: new Date() })
+    .where(eq(userInvitations.id, invitation.id));
 
   return { user, invitation };
 }
@@ -670,67 +1086,48 @@ export async function updateInvitationEmail(
   tenantId: string,
   newEmail: string
 ) {
-  // Verify invitation exists and is still pending
-  const [invitation] = await db
-    .select()
-    .from(userInvitations)
-    .where(and(
+  const normalizedEmail = newEmail.trim().toLowerCase();
+  return db.transaction(async tx => {
+    const [invitation] = await tx.select().from(userInvitations).where(and(
       eq(userInvitations.id, invitationId),
       eq(userInvitations.tenantId, tenantId),
-      isNull(userInvitations.acceptedAt)
-    ))
-    .limit(1);
-
-  if (!invitation) {
-    throw new Error('Invitation not found or already accepted');
-  }
-
-  // Check if a user already exists with the new email
-  const [existingUser] = await db
-    .select()
-    .from(users)
-    .where(and(
-      eq(users.tenantId, tenantId),
-      eq(users.email, newEmail)
-    ))
-    .limit(1);
-
-  if (existingUser) {
-    throw new Error('A user with this email already exists in your organization');
-  }
-
-  // Check if there's already a pending invitation for the new email
-  const [existingInvitation] = await db
-    .select()
-    .from(userInvitations)
-    .where(and(
-      eq(userInvitations.tenantId, tenantId),
-      eq(userInvitations.email, newEmail),
       isNull(userInvitations.acceptedAt),
-      gt(userInvitations.expiresAt, new Date())
-    ))
-    .limit(1);
-
-  if (existingInvitation) {
-    throw new Error('An invitation has already been sent to this email');
-  }
-
-  // Generate new token and extend expiration
-  const newToken = generateInvitationToken();
-  const newExpiresAt = new Date();
-  newExpiresAt.setDate(newExpiresAt.getDate() + 7);
-
-  const [updated] = await db
-    .update(userInvitations)
-    .set({
-      email: newEmail,
-      token: newToken,
+    )).limit(1).for('no key update');
+    if (!invitation) throw new Error('Invitation not found or already accepted');
+    if (invitation.volunteerApplicationId) {
+      throw invitationConflict(
+        'APPLICATION_BOUND_INVITATION_EMAIL_IMMUTABLE',
+        'This invitation recipient belongs to a verified volunteer application and cannot be edited',
+      );
+    }
+    const [existingUser] = await tx.select({ id: users.id }).from(users).where(and(
+      eq(users.tenantId, tenantId),
+      sql`lower(trim(${users.email})) = ${normalizedEmail}`,
+    )).limit(1);
+    if (existingUser) throw new Error('A user with this email already exists in your organization');
+    const [existingInvitation] = await tx.select({ id: userInvitations.id }).from(userInvitations).where(and(
+      eq(userInvitations.tenantId, tenantId),
+      sql`lower(trim(${userInvitations.email})) = ${normalizedEmail}`,
+      isNull(userInvitations.acceptedAt),
+      gt(userInvitations.expiresAt, new Date()),
+      sql`${userInvitations.id} <> ${invitationId}`,
+    )).limit(1);
+    if (existingInvitation) throw new Error('An invitation has already been sent to this email');
+    const newExpiresAt = new Date();
+    newExpiresAt.setDate(newExpiresAt.getDate() + 7);
+    const [updated] = await tx.update(userInvitations).set({
+      email: normalizedEmail,
+      token: generateInvitationToken(),
       expiresAt: newExpiresAt,
-    })
-    .where(eq(userInvitations.id, invitationId))
-    .returning();
-
-  return updated;
+    }).where(and(
+      eq(userInvitations.id, invitationId),
+      eq(userInvitations.tenantId, tenantId),
+      isNull(userInvitations.acceptedAt),
+      isNull(userInvitations.volunteerApplicationId),
+    )).returning();
+    if (!updated) throw invitationConflict('INVITATION_UPDATE_CONFLICT', 'The invitation changed before its email was updated');
+    return updated;
+  });
 }
 
 /**
@@ -769,15 +1166,40 @@ export async function resendInvitation(invitationId: string, tenantId: string) {
   if (!invitation) {
     throw new Error('Invitation not found or already accepted');
   }
+  if (invitation.roles.includes('volunteer')) {
+    if (invitation.volunteerApplicationId) {
+      await validateBoundVolunteerInvitation(
+        tenantId,
+        invitation.volunteerApplicationId,
+        invitation.email,
+      );
+    } else {
+      const unbound = decideUnboundVolunteerInvitationAcceptance(
+        true,
+        await requiredVolunteerTrainingExists(tenantId),
+      );
+      if (!unbound.allowed) {
+        throw invitationConflict(
+          unbound.code,
+          'Staff must reissue this invitation from the approved volunteer application',
+        );
+      }
+    }
+  }
 
   // Extend expiration
   const newExpiresAt = new Date();
   newExpiresAt.setDate(newExpiresAt.getDate() + 7);
 
-  await db
+  const [extended] = await db
     .update(userInvitations)
     .set({ expiresAt: newExpiresAt })
-    .where(eq(userInvitations.id, invitationId));
+    .where(and(
+      eq(userInvitations.id, invitationId),
+      eq(userInvitations.tenantId, tenantId),
+      isNull(userInvitations.acceptedAt),
+    )).returning();
+  if (!extended) throw invitationConflict('VOLUNTEER_INVITATION_FINALIZATION_CONFLICT', 'The invitation changed before resend');
 
-  return { ...invitation, expiresAt: newExpiresAt };
+  return extended;
 }

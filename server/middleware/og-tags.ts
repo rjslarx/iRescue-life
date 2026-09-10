@@ -496,7 +496,14 @@ async function serveInjectedHtml(
   res.status(200).set({ 'Content-Type': 'text/html' }).end(html);
 }
 
+export function isSensitiveTrainingTokenPath(value?: string): boolean {
+  if (!value) return false;
+  const pathOnly = value.split(/[?#]/, 1)[0];
+  return /^\/(?:[^/]+\/)?volunteer-training\/[^/]+\/?$/.test(pathOnly);
+}
+
 export async function injectOGTags(req: Request, res: Response, next: NextFunction) {
+  if (isSensitiveTrainingTokenPath(req.url) || isSensitiveTrainingTokenPath(req.originalUrl)) return next();
   const userAgent = req.get('User-Agent');
 
   // Always skip asset / API paths

@@ -1,6 +1,80 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
+    <script>
+      (function () {
+        var sensitivePattern = /(?:^|\/)volunteer-training\/[^/?#]+(?:\/|$)/i;
+        var isSensitive = function (value) {
+          try {
+            return sensitivePattern.test(new URL(value, window.location.href).pathname);
+          } catch (_) {
+            return sensitivePattern.test(String(value));
+          }
+        };
+        var installNoReferrer = function () {
+          var existing = document.querySelector('meta[name="referrer"]');
+          if (existing) {
+            existing.content = 'no-referrer';
+            return;
+          }
+          var meta = document.createElement('meta');
+          meta.name = 'referrer';
+          meta.content = 'no-referrer';
+          document.head.appendChild(meta);
+        };
+        var sensitive = isSensitive(window.location.href);
+        window.__irescueSensitiveRoute = sensitive;
+        if (sensitive) installNoReferrer();
+
+        // Keep this guard outside any analytics history wrapper. Sensitive
+        // destinations become full-document navigations without ever being
+        // passed to pushState/replaceState or becoming the current SPA URL.
+        var nativePushState = history.pushState;
+        var nativeReplaceState = history.replaceState;
+        var guardedHistory = function (delegateSnapshot) {
+          return function (state, title, url) {
+            if (url != null && isSensitive(String(url))) {
+              installNoReferrer();
+              window.location.assign(new URL(String(url), window.location.href).href);
+              return;
+            }
+            return delegateSnapshot.call(history, state, title, url);
+          };
+        };
+        var pushDelegate = nativePushState;
+        var replaceDelegate = nativeReplaceState;
+        Object.defineProperty(history, 'pushState', {
+          get: function () {
+            return guardedHistory(pushDelegate);
+          },
+          set: function (nextDelegate) {
+            if (typeof nextDelegate !== 'function') {
+              throw new TypeError('history.pushState must be a function');
+            }
+            pushDelegate = nextDelegate;
+          },
+          configurable: false
+        });
+        Object.defineProperty(history, 'replaceState', {
+          get: function () {
+            return guardedHistory(replaceDelegate);
+          },
+          set: function (nextDelegate) {
+            if (typeof nextDelegate !== 'function') {
+              throw new TypeError('history.replaceState must be a function');
+            }
+            replaceDelegate = nextDelegate;
+          },
+          configurable: false
+        });
+        window.addEventListener('popstate', function (event) {
+          if (!isSensitive(window.location.href)) return;
+          installNoReferrer();
+          event.stopImmediatePropagation();
+          window.location.replace(window.location.href);
+        }, true);
+      })();
+    </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
     <title>Rescue Portal - Complete Animal Rescue Management Platform</title>
@@ -25,16 +99,18 @@
     <meta name="twitter:image" content="https://irescue.life/icon-512.png" />
     
     <!-- Google Analytics & Google Ads -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-W9DLZZFSFX"></script>
     <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-      gtag('config', 'G-W9DLZZFSFX', {
-        page_path: window.location.pathname,
-        send_page_view: false
-      });
-      gtag('config', 'AW-17428400771');
+      if (!window.__irescueSensitiveRoute) {
+        var analyticsScript = document.createElement('script');
+        analyticsScript.async = true;
+        analyticsScript.src = 'https://www.googletagmanager.com/gtag/js?id=G-W9DLZZFSFX';
+        document.head.appendChild(analyticsScript);
+        window.dataLayer = window.dataLayer || [];
+        window.gtag = function(){dataLayer.push(arguments);};
+        gtag('js', new Date());
+        gtag('config', 'G-W9DLZZFSFX', { send_page_view: false });
+        gtag('config', 'AW-17428400771', { send_page_view: false });
+      }
     </script>
     
     <!-- Structured Data -->

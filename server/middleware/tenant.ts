@@ -3,6 +3,13 @@ import { db } from '../db';
 import { tenants } from '@shared/schema';
 import { eq, or, and, sql } from 'drizzle-orm';
 
+export function redactTrainingTokenFromUrl(value: string): string {
+  return value.replace(
+    /(\/(?:api\/public\/)?volunteer-training\/)[^/?#\s]+/g,
+    '$1[REDACTED]',
+  );
+}
+
 export interface TenantContext {
   id: string;
   subdomain: string;
@@ -181,7 +188,7 @@ export async function resolveTenant(req: Request, res: Response, next: NextFunct
     }
     
     // Debug logging
-    console.log(`[TENANT DEBUG] ${req.method} ${req.path} - hostname: ${hostname}, x-tenant-id: ${req.headers['x-tenant-id']}, session.tenantId: ${req.session.tenantId}`);
+    console.log(`[TENANT DEBUG] ${req.method} ${redactTrainingTokenFromUrl(req.path)} - hostname: ${hostname}, x-tenant-id: ${req.headers['x-tenant-id']}, session.tenantId: ${req.session.tenantId}`);
     
     // Platform domain for iRescue.life
     const PLATFORM_DOMAIN = 'irescue.life';
@@ -210,7 +217,7 @@ export async function resolveTenant(req: Request, res: Response, next: NextFunct
         if (potentialTenant) {
           subdomain = firstPathSegment;
           console.log(`[TENANT DEBUG] Path-based tenant detected (dev): ${subdomain}`);
-          console.log(`[TENANT DEBUG] BEFORE stripping - req.url: ${req.url}, req.originalUrl: ${req.originalUrl}, req.path: ${req.path}`);
+          console.log(`[TENANT DEBUG] BEFORE stripping - req.url: ${redactTrainingTokenFromUrl(req.url)}, req.originalUrl: ${redactTrainingTokenFromUrl(req.originalUrl)}, req.path: ${redactTrainingTokenFromUrl(req.path)}`);
           
           // Store base path for PWA manifest and other URL generation
           req.basePath = `/${firstPathSegment}`;
@@ -223,7 +230,7 @@ export async function resolveTenant(req: Request, res: Response, next: NextFunct
           // Without this, Express router still sees /demo/api/... even though we modified req.url
           delete (req as any)._parsedUrl;
           
-          console.log(`[TENANT DEBUG] AFTER stripping - req.url: ${req.url}, req.originalUrl: ${req.originalUrl}, req.path: ${req.path}`);
+          console.log(`[TENANT DEBUG] AFTER stripping - req.url: ${redactTrainingTokenFromUrl(req.url)}, req.originalUrl: ${redactTrainingTokenFromUrl(req.originalUrl)}, req.path: ${redactTrainingTokenFromUrl(req.path)}`);
         }
       }
       
@@ -278,7 +285,7 @@ export async function resolveTenant(req: Request, res: Response, next: NextFunct
           // Found a tenant! Use path-based routing
           subdomain = firstPathSegment;
           console.log(`[TENANT DEBUG] Path-based tenant detected: ${subdomain}`);
-          console.log(`[TENANT DEBUG] BEFORE stripping - req.url: ${req.url}, req.originalUrl: ${req.originalUrl}, req.path: ${req.path}`);
+          console.log(`[TENANT DEBUG] BEFORE stripping - req.url: ${redactTrainingTokenFromUrl(req.url)}, req.originalUrl: ${redactTrainingTokenFromUrl(req.originalUrl)}, req.path: ${redactTrainingTokenFromUrl(req.path)}`);
           
           // Store base path for PWA manifest and other URL generation
           req.basePath = `/${firstPathSegment}`;
@@ -295,7 +302,7 @@ export async function resolveTenant(req: Request, res: Response, next: NextFunct
           // Without this, Express router still sees /demo/api/... even though we modified req.url
           delete (req as any)._parsedUrl;
           
-          console.log(`[TENANT DEBUG] AFTER stripping - req.url: ${req.url}, req.originalUrl: ${req.originalUrl}, req.path: ${req.path}`);
+          console.log(`[TENANT DEBUG] AFTER stripping - req.url: ${redactTrainingTokenFromUrl(req.url)}, req.originalUrl: ${redactTrainingTokenFromUrl(req.originalUrl)}, req.path: ${redactTrainingTokenFromUrl(req.path)}`);
         }
       }
       

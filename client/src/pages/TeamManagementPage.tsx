@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -16,6 +17,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -63,6 +65,7 @@ interface Invitation {
   email: string;
   fullName: string | null;
   roles: Array<"admin" | "board_member" | "staff" | "foster" | "volunteer">;
+  isApplicationBound: boolean;
   invitationUrl: string;
   expiresAt: Date;
   createdAt: Date;
@@ -104,6 +107,11 @@ export default function TeamManagementPage() {
   const [selectedRoleTab, setSelectedRoleTab] = useState<string>("all");
   const [selectedTagFilter, setSelectedTagFilter] = useState<string>("");
   const [tagInput, setTagInput] = useState("");
+  const [trainingOverrideAction, setTrainingOverrideAction] = useState<
+    { kind: "roles"; id: string; roles: User["roles"] } |
+    { kind: "access"; id: string } | null
+  >(null);
+  const [trainingOverrideReason, setTrainingOverrideReason] = useState("");
 
   const [newInvitation, setNewInvitation] = useState({
     email: "",
@@ -262,10 +270,11 @@ export default function TeamManagementPage() {
   });
 
   const updateUserMutation = useMutation({
-    mutationFn: async ({ id, roles, fullName }: { id: string; roles?: User["roles"]; fullName?: string }) => {
-      const payload: { roles?: User["roles"]; fullName?: string } = {};
+    mutationFn: async ({ id, roles, fullName, trainingOverrideReason }: { id: string; roles?: User["roles"]; fullName?: string; trainingOverrideReason?: string }) => {
+      const payload: { roles?: User["roles"]; fullName?: string; trainingOverrideReason?: string } = {};
       if (roles) payload.roles = roles;
       if (fullName) payload.fullName = fullName;
+      if (trainingOverrideReason) payload.trainingOverrideReason = trainingOverrideReason;
       return await apiRequest("PATCH", `/api/users/${id}`, payload);
     },
     onSuccess: () => {
@@ -308,8 +317,8 @@ export default function TeamManagementPage() {
   });
 
   const updateAccessMutation = useMutation({
-    mutationFn: async ({ id, isActive }: { id: string; isActive: boolean }) => {
-      return await apiRequest("PATCH", `/api/users/${id}/access`, { isActive });
+    mutationFn: async ({ id, isActive, trainingOverrideReason }: { id: string; isActive: boolean; trainingOverrideReason?: string }) => {
+      return await apiRequest("PATCH", `/api/users/${id}/access`, { isActive, ...(trainingOverrideReason ? { trainingOverrideReason } : {}) });
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['/api/users'] });
@@ -465,6 +474,12 @@ export default function TeamManagementPage() {
   };
 
   const handleUpdateRoles = (userId: string, newRoles: User["roles"]) => {
+    const existing = usersData?.users.find(item => item.id === userId);
+    if (newRoles.includes("volunteer") && !existing?.roles.includes("volunteer")) {
+      setTrainingOverrideReason("");
+      setTrainingOverrideAction({ kind: "roles", id: userId, roles: newRoles });
+      return;
+    }
     updateUserMutation.mutate({ id: userId, roles: newRoles });
   };
 
@@ -621,17 +636,24 @@ export default function TeamManagementPage() {
                               <span>{invitation.email}</span>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className="h-6 w-6"
-                                    onClick={() => setEditingInvitationEmail({ id: invitation.id, email: invitation.email })}
-                                    data-testid={`button-edit-email-${invitation.id}`}
-                                  >
-                                    <Pencil className="h-3 w-3" />
-                                  </Button>
+                                  <span>
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-6 w-6"
+                                      disabled={invitation.isApplicationBound}
+                                      onClick={() => setEditingInvitationEmail({ id: invitation.id, email: invitation.email })}
+                                      data-testid={`button-edit-email-${invitation.id}`}
+                                    >
+                                      <Pencil className="h-3 w-3" />
+                                    </Button>
+                                  </span>
                                 </TooltipTrigger>
-                                <TooltipContent>Edit email address</TooltipContent>
+                                <TooltipContent>
+                                  {invitation.isApplicationBound
+                                    ? "Recipient belongs to a verified volunteer application and cannot be edited"
+                                    : "Edit email address"}
+                                </TooltipContent>
                               </Tooltip>
                             </div>
                           )}
@@ -1537,7 +1559,16 @@ export default function TeamManagementPage() {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => userAccessToChange && updateAccessMutation.mutate({ id: userAccessToChange.id, isActive: !userAccessToChange.isActive })}
+              onClick={() => {
+                if (!userAccessToChange) return;
+                if (!userAccessToChange.isActive && userAccessToChange.roles.includes("volunteer")) {
+                  setTrainingOverrideReason("");
+                  setTrainingOverrideAction({ kind: "access", id: userAccessToChange.id });
+                  setUserAccessToChange(null);
+                  return;
+                }
+                updateAccessMutation.mutate({ id: userAccessToChange.id, isActive: !userAccessToChange.isActive });
+              }}
               data-testid="button-confirm-access-change"
             >
               {updateAccessMutation.isPending
@@ -1547,6 +1578,49 @@ export default function TeamManagementPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <Dialog open={!!trainingOverrideAction} onOpenChange={(open) => !open && setTrainingOverrideAction(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Audited volunteer training override</DialogTitle>
+            <DialogDescription>
+              Directly adding or restoring volunteer access bypasses applicant onboarding. Explain why staff is authorizing every incomplete current training requirement; this reason is recorded in immutable completion history.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={trainingOverrideReason}
+            onChange={event => setTrainingOverrideReason(event.target.value)}
+            maxLength={1000}
+            placeholder="Override reason (10–1000 characters)"
+            data-testid="input-team-training-override-reason"
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTrainingOverrideAction(null)}>Cancel</Button>
+            <Button
+              disabled={trainingOverrideReason.trim().length < 10 || updateUserMutation.isPending || updateAccessMutation.isPending}
+              onClick={() => {
+                if (!trainingOverrideAction) return;
+                if (trainingOverrideAction.kind === "roles") {
+                  updateUserMutation.mutate({
+                    id: trainingOverrideAction.id,
+                    roles: trainingOverrideAction.roles,
+                    trainingOverrideReason,
+                  });
+                } else {
+                  updateAccessMutation.mutate({
+                    id: trainingOverrideAction.id,
+                    isActive: true,
+                    trainingOverrideReason,
+                  });
+                }
+                setTrainingOverrideAction(null);
+              }}
+              data-testid="button-confirm-team-training-override"
+            >
+              Record override and continue
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Cancel Invitation Confirmation Dialog */}
       <AlertDialog open={!!invitationToCancel} onOpenChange={() => setInvitationToCancel(null)}>

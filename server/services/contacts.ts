@@ -1,9 +1,79 @@
 import { db } from '../db';
-import { contacts } from '@shared/schema';
-import { eq, and } from 'drizzle-orm';
+import { contacts, insertContactSchema, volunteerApplications, volunteerTrainingCompletions } from '@shared/schema';
+import { eq, and, isNull, or, sql } from 'drizzle-orm';
 
 export type ContactSource = 'adoption_application' | 'animal_inquiry' | 'foster_application' | 'direct_foster_agreement' | 'volunteer_application' | 'user' | 'donation' | 'manual' | 'newsletter';
 export type ContactRole = 'admin' | 'board_member' | 'staff' | 'foster' | 'volunteer';
+
+export function isHighConfidenceVolunteerApplicationContact(
+  application: { applicantName: string; applicantPhone?: string | null },
+  contact: { name: string; phone?: string | null; role?: string[] | null; source?: string[] | null },
+) {
+  const normalizedName = (value?: string | null) => (value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+  const normalizedPhone = (value?: string | null) => (value || '').replace(/\D/g, '');
+  const trustedOrigin = contact.role?.includes('volunteer') ||
+    contact.source?.includes('volunteer_application');
+  return !!trustedOrigin && (
+    (!!normalizedName(application.applicantName) &&
+      normalizedName(contact.name) === normalizedName(application.applicantName)) ||
+    (!!normalizedPhone(application.applicantPhone) &&
+      normalizedPhone(contact.phone) === normalizedPhone(application.applicantPhone))
+  );
+}
+
+export function decideVolunteerIdentityResolution(
+  established: { contactId?: string | null; userId?: string | null },
+  allowExistingEmailContactMatch: boolean,
+) {
+  if (established.contactId || established.userId) {
+    return { action: 'use_established' as const, mayLookupEmail: false as const, mayLink: true as const };
+  }
+  if (!allowExistingEmailContactMatch) {
+    return { action: 'identity_review' as const, mayLookupEmail: false as const, mayLink: false as const };
+  }
+  return { action: 'staff_email_resolution' as const, mayLookupEmail: true as const, mayLink: true as const };
+}
+
+export function decideFreshVolunteerContactInsertOutcome(inserted: boolean) {
+  return inserted
+    ? { link: true as const, requiresStaffVerification: false as const }
+    : { link: false as const, requiresStaffVerification: true as const };
+}
+
+function volunteerIdentityReviewRequiredError() {
+  return Object.assign(new Error('Volunteer identity requires staff verification'), {
+    status: 409,
+    code: 'VOLUNTEER_IDENTITY_REVIEW_REQUIRED',
+  });
+}
+
+export const staffContactCreateSchema = insertContactSchema
+  .omit({ tenantId: true, userId: true })
+  .strict();
+export const staffContactUpdateSchema = staffContactCreateSchema.partial().strict();
+
+export function assertContactCanLink(existingUserId: string | null | undefined, requestedUserId: string): void {
+  if (existingUserId && existingUserId !== requestedUserId) {
+    const error = new Error('Contact email is already owned by another user') as Error & { status?: number; code?: string };
+    error.status = 409;
+    error.code = 'CONTACT_OWNERSHIP_CONFLICT';
+    throw error;
+  }
+}
+
+export function assertProfileContactEmailAvailable(
+  matchingContact: { id: string; userId: string | null } | undefined,
+  ownContactIds: string[],
+  userId: string,
+): void {
+  if (!matchingContact) return;
+  if (!ownContactIds.includes(matchingContact.id) || (matchingContact.userId && matchingContact.userId !== userId)) {
+    const error = new Error('That email address belongs to another contact') as Error & { status?: number; code?: string };
+    error.status = 409;
+    error.code = 'CONTACT_EMAIL_CONFLICT';
+    throw error;
+  }
+}
 
 /**
  * Upsert a contact - create if doesn't exist, update if exists
@@ -37,6 +107,7 @@ export async function upsertContact(params: {
     if (existing.length > 0) {
       // Contact exists - update it
       const contact = existing[0];
+      if (params.userId) assertContactCanLink(contact.userId, params.userId);
       
       // Merge sources (add new source if not already present)
       const updatedSources = contact.source || [];
@@ -59,9 +130,18 @@ export async function upsertContact(params: {
           role: updatedRoles.length > 0 ? updatedRoles : null,
           updatedAt: new Date(),
         })
-        .where(eq(contacts.id, contact.id))
+        .where(and(
+          eq(contacts.id, contact.id),
+          ...(params.userId ? [or(isNull(contacts.userId), eq(contacts.userId, params.userId))] : []),
+        ))
         .returning();
 
+      if (!updated && params.userId) {
+        throw Object.assign(new Error('Contact email is already owned by another user'), {
+          status: 409,
+          code: 'CONTACT_OWNERSHIP_CONFLICT',
+        });
+      }
       return updated;
     } else {
       // Create new contact
@@ -127,34 +207,121 @@ export async function createContactFromFosterApplication(
  * Activate volunteer in directory when volunteer application moves to Active Pool.
  * Upserts contact record with 'volunteer' role.
  */
-export async function activateVolunteerInDirectory(params: {
+export async function establishVolunteerApplicationIdentity(params: {
   tenantId: string;
+  applicationId?: string;
   applicantName: string;
   applicantEmail: string;
   applicantPhone?: string;
   address?: string;
+  allowExistingEmailContactMatch: boolean;
 }) {
-  const { tenantId, applicantName, applicantEmail, applicantPhone, address } = params;
+  const { tenantId, applicationId, applicantName, applicantEmail, applicantPhone, address } = params;
 
   try {
-    const normalizedEmail = applicantEmail.trim().toLowerCase();
+    if (!applicationId) throw new Error('Volunteer application identity is required for activation');
+    const {
+      getApplicationEstablishedIdentity,
+      linkAndReconcileApplicationIdentity,
+    } = await import('./volunteer-training');
+    const established = await getApplicationEstablishedIdentity(tenantId, applicationId);
+    const resolution = decideVolunteerIdentityResolution(established, params.allowExistingEmailContactMatch);
+    if (resolution.action === 'identity_review') {
+      throw volunteerIdentityReviewRequiredError();
+    }
+    let contact;
+    if (established.contactId) {
+      [contact] = await db.select().from(contacts).where(and(
+        eq(contacts.tenantId, tenantId), eq(contacts.id, established.contactId),
+      )).limit(1);
+    } else if (established.userId) {
+      [contact] = await db.select().from(contacts).where(and(
+        eq(contacts.tenantId, tenantId), eq(contacts.userId, established.userId),
+      )).limit(1);
+    } else {
+      const normalizedEmail = applicantEmail.trim().toLowerCase();
+      const [emailContact] = await db.select().from(contacts).where(and(
+        eq(contacts.tenantId, tenantId),
+        sql`lower(trim(${contacts.email})) = ${normalizedEmail}`,
+      )).limit(1);
+      if (emailContact) {
+        const highConfidence = isHighConfidenceVolunteerApplicationContact({
+          applicantName,
+          applicantPhone,
+        }, emailContact);
+        if (!highConfidence) throw volunteerIdentityReviewRequiredError();
+        contact = emailContact;
+      } else {
+        try {
+          [contact] = await db.insert(contacts).values({
+            tenantId,
+            email: normalizedEmail,
+            name: applicantName,
+            phone: applicantPhone,
+            address,
+            source: ['volunteer_application'],
+            role: ['volunteer'],
+            tags: ['Volunteer Applicant'],
+          }).returning();
+        } catch (error: any) {
+          if (error?.code === '23505' || error?.cause?.code === '23505') {
+            const outcome = decideFreshVolunteerContactInsertOutcome(false);
+            if (!outcome.link) throw volunteerIdentityReviewRequiredError();
+          }
+          throw error;
+        }
+      }
+    }
+    if (!contact) throw new Error('Authoritative volunteer contact was not found');
 
-    const contact = await upsertContact({
-      tenantId,
-      email: normalizedEmail,
-      name: applicantName,
-      phone: applicantPhone,
-      address,
-      source: 'volunteer_application',
-      role: ['volunteer'],
-      tags: ['Active Volunteer'],
-    });
-
-    console.log(`[Volunteer Directory Sync] Synced contact ${normalizedEmail} with volunteer role`);
+    await linkAndReconcileApplicationIdentity({
+        tenantId,
+        applicationId,
+        contactId: contact.id,
+        userId: established.userId || contact.userId,
+      });
     return contact;
   } catch (error) {
     console.error('[Volunteer Directory Sync] Error activating volunteer in directory:', error);
+    throw error;
   }
+}
+
+export async function markVolunteerContactActiveWithExecutor(executor: any, tenantId: string, contactId: string) {
+  const [contact] = await executor.select().from(contacts).where(and(
+    eq(contacts.tenantId, tenantId), eq(contacts.id, contactId),
+  )).limit(1);
+  if (!contact) throw new Error('Volunteer contact was not found');
+  const [activated] = await executor.update(contacts).set({
+    source: Array.from(new Set([...(contact.source || []), 'volunteer_application' as const])),
+    role: Array.from(new Set([...(contact.role || []), 'volunteer' as const])),
+    tags: Array.from(new Set([...(contact.tags || []), 'Active Volunteer'])),
+    updatedAt: new Date(),
+  }).where(and(eq(contacts.tenantId, tenantId), eq(contacts.id, contactId))).returning();
+  return activated;
+}
+
+export async function markVolunteerContactActive(tenantId: string, contactId: string) {
+  return markVolunteerContactActiveWithExecutor(db, tenantId, contactId);
+}
+
+export async function activateVolunteerInDirectory(params: Parameters<typeof establishVolunteerApplicationIdentity>[0]) {
+  const contact = await establishVolunteerApplicationIdentity(params);
+  return markVolunteerContactActive(params.tenantId, contact.id);
+}
+
+export async function applyLockedFosterUserActivation(args: {
+  lockedRoles: string[];
+  lockedIsActive: boolean;
+  complianceGate: () => Promise<void>;
+  write: (roles: string[]) => Promise<void>;
+}) {
+  const roles = args.lockedRoles.includes('foster') ? args.lockedRoles : [...args.lockedRoles, 'foster'];
+  if (!args.lockedIsActive && args.lockedRoles.includes('volunteer')) {
+    await args.complianceGate();
+  }
+  await args.write(roles);
+  return roles;
 }
 
 /**
@@ -249,7 +416,7 @@ export async function activateFosterInDirectory(params: {
 
   try {
     const existingUsers = await db
-      .select({ id: users.id, roles: users.roles, fosterStatus: users.fosterStatus, email: users.email })
+      .select({ id: users.id })
       .from(users)
       .where(and(
         eq(users.tenantId, tenantId),
@@ -260,29 +427,56 @@ export async function activateFosterInDirectory(params: {
     const existingUser = existingUsers[0];
 
     if (existingUser) {
-      const currentRoles = existingUser.roles || [];
-      const needsRoleUpdate = !currentRoles.includes('foster');
-      const needsStatusUpdate = existingUser.fosterStatus !== 'active';
-
-      if (needsRoleUpdate || needsStatusUpdate) {
-        const updatedRoles = needsRoleUpdate
-          ? [...currentRoles, 'foster'] as typeof currentRoles
-          : currentRoles;
-
-        await db.update(users).set({
-          roles: updatedRoles,
-          fosterStatus: 'active',
-        }).where(eq(users.id, existingUser.id));
-
-        console.log(`[Foster Directory Sync] Updated user ${normalizedEmail} (id: ${existingUser.id}): roles=${JSON.stringify(updatedRoles)}, fosterStatus=active (was: roles=${JSON.stringify(currentRoles)}, fosterStatus=${existingUser.fosterStatus})`);
-      } else {
-        console.log(`[Foster Directory Sync] User ${normalizedEmail} already has foster role and active status, no update needed`);
-      }
-
-      if (contact && (!contact.userId || contact.userId !== existingUser.id)) {
-        await db.update(contacts).set({ userId: existingUser.id, updatedAt: new Date() }).where(eq(contacts.id, contact.id));
-        console.log(`[Foster Directory Sync] Linked contact ${contact.id} to user ${existingUser.id}`);
-      }
+      await db.transaction(async tx => {
+        const {
+          acquireVolunteerTrainingActivationPolicyLock,
+          ensureUserVolunteerActivationCompliance,
+          reconcileTrainingIdentityWithExecutor,
+        } = await import('./volunteer-training');
+        await acquireVolunteerTrainingActivationPolicyLock(tx, tenantId);
+        const [lockedUser] = await tx.select({
+          id: users.id,
+          roles: users.roles,
+          isActive: users.isActive,
+        }).from(users).where(and(
+          eq(users.tenantId, tenantId), eq(users.id, existingUser.id),
+        )).limit(1).for('no key update');
+        if (!lockedUser) throw new Error('Existing foster account changed during activation');
+        await applyLockedFosterUserActivation({
+          lockedRoles: lockedUser.roles || [],
+          lockedIsActive: lockedUser.isActive,
+          complianceGate: async () => {
+            await ensureUserVolunteerActivationCompliance({
+              tenantId,
+              userId: lockedUser.id,
+              actorId: lockedUser.id,
+              executor: tx,
+            });
+          },
+          write: async roles => {
+            await tx.update(users).set({
+              roles: roles as typeof lockedUser.roles,
+              fosterStatus: 'active',
+              isActive: true,
+            }).where(and(eq(users.tenantId, tenantId), eq(users.id, lockedUser.id)));
+          },
+        });
+        if (contact && (!contact.userId || contact.userId !== lockedUser.id)) {
+          assertContactCanLink(contact.userId, lockedUser.id);
+          const [linkedContact] = await tx.update(contacts)
+            .set({ userId: lockedUser.id, updatedAt: new Date() })
+            .where(and(eq(contacts.id, contact.id), isNull(contacts.userId)))
+            .returning({ id: contacts.id });
+          if (!linkedContact) {
+            throw Object.assign(new Error('Contact email is already owned by another user'), {
+              status: 409, code: 'CONTACT_OWNERSHIP_CONFLICT',
+            });
+          }
+          await reconcileTrainingIdentityWithExecutor(tx, {
+            tenantId, contactId: contact.id, userId: lockedUser.id,
+          });
+        }
+      });
     } else {
       console.log(`[Foster Directory Sync] No existing user found for ${normalizedEmail}, sending foster welcome invitation`);
 
@@ -378,6 +572,7 @@ export async function activateFosterInDirectory(params: {
     }
   } catch (userError) {
     console.error(`[Foster Directory Sync] CRITICAL: Failed to sync user record for ${normalizedEmail}:`, userError);
+    throw userError;
   }
 
   return contact;
@@ -388,20 +583,68 @@ export async function activateFosterInDirectory(params: {
  */
 export async function createContactFromVolunteerApplication(
   tenantId: string,
+  applicationId: string,
   applicantName: string,
   applicantEmail: string,
   applicantPhone: string,
   address?: string
 ) {
-  return upsertContact({
-    tenantId,
-    email: applicantEmail,
-    name: applicantName,
-    phone: applicantPhone,
-    address,
-    source: 'volunteer_application',
-    tags: ['Volunteer Applicant'],
+  const normalizedEmail = applicantEmail.trim().toLowerCase();
+  return db.transaction(async tx => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${`public-volunteer-contact:${tenantId}:${normalizedEmail}`}, 0))`);
+    const existing = await tx.select({ id: contacts.id }).from(contacts).where(and(
+      eq(contacts.tenantId, tenantId),
+      sql`lower(trim(${contacts.email})) = ${normalizedEmail}`,
+    )).limit(1);
+    const decision = decidePublicVolunteerContactAssociation(existing.length > 0);
+    if (!decision.createAndLink) {
+      return { contact: null, linked: false as const, requiresStaffVerification: true as const };
+    }
+
+    const [contact] = await tx.insert(contacts).values({
+      tenantId,
+      email: normalizedEmail,
+      name: applicantName,
+      phone: applicantPhone,
+      address,
+      source: ['volunteer_application'],
+      tags: ['Volunteer Applicant'],
+    }).returning();
+    const matching = await tx.select({ id: contacts.id }).from(contacts).where(and(
+      eq(contacts.tenantId, tenantId),
+      sql`lower(trim(${contacts.email})) = ${normalizedEmail}`,
+    ));
+    if (matching.length !== 1 || matching[0].id !== contact.id) {
+      await tx.delete(contacts).where(and(eq(contacts.tenantId, tenantId), eq(contacts.id, contact.id)));
+      return { contact: null, linked: false as const, requiresStaffVerification: true as const };
+    }
+    const [linkedApplication] = await tx.update(volunteerApplications).set({
+      contactId: contact.id,
+      updatedAt: new Date(),
+    }).where(and(
+      eq(volunteerApplications.tenantId, tenantId),
+      eq(volunteerApplications.id, applicationId),
+      isNull(volunteerApplications.contactId),
+      isNull(volunteerApplications.userId),
+    )).returning({ id: volunteerApplications.id });
+    if (!linkedApplication) {
+      await tx.delete(contacts).where(and(eq(contacts.tenantId, tenantId), eq(contacts.id, contact.id)));
+      return { contact: null, linked: false as const, requiresStaffVerification: true as const };
+    }
+    await tx.update(volunteerTrainingCompletions).set({ contactId: contact.id }).where(and(
+      eq(volunteerTrainingCompletions.tenantId, tenantId),
+      eq(volunteerTrainingCompletions.volunteerApplicationId, applicationId),
+      isNull(volunteerTrainingCompletions.contactId),
+      isNull(volunteerTrainingCompletions.userId),
+    ));
+    return { contact, linked: true as const, requiresStaffVerification: false as const };
   });
+}
+
+export function decidePublicVolunteerContactAssociation(existingContactFound: boolean) {
+  return existingContactFound
+    ? { createAndLink: false as const, requiresStaffVerification: true as const, complianceIdentity: 'application_only' as const }
+    : { createAndLink: true as const, requiresStaffVerification: false as const, complianceIdentity: 'fresh_contact' as const };
 }
 
 /**

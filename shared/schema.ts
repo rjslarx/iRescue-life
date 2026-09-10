@@ -443,6 +443,7 @@ export const userInvitations = pgTable("user_invitations", {
   roles: text("roles").array().notNull().$type<("admin" | "board_member" | "staff" | "foster" | "volunteer")[]>(),
   token: text("token").notNull().unique(),
   invitedBy: uuid("invited_by").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  volunteerApplicationId: uuid("volunteer_application_id"),
   expiresAt: timestamp("expires_at").notNull(),
   acceptedAt: timestamp("accepted_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -1412,6 +1413,8 @@ export const volunteerFullyStaffedNotifications = pgTable("volunteer_fully_staff
 export const volunteerApplications = pgTable("volunteer_applications", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  contactId: uuid("contact_id").references(() => contacts.id, { onDelete: 'set null' }),
+  userId: uuid("user_id").references(() => users.id, { onDelete: 'set null' }),
   applicantName: text("applicant_name").notNull(),
   applicantEmail: text("applicant_email").notNull(),
   applicantPhone: text("applicant_phone").notNull(),
@@ -1433,13 +1436,25 @@ export const volunteerApplications = pgTable("volunteer_applications", {
   driveFolderId: text("drive_folder_id"), // Google Drive or Object Storage folder ID for documents
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+}, (table) => ({
+  tenantContactIdx: index("volunteer_applications_tenant_contact_idx").on(table.tenantId, table.contactId),
+  tenantUserIdx: index("volunteer_applications_tenant_user_idx").on(table.tenantId, table.userId),
+}));
 
 export const insertVolunteerApplicationSchema = createInsertSchema(volunteerApplications).omit({
   id: true,
+  contactId: true,
+  userId: true,
   createdAt: true,
   updatedAt: true,
 });
+export const publicVolunteerApplicationSchema = insertVolunteerApplicationSchema.omit({
+  tenantId: true,
+  status: true,
+  pipelineStatus: true,
+  notes: true,
+  driveFolderId: true,
+}).strict();
 export type InsertVolunteerApplication = z.infer<typeof insertVolunteerApplicationSchema>;
 export type VolunteerApplication = typeof volunteerApplications.$inferSelect;
 
@@ -5579,6 +5594,9 @@ export const tutorials = pgTable("tutorials", {
   sortOrder: integer("sort_order").notNull().default(0),
   isGlobal: boolean("is_global").notNull().default(false),
   visibleToRoles: text("visible_to_roles").array().$type<("admin" | "board_member" | "staff" | "foster" | "volunteer")[]>(),
+  requiredForVolunteers: boolean("required_for_volunteers").notNull().default(false),
+  renewalMonths: integer("renewal_months").notNull().default(12),
+  requirementVersion: integer("requirement_version").notNull().default(1),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -5590,6 +5608,69 @@ export const insertTutorialSchema = createInsertSchema(tutorials).omit({
 });
 export type InsertTutorial = z.infer<typeof insertTutorialSchema>;
 export type Tutorial = typeof tutorials.$inferSelect;
+
+// Immutable snapshots ensure an attestation always identifies the exact
+// training content the volunteer confirmed, even after a tutorial is edited.
+export const volunteerTrainingVersions = pgTable("volunteer_training_versions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  tutorialId: uuid("tutorial_id").notNull().references(() => tutorials.id, { onDelete: "restrict" }),
+  version: integer("version").notNull(),
+  titleSnapshot: text("title_snapshot").notNull(),
+  descriptionSnapshot: text("description_snapshot"),
+  videoUrlSnapshot: text("video_url_snapshot").notNull(),
+  renewalMonthsSnapshot: integer("renewal_months_snapshot").notNull(),
+  createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  tutorialVersionUnique: unique().on(table.tenantId, table.tutorialId, table.version),
+}));
+
+export const volunteerTrainingCompletions = pgTable("volunteer_training_completions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  tutorialId: uuid("tutorial_id").notNull().references(() => tutorials.id, { onDelete: "restrict" }),
+  trainingVersionId: uuid("training_version_id").notNull().references(() => volunteerTrainingVersions.id, { onDelete: "restrict" }),
+  requirementVersion: integer("requirement_version").notNull(),
+  renewalCycle: integer("renewal_cycle").notNull().default(1),
+  // Stable, tenant-local identity (user preferred, then contact, then application).
+  identityKey: text("identity_key").notNull(),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+  contactId: uuid("contact_id").references(() => contacts.id, { onDelete: "set null" }),
+  volunteerApplicationId: uuid("volunteer_application_id").references(() => volunteerApplications.id, { onDelete: "set null" }),
+  completionType: text("completion_type").notNull().$type<"attestation" | "staff_override">(),
+  attestedAt: timestamp("attested_at").notNull().defaultNow(),
+  renewalDueAt: timestamp("renewal_due_at").notNull(),
+  recordedByUserId: uuid("recorded_by_user_id").references(() => users.id, { onDelete: "restrict" }),
+  overrideReason: text("override_reason"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  identityVersionCycleUnique: unique().on(table.tenantId, table.trainingVersionId, table.identityKey, table.renewalCycle),
+  identityIndex: index("volunteer_training_completions_identity_idx").on(table.tenantId, table.identityKey),
+}));
+
+export type VolunteerTrainingVersion = typeof volunteerTrainingVersions.$inferSelect;
+export type VolunteerTrainingCompletion = typeof volunteerTrainingCompletions.$inferSelect;
+
+export const volunteerTrainingAccessSessions = pgTable("volunteer_training_access_sessions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  volunteerApplicationId: uuid("volunteer_application_id").notNull().references(() => volunteerApplications.id, { onDelete: "cascade" }),
+  secureTokenHash: text("secure_token_hash").notNull().unique(),
+  recipientEmail: text("recipient_email").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  sentAt: timestamp("sent_at"),
+  revokedAt: timestamp("revoked_at"),
+  createdByUserId: uuid("created_by_user_id").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  applicationIndex: index("volunteer_training_access_application_idx").on(table.tenantId, table.volunteerApplicationId),
+  activeApplicationUnique: uniqueIndex("volunteer_training_access_active_unique")
+    .on(table.tenantId, table.volunteerApplicationId)
+    .where(sql`${table.revokedAt} IS NULL`),
+}));
+
+export type VolunteerTrainingAccessSession = typeof volunteerTrainingAccessSessions.$inferSelect;
 
 export const helpDocuments = pgTable("help_documents", {
   id: uuid("id").primaryKey().defaultRandom(),

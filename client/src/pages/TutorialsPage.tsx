@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
+import { canAttestOpenedRequirement } from "@shared/volunteer-training";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -138,6 +139,8 @@ const tutorialFormSchema = z.object({
   category: z.enum(["getting-started", "animals", "medical", "fosters", "volunteers", "communications", "finance", "website", "settings", "other"]),
   sortOrder: z.coerce.number().int().min(0).default(0),
   visibleToRoles: VISIBLE_TO_ROLES_SCHEMA,
+  requiredForVolunteers: z.boolean().default(false),
+  renewalMonths: z.coerce.number().int().min(1).max(120).default(12),
 });
 type TutorialFormData = z.infer<typeof tutorialFormSchema>;
 
@@ -208,7 +211,9 @@ function getCategoryLabel(value: string) {
 export default function TutorialsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const isAdmin = user?.roles.includes("admin");
+  const isAdmin = user?.roles.includes("admin") || user?.roles.includes("owner");
+  const canManageTutorials = isAdmin || !!user?.roles.includes("staff");
+  const isVolunteer = !!user?.roles.includes("volunteer");
 
   // ── Video state ──────────────────────────────────────────────────────────────
   const [videoDialogOpen, setVideoDialogOpen] = useState(false);
@@ -217,6 +222,7 @@ export default function TutorialsPage() {
   const [videoToDelete, setVideoToDelete] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [expandedVideo, setExpandedVideo] = useState<string | null>(null);
+  const [openedRequiredVideos, setOpenedRequiredVideos] = useState<Map<string, number>>(new Map());
 
   // ── Document state ───────────────────────────────────────────────────────────
   const [docDialogOpen, setDocDialogOpen] = useState(false);
@@ -231,6 +237,22 @@ export default function TutorialsPage() {
   const { data: tutData, isLoading: tutLoading } = useQuery<{ tutorials: Tutorial[] }>({
     queryKey: ['/api/tutorials'],
   });
+  const { data: myTraining } = useQuery<{
+    requirements: Array<{ tutorialId: string; requirementVersion: number; status: string; completion: { renewalDueAt: string } | null }>;
+  }>({
+    queryKey: ['/api/volunteer-training/me'],
+    enabled: !!user,
+    retry: false,
+  });
+  const attestMutation = useMutation({
+    mutationFn: async ({ tutorialId, requirementVersion }: { tutorialId: string; requirementVersion: number }) =>
+      (await apiRequest('POST', `/api/volunteer-training/${tutorialId}/attest`, { attested: true, requirementVersion })).json(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/volunteer-training/me'] });
+      toast({ title: "Training attestation recorded", description: "Your completion and renewal date are now on file." });
+    },
+    onError: (e: any) => toast({ title: "Unable to record attestation", description: e.message, variant: "destructive" }),
+  });
   const { data: docData, isLoading: docLoading } = useQuery<{ documents: HelpDocument[] }>({
     queryKey: ['/api/help-documents'],
   });
@@ -238,7 +260,7 @@ export default function TutorialsPage() {
   // ── Video form ───────────────────────────────────────────────────────────────
   const videoForm = useForm<TutorialFormData>({
     resolver: zodResolver(tutorialFormSchema),
-    defaultValues: { title: "", description: "", youtubeUrl: "", category: "getting-started", sortOrder: 0, visibleToRoles: [] },
+    defaultValues: { title: "", description: "", youtubeUrl: "", category: "getting-started", sortOrder: 0, visibleToRoles: [], requiredForVolunteers: false, renewalMonths: 12 },
   });
 
   const createVideoMutation = useMutation({
@@ -282,7 +304,7 @@ export default function TutorialsPage() {
   function closeVideoDialog() {
     setVideoDialogOpen(false);
     setEditingTutorial(null);
-    videoForm.reset({ title: "", description: "", youtubeUrl: "", category: "getting-started", sortOrder: 0, visibleToRoles: [] });
+    videoForm.reset({ title: "", description: "", youtubeUrl: "", category: "getting-started", sortOrder: 0, visibleToRoles: [], requiredForVolunteers: false, renewalMonths: 12 });
   }
 
   function handleEditVideo(tutorial: Tutorial) {
@@ -294,6 +316,8 @@ export default function TutorialsPage() {
       category: tutorial.category as any,
       sortOrder: tutorial.sortOrder,
       visibleToRoles: (tutorial.visibleToRoles as RoleValue[]) || [],
+      requiredForVolunteers: tutorial.requiredForVolunteers,
+      renewalMonths: tutorial.renewalMonths,
     });
     setVideoDialogOpen(true);
   }
@@ -493,7 +517,7 @@ export default function TutorialsPage() {
           <TabsContent value="videos" className="space-y-6">
             <div className="flex items-center justify-between gap-4 flex-wrap">
               <p className="text-sm text-muted-foreground">Video tutorials to help your team learn the platform</p>
-              {isAdmin && (
+              {canManageTutorials && (
                 <Button onClick={() => setVideoDialogOpen(true)} data-testid="button-add-tutorial">
                   <Plus className="h-4 w-4 mr-2" />
                   Add Video
@@ -511,11 +535,11 @@ export default function TutorialsPage() {
                   <Video className="h-12 w-12 text-muted-foreground mb-4" />
                   <h3 className="text-lg font-medium">No videos yet</h3>
                   <p className="text-muted-foreground text-center mt-2 max-w-md">
-                    {isAdmin
+                    {canManageTutorials
                       ? "Add your first video tutorial to help your team learn how to use the platform."
                       : "Video tutorials will appear here once your admin adds them."}
                   </p>
-                  {isAdmin && (
+                  {canManageTutorials && (
                     <Button onClick={() => setVideoDialogOpen(true)} className="mt-4" data-testid="button-add-first-tutorial">
                       <Plus className="h-4 w-4 mr-2" />
                       Add Video
@@ -541,11 +565,19 @@ export default function TutorialsPage() {
                           <TutorialCard
                             key={tutorial.id}
                             tutorial={tutorial}
-                            isAdmin={isAdmin}
+                            isAdmin={canManageTutorials}
                             isExpanded={expandedVideo === tutorial.id}
-                            onExpand={() => setExpandedVideo(expandedVideo === tutorial.id ? null : tutorial.id)}
+                            onExpand={() => {
+                              setExpandedVideo(expandedVideo === tutorial.id ? null : tutorial.id);
+                              if (tutorial.requiredForVolunteers) setOpenedRequiredVideos(previous => new Map(previous).set(tutorial.id, tutorial.requirementVersion));
+                            }}
                             onEdit={() => handleEditVideo(tutorial)}
                             onDelete={() => { setVideoToDelete(tutorial.id); setDeleteVideoConfirm(true); }}
+                            trainingStatus={myTraining?.requirements.find(item => item.tutorialId === tutorial.id)}
+                            hasOpened={canAttestOpenedRequirement(openedRequiredVideos.get(tutorial.id), tutorial.requirementVersion)}
+                            onOpened={() => setOpenedRequiredVideos(previous => new Map(previous).set(tutorial.id, tutorial.requirementVersion))}
+                            onAttest={() => attestMutation.mutate({ tutorialId: tutorial.id, requirementVersion: openedRequiredVideos.get(tutorial.id)! })}
+                            attesting={attestMutation.isPending}
                           />
                         ))}
                       </div>
@@ -560,11 +592,19 @@ export default function TutorialsPage() {
                         <TutorialCard
                           key={tutorial.id}
                           tutorial={tutorial}
-                          isAdmin={isAdmin}
+                          isAdmin={canManageTutorials}
                           isExpanded={expandedVideo === tutorial.id}
-                          onExpand={() => setExpandedVideo(expandedVideo === tutorial.id ? null : tutorial.id)}
+                          onExpand={() => {
+                            setExpandedVideo(expandedVideo === tutorial.id ? null : tutorial.id);
+                            if (tutorial.requiredForVolunteers) setOpenedRequiredVideos(previous => new Map(previous).set(tutorial.id, tutorial.requirementVersion));
+                          }}
                           onEdit={() => handleEditVideo(tutorial)}
                           onDelete={() => { setVideoToDelete(tutorial.id); setDeleteVideoConfirm(true); }}
+                          trainingStatus={myTraining?.requirements.find(item => item.tutorialId === tutorial.id)}
+                          hasOpened={canAttestOpenedRequirement(openedRequiredVideos.get(tutorial.id), tutorial.requirementVersion)}
+                          onOpened={() => setOpenedRequiredVideos(previous => new Map(previous).set(tutorial.id, tutorial.requirementVersion))}
+                          onAttest={() => attestMutation.mutate({ tutorialId: tutorial.id, requirementVersion: openedRequiredVideos.get(tutorial.id)! })}
+                          attesting={attestMutation.isPending}
                         />
                       ))}
                     </div>
@@ -676,6 +716,38 @@ export default function TutorialsPage() {
                     </FormItem>
                   )}
                 />
+                <FormField
+                  control={videoForm.control}
+                  name="requiredForVolunteers"
+                  render={({ field }) => (
+                    <FormItem className="rounded-md border p-3">
+                      <div className="flex items-center gap-2">
+                        <FormControl>
+                          <Checkbox checked={field.value} onCheckedChange={field.onChange} data-testid="checkbox-required-volunteer-training" />
+                        </FormControl>
+                        <FormLabel className="m-0">Required volunteer training</FormLabel>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Volunteers must explicitly attest after opening this video. The system does not verify playback.
+                      </p>
+                    </FormItem>
+                  )}
+                />
+                {videoForm.watch("requiredForVolunteers") && (
+                  <FormField
+                    control={videoForm.control}
+                    name="renewalMonths"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Renew every (months)</FormLabel>
+                        <FormControl>
+                          <Input type="number" min={1} max={120} {...field} data-testid="input-training-renewal-months" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={closeVideoDialog}>Cancel</Button>
                   <Button type="submit" disabled={createVideoMutation.isPending || updateVideoMutation.isPending} data-testid="button-submit-tutorial">
@@ -856,6 +928,7 @@ export default function TutorialsPage() {
 
 function TutorialCard({
   tutorial, isAdmin, isExpanded, onExpand, onEdit, onDelete,
+  trainingStatus, hasOpened, onOpened, onAttest, attesting,
 }: {
   tutorial: Tutorial;
   isAdmin?: boolean;
@@ -863,6 +936,11 @@ function TutorialCard({
   onExpand: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  trainingStatus?: { status: string; completion: { renewalDueAt: string } | null };
+  hasOpened: boolean;
+  onOpened: () => void;
+  onAttest: () => void;
+  attesting: boolean;
 }) {
   const isYT = isYouTubeUrl(tutorial.youtubeUrl);
   const videoId = isYT ? extractYouTubeId(tutorial.youtubeUrl) : null;
@@ -918,6 +996,11 @@ function TutorialCard({
               <Globe className="h-3 w-3" /> Platform
             </Badge>
           )}
+          {tutorial.requiredForVolunteers && (
+            <Badge variant="destructive" className="w-fit" data-testid={`badge-required-training-${tutorial.id}`}>
+              Required · v{tutorial.requirementVersion} · renew every {tutorial.renewalMonths} months
+            </Badge>
+          )}
           {isAdmin && !tutorial.isGlobal && <VisibilityBadge roles={tutorial.visibleToRoles as RoleValue[] | null} />}
         </div>
       </CardHeader>
@@ -933,12 +1016,42 @@ function TutorialCard({
           variant="outline"
           size="sm"
           className="w-full"
-          onClick={() => window.open(tutorial.youtubeUrl, '_blank')}
+          onClick={() => {
+            window.open(tutorial.youtubeUrl, '_blank', 'noopener,noreferrer');
+            onOpened();
+          }}
           data-testid={`button-open-video-${tutorial.id}`}
         >
           <ExternalLink className="h-4 w-4 mr-2" />
           {isYT ? "Open in YouTube" : "Watch Video"}
         </Button>
+        {tutorial.requiredForVolunteers && trainingStatus && (
+          <div className="mt-3 space-y-2">
+            {trainingStatus.completion && trainingStatus.status === 'current' ? (
+              <p className="text-xs text-green-700 dark:text-green-400" data-testid={`training-current-${tutorial.id}`}>
+                Attested · renew by {new Date(trainingStatus.completion.renewalDueAt).toLocaleDateString()}
+              </p>
+            ) : (
+              <>
+                <p className="text-xs text-muted-foreground">
+                  {trainingStatus.status === 'due_soon'
+                    ? `Renewal is available now. Your current term remains valid through ${new Date(trainingStatus.completion!.renewalDueAt).toLocaleDateString()}. Open the current video before renewing.`
+                    : 'Open the video, then confirm that you watched this assigned training. Opening it alone does not complete training.'}
+                </p>
+                <Button
+                  size="sm"
+                  className="w-full"
+                  disabled={!hasOpened || attesting}
+                  onClick={onAttest}
+                  data-testid={`button-attest-training-${tutorial.id}`}
+                >
+                  {attesting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                  {trainingStatus.status === 'due_soon' ? 'I attest and renew this training' : 'I attest that I watched this training'}
+                </Button>
+              </>
+            )}
+          </div>
+        )}
       </CardContent>
     </Card>
   );

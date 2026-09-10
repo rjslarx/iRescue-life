@@ -32,6 +32,187 @@ CREATE INDEX IF NOT EXISTS animal_profile_submissions_animal_idx
   ON animal_profile_submissions (tenant_id, animal_id);
 SQL
 
+# Task #331: tenant-scoped volunteer training requirements, immutable content
+# versions, attestations, renewal dates, and audited staff overrides.
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' || echo "[post-merge] volunteer training compliance schema skipped (already applied or DB unreachable)."
+ALTER TABLE tutorials ADD COLUMN IF NOT EXISTS required_for_volunteers boolean NOT NULL DEFAULT false;
+ALTER TABLE tutorials ADD COLUMN IF NOT EXISTS renewal_months integer NOT NULL DEFAULT 12;
+ALTER TABLE tutorials ADD COLUMN IF NOT EXISTS requirement_version integer NOT NULL DEFAULT 1;
+ALTER TABLE volunteer_applications ADD COLUMN IF NOT EXISTS contact_id uuid REFERENCES contacts(id) ON DELETE SET NULL;
+ALTER TABLE volunteer_applications ADD COLUMN IF NOT EXISTS user_id uuid REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE user_invitations ADD COLUMN IF NOT EXISTS volunteer_application_id uuid;
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'user_invitations_volunteer_application_fk') THEN
+    ALTER TABLE user_invitations ADD CONSTRAINT user_invitations_volunteer_application_fk
+      FOREIGN KEY (volunteer_application_id) REFERENCES volunteer_applications(id) ON DELETE SET NULL;
+  END IF;
+END $$;
+CREATE INDEX IF NOT EXISTS user_invitations_volunteer_application_idx
+  ON user_invitations (tenant_id, volunteer_application_id);
+CREATE INDEX IF NOT EXISTS volunteer_applications_tenant_contact_idx
+  ON volunteer_applications (tenant_id, contact_id);
+CREATE INDEX IF NOT EXISTS volunteer_applications_tenant_user_idx
+  ON volunteer_applications (tenant_id, user_id);
+
+CREATE TABLE IF NOT EXISTS volunteer_training_versions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  tutorial_id uuid NOT NULL REFERENCES tutorials(id) ON DELETE RESTRICT,
+  version integer NOT NULL,
+  title_snapshot text NOT NULL,
+  description_snapshot text,
+  video_url_snapshot text NOT NULL,
+  renewal_months_snapshot integer NOT NULL,
+  created_by uuid REFERENCES users(id) ON DELETE SET NULL,
+  created_at timestamp NOT NULL DEFAULT now(),
+  UNIQUE (tenant_id, tutorial_id, version)
+);
+CREATE TABLE IF NOT EXISTS volunteer_training_completions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  tutorial_id uuid NOT NULL REFERENCES tutorials(id) ON DELETE RESTRICT,
+  training_version_id uuid NOT NULL REFERENCES volunteer_training_versions(id) ON DELETE RESTRICT,
+  requirement_version integer NOT NULL,
+  renewal_cycle integer NOT NULL DEFAULT 1,
+  identity_key text NOT NULL,
+  user_id uuid REFERENCES users(id) ON DELETE SET NULL,
+  contact_id uuid REFERENCES contacts(id) ON DELETE SET NULL,
+  volunteer_application_id uuid REFERENCES volunteer_applications(id) ON DELETE SET NULL,
+  completion_type text NOT NULL,
+  attested_at timestamp NOT NULL DEFAULT now(),
+  renewal_due_at timestamp NOT NULL,
+  recorded_by_user_id uuid NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  override_reason text,
+  created_at timestamp NOT NULL DEFAULT now(),
+  UNIQUE (tenant_id, training_version_id, identity_key, renewal_cycle)
+);
+CREATE INDEX IF NOT EXISTS volunteer_training_completions_identity_idx
+  ON volunteer_training_completions (tenant_id, identity_key);
+ALTER TABLE volunteer_training_completions ALTER COLUMN recorded_by_user_id DROP NOT NULL;
+CREATE TABLE IF NOT EXISTS volunteer_training_access_sessions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  volunteer_application_id uuid NOT NULL REFERENCES volunteer_applications(id) ON DELETE CASCADE,
+  secure_token_hash text NOT NULL UNIQUE,
+  recipient_email text NOT NULL,
+  expires_at timestamp NOT NULL,
+  sent_at timestamp,
+  revoked_at timestamp,
+  created_by_user_id uuid REFERENCES users(id) ON DELETE SET NULL,
+  created_at timestamp NOT NULL DEFAULT now()
+);
+ALTER TABLE volunteer_training_access_sessions
+  ADD COLUMN IF NOT EXISTS recipient_email text;
+UPDATE volunteer_training_access_sessions
+SET revoked_at = coalesce(revoked_at, now())
+WHERE recipient_email IS NULL AND revoked_at IS NULL;
+UPDATE volunteer_training_access_sessions sessions
+SET recipient_email = coalesce(linked_contact.email, application.applicant_email)
+FROM volunteer_applications application
+LEFT JOIN contacts linked_contact
+  ON linked_contact.id = application.contact_id
+ AND linked_contact.tenant_id = application.tenant_id
+WHERE sessions.volunteer_application_id = application.id
+  AND sessions.tenant_id = application.tenant_id
+  AND sessions.recipient_email IS NULL;
+ALTER TABLE volunteer_training_access_sessions
+  ALTER COLUMN recipient_email SET NOT NULL;
+CREATE INDEX IF NOT EXISTS volunteer_training_access_application_idx
+  ON volunteer_training_access_sessions (tenant_id, volunteer_application_id);
+CREATE UNIQUE INDEX IF NOT EXISTS volunteer_training_access_active_unique
+  ON volunteer_training_access_sessions (tenant_id, volunteer_application_id)
+  WHERE revoked_at IS NULL;
+
+-- Resolve the single completion-established contact/user first, then validate
+-- the final pair together with any retained application links.
+WITH aggregated_owners AS (
+  SELECT va.id AS application_id,
+    min(vtc.contact_id::text)::uuid AS completion_contact_id,
+    min(vtc.user_id::text)::uuid AS completion_user_id,
+    count(DISTINCT vtc.contact_id) FILTER (WHERE vtc.contact_id IS NOT NULL) AS contact_count,
+    count(DISTINCT vtc.user_id) FILTER (WHERE vtc.user_id IS NOT NULL) AS user_count
+  FROM volunteer_applications va
+  JOIN volunteer_training_completions vtc
+    ON vtc.tenant_id = va.tenant_id AND vtc.volunteer_application_id = va.id
+  GROUP BY va.id
+),
+resolved_owners AS (
+  SELECT va.id AS application_id, va.tenant_id,
+    coalesce(va.contact_id, owners.completion_contact_id) AS contact_id,
+    coalesce(va.user_id, owners.completion_user_id) AS user_id,
+    owners.completion_contact_id, owners.completion_user_id,
+    owners.contact_count, owners.user_count
+  FROM volunteer_applications va
+  JOIN aggregated_owners owners ON owners.application_id = va.id
+  WHERE owners.contact_count <= 1 AND owners.user_count <= 1
+    AND (va.contact_id IS NULL OR owners.completion_contact_id IS NULL
+      OR va.contact_id = owners.completion_contact_id)
+    AND (va.user_id IS NULL OR owners.completion_user_id IS NULL
+      OR va.user_id = owners.completion_user_id)
+),
+valid_pairs AS (
+  SELECT resolved.*
+  FROM resolved_owners resolved
+  LEFT JOIN contacts resolved_contact
+    ON resolved_contact.id = resolved.contact_id
+   AND resolved_contact.tenant_id = resolved.tenant_id
+  LEFT JOIN users resolved_user
+    ON resolved_user.id = resolved.user_id
+   AND resolved_user.tenant_id = resolved.tenant_id
+  WHERE (resolved.contact_id IS NULL OR resolved_contact.id IS NOT NULL)
+    AND (resolved.user_id IS NULL OR resolved_user.id IS NOT NULL)
+    AND (resolved_contact.user_id IS NULL OR resolved.user_id IS NULL
+      OR resolved_contact.user_id = resolved.user_id)
+)
+UPDATE volunteer_applications va
+SET contact_id = valid.contact_id,
+    user_id = valid.user_id,
+    updated_at = now()
+FROM valid_pairs valid
+WHERE va.id = valid.application_id
+  AND (va.contact_id IS NULL OR va.user_id IS NULL);
+
+-- Email fallback only applies when no completion owner exists. An intake
+-- contact is eligible by volunteer role or durable volunteer_application source.
+WITH candidates AS (
+  SELECT va.id AS application_id, c.id AS contact_id, c.user_id,
+    count(*) OVER (PARTITION BY va.id) AS contacts_for_application,
+    count(*) OVER (PARTITION BY c.id) AS applications_for_contact
+  FROM volunteer_applications va
+  JOIN contacts c ON c.tenant_id = va.tenant_id
+   AND lower(trim(c.email)) = lower(trim(va.applicant_email))
+   AND (c.role @> ARRAY['volunteer']::text[]
+     OR c.source @> ARRAY['volunteer_application']::text[])
+   AND (
+     (trim(coalesce(va.applicant_name, '')) <> ''
+       AND lower(regexp_replace(trim(c.name), '\s+', ' ', 'g'))
+         = lower(regexp_replace(trim(va.applicant_name), '\s+', ' ', 'g')))
+     OR
+     (regexp_replace(coalesce(va.applicant_phone, ''), '[^0-9]', '', 'g') <> ''
+       AND regexp_replace(coalesce(c.phone, ''), '[^0-9]', '', 'g')
+         = regexp_replace(coalesce(va.applicant_phone, ''), '[^0-9]', '', 'g'))
+   )
+  WHERE va.pipeline_status IN ('active_pool', 'orientation_scheduled', 'waiver_needed')
+    AND va.contact_id IS NULL AND va.user_id IS NULL
+    AND NOT EXISTS (
+      SELECT 1 FROM volunteer_training_completions owner_completion
+      WHERE owner_completion.tenant_id = va.tenant_id
+        AND owner_completion.volunteer_application_id = va.id
+        AND (owner_completion.contact_id IS NOT NULL OR owner_completion.user_id IS NOT NULL)
+    )
+),
+unambiguous AS (
+  SELECT * FROM candidates
+  WHERE contacts_for_application = 1 AND applications_for_contact = 1
+)
+UPDATE volunteer_applications va
+SET contact_id = matched.contact_id, user_id = matched.user_id, updated_at = now()
+FROM unambiguous matched
+WHERE va.id = matched.application_id
+  AND va.contact_id IS NULL AND va.user_id IS NULL;
+SQL
+
 # Public animal questions and meet-and-greet requests.
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' || echo "[post-merge] animal inquiries schema skipped (already applied or DB unreachable)."
 CREATE TABLE IF NOT EXISTS animal_inquiries (

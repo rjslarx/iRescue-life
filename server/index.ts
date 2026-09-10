@@ -5,7 +5,7 @@ import fs from "fs";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { sessionMiddleware, authenticateUser } from "./middleware/auth";
-import { resolveTenant } from "./middleware/tenant";
+import { resolveTenant, redactTrainingTokenFromUrl } from "./middleware/tenant";
 import { injectOGTags, ogImageRouter } from "./middleware/og-tags";
 import { validateEnvironment } from "./config/env-validation";
 import { helmetConfig, getCorsConfig, configureTrustProxy, apiLimiter } from "./config/security";
@@ -21,6 +21,7 @@ import { seedTrapLoanForm } from "./scripts/seed-trap-loan-form";
 import { db } from "./db";
 import { medicalCatalog, medicalPrescriptions, medicalDoses } from "@shared/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
+import { isSensitiveVolunteerTrainingUrl } from "@shared/sensitive-routes";
 
 async function ensurePeerCampaignThemeColumn() {
   try {
@@ -187,6 +188,12 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 
 // Security headers
 app.use(helmetConfig);
+app.use((req, res, next) => {
+  if (isSensitiveVolunteerTrainingUrl(req.originalUrl || req.url)) {
+    res.setHeader('Referrer-Policy', 'no-referrer');
+  }
+  next();
+});
 
 // CORS configuration
 app.use(getCorsConfig());
@@ -227,7 +234,7 @@ app.use(injectOGTags);
 
 app.use((req, res, next) => {
   const start = Date.now();
-  const path = req.path;
+  const path = redactTrainingTokenFromUrl(req.path);
   let capturedJsonResponse: Record<string, any> | undefined = undefined;
 
   const originalResJson = res.json;

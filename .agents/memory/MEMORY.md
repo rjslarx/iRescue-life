@@ -32,3 +32,4 @@
 - [Staged media cleanup races](staged-media-cleanup-races.md) — cleanup and new references must share one parent-record lock plus in-lock object re-verification.
 - [Facebook sharing on iOS](facebook-sharing-ios.md) — share raffle URLs without attached files; Facebook reads the uploaded image from Open Graph metadata.
 - [Destination-charge economics](destination-charge-economics.md) — route whenever a destination exists; keep processing recovery separate; reconcile disputes from actual Stripe cashflows.
+- [Volunteer training compliance](volunteer-training-compliance.md) — use secure pre-account links, exact-version attestations, universal activation gates, and durable identity ownership.
