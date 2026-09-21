@@ -36,9 +36,8 @@ export async function applyLockedVolunteerRoleUpdate<T>(args: {
   complianceGate: () => Promise<void>;
   write: () => Promise<T>;
 }) {
-  if (args.desiredRoles?.includes("volunteer") && !args.lockedCurrentRoles.includes("volunteer")) {
-    await args.complianceGate();
-  }
+  // Training is informational. Keep this wrapper for atomic role writes, but
+  // never make the write contingent on training state.
   return args.write();
 }
 
@@ -48,9 +47,8 @@ export async function applyLockedVolunteerAccessUpdate<T>(args: {
   complianceGate: () => Promise<void>;
   write: () => Promise<T>;
 }) {
-  if (args.restoring && args.lockedCurrentRoles.includes("volunteer")) {
-    await args.complianceGate();
-  }
+  // Training is informational. Access restoration must not create an override
+  // completion or be rejected because a tutorial is incomplete or overdue.
   return args.write();
 }
 
@@ -191,7 +189,7 @@ export function renewalPlan(
 }
 
 export function activationAllowed(status: TrainingState | null | undefined): boolean {
-  return status === "current" || status === "due_soon";
+  return true;
 }
 
 export function requestedVolunteerApplicationActivation(input: {
@@ -230,12 +228,6 @@ export function canonicalTrainingIdentity(args: {
   identityKey: string; userId?: string | null; contactId?: string | null; applicationId?: string | null;
 }): string {
   return args.contactId || args.applicationId || args.userId || args.identityKey;
-}
-
-export async function getActivationTrainingGuard(tenantId: string, applicationId: string, executor: any = db) {
-  const compliance = await getApplicationCompliance(tenantId, applicationId, executor);
-  const disposition = waiverActivationDisposition(compliance?.overallStatus);
-  return { allowed: !!compliance && disposition.activate, compliance, disposition };
 }
 
 export function stateFor(
@@ -637,27 +629,19 @@ export async function recordAuthenticatedTrainingCompletion(args: {
   });
 }
 
-export function volunteerTrainingRequiredError(message = "Volunteer training is required before activation") {
-  return Object.assign(new Error(message), {
-    status: 409,
-    code: "VOLUNTEER_TRAINING_REQUIRED",
-  });
-}
-
 export function volunteerActivationPolicyDisposition(
   status: TrainingState,
   requirementCount: number,
   overrideReason?: string,
 ) {
-  if (!requirementCount || activationAllowed(status)) return { action: "allow" as const };
-  const reason = overrideReason?.trim();
-  if (!reason || reason.length < 10 || reason.length > 1000) return { action: "reject" as const };
-  return { action: "override" as const, reason };
+  return { action: "allow" as const };
 }
 
 /**
- * The single policy gate for granting/restoring an existing user's volunteer
- * access. Staff overrides are immutable training completions, never user data.
+ * Returns informational compliance for granting/restoring volunteer access.
+ * It deliberately never records a completion or override: only an actual
+ * attestation (or a separately authorized historical override endpoint) may
+ * add training history.
  */
 export async function ensureUserVolunteerActivationCompliance(args: {
   tenantId: string;
@@ -667,46 +651,8 @@ export async function ensureUserVolunteerActivationCompliance(args: {
   executor?: any;
 }) {
   const executor = args.executor || db;
-  let compliance = await getUserCompliance(args.tenantId, args.userId, executor);
-  const disposition = volunteerActivationPolicyDisposition(
-    compliance.overallStatus,
-    compliance.requirements.length,
-    args.overrideReason,
-  );
-  if (disposition.action === "allow") {
-    return { compliance, overrideUsed: false };
-  }
-  if (disposition.action === "reject") {
-    throw volunteerTrainingRequiredError(
-      "Volunteer training is incomplete. Provide a 10–1000 character audited override reason.",
-    );
-  }
-  const reason = disposition.reason;
-  const [contact] = await executor.select({ id: contacts.id }).from(contacts).where(and(
-    eq(contacts.tenantId, args.tenantId),
-    eq(contacts.userId, args.userId),
-  )).limit(1);
-  if (!contact) {
-    throw volunteerTrainingRequiredError("Volunteer contact ownership must be established before recording an override");
-  }
-  for (const requirement of compliance.requirements.filter(item => !activationAllowed(item.status))) {
-    await recordCompletionWithExecutor(executor, {
-      tenantId: args.tenantId,
-      tutorialId: requirement.tutorialId,
-      identityKey: `user:${args.userId}`,
-      actorId: args.actorId,
-      userId: args.userId,
-      contactId: contact.id,
-      type: "staff_override",
-      reason,
-      requirementVersion: requirement.requirementVersion,
-    });
-  }
-  compliance = await getUserCompliance(args.tenantId, args.userId, executor);
-  if (!activationAllowed(compliance.overallStatus)) {
-    throw volunteerTrainingRequiredError();
-  }
-  return { compliance, overrideUsed: true };
+  const compliance = await getUserCompliance(args.tenantId, args.userId, executor);
+  return { compliance, overrideUsed: false };
 }
 
 export async function finalizeVolunteerApplicationActivation(args: {
@@ -714,7 +660,6 @@ export async function finalizeVolunteerApplicationActivation(args: {
   applicationId: string;
   expectedPipelineStatuses: string[];
   extraApplicationUpdate?: Record<string, unknown>;
-  blockedAsResult?: boolean;
 }) {
   return db.transaction(async tx => {
     await acquireVolunteerTrainingActivationPolicyLock(tx, args.tenantId);
@@ -744,19 +689,6 @@ export async function finalizeVolunteerApplicationActivation(args: {
       });
     }
     const compliance = await getApplicationCompliance(args.tenantId, args.applicationId, tx);
-    if (!compliance || !activationAllowed(compliance.overallStatus)) {
-      if (args.blockedAsResult) {
-        return {
-          activated: false as const,
-          application,
-          contact,
-          compliance,
-          previousApplication: application,
-          transitionedToActivePool: false as const,
-        };
-      }
-      throw volunteerTrainingRequiredError();
-    }
     const [updatedApplication] = await tx.update(volunteerApplications).set({
       pipelineStatus: "active_pool",
       status: "approved",

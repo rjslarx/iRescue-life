@@ -1,17 +1,19 @@
 ---
 name: Volunteer training compliance
-description: Durable onboarding, versioning, activation, renewal, and identity rules for required volunteer training.
+description: Informational-only training policy and durable completion ownership and token-security rules.
 ---
 
-Required volunteer training before account activation must use an expiring, hashed, application-bound access link. An attestation applies only to the exact training version the volunteer opened. Required-content edits must lock, version, update, and create the immutable snapshot in one transaction. Every path that can activate a volunteer, including waiver automation and welcome-invitation acceptance, must use the same live training-compliance decision.
+Training is informational only. Preserve who completed which training and when, including version history, but never use incomplete or overdue training to block team invitations, acceptance, activation, role grants, or access restoration. Do not fabricate completions to permit access.
 
-**Why:** Volunteer accounts are created only after activation, so requiring an authenticated attestation creates a circular onboarding flow. Separate activation paths can bypass one another, and email matching can transfer compliance when an address is changed or reused.
+**Why:** The user explicitly reversed mandatory training enforcement because it caused administrative onboarding friction. Older mandatory-gate decisions are superseded.
 
-Final activation decisions must serialize with requirement publication, not rely on a requirement count read before account creation. Lock current user state when deciding whether a role is being newly granted. When a user mutation may record a completion, use a row-lock mode compatible with foreign-key key-share checks.
+**How to apply:** Keep completion/status tracking and exact-version attestations separate from access authorization. Admin invitations must not require a volunteer application or training override simply because tracked training exists. Preserve tenant, account, and recipient ownership security.
 
-**Why:** Password hashing leaves time for requirements to change; concurrent role removal can invalidate an earlier role snapshot. A user FOR UPDATE lock followed by a completion advisory lock can deadlock with a completion insert holding that advisory lock and waiting for its user foreign key.
+Use compatible non-key row locks when completion writes reference users, and derive role mutations from locked current roles rather than stale snapshots.
 
-**How to apply:** Preserve shared policy-lock ordering for publication and activation. Use NO KEY UPDATE for non-key user mutations. Keep explicit, audited identity approval separate from training overrides: an existing donor/foster needs a supported staff verification path without public email-based adoption.
+**Why:** A user FOR UPDATE lock followed by a completion advisory lock can deadlock with a completion insert holding that advisory lock and waiting for its user foreign key; stale role arrays can regrant removed roles.
+
+**How to apply:** Use NO KEY UPDATE for non-key user mutations where appropriate. Retain atomic invitation creation/finalization so failures do not strand accounts and prevent retries.
 
 Public bearer attestation must revalidate access and insert the completion in one transaction using the same application-person lock order as identity approval.
 
@@ -25,4 +27,4 @@ Sensitive-route browser protection must run before analytics observes a History 
 
 **How to apply:** Preserve the pre-analytics full-document navigation guard and strict-mode-compatible wrapper chaining. Test against the installed router, not just a non-strict mock. Keep sensitive URLs out of canonical/social metadata and apply no-referrer before outbound requests.
 
-**How to apply:** Exclude token pages from URL-derived middleware before any logging, and allowlist every public response rather than returning internal compliance/application objects. Preserve immutable completion history; reconcile only through explicit application/contact/user identifiers; reject conflicting ownership; enforce ownership again on compliance/history reads. Bind volunteer welcome invitations to the approved application and recheck current training and exact contact ownership before creating or activating an account. Public intake must not adopt an existing contact from a submitted email; keep the application provisional until staff approves a high-confidence match. Waiver automation may use only an already-established identity, while pre-account links remain usable during orientation and waiver-waiting stages. When linking legacy applications, prefer established completion owners; only use an unambiguous, tenant-bound email plus name/phone backfill when no completion owner exists, then persist the result instead of repeating email lookup. Allow early renewal near the due date without shortening the current term or turning retries into extra cycles.
+**How to apply:** Exclude token pages from URL-derived middleware before logging and allowlist public responses. Preserve immutable completion history; reconcile only through explicit application/contact/user identifiers, reject conflicting ownership, and enforce it on history reads. Public intake must not adopt existing contacts from submitted email. Preserve exact recipient ownership for application-bound welcome invitations without requiring training completion. Keep renewal dates informational.

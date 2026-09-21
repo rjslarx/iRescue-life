@@ -70,13 +70,14 @@ export default function PublicVolunteerTrainingPage() {
     <main className="min-h-screen bg-muted/30 py-10 px-4">
       <div className="max-w-3xl mx-auto space-y-6">
         <div>
-          <h1 className="text-3xl font-bold">Required volunteer training</h1>
+          <h1 className="text-3xl font-bold">Volunteer training</h1>
           <p className="text-muted-foreground mt-2">
             Hello {data.applicantName}. Open each assigned video, then explicitly attest that you watched it.
-            Opening a video alone does not complete training, and the system does not verify playback.
+            Opening a video alone does not record completion, and the system does not verify playback.
+            Your training status does not block an invitation, account activation, or access.
           </p>
         </div>
-        {data.tutorials.length === 0 && <Card><CardContent className="py-8">No required training is currently assigned.</CardContent></Card>}
+        {data.tutorials.length === 0 && <Card><CardContent className="py-8">No training is currently assigned for tracking.</CardContent></Card>}
         {data.tutorials.map(tutorial => {
           const complete = tutorial.status === "current";
           return (
@@ -85,10 +86,10 @@ export default function PublicVolunteerTrainingPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <CardTitle>{tutorial.title}</CardTitle>
-                    <CardDescription>Version {tutorial.requirementVersion} · renew every {tutorial.renewalMonths} months</CardDescription>
+                    <CardDescription>Version {tutorial.requirementVersion} · {tutorial.renewalMonths}-month renewal interval</CardDescription>
                   </div>
-                  <Badge variant={complete ? "default" : "destructive"}>
-                    {complete ? "Completed" : tutorial.status === "due_soon" ? "Renewal available" : "Required"}
+                  <Badge variant={complete ? "default" : "secondary"}>
+                    {complete ? "Completed" : tutorial.status === "due_soon" ? "Renewal available" : "Not yet attested"}
                   </Badge>
                 </div>
               </CardHeader>

@@ -106,7 +106,16 @@ export default function VolunteerManagementPage() {
     }>;
   }>({ queryKey: ['/api/volunteer-training/tracker'], enabled: isAdmin });
   const { data: historyData } = useQuery<{
-    history: Array<{ id: string; title: string; requirementVersion: number; completionType: string; attestedAt: string; renewalDueAt: string; overrideReason: string | null }>;
+    history: Array<{
+      id: string;
+      title: string;
+      requirementVersion: number;
+      completionType: string;
+      attestedAt: string;
+      renewalDueAt: string;
+      overrideReason: string | null;
+      recordedByName?: string | null;
+    }>;
   }>({
     queryKey: ['/api/volunteer-training/users', trainingVolunteer?.id, 'history'],
     queryFn: async () => (await apiRequest('GET', `/api/volunteer-training/users/${trainingVolunteer!.id}/history`)).json(),
@@ -124,9 +133,9 @@ export default function VolunteerManagementPage() {
       queryClient.invalidateQueries({ queryKey: ['/api/volunteer-training/tracker'] });
       queryClient.invalidateQueries({ queryKey: ['/api/volunteer-training/users', trainingVolunteer?.id, 'history'] });
       setOverrideReason("");
-      toast({ title: "Training override recorded", description: "The reason is retained in the volunteer's audit history." });
+      toast({ title: "Staff completion recorded", description: "The reason is retained in the volunteer's training history." });
     },
-    onError: (e: any) => toast({ title: "Unable to record override", description: e.message, variant: "destructive" }),
+    onError: (e: any) => toast({ title: "Unable to record completion", description: e.message, variant: "destructive" }),
   });
 
   const holdHarmlessStatus = holdHarmlessData?.holdHarmlessStatus || {};
@@ -340,7 +349,7 @@ export default function VolunteerManagementPage() {
                       <TableHead>Email</TableHead>
                       <TableHead>Phone</TableHead>
                       <TableHead>Joined Date</TableHead>
-                      <TableHead>Compliance</TableHead>
+                      <TableHead>Records</TableHead>
                       <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -382,7 +391,7 @@ export default function VolunteerManagementPage() {
                                 }}
                                 data-testid={`button-training-history-${volunteer.id}`}
                               >
-                                <Badge variant={['overdue', 'incomplete'].includes(training.overallStatus) ? "destructive" : "outline"}>
+                                <Badge variant={['overdue', 'incomplete'].includes(training.overallStatus) ? "secondary" : "outline"}>
                                   Training {training.overallStatus.replace('_', ' ')}
                                 </Badge>
                               </Button>
@@ -478,7 +487,7 @@ export default function VolunteerManagementPage() {
           <DialogHeader>
             <DialogTitle>Training history — {trainingVolunteer?.name}</DialogTitle>
             <DialogDescription>
-              Explicit attestations and authorized overrides. Video playback is not technically verified.
+              Explicit attestations and optional staff-authorized records. Video playback is not technically verified. Training status does not limit invitations, activation, or account access.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -486,7 +495,9 @@ export default function VolunteerManagementPage() {
               <Card key={item.id} className="p-3">
                 <div className="font-medium">{item.title} · version {item.requirementVersion}</div>
                 <div className="text-sm text-muted-foreground">
-                  {item.completionType === "staff_override" ? "Staff override" : "Volunteer attestation"} on {new Date(item.attestedAt).toLocaleDateString()}
+                  {item.completionType === "staff_override"
+                    ? `Staff completion${item.recordedByName ? ` by ${item.recordedByName}` : ""}`
+                    : `Volunteer attestation by ${trainingVolunteer?.name}`} on {new Date(item.attestedAt).toLocaleString()}
                   {" · "}renewal due {new Date(item.renewalDueAt).toLocaleDateString()}
                 </div>
                 {item.overrideReason && <p className="text-sm mt-1">Reason: {item.overrideReason}</p>}
@@ -495,7 +506,10 @@ export default function VolunteerManagementPage() {
           </div>
           {isAdmin && trainingVolunteer && (trainingData?.volunteers.find(item => item.id === trainingVolunteer.id)?.requirements.length || 0) > 0 && (
             <div className="border-t pt-4 space-y-2">
-              <h4 className="font-medium">Authorized staff override</h4>
+              <h4 className="font-medium">Optional staff completion record</h4>
+              <p className="text-xs text-muted-foreground">
+                This audit entry is not required to invite or activate the volunteer.
+              </p>
               <select
                 className="h-9 w-full rounded-md border bg-background px-3 text-sm"
                 value={overrideTutorialId}
@@ -518,7 +532,7 @@ export default function VolunteerManagementPage() {
                 data-testid="button-submit-training-override"
               >
                 {overrideMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                Record override
+                Record completion
               </Button>
             </div>
           )}

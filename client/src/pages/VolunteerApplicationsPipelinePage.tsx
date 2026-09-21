@@ -137,9 +137,9 @@ export default function VolunteerApplicationsPipelinePage() {
       queryClient.invalidateQueries({ queryKey: ['/api/volunteer-applications'] });
       setOverrideTarget(null);
       setOverrideReason("");
-      toast({ title: "Training override recorded", description: "The reason has been added to the audit history." });
+      toast({ title: "Staff completion recorded", description: "The reason has been added to the training history." });
     },
-    onError: (error: any) => toast({ title: "Override failed", description: error.message, variant: "destructive" }),
+    onError: (error: any) => toast({ title: "Unable to record completion", description: error.message, variant: "destructive" }),
   });
   const sendTrainingMutation = useMutation({
     mutationFn: async (applicationId: string) => (await apiRequest('POST', `/api/volunteer-applications/${applicationId}/send-training`)).json(),
@@ -298,8 +298,11 @@ export default function VolunteerApplicationsPipelinePage() {
           <TabsContent value="pipeline" className="mt-0">
             <div className="mb-4 space-y-2">
               {applications.filter(app => app.trainingCompliance && ['overdue', 'incomplete'].includes(app.trainingCompliance.overallStatus)).map(app => (
-                <div key={app.id} className="flex items-center justify-between gap-3 rounded-md border border-destructive/30 p-3 text-sm">
-                  <span><strong>{app.applicantName}</strong>: training {app.trainingCompliance!.overallStatus.replace('_', ' ')}. Activation is blocked.</span>
+                <div key={app.id} className="flex items-center justify-between gap-3 rounded-md border p-3 text-sm">
+                  <span>
+                    <strong>{app.applicantName}</strong>: tracked training is {app.trainingCompliance!.overallStatus.replace('_', ' ')}.
+                    This does not prevent invitation, activation, or access.
+                  </span>
                   <div className="flex gap-2 shrink-0">
                     <Button
                       size="sm"
@@ -319,7 +322,7 @@ export default function VolunteerApplicationsPipelinePage() {
                       }}
                       data-testid={`button-training-override-${app.id}`}
                     >
-                      Staff override
+                      Record staff completion
                     </Button>
                   </div>
                 </div>
@@ -373,7 +376,7 @@ export default function VolunteerApplicationsPipelinePage() {
                           )}
                           {volunteer.trainingCompliance && (
                             <Badge
-                              variant={['overdue', 'incomplete'].includes(volunteer.trainingCompliance.overallStatus) ? "destructive" : "outline"}
+                              variant={['overdue', 'incomplete'].includes(volunteer.trainingCompliance.overallStatus) ? "secondary" : "outline"}
                               className="text-xs shrink-0"
                               data-testid={`badge-training-${volunteer.id}`}
                             >
@@ -521,9 +524,9 @@ export default function VolunteerApplicationsPipelinePage() {
       <Dialog open={!!overrideTarget} onOpenChange={(open) => !open && setOverrideTarget(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Override required training</DialogTitle>
+            <DialogTitle>Record staff training completion</DialogTitle>
             <DialogDescription>
-              This satisfies the selected requirement for {overrideTarget?.applicantName}. A detailed audit reason is required.
+              Optionally add a staff-authorized completion to {overrideTarget?.applicantName}'s training history. This record is not needed to invite, activate, or grant access. A detailed audit reason is required for the record.
             </DialogDescription>
           </DialogHeader>
           <select
@@ -539,7 +542,7 @@ export default function VolunteerApplicationsPipelinePage() {
           <Textarea
             value={overrideReason}
             onChange={event => setOverrideReason(event.target.value)}
-            placeholder="Reason for authorized override (at least 10 characters)"
+            placeholder="Reason for staff completion (at least 10 characters)"
             data-testid="input-pipeline-training-override-reason"
           />
           <DialogFooter>
@@ -550,7 +553,7 @@ export default function VolunteerApplicationsPipelinePage() {
               data-testid="button-confirm-training-override"
             >
               {overrideMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Record override
+              Record completion
             </Button>
           </DialogFooter>
         </DialogContent>

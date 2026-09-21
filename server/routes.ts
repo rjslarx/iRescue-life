@@ -5692,54 +5692,15 @@ Crawl-delay: 1
       }).strict();
 
       const data = userSchema.parse(req.body);
-      const { trainingOverrideReason, ...createData } = data;
-      const isVolunteer = createData.roles.includes('volunteer');
-      let hasRequiredTraining = false;
-      if (isVolunteer) {
-        const { tutorials } = await import('@shared/schema');
-        const [required] = await db.select({ id: tutorials.id }).from(tutorials).where(and(
-          eq(tutorials.tenantId, req.tenant!.id),
-          eq(tutorials.requiredForVolunteers, true),
-        )).limit(1);
-        hasRequiredTraining = !!required;
-        const reason = trainingOverrideReason?.trim();
-        if (hasRequiredTraining && (!reason || reason.length < 10 || reason.length > 1000)) {
-          const { volunteerTrainingRequiredError } = await import('./services/volunteer-training');
-          throw volunteerTrainingRequiredError("Direct volunteer creation requires a 10–1000 character audited training override reason");
-        }
-      }
-      let user = await createUser(req.tenant!.id, createData, {
-        initiallyInactive: isVolunteer,
-      });
-      if (isVolunteer) {
-        const { acquireVolunteerTrainingActivationPolicyLock, ensureUserVolunteerActivationCompliance } = await import('./services/volunteer-training');
-        const activated = await db.transaction(async tx => {
-          await acquireVolunteerTrainingActivationPolicyLock(tx, req.tenant!.id);
-          await ensureUserVolunteerActivationCompliance({
-            tenantId: req.tenant!.id,
-            userId: user.id,
-            actorId: req.user!.id,
-            overrideReason: trainingOverrideReason,
-            executor: tx,
-          });
-          const [exactUser] = await tx.update(users).set({ isActive: true }).where(and(
-            eq(users.tenantId, req.tenant!.id), eq(users.id, user.id), eq(users.isActive, false),
-          )).returning();
-          return exactUser;
-        });
-        if (!activated) throw new Error("Unable to activate volunteer after training verification");
-        const { passwordHash: _, ...safeActivated } = activated;
-        user = safeActivated;
-      }
+      const createData = { ...data };
+      delete createData.trainingOverrideReason;
+      const user = await createUser(req.tenant!.id, createData);
 
       res.json({
         success: true,
         user,
       });
     } catch (error: any) {
-      if (error?.code === 'VOLUNTEER_TRAINING_REQUIRED') {
-        return res.status(error.status || 409).json({ error: error.message, message: error.message, code: error.code });
-      }
       next(error);
     }
   });
@@ -5760,8 +5721,9 @@ Crawl-delay: 1
       }).strict();
 
       const data = updateSchema.parse(req.body);
-      const { trainingOverrideReason, ...userUpdate } = data;
-      const { acquireVolunteerTrainingActivationPolicyLock, applyLockedVolunteerRoleUpdate, ensureUserVolunteerActivationCompliance } = await import('./services/volunteer-training');
+      const userUpdate = { ...data };
+      delete userUpdate.trainingOverrideReason;
+      const { acquireVolunteerTrainingActivationPolicyLock, applyLockedVolunteerRoleUpdate } = await import('./services/volunteer-training');
       const updatedUser = await db.transaction(async tx => {
         await acquireVolunteerTrainingActivationPolicyLock(tx, req.tenant!.id);
         const [lockedUser] = await tx.select({ id: users.id, roles: users.roles }).from(users).where(and(
@@ -5771,15 +5733,7 @@ Crawl-delay: 1
         return applyLockedVolunteerRoleUpdate({
           lockedCurrentRoles: lockedUser.roles,
           desiredRoles: userUpdate.roles,
-          complianceGate: async () => {
-            await ensureUserVolunteerActivationCompliance({
-              tenantId: req.tenant!.id,
-              userId: lockedUser.id,
-              actorId: req.user!.id,
-              overrideReason: trainingOverrideReason,
-              executor: tx,
-            });
-          },
+          complianceGate: async () => {},
           write: async () => {
             const [updated] = await tx.update(users).set(userUpdate).where(and(
               eq(users.id, lockedUser.id), eq(users.tenantId, req.tenant!.id),
@@ -5834,9 +5788,6 @@ Crawl-delay: 1
 
       res.json({ success: true, user: updatedUser });
     } catch (error: any) {
-      if (error?.code === 'VOLUNTEER_TRAINING_REQUIRED') {
-        return res.status(error.status || 409).json({ error: error.message, message: error.message, code: error.code });
-      }
       next(error);
     }
   });
@@ -5848,10 +5799,11 @@ Crawl-delay: 1
   app.patch('/api/users/:id/access', requireTenant, requireAuth, requireRole('owner', 'admin'), async (req, res, next) => {
     try {
       const { users } = await import('@shared/schema');
-      const { isActive, trainingOverrideReason } = z.object({
+      const accessData = z.object({
         isActive: z.boolean(),
         trainingOverrideReason: z.string().optional(),
       }).strict().parse(req.body);
+      const { isActive } = accessData;
 
       if (req.params.id === req.user!.id) {
         return res.status(400).json({ error: 'You cannot put your own access on hold' });
@@ -5860,7 +5812,7 @@ Crawl-delay: 1
         return res.status(403).json({ error: 'End View As mode before changing a team member’s access' });
       }
 
-      const { acquireVolunteerTrainingActivationPolicyLock, applyLockedVolunteerAccessUpdate, ensureUserVolunteerActivationCompliance } = await import('./services/volunteer-training');
+      const { acquireVolunteerTrainingActivationPolicyLock, applyLockedVolunteerAccessUpdate } = await import('./services/volunteer-training');
       const updatedUser = await db.transaction(async (tx) => {
         const { auditLogs } = await import('@shared/schema');
         await acquireVolunteerTrainingActivationPolicyLock(tx, req.tenant!.id);
@@ -5886,15 +5838,7 @@ Crawl-delay: 1
         const updated = await applyLockedVolunteerAccessUpdate({
           lockedCurrentRoles: targetUser.roles,
           restoring: isActive,
-          complianceGate: async () => {
-            await ensureUserVolunteerActivationCompliance({
-              tenantId: req.tenant!.id,
-              userId: targetUser.id,
-              actorId: req.user!.id,
-              overrideReason: trainingOverrideReason,
-              executor: tx,
-            });
-          },
+          complianceGate: async () => {},
           write: async () => {
             const [row] = await tx.update(users).set({ isActive }).where(and(
               eq(users.id, targetUser.id), eq(users.tenantId, req.tenant!.id),
@@ -5928,9 +5872,6 @@ Crawl-delay: 1
     } catch (error: any) {
       if (error?.accessStatus) {
         return res.status(error.accessStatus).json({ error: error.message });
-      }
-      if (error?.code === 'VOLUNTEER_TRAINING_REQUIRED') {
-        return res.status(error.status || 409).json({ error: error.message, message: error.message, code: error.code });
       }
       next(error);
     }
@@ -16587,33 +16528,11 @@ ${renderedHtml}
               allowExistingEmailContactMatch: false,
             });
             const { finalizeVolunteerApplicationActivation } = await import('./services/volunteer-training');
-            const finalization = await finalizeVolunteerApplicationActivation({
+            await finalizeVolunteerApplicationActivation({
               tenantId: submission.tenantId,
               applicationId: volunteerApp.id,
               expectedPipelineStatuses: ['waiver_needed'],
-              blockedAsResult: true,
             });
-            if (!finalization.activated) {
-              // The signed waiver is already persisted above. Keep the application
-              // at waiver_needed until required training is current.
-              const { logActivity } = await import('./lib/activity-logger');
-              await logActivity({
-                tenantId: submission.tenantId,
-                userId: null,
-                action: 'volunteer_activation_blocked_training',
-                category: 'user',
-                entityType: 'volunteer_application',
-                entityId: volunteerApp.id.toString(),
-                description: `Signed waiver preserved for ${volunteerApp.applicantName}; activation is waiting on required training`,
-                metadata: {
-                  formId: form.id,
-                  submissionId: updated?.id,
-                  pipelineStatus: volunteerApp.pipelineStatus,
-                  trainingStatus: finalization.compliance?.overallStatus || 'incomplete',
-                },
-              });
-              console.log(`[Volunteer Automation] Signed waiver preserved; activation blocked by required training for application ${volunteerApp.id}`);
-            } else {
             // Log activity for the auto-advancement
             const { logActivity } = await import('./lib/activity-logger');
             await logActivity({
@@ -16692,7 +16611,6 @@ ${renderedHtml}
               });
             } catch (notifyError) {
               console.error('[Volunteer Automation] Error dispatching staff notification:', notifyError);
-            }
             }
           }
         } catch (automationError) {
@@ -23184,14 +23102,6 @@ Submitted: ${new Date().toLocaleString()}
         return res.status(409).json({
           error: 'Volunteer invitation requires an active-pool application',
           code: 'VOLUNTEER_INVITATION_STAGE_INVALID',
-        });
-      }
-      const { getActivationTrainingGuard } = await import('./services/volunteer-training');
-      const invitationGuard = await getActivationTrainingGuard(req.tenant!.id, application.id);
-      if (!invitationGuard.allowed) {
-        return res.status(409).json({
-          error: 'Current volunteer training is required before sending an invitation',
-          code: 'VOLUNTEER_INVITATION_TRAINING_REQUIRED',
         });
       }
       const { validateBoundVolunteerInvitation } = await import('./services/invitations');

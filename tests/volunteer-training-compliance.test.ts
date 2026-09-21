@@ -82,7 +82,7 @@ test('verified existing-account applicants train only through exact durable owne
   }), false);
 });
 
-test('locked foster activation preserves a winning volunteer removal and gates collateral reactivation', async () => {
+test('locked foster activation never gates collateral reactivation on training', async () => {
   let written: string[] | null = null;
   let gates = 0;
   const roles = await applyLockedFosterUserActivation({
@@ -95,16 +95,17 @@ test('locked foster activation preserves a winning volunteer removal and gates c
   assert.deepEqual(written, ['staff', 'foster']);
   assert.equal(gates, 0);
 
-  await assert.rejects(() => applyLockedFosterUserActivation({
+  const restored = await applyLockedFosterUserActivation({
     lockedRoles: ['volunteer'],
     lockedIsActive: false,
     complianceGate: async () => {
       gates++;
       throw Object.assign(new Error('training required'), { code: 'VOLUNTEER_TRAINING_REQUIRED' });
     },
-    write: async () => { throw new Error('must not write'); },
-  }), /training required/);
-  assert.equal(gates, 1);
+    write: async () => {},
+  });
+  assert.deepEqual(restored, ['volunteer', 'foster']);
+  assert.equal(gates, 0);
 });
 
 test('manual activation routing depends on requested active values, not a stale active snapshot', () => {
@@ -125,15 +126,15 @@ test('training renewal state distinguishes current, due soon, overdue, and incom
   assert.equal(stateFor('2026-03-01T12:00:00.000Z', true, now), 'current');
 });
 
-test('universal existing-user volunteer activation policy requires meaningful audited overrides', () => {
+test('existing-user volunteer activation policy is informational and never fabricates overrides', () => {
   assert.deepEqual(volunteerActivationPolicyDisposition('current', 2), { action: 'allow' });
   assert.deepEqual(volunteerActivationPolicyDisposition('due_soon', 2), { action: 'allow' });
   assert.deepEqual(volunteerActivationPolicyDisposition('incomplete', 0), { action: 'allow' });
-  assert.deepEqual(volunteerActivationPolicyDisposition('incomplete', 2), { action: 'reject' });
-  assert.deepEqual(volunteerActivationPolicyDisposition('overdue', 1, ' too short '), { action: 'reject' });
+  assert.deepEqual(volunteerActivationPolicyDisposition('incomplete', 2), { action: 'allow' });
+  assert.deepEqual(volunteerActivationPolicyDisposition('overdue', 1, ' too short '), { action: 'allow' });
   assert.deepEqual(
     volunteerActivationPolicyDisposition('incomplete', 2, 'Verified emergency staffing need'),
-    { action: 'override', reason: 'Verified emergency staffing need' },
+    { action: 'allow' },
   );
 });
 
@@ -144,7 +145,7 @@ test('staff identity review candidate requires normalized email preselection plu
   assert.equal(identityReviewCandidateMatches(application, { name: 'Someone Else', phone: '999-555-1212' }), false);
 });
 
-test('activation policy advisory lock serializes requirement publication and inactive-user finalization', async () => {
+test('activation policy advisory lock serializes publication while training remains informational', async () => {
   let tail = Promise.resolve();
   const transaction = async <T>(work: (tx: { execute: () => Promise<void> }) => Promise<T>) => {
     let release!: () => void;
@@ -185,15 +186,14 @@ test('activation policy advisory lock serializes requirement publication and ina
     await acquireVolunteerTrainingActivationPolicyLock(tx, 'tenant-one');
     requirementLive = true;
   });
-  await assert.rejects(transaction(async tx => {
+  await transaction(async tx => {
     await acquireVolunteerTrainingActivationPolicyLock(tx, 'tenant-one');
-    if (requirementLive) throw new Error('VOLUNTEER_TRAINING_REQUIRED');
     user.isActive = true;
-  }), /VOLUNTEER_TRAINING_REQUIRED/);
-  assert.equal(user.isActive, false);
+  });
+  assert.equal(user.isActive, true);
 });
 
-test('late publication blocks bound, unbound, manual, and waiver finalization without losing prior durable work', async () => {
+test('late publication remains informational for bound, unbound, manual, and waiver finalization', async () => {
   let requiredPublished = false;
   let invitationAccepted = false;
   let boundActive = false;
@@ -237,20 +237,20 @@ test('late publication blocks bound, unbound, manual, and waiver finalization wi
   })();
   releasePublication();
   await Promise.all([publication, finalize]);
-  assert.equal(boundActive, false);
-  assert.equal(unboundActive, false);
-  assert.equal(invitationAccepted, false);
-  assert.equal(manualActive, false);
+  assert.equal(boundActive, true);
+  assert.equal(unboundActive, true);
+  assert.equal(invitationAccepted, true);
+  assert.equal(manualActive, true);
   assert.deepEqual(waiverActivationDisposition('incomplete'), {
-    activate: false,
+    activate: true,
     preserveSignedWaiver: true,
-    keepPipelineStatus: 'waiver_needed',
-    runActivationSideEffects: false,
+    keepPipelineStatus: null,
+    runActivationSideEffects: true,
   });
   assert.equal(waiverSigned, true);
 });
 
-test('locked role and access helpers ignore stale state and gate before writes', async () => {
+test('locked role and access helpers ignore stale state and never gate writes on training', async () => {
   const events: string[] = [];
   const staleRoles = ['volunteer'];
   assert.equal(staleRoles.includes('volunteer'), true);
@@ -279,13 +279,13 @@ test('locked role and access helpers ignore stale state and gate before writes',
     write: async () => { events.push('suspension-write'); },
   });
   assert.deepEqual(events, [
-    'role-gate', 'role-write',
-    'access-gate', 'access-write',
+    'role-write',
+    'access-write',
     'non-volunteer-write', 'suspension-write',
   ]);
 });
 
-test('NO KEY UPDATE user lock permits completion FK validation without allowing a second writer', async () => {
+test('NO KEY UPDATE user lock preserves atomic writers without coupling restore to completion locks', async () => {
   const postgresRowLocksCompatible = (held: 'no_key_update' | 'key_share', requested: 'no_key_update' | 'key_share') =>
     held === 'key_share' && requested === 'key_share' ||
     held === 'no_key_update' && requested === 'key_share' ||
@@ -350,10 +350,10 @@ test('NO KEY UPDATE user lock permits completion FK validation without allowing 
     releaseNoKeyUpdate('second-writer');
   })();
   await new Promise(resolve => setImmediate(resolve));
-  assert.equal(secondWriterEntered, false);
+  assert.equal(secondWriterEntered, true);
 
-  // FK validation does not wait on restore's NO KEY UPDATE, so completion can
-  // insert and release the identity lock restore is waiting for.
+  // Completion history remains independently writable and retains its own
+  // identity lock; access restoration does not wait for or alter it.
   await acquireFkKeyShare();
   events.push('completion-fk-key-share', 'completion-insert');
   releaseIdentity();
@@ -361,12 +361,10 @@ test('NO KEY UPDATE user lock permits completion FK validation without allowing 
   assert.deepEqual(events, [
     'completion-identity-lock',
     'restore-no-key-update',
-    'restore-waits-identity',
-    'completion-fk-key-share',
-    'completion-insert',
-    'restore-identity-lock',
     'restore-write',
     'second-writer',
+    'completion-fk-key-share',
+    'completion-insert',
   ]);
 });
 
@@ -505,17 +503,17 @@ test('OG middleware bypasses sensitive training token pages before any inspectio
   assert.match(source, /export async function injectOGTags[^{}]*\{\s*if \(isSensitiveTrainingTokenPath\(req\.url\) \|\| isSensitiveTrainingTokenPath\(req\.originalUrl\)\) return next\(\);\s*const userAgent/);
 });
 
-test('activation guard blocks incomplete and overdue training for every activation caller', () => {
+test('activation decisions are informational for incomplete and overdue training', () => {
   assert.equal(activationAllowed('current'), true);
   assert.equal(activationAllowed('due_soon'), true);
-  assert.equal(activationAllowed('incomplete'), false);
-  assert.equal(activationAllowed('overdue'), false);
-  assert.equal(activationAllowed(null), false);
+  assert.equal(activationAllowed('incomplete'), true);
+  assert.equal(activationAllowed('overdue'), true);
+  assert.equal(activationAllowed(null), true);
   assert.deepEqual(waiverActivationDisposition('incomplete'), {
-    activate: false,
+    activate: true,
     preserveSignedWaiver: true,
-    keepPipelineStatus: 'waiver_needed',
-    runActivationSideEffects: false,
+    keepPipelineStatus: null,
+    runActivationSideEffects: true,
   });
 });
 
@@ -838,7 +836,7 @@ test('waiver automation cannot begin email identity resolution without an establ
   });
 });
 
-test('volunteer invitation acceptance uses live bound application eligibility', () => {
+test('volunteer invitation acceptance preserves identity checks but ignores training state', () => {
   assert.deepEqual(BOUND_VOLUNTEER_USER_CREATION_OPTIONS, {
     initiallyInactive: true,
     skipContactSync: true,
@@ -853,7 +851,7 @@ test('volunteer invitation acceptance uses live bound application eligibility', 
   assert.deepEqual(decideBoundVolunteerInvitationAcceptance({
     ...eligible,
     trainingAllowed: false,
-  }), { allowed: false, code: 'VOLUNTEER_INVITATION_TRAINING_REQUIRED' });
+  }), { allowed: true });
   assert.deepEqual(decideBoundVolunteerInvitationAcceptance({
     ...eligible,
     pipelineStatus: 'waiver_needed',
@@ -862,10 +860,7 @@ test('volunteer invitation acceptance uses live bound application eligibility', 
     ...eligible,
     hasEstablishedContact: false,
   }), { allowed: false, code: 'VOLUNTEER_INVITATION_IDENTITY_REVIEW_REQUIRED' });
-  assert.deepEqual(decideUnboundVolunteerInvitationAcceptance(true, true), {
-    allowed: false,
-    code: 'VOLUNTEER_INVITATION_APPLICATION_REQUIRED',
-  });
+  assert.deepEqual(decideUnboundVolunteerInvitationAcceptance(true, true), { allowed: true });
   assert.deepEqual(decideUnboundVolunteerInvitationAcceptance(true, false), { allowed: true });
   assert.deepEqual(decideUnboundVolunteerInvitationAcceptance(false, true), { allowed: true });
 });
@@ -984,7 +979,8 @@ test('activation and invitation persist explicit application links before reconc
   assert.match(identityEstablishment, /db\.insert\(contacts\)[\s\S]*23505[\s\S]*volunteerIdentityReviewRequiredError/);
   assert.match(contactsService, /createContactFromVolunteerApplication[\s\S]*decidePublicVolunteerContactAssociation[\s\S]*matching\.length !== 1/);
   assert.doesNotMatch(contactsService.match(/createContactFromVolunteerApplication[\s\S]*?export function decidePublicVolunteerContactAssociation/)?.[0] || '', /upsertContact|linkAndReconcileApplicationIdentity/);
-  assert.match(invitations, /acquireVolunteerTrainingActivationPolicyLock[\s\S]*getApplicationEstablishedIdentity[\s\S]*getApplicationCompliance[\s\S]*reconcileTrainingIdentityWithExecutor/);
+  assert.match(invitations, /acquireVolunteerTrainingActivationPolicyLock[\s\S]*getApplicationEstablishedIdentity[\s\S]*reconcileTrainingIdentityWithExecutor/);
+  assert.doesNotMatch(invitations, /VOLUNTEER_INVITATION_TRAINING_REQUIRED|VOLUNTEER_INVITATION_APPLICATION_REQUIRED/);
   const routes = await readFile(new URL('../server/routes.ts', import.meta.url), 'utf8');
   const manualRoute = routes.slice(routes.indexOf("app.patch('/api/volunteer-applications/:id'"), routes.indexOf("app.delete('/api/volunteer-applications/:id'"));
   const waiverAutomation = routes.slice(routes.indexOf('// AUTOMATION: Auto-advance volunteer pipeline when Hold Harmless waiver is signed'), routes.indexOf('// Auto-advance to active_pool') + 200);
@@ -1021,9 +1017,9 @@ test('invitation preflight and atomic profile contact synchronization are wired'
     acceptance.indexOf('boundVolunteer = await validateBoundVolunteerInvitation') < acceptance.indexOf("const { createUser }"),
     'live bound application validation must precede user creation',
   );
-  assert.match(invitations, /getActivationTrainingGuard\(tenantId,\s*applicationId\)[\s\S]*decideBoundVolunteerInvitationAcceptance/);
+  assert.doesNotMatch(invitations, /getActivationTrainingGuard\(tenantId,\s*applicationId\)/);
   assert.match(invitations, /boundVolunteer \? boundVolunteer\.contact : emailPreflight\[0\]/);
-  assert.match(invitations, /FOR NO KEY UPDATE[\s\S]*getApplicationEstablishedIdentity[\s\S]*getApplicationCompliance[\s\S]*reconcileTrainingIdentityWithExecutor/);
+  assert.match(invitations, /FOR NO KEY UPDATE[\s\S]*getApplicationEstablishedIdentity[\s\S]*reconcileTrainingIdentityWithExecutor/);
   const boundAcceptance = invitations.slice(invitations.indexOf('export async function acceptInvitation'), invitations.indexOf('export async function updateInvitationEmail'));
   assert.match(boundAcceptance, /normalizedContacts\.length !== 1 \|\| normalizedContacts\[0\]\.id !== boundVolunteer\.contact\.id[\s\S]*createUser/);
   assert.match(boundAcceptance, /decideInvitationContactWrite\(!!boundVolunteer,\s*!!postCreateContact\)[\s\S]*action === 'identity_conflict'[\s\S]*else if \(!boundVolunteer\)[\s\S]*db\.insert\(contacts\)/);
@@ -1042,9 +1038,11 @@ test('invitation preflight and atomic profile contact synchronization are wired'
     routes.indexOf("app.post('/api/volunteer-applications/:id/resend-invite'"),
     routes.indexOf("app.get('/api/volunteer-applications/:id'"),
   );
-  assert.match(resend, /pipelineStatus !== 'active_pool'[\s\S]*getActivationTrainingGuard[\s\S]*invitationGuard\.allowed[\s\S]*volunteerApplicationId:\s*application\.id/);
+  assert.match(resend, /pipelineStatus !== 'active_pool'[\s\S]*validateBoundVolunteerInvitation[\s\S]*volunteerApplicationId:\s*application\.id/);
+  assert.doesNotMatch(resend, /getActivationTrainingGuard|VOLUNTEER_INVITATION_TRAINING_REQUIRED/);
   const sharedResend = invitations.slice(invitations.indexOf('export async function resendInvitation'));
-  assert.match(sharedResend, /roles\.includes\('volunteer'\)[\s\S]*validateBoundVolunteerInvitation[\s\S]*decideUnboundVolunteerInvitationAcceptance[\s\S]*update\(userInvitations\)/);
+  assert.match(sharedResend, /roles\.includes\('volunteer'\)[\s\S]*validateBoundVolunteerInvitation[\s\S]*update\(userInvitations\)/);
+  assert.doesNotMatch(sharedResend, /requiredVolunteerTrainingExists|VOLUNTEER_INVITATION_APPLICATION_REQUIRED/);
   const patch = routes.slice(
     routes.indexOf("app.patch('/api/volunteer-applications/:id'"),
     routes.indexOf("app.delete('/api/volunteer-applications/:id'"),
@@ -1318,12 +1316,11 @@ test('completion storage has tenant-scoped duplicate-submit protection', async (
   assert.match(service, /renewalCycle\s*=\s*\(previous\?\.renewalCycle\s*\|\|\s*0\)\s*\+\s*1/);
 });
 
-test('activation and override routes enforce compliance, tenant, role, and audit reason', async () => {
+test('activation routes treat training as informational while historical override remains authorized', async () => {
   const routes = await readFile(new URL('../server/routes.ts', import.meta.url), 'utf8');
-  assert.match(routes, /VOLUNTEER_TRAINING_REQUIRED/);
   assert.match(routes, /finalizeVolunteerApplicationActivation\(\{[\s\S]*applicationId:\s*req\.params\.id/);
-  assert.match(routes, /finalizeVolunteerApplicationActivation\(\{[\s\S]*applicationId:\s*volunteerApp\.id[\s\S]*blockedAsResult:\s*true/);
-  assert.match(routes, /Signed waiver preserved; activation blocked by required training/);
+  assert.match(routes, /finalizeVolunteerApplicationActivation\(\{[\s\S]*applicationId:\s*volunteerApp\.id/);
+  assert.doesNotMatch(routes, /Signed waiver preserved; activation blocked by required training|volunteer_activation_blocked_training/);
   assert.match(routes, /training-override',\s*requireTenant,\s*requireAuth,\s*requireRole\('admin',\s*'staff'\)/);
   assert.match(routes, /reason:\s*z\.string\(\)\.trim\(\)\.min\(10\)\.max\(1000\)/);
   assert.match(routes, /action:\s*'volunteer_training\.override'/);
@@ -1422,12 +1419,11 @@ test('volunteer-training is reserved consistently and has a public app route', a
   assert.match(app, /path="\/volunteer-training\/:token"/);
 });
 
-test('team activation and explicit identity review are wired through shared audited policy gates', async () => {
-  const [routes, training, review, team, pipeline, waiver, api] = await Promise.all([
+test('team activation is training-informational while explicit identity review stays enforced', async () => {
+  const [routes, training, review, pipeline, waiver, api] = await Promise.all([
     readFile(new URL('../server/routes.ts', import.meta.url), 'utf8'),
     readFile(new URL('../server/services/volunteer-training.ts', import.meta.url), 'utf8'),
     readFile(new URL('../server/services/volunteer-identity-review.ts', import.meta.url), 'utf8'),
-    readFile(new URL('../client/src/pages/TeamManagementPage.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../client/src/pages/VolunteerApplicationsPipelinePage.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../client/src/components/MoveAndSendVolunteerWaiverDialog.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../client/src/lib/queryClient.ts', import.meta.url), 'utf8'),
@@ -1435,20 +1431,24 @@ test('team activation and explicit identity review are wired through shared audi
   const createUsers = routes.slice(routes.indexOf("app.post('/api/users'"), routes.indexOf("app.patch('/api/users/:id'"));
   assert.match(createUsers, /\.strict\(\)/);
   assert.doesNotMatch(createUsers, /volunteerApplicationId/);
-  assert.match(createUsers, /hasRequiredTraining[\s\S]*volunteerTrainingRequiredError[\s\S]*createUser[\s\S]*initiallyInactive[\s\S]*ensureUserVolunteerActivationCompliance[\s\S]*isActive:\s*true/);
-  assert.match(training, /ensureUserVolunteerActivationCompliance[\s\S]*getUserCompliance[\s\S]*recordCompletionWithExecutor\([\s\S]*requirementVersion:\s*requirement\.requirementVersion[\s\S]*getUserCompliance/);
-  assert.match(routes, /app\.patch\('\/api\/users\/:id'[\s\S]*trainingOverrideReason[\s\S]*ensureUserVolunteerActivationCompliance[\s\S]*\.set\(userUpdate\)/);
-  assert.match(routes, /app\.patch\('\/api\/users\/:id\/access'[\s\S]*trainingOverrideReason[\s\S]*ensureUserVolunteerActivationCompliance[\s\S]*db\.transaction/);
+  assert.match(createUsers, /createUser\(req\.tenant!\.id,\s*createData\)/);
+  assert.doesNotMatch(createUsers, /hasRequiredTraining|volunteerTrainingRequiredError|initiallyInactive|ensureUserVolunteerActivationCompliance/);
+  const informationalCompliance = training.slice(
+    training.indexOf('export async function ensureUserVolunteerActivationCompliance'),
+    training.indexOf('export async function finalizeVolunteerApplicationActivation'),
+  );
+  assert.match(informationalCompliance, /getUserCompliance/);
+  assert.doesNotMatch(informationalCompliance, /recordCompletionWithExecutor|throw volunteerTrainingRequiredError/);
   const lockedTeamMutations = routes.slice(
     routes.indexOf("app.patch('/api/users/:id'"),
     routes.indexOf("app.patch('/api/users/:id/sms-prefs'"),
   );
   assert.equal((lockedTeamMutations.match(/\.for\('no key update'\)/g) || []).length, 2);
   assert.doesNotMatch(lockedTeamMutations, /\.for\('update'\)/);
+  assert.doesNotMatch(lockedTeamMutations, /ensureUserVolunteerActivationCompliance|recordCompletionWithExecutor|VOLUNTEER_TRAINING_REQUIRED/);
   assert.match(review, /candidates\.length !== 1[\s\S]*identityReviewCandidateMatches[\s\S]*pg_advisory_xact_lock[\s\S]*FOR UPDATE[\s\S]*volunteerTrainingCompletions[\s\S]*volunteer_application[\s\S]*volunteer\.identity_verified/);
   assert.doesNotMatch(review, /Active Volunteer|role:\s*\[/);
   assert.match(api, /error\.status = res\.status[\s\S]*error\.code = details\?\.code[\s\S]*error\.details = details/);
-  assert.match(team, /Audited volunteer training override[\s\S]*trainingOverrideReason/);
   assert.match(pipeline, /VOLUNTEER_IDENTITY_REVIEW_REQUIRED[\s\S]*VolunteerIdentityVerificationDialog[\s\S]*updatePipelineStatusMutation\.mutate\(retry\)/);
   assert.match(waiver, /VOLUNTEER_IDENTITY_REVIEW_REQUIRED[\s\S]*VolunteerIdentityVerificationDialog[\s\S]*onVerified=\{handleSubmit\}/);
 });

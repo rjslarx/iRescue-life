@@ -1,5 +1,5 @@
 import { db } from '../db';
-import { contacts, userInvitations, users, tenants, tutorials, volunteerApplications, volunteerTrainingAccessSessions } from '@shared/schema';
+import { contacts, userInvitations, users, tenants, volunteerApplications, volunteerTrainingAccessSessions } from '@shared/schema';
 import { eq, and, isNull, gt, or, sql } from 'drizzle-orm';
 import crypto from 'crypto';
 import { EmailService } from '../lib/email-service';
@@ -17,14 +17,11 @@ export function decideBoundVolunteerInvitationAcceptance(args: {
   if (args.pipelineStatus !== 'active_pool') return { allowed: false as const, code: 'VOLUNTEER_INVITATION_STAGE_INVALID' };
   if (!args.recipientMatches) return { allowed: false as const, code: 'VOLUNTEER_INVITATION_RECIPIENT_STALE' };
   if (!args.hasEstablishedContact) return { allowed: false as const, code: 'VOLUNTEER_INVITATION_IDENTITY_REVIEW_REQUIRED' };
-  if (!args.trainingAllowed) return { allowed: false as const, code: 'VOLUNTEER_INVITATION_TRAINING_REQUIRED' };
   return { allowed: true as const };
 }
 
 export function decideUnboundVolunteerInvitationAcceptance(isVolunteer: boolean, requiredTrainingExists: boolean) {
-  return isVolunteer && requiredTrainingExists
-    ? { allowed: false as const, code: 'VOLUNTEER_INVITATION_APPLICATION_REQUIRED' }
-    : { allowed: true as const };
+  return { allowed: true as const };
 }
 
 export const BOUND_VOLUNTEER_USER_CREATION_OPTIONS = Object.freeze({
@@ -36,14 +33,6 @@ export function decideInvitationContactWrite(boundInvitation: boolean, exactCont
   if (boundInvitation && !exactContactExists) return { action: 'identity_conflict' as const };
   if (exactContactExists) return { action: 'update_exact' as const };
   return { action: 'insert_new' as const };
-}
-
-async function requiredVolunteerTrainingExists(tenantId: string) {
-  const [required] = await db.select({ id: tutorials.id }).from(tutorials).where(and(
-    eq(tutorials.tenantId, tenantId),
-    eq(tutorials.requiredForVolunteers, true),
-  )).limit(1);
-  return !!required;
 }
 
 export async function validateBoundVolunteerInvitation(
@@ -62,7 +51,7 @@ export async function validateBoundVolunteerInvitation(
   if (application.applicantEmail.trim().toLowerCase() !== recipientEmail.trim().toLowerCase()) {
     throw invitationConflict('VOLUNTEER_INVITATION_RECIPIENT_STALE', 'The invitation recipient no longer matches the application');
   }
-  const { getApplicationEstablishedIdentity, getActivationTrainingGuard } = await import('./volunteer-training');
+  const { getApplicationEstablishedIdentity } = await import('./volunteer-training');
   const established = await getApplicationEstablishedIdentity(tenantId, applicationId);
   if (!established.contactId) {
     throw invitationConflict('VOLUNTEER_INVITATION_IDENTITY_REVIEW_REQUIRED', 'Volunteer identity requires staff review');
@@ -77,12 +66,11 @@ export async function validateBoundVolunteerInvitation(
   if (contact.email.trim().toLowerCase() !== recipientEmail.trim().toLowerCase()) {
     throw invitationConflict('VOLUNTEER_INVITATION_RECIPIENT_STALE', 'The established contact recipient no longer matches');
   }
-  const guard = await getActivationTrainingGuard(tenantId, applicationId);
   const decision = decideBoundVolunteerInvitationAcceptance({
     pipelineStatus: application.pipelineStatus,
     recipientMatches: application.applicantEmail.trim().toLowerCase() === recipientEmail.trim().toLowerCase(),
     hasEstablishedContact: !!contact,
-    trainingAllowed: guard.allowed,
+    trainingAllowed: true,
   });
   if (!decision.allowed) {
     throw invitationConflict(decision.code, 'Current volunteer invitation eligibility must be reviewed');
@@ -153,11 +141,6 @@ export async function createInvitation(
   if (data.roles.includes('volunteer')) {
     if (data.volunteerApplicationId) {
       await validateBoundVolunteerInvitation(tenantId, data.volunteerApplicationId, data.email);
-    } else {
-      const unbound = decideUnboundVolunteerInvitationAcceptance(true, await requiredVolunteerTrainingExists(tenantId));
-      if (!unbound.allowed) {
-        throw invitationConflict(unbound.code, 'Reissue this volunteer invitation from an approved application');
-      }
     }
   }
   // Check if user already exists
@@ -749,8 +732,6 @@ async function acceptVolunteerInvitationAtomic(args: {
   return db.transaction(async tx => {
     const {
       acquireVolunteerTrainingActivationPolicyLock,
-      activationAllowed,
-      getApplicationCompliance,
       getApplicationEstablishedIdentity,
       reconcileTrainingIdentityWithExecutor,
     } = await import('./volunteer-training');
@@ -799,17 +780,7 @@ async function acceptVolunteerInvitationAtomic(args: {
         throw invitationConflict('VOLUNTEER_INVITATION_IDENTITY_REVIEW_REQUIRED', 'The established contact identity changed');
       }
       contact = matching[0];
-      const compliance = await getApplicationCompliance(invitation.tenantId, application.id, tx);
-      if (!compliance || !activationAllowed(compliance.overallStatus)) {
-        throw invitationConflict('VOLUNTEER_INVITATION_TRAINING_REQUIRED', 'Required volunteer training is not current');
-      }
     } else {
-      const [required] = await tx.select({ id: tutorials.id }).from(tutorials).where(and(
-        eq(tutorials.tenantId, invitation.tenantId), eq(tutorials.requiredForVolunteers, true),
-      )).limit(1);
-      if (required) {
-        throw invitationConflict('VOLUNTEER_INVITATION_APPLICATION_REQUIRED', 'Staff must reissue this invitation from an eligible application');
-      }
       const matching = await tx.select().from(contacts).where(and(
         eq(contacts.tenantId, invitation.tenantId),
         sql`lower(trim(${contacts.email})) = ${normalizedEmail}`,
@@ -909,14 +880,6 @@ export async function acceptInvitation(
         invitation.volunteerApplicationId,
         normalizedEmail,
       );
-    } else {
-      const unbound = decideUnboundVolunteerInvitationAcceptance(true, await requiredVolunteerTrainingExists(invitation.tenantId));
-      if (!unbound.allowed) {
-        throw invitationConflict(
-          unbound.code,
-          'Staff must reissue this invitation from the approved volunteer application',
-        );
-      }
     }
   }
   if (boundVolunteer) {
@@ -1173,17 +1136,6 @@ export async function resendInvitation(invitationId: string, tenantId: string) {
         invitation.volunteerApplicationId,
         invitation.email,
       );
-    } else {
-      const unbound = decideUnboundVolunteerInvitationAcceptance(
-        true,
-        await requiredVolunteerTrainingExists(tenantId),
-      );
-      if (!unbound.allowed) {
-        throw invitationConflict(
-          unbound.code,
-          'Staff must reissue this invitation from the approved volunteer application',
-        );
-      }
     }
   }
 

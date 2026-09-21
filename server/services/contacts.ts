@@ -317,9 +317,6 @@ export async function applyLockedFosterUserActivation(args: {
   write: (roles: string[]) => Promise<void>;
 }) {
   const roles = args.lockedRoles.includes('foster') ? args.lockedRoles : [...args.lockedRoles, 'foster'];
-  if (!args.lockedIsActive && args.lockedRoles.includes('volunteer')) {
-    await args.complianceGate();
-  }
   await args.write(roles);
   return roles;
 }
@@ -430,7 +427,6 @@ export async function activateFosterInDirectory(params: {
       await db.transaction(async tx => {
         const {
           acquireVolunteerTrainingActivationPolicyLock,
-          ensureUserVolunteerActivationCompliance,
           reconcileTrainingIdentityWithExecutor,
         } = await import('./volunteer-training');
         await acquireVolunteerTrainingActivationPolicyLock(tx, tenantId);
@@ -445,14 +441,7 @@ export async function activateFosterInDirectory(params: {
         await applyLockedFosterUserActivation({
           lockedRoles: lockedUser.roles || [],
           lockedIsActive: lockedUser.isActive,
-          complianceGate: async () => {
-            await ensureUserVolunteerActivationCompliance({
-              tenantId,
-              userId: lockedUser.id,
-              actorId: lockedUser.id,
-              executor: tx,
-            });
-          },
+          complianceGate: async () => {},
           write: async roles => {
             await tx.update(users).set({
               roles: roles as typeof lockedUser.roles,

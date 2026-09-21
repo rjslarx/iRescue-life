@@ -725,10 +725,10 @@ export default function TutorialsPage() {
                         <FormControl>
                           <Checkbox checked={field.value} onCheckedChange={field.onChange} data-testid="checkbox-required-volunteer-training" />
                         </FormControl>
-                        <FormLabel className="m-0">Required volunteer training</FormLabel>
+                        <FormLabel className="m-0">Track volunteer training</FormLabel>
                       </div>
                       <p className="text-xs text-muted-foreground mt-2">
-                        Volunteers must explicitly attest after opening this video. The system does not verify playback.
+                        Adds this video to volunteer training records. Volunteers can explicitly attest after opening it; the system does not verify playback. Tracking never limits invitations or account access.
                       </p>
                     </FormItem>
                   )}
@@ -739,7 +739,7 @@ export default function TutorialsPage() {
                     name="renewalMonths"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Renew every (months)</FormLabel>
+                        <FormLabel>Renewal reminder interval (months)</FormLabel>
                         <FormControl>
                           <Input type="number" min={1} max={120} {...field} data-testid="input-training-renewal-months" />
                         </FormControl>
@@ -997,8 +997,8 @@ function TutorialCard({
             </Badge>
           )}
           {tutorial.requiredForVolunteers && (
-            <Badge variant="destructive" className="w-fit" data-testid={`badge-required-training-${tutorial.id}`}>
-              Required · v{tutorial.requirementVersion} · renew every {tutorial.renewalMonths} months
+            <Badge variant="secondary" className="w-fit" data-testid={`badge-required-training-${tutorial.id}`}>
+              Training tracked · v{tutorial.requirementVersion} · {tutorial.renewalMonths}-month renewal interval
             </Badge>
           )}
           {isAdmin && !tutorial.isGlobal && <VisibilityBadge roles={tutorial.visibleToRoles as RoleValue[] | null} />}
@@ -1035,7 +1035,7 @@ function TutorialCard({
               <>
                 <p className="text-xs text-muted-foreground">
                   {trainingStatus.status === 'due_soon'
-                    ? `Renewal is available now. Your current term remains valid through ${new Date(trainingStatus.completion!.renewalDueAt).toLocaleDateString()}. Open the current video before renewing.`
+                    ? `Optional renewal is available now. This completion is tracked through ${new Date(trainingStatus.completion!.renewalDueAt).toLocaleDateString()}. Open the current video before renewing.`
                     : 'Open the video, then confirm that you watched this assigned training. Opening it alone does not complete training.'}
                 </p>
                 <Button
