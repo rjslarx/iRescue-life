@@ -48,6 +48,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { ObjectUploader } from "@/components/ObjectUploader";
+import ContestEntrantPhoto from "@/components/ContestEntrantPhoto";
 import {
   Copy,
   Download,
@@ -1251,16 +1252,10 @@ function VotingContestsTab({ tenantSubdomain }: { tenantSubdomain?: string }) {
             {entrants
               .sort((a, b) => (b.totalVotes ?? 0) - (a.totalVotes ?? 0))
               .map((entrant, idx) => (
-              <Card key={entrant.id} data-testid={`card-entrant-${entrant.id}`}>
-                <CardContent className="pt-6">
-                  <div className="flex items-start gap-3">
-                    <Avatar className="h-14 w-14 rounded-md">
-                      {entrant.photoUrl ? (
-                        <AvatarImage src={entrant.photoUrl} alt={entrant.name} />
-                      ) : null}
-                      <AvatarFallback className="rounded-md">{entrant.name.charAt(0).toUpperCase()}</AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 min-w-0">
+              <Card key={entrant.id} className="rounded-[2rem] p-3" data-testid={`card-entrant-${entrant.id}`}>
+                <ContestEntrantPhoto name={entrant.name} photoUrl={entrant.photoUrl} />
+                <CardContent className="px-3 pt-4 pb-2">
+                    <div className="min-w-0">
                       <div className="flex items-center justify-between gap-2">
                         <p className="font-medium truncate" data-testid={`text-entrant-name-${entrant.id}`}>{entrant.name}</p>
                         {idx === 0 && entrants.length > 1 && (
@@ -1271,10 +1266,9 @@ function VotingContestsTab({ tenantSubdomain }: { tenantSubdomain?: string }) {
                         {(entrant.totalVotes ?? 0).toLocaleString()}
                       </p>
                       <p className="text-xs text-muted-foreground">votes</p>
-                    </div>
                   </div>
                 </CardContent>
-                <CardFooter className="pt-0 justify-end">
+                <CardFooter className="px-3 pt-0 pb-2 justify-end">
                   <Button
                     size="icon"
                     variant="ghost"

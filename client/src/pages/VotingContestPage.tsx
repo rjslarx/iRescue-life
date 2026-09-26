@@ -4,6 +4,7 @@ import { useParams, useSearch } from "wouter";
 import { useSEO } from "@/hooks/useSEO";
 import { apiRequest } from "@/lib/queryClient";
 import PublicHeader from "@/components/PublicHeader";
+import ContestEntrantPhoto from "@/components/ContestEntrantPhoto";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -268,7 +269,7 @@ export default function VotingContestPage() {
               return (
                 <Card
                   key={entrant.id}
-                  className={`overflow-visible relative ${isLeader ? "ring-2 ring-primary" : ""}`}
+                  className={`overflow-visible relative rounded-[2rem] p-3 ${isLeader ? "ring-2 ring-primary" : ""}`}
                   data-testid={`card-entrant-${entrant.id}`}
                 >
                   {isLeader && (
@@ -279,21 +280,8 @@ export default function VotingContestPage() {
                       </Badge>
                     </div>
                   )}
-                  <CardContent className="pt-6 flex flex-col items-center text-center space-y-4">
-                    <Avatar className="h-28 w-28">
-                      <AvatarImage
-                        src={entrant.photoUrl || undefined}
-                        alt={entrant.name}
-                      />
-                      <AvatarFallback className="text-2xl">
-                        {entrant.name
-                          .split(" ")
-                          .map((n) => n[0])
-                          .join("")
-                          .toUpperCase()
-                          .slice(0, 2)}
-                      </AvatarFallback>
-                    </Avatar>
+                  <ContestEntrantPhoto name={entrant.name} photoUrl={entrant.photoUrl} />
+                  <CardContent className="px-3 pt-3 pb-2 flex flex-1 flex-col items-center text-center space-y-4">
 
                     <div>
                       <h3
