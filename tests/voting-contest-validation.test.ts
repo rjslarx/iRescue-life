@@ -1,7 +1,44 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { votingContestEntrantDescriptionRequestSchema, votingContestEntrantRequestSchema, votingContestImageSchema } from "../shared/voting-contest-validation";
+import { contestAppearanceSchema, VOTING_CONTEST_THEMES, votingContestEntrantDescriptionRequestSchema, votingContestEntrantRequestSchema, votingContestImageSchema } from "../shared/voting-contest-validation";
+
+test("contest appearance accepts theme presets and nullable defaults", () => {
+  assert.deepEqual(VOTING_CONTEST_THEMES, ["birthday", "confetti", "hearts", "paws", "stars", "halloween"]);
+  assert.deepEqual(contestAppearanceSchema.parse({}), {});
+  for (const themeBackground of VOTING_CONTEST_THEMES) {
+    assert.deepEqual(contestAppearanceSchema.parse({ themeBackground }), { themeBackground });
+  }
+  assert.deepEqual(contestAppearanceSchema.parse({ themeBackground: null, primaryColor: "", accentColor: null }),
+    { themeBackground: null, primaryColor: null, accentColor: null });
+  assert.deepEqual(contestAppearanceSchema.parse({ primaryColor: "#aB12cD", accentColor: "#000000" }),
+    { primaryColor: "#aB12cD", accentColor: "#000000" });
+});
+
+test("contest appearance rejects invalid colors and unknown themes", () => {
+  for (const field of ["primaryColor", "accentColor"]) {
+    for (const color of ["red", "#fff", "#12345678", " #123456", "#GG0000", 123]) {
+      assert.equal(contestAppearanceSchema.safeParse({ [field]: color }).success, false, `${field}: ${color}`);
+    }
+  }
+  for (const themeBackground of ["christmas", "", "Halloween", 10]) {
+    assert.equal(contestAppearanceSchema.safeParse({ themeBackground }).success, false, String(themeBackground));
+  }
+});
+
+test("contest create and edit validate and persist appearance without changing omitted fields", () => {
+  const routes = readFileSync(new URL("../server/routes.ts", import.meta.url), "utf8");
+  const create = routes.split("app.post('/api/voting-contests'")[1]?.split("app.get('/api/voting-contests'")[0];
+  const edit = routes.split("app.patch('/api/voting-contests/:id'")[1]?.split("app.delete('/api/voting-contests/:id'")[0];
+  assert.ok(create);
+  assert.ok(edit);
+  for (const field of ["primaryColor", "accentColor", "themeBackground"]) {
+    assert.match(create, new RegExp(`${field}: data\\.${field} \\?\\? null`));
+    assert.match(edit, new RegExp(`if \\(data\\.${field} !== undefined\\) updateData\\.${field} = data\\.${field}`));
+  }
+  assert.match(create, /\.merge\(contestAppearanceSchema\)/);
+  assert.match(edit, /\.merge\(contestAppearanceSchema\)/);
+});
 
 test("entrant accepts the uploaded object path sent by the fundraiser hub", () => {
   const data = { name: "Munchkin", photoUrl: "/objects/tenant-id/uploads/photo.jpeg" };

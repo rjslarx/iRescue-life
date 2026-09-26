@@ -2,6 +2,13 @@
 set -e
 npm install
 
+# Voting contest appearance overrides. Nullable columns preserve defaults for older contests.
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' || echo "[post-merge] voting contest appearance columns skipped (already applied or DB unreachable)."
+ALTER TABLE voting_contests ADD COLUMN IF NOT EXISTS primary_color text;
+ALTER TABLE voting_contests ADD COLUMN IF NOT EXISTS accent_color text;
+ALTER TABLE voting_contests ADD COLUMN IF NOT EXISTS theme_background text;
+SQL
+
 # Optional short descriptions for voting contest entrants. Additive and safe to rerun.
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' || echo "[post-merge] voting contest entrant description column skipped (already applied or DB unreachable)."
 ALTER TABLE voting_contest_entrants ADD COLUMN IF NOT EXISTS description text;

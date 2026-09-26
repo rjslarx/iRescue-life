@@ -1,5 +1,5 @@
 import type { Express } from "express";
-import { votingContestImageSchema, votingContestEntrantRequestSchema, votingContestEntrantDescriptionRequestSchema } from "@shared/voting-contest-validation";
+import { votingContestImageSchema, votingContestEntrantRequestSchema, votingContestEntrantDescriptionRequestSchema, contestAppearanceSchema } from "@shared/voting-contest-validation";
 import type Stripe from "stripe";
 import { toStripeStatementDescriptor } from "./lib/stripe-service";
 import express from "express";
@@ -55117,7 +55117,7 @@ ${section('Metadata', metaRows)}
         imageUrl: votingContestImageSchema.optional(),
         startDate: z.string().optional(),
         endDate: z.string().optional(),
-      });
+      }).merge(contestAppearanceSchema);
       const data = schema.parse(req.body);
       const slug = data.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-' + Date.now().toString(36);
       const [contest] = await db.insert(votingContests).values({
@@ -55126,7 +55126,9 @@ ${section('Metadata', metaRows)}
         slug,
         description: data.description || null,
         imageUrl: data.imageUrl || null,
-        videoUrl: data.videoUrl || null,
+        primaryColor: data.primaryColor ?? null,
+        accentColor: data.accentColor ?? null,
+        themeBackground: data.themeBackground ?? null,
         startDate: data.startDate ? new Date(data.startDate) : null,
         endDate: data.endDate ? new Date(data.endDate) : null,
       }).returning();
@@ -55185,12 +55187,15 @@ ${section('Metadata', metaRows)}
         startDate: z.string().optional().or(z.null()),
         endDate: z.string().optional().or(z.null()),
         isActive: z.boolean().optional(),
-      });
+      }).merge(contestAppearanceSchema);
       const data = schema.parse(req.body);
       const updateData: any = {};
       if (data.title !== undefined) updateData.title = data.title;
       if (data.description !== undefined) updateData.description = data.description;
       if (data.imageUrl !== undefined) updateData.imageUrl = data.imageUrl || null;
+      if (data.primaryColor !== undefined) updateData.primaryColor = data.primaryColor;
+      if (data.accentColor !== undefined) updateData.accentColor = data.accentColor;
+      if (data.themeBackground !== undefined) updateData.themeBackground = data.themeBackground;
       if (data.startDate !== undefined) updateData.startDate = data.startDate ? new Date(data.startDate) : null;
       if (data.endDate !== undefined) updateData.endDate = data.endDate ? new Date(data.endDate) : null;
       if (data.isActive !== undefined) updateData.isActive = data.isActive;

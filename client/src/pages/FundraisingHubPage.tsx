@@ -49,6 +49,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { ObjectUploader } from "@/components/ObjectUploader";
 import ContestEntrantPhoto from "@/components/ContestEntrantPhoto";
+import { VotingAppearanceControls } from "@/components/VotingAppearanceControls";
+import { DEFAULT_VOTING_APPEARANCE, validVotingColor, type VotingAppearance } from "@/lib/votingThemes";
 import ContestantShareActions from "@/components/ContestantShareActions";
 import { contestantUrl } from "@/lib/contestShare";
 import {
@@ -1100,6 +1102,12 @@ function VotingContestsTab({ tenantSubdomain }: { tenantSubdomain?: string }) {
   const [newStartDate, setNewStartDate] = useState("");
   const [newEndDate, setNewEndDate] = useState("");
   const [newImageUrl, setNewImageUrl] = useState("");
+  const [newAppearance, setNewAppearance] = useState<VotingAppearance>(DEFAULT_VOTING_APPEARANCE);
+  const [editingAppearance, setEditingAppearance] = useState<VotingContest | null>(null);
+  const [editAppearance, setEditAppearance] = useState<VotingAppearance>(DEFAULT_VOTING_APPEARANCE);
+  const appearanceValid = (appearance: VotingAppearance) =>
+    (!appearance.primaryColor || !!validVotingColor(appearance.primaryColor)) &&
+    (!appearance.accentColor || !!validVotingColor(appearance.accentColor));
 
   const { data: contestsData, isLoading } = useQuery<(VotingContest & { entrantCount?: number; totalVotesAll?: number })[]>({
     queryKey: ["/api/voting-contests"],
@@ -1112,7 +1120,7 @@ function VotingContestsTab({ tenantSubdomain }: { tenantSubdomain?: string }) {
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: { title: string; description: string; startDate: string; endDate: string; imageUrl?: string }) => {
+    mutationFn: async (data: { title: string; description: string; startDate: string; endDate: string; imageUrl?: string } & VotingAppearance) => {
       const res = await apiRequest("POST", "/api/voting-contests", data);
       return res.json();
     },
@@ -1125,9 +1133,25 @@ function VotingContestsTab({ tenantSubdomain }: { tenantSubdomain?: string }) {
       setNewStartDate("");
       setNewEndDate("");
       setNewImageUrl("");
+      setNewAppearance(DEFAULT_VOTING_APPEARANCE);
     },
     onError: (err: Error) => {
       toast({ title: "Failed to create contest", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const appearanceMutation = useMutation({
+    mutationFn: async ({ id, appearance }: { id: string; appearance: VotingAppearance }) => {
+      const res = await apiRequest("PATCH", `/api/voting-contests/${id}`, appearance);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/voting-contests"] });
+      toast({ title: "Contest appearance saved" });
+      setEditingAppearance(null);
+    },
+    onError: (err: Error) => {
+      toast({ title: "Failed to save appearance", description: err.message, variant: "destructive" });
     },
   });
 
@@ -1235,6 +1259,7 @@ function VotingContestsTab({ tenantSubdomain }: { tenantSubdomain?: string }) {
       startDate: newStartDate,
       endDate: newEndDate,
       imageUrl: newImageUrl || undefined,
+      ...newAppearance,
     });
   };
 
@@ -1504,6 +1529,17 @@ function VotingContestsTab({ tenantSubdomain }: { tenantSubdomain?: string }) {
                   </div>
                 </CardContent>
                 <CardFooter className="flex items-center justify-end gap-1 flex-wrap">
+                  <Button variant="outline" onClick={() => {
+                    setEditingAppearance(contest);
+                    setEditAppearance({
+                      primaryColor: contest.primaryColor,
+                      accentColor: contest.accentColor,
+                      themeBackground: contest.themeBackground,
+                    });
+                  }} data-testid={`button-edit-voting-appearance-${contest.id}`}>
+                    <Palette className="mr-2 h-3.5 w-3.5" />
+                    Edit appearance
+                  </Button>
                   <Button
                     variant="outline"
                    
@@ -1548,8 +1584,8 @@ function VotingContestsTab({ tenantSubdomain }: { tenantSubdomain?: string }) {
         </div>
       )}
 
-      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-        <DialogContent data-testid="dialog-create-contest">
+      <Dialog open={createDialogOpen} onOpenChange={(open) => { if (!createMutation.isPending) setCreateDialogOpen(open); }}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl" data-testid="dialog-create-contest">
           <DialogHeader>
             <DialogTitle>Create Voting Contest</DialogTitle>
           </DialogHeader>
@@ -1602,6 +1638,7 @@ function VotingContestsTab({ tenantSubdomain }: { tenantSubdomain?: string }) {
                 data-testid="input-contest-image-url"
               />
             </div>
+            <VotingAppearanceControls value={newAppearance} onChange={setNewAppearance} disabled={createMutation.isPending} />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateDialogOpen(false)} data-testid="button-cancel-create-contest">
@@ -1609,11 +1646,24 @@ function VotingContestsTab({ tenantSubdomain }: { tenantSubdomain?: string }) {
             </Button>
             <Button
               onClick={handleCreateSubmit}
-              disabled={!newTitle.trim() || createMutation.isPending}
+              disabled={!newTitle.trim() || !appearanceValid(newAppearance) || createMutation.isPending}
               data-testid="button-submit-create-contest"
             >
               {createMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Create Contest
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={!!editingAppearance} onOpenChange={(open) => { if (!open && !appearanceMutation.isPending) setEditingAppearance(null); }}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl" data-testid="dialog-edit-voting-appearance">
+          <DialogHeader><DialogTitle>Edit appearance — {editingAppearance?.title}</DialogTitle></DialogHeader>
+          <VotingAppearanceControls value={editAppearance} onChange={setEditAppearance} disabled={appearanceMutation.isPending} />
+          <DialogFooter>
+            <Button variant="outline" disabled={appearanceMutation.isPending} onClick={() => setEditingAppearance(null)}>Cancel</Button>
+            <Button disabled={appearanceMutation.isPending || !appearanceValid(editAppearance)} onClick={() => editingAppearance && appearanceMutation.mutate({ id: editingAppearance.id, appearance: editAppearance })} data-testid="button-save-voting-appearance">
+              {appearanceMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save appearance
             </Button>
           </DialogFooter>
         </DialogContent>

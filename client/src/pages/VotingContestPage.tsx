@@ -4,6 +4,7 @@ import { useParams, useSearch } from "wouter";
 import { useSEO } from "@/hooks/useSEO";
 import ContestantShareActions from "@/components/ContestantShareActions";
 import { contestantUrl } from "@/lib/contestShare";
+import { contrastText, readableColor, validVotingColor, votingBackgroundStyle } from "@/lib/votingThemes";
 import { apiRequest } from "@/lib/queryClient";
 import PublicHeader from "@/components/PublicHeader";
 import ContestEntrantPhoto from "@/components/ContestEntrantPhoto";
@@ -178,9 +179,16 @@ export default function VotingContestPage() {
   const hasEnded = contestData.endDate
     ? new Date(contestData.endDate) < new Date()
     : false;
+  const primary = validVotingColor(contestData.primaryColor);
+  const accent = validVotingColor(contestData.accentColor);
+  const primaryTextStyle = primary ? { color: readableColor(primary) } : undefined;
+  const voteButtonStyle = accent ? { backgroundColor: accent, borderColor: accent, color: contrastText(accent) } : primary ? { backgroundColor: primary, borderColor: primary, color: contrastText(primary) } : undefined;
+  const themeStyle = votingBackgroundStyle(contestData.themeBackground, primary);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className={`min-h-screen relative ${contestData.themeBackground === "halloween" ? "bg-[#fff8f0] dark:bg-[#1e1429]" : "bg-background"}`}>
+      {themeStyle && <div className="absolute inset-0 pointer-events-none opacity-[0.2] dark:opacity-[0.16]" style={themeStyle} aria-hidden="true" data-testid="voting-theme-background" />}
+      <div className="relative">
       <PublicHeader
         rescueName={rescueName}
         logoUrl={tenant?.logoUrl || undefined}
@@ -219,6 +227,7 @@ export default function VotingContestPage() {
             </Badge>
             <h1
               className="text-3xl md:text-4xl font-bold"
+              style={primaryTextStyle}
               data-testid="text-contest-title"
             >
               {contestData.title}
@@ -290,12 +299,13 @@ export default function VotingContestPage() {
                 <Card
                   key={entrant.id}
                   id={`contest-entrant-${entrant.id}`}
-                  className={`overflow-visible relative rounded-[2rem] p-3 ${linkedEntrant?.id === entrant.id ? "ring-4 ring-amber-500 bg-amber-50/30 dark:bg-amber-950/20" : isLeader ? "ring-2 ring-primary" : ""}`}
+                  className={`overflow-visible relative rounded-[2rem] p-3 bg-card ${linkedEntrant?.id === entrant.id ? "ring-4 ring-amber-500" : isLeader ? "ring-2 ring-primary" : ""}`}
+                  style={isLeader && linkedEntrant?.id !== entrant.id && primary ? { borderColor: primary, boxShadow: `0 0 0 2px ${primary}` } : undefined}
                   data-testid={`card-entrant-${entrant.id}`}
                 >
                   {isLeader && (
                     <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-10">
-                      <Badge variant="default" data-testid="badge-leader">
+                      <Badge variant="default" style={voteButtonStyle} data-testid="badge-leader">
                         <Trophy className="h-3 w-3 mr-1" />
                         Leader
                       </Badge>
@@ -318,6 +328,7 @@ export default function VotingContestPage() {
                       )}
                       <p
                         className="text-2xl font-bold text-primary mt-1"
+                        style={primaryTextStyle}
                         data-testid={`text-entrant-votes-${entrant.id}`}
                       >
                         {(entrant.totalVotes || 0).toLocaleString()} vote
@@ -328,6 +339,7 @@ export default function VotingContestPage() {
                     {!hasEnded && (
                       <Button
                         className="w-full gap-2"
+                        style={voteButtonStyle}
                         onClick={() => {
                           setSelectedEntrant(entrant);
                           setSelectedPackage(null);
@@ -405,6 +417,7 @@ export default function VotingContestPage() {
                       : "outline"
                   }
                   className="justify-between"
+                  style={!useCustom && selectedPackage === pkg.amount ? voteButtonStyle : undefined}
                   onClick={() => {
                     setSelectedPackage(pkg.amount);
                     setUseCustom(false);
@@ -421,6 +434,7 @@ export default function VotingContestPage() {
               <Button
                 variant={useCustom ? "default" : "outline"}
                 className="w-full"
+                style={useCustom ? voteButtonStyle : undefined}
                 onClick={() => setUseCustom(true)}
                 data-testid="button-custom-vote"
               >
@@ -454,6 +468,7 @@ export default function VotingContestPage() {
             <Button
               size="lg"
               className="w-full gap-2"
+              style={voteButtonStyle}
               onClick={handleVote}
               disabled={isCheckingOut || currentVoteAmount < 1}
               data-testid="button-confirm-vote"
@@ -468,6 +483,7 @@ export default function VotingContestPage() {
           </div>
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   );
 }

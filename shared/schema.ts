@@ -6249,6 +6249,8 @@ export const peerCampaigns = pgTable("peer_campaigns", {
 
 export const PEER_CAMPAIGN_THEMES = ['birthday', 'confetti', 'hearts', 'paws', 'stars'] as const;
 export type PeerCampaignTheme = typeof PEER_CAMPAIGN_THEMES[number];
+export const VOTING_CONTEST_THEMES = [...PEER_CAMPAIGN_THEMES, 'halloween'] as const;
+export type VotingContestTheme = typeof VOTING_CONTEST_THEMES[number];
 
 export const insertPeerCampaignSchema = createInsertSchema(peerCampaigns).omit({
   id: true,
@@ -7079,6 +7081,9 @@ export const votingContests = pgTable("voting_contests", {
   slug: text("slug").notNull(),
   description: text("description"),
   imageUrl: text("image_url"),
+  primaryColor: text("primary_color"),
+  accentColor: text("accent_color"),
+  themeBackground: text("theme_background").$type<VotingContestTheme>(),
   startDate: timestamp("start_date"),
   endDate: timestamp("end_date"),
   isActive: boolean("is_active").notNull().default(true),

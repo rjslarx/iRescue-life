@@ -1,4 +1,18 @@
 import { z } from "zod";
+import { VOTING_CONTEST_THEMES } from "./schema";
+
+export { VOTING_CONTEST_THEMES } from "./schema";
+
+const contestColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/, "Use a 6-digit hex color")
+  .or(z.literal("").transform(() => null))
+  .nullable()
+  .optional();
+
+export const contestAppearanceSchema = z.object({
+  primaryColor: contestColorSchema,
+  accentColor: contestColorSchema,
+  themeBackground: z.enum(VOTING_CONTEST_THEMES).nullable().optional(),
+});
 
 // Uploads return same-origin object paths, not absolute web URLs.
 export const votingContestImageSchema = z.string().refine(value => {
