@@ -29,9 +29,10 @@ interface ContestPageData extends VotingContest {
 }
 
 const VOTE_PACKAGES = [
+  { amount: 1, votes: 1, label: "$1 (1 Vote)" },
+  { amount: 5, votes: 5, label: "$5 (5 Votes)" },
   { amount: 10, votes: 10, label: "$10 (10 Votes)" },
-  { amount: 25, votes: 25, label: "$25 (25 Votes)" },
-  { amount: 50, votes: 50, label: "$50 (50 Votes)" },
+  { amount: 20, votes: 20, label: "$20 (20 Votes)" },
 ];
 
 export default function VotingContestPage() {
