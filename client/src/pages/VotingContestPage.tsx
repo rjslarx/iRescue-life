@@ -21,8 +21,10 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Trophy, Vote, CheckCircle, Heart } from "lucide-react";
 import type { VotingContest, VotingContestEntrant, Tenant } from "@shared/schema";
 
+type DescribedVotingContestEntrant = VotingContestEntrant & { description: string | null };
+
 interface ContestPageData extends VotingContest {
-  entrants: VotingContestEntrant[];
+  entrants: DescribedVotingContestEntrant[];
   rescueName: string;
 }
 
@@ -38,7 +40,7 @@ export default function VotingContestPage() {
   const searchParams = new URLSearchParams(searchString);
   const votedSuccess = searchParams.get("voted") === "success";
 
-  const [selectedEntrant, setSelectedEntrant] = useState<VotingContestEntrant | null>(null);
+  const [selectedEntrant, setSelectedEntrant] = useState<DescribedVotingContestEntrant | null>(null);
   const [selectedPackage, setSelectedPackage] = useState<number | null>(null);
   const [customAmount, setCustomAmount] = useState("");
   const [useCustom, setUseCustom] = useState(false);
@@ -290,6 +292,11 @@ export default function VotingContestPage() {
                       >
                         {entrant.name}
                       </h3>
+                      {entrant.description && (
+                        <p className="text-sm text-muted-foreground whitespace-pre-wrap break-words" data-testid={`text-entrant-description-${entrant.id}`}>
+                          {entrant.description}
+                        </p>
+                      )}
                       <p
                         className="text-2xl font-bold text-primary mt-1"
                         data-testid={`text-entrant-votes-${entrant.id}`}

@@ -2,6 +2,11 @@
 set -e
 npm install
 
+# Optional short descriptions for voting contest entrants. Additive and safe to rerun.
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' || echo "[post-merge] voting contest entrant description column skipped (already applied or DB unreachable)."
+ALTER TABLE voting_contest_entrants ADD COLUMN IF NOT EXISTS description text;
+SQL
+
 # Phase 1 interactive animal profiles and their tenant-controlled review queue.
 # All changes are additive and safe to rerun.
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' || echo "[post-merge] interactive animal profile schema skipped (already applied or DB unreachable)."

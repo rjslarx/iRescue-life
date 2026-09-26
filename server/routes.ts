@@ -1,5 +1,5 @@
 import type { Express } from "express";
-import { votingContestImageSchema, votingContestEntrantRequestSchema } from "@shared/voting-contest-validation";
+import { votingContestImageSchema, votingContestEntrantRequestSchema, votingContestEntrantDescriptionRequestSchema } from "@shared/voting-contest-validation";
 import type Stripe from "stripe";
 import { toStripeStatementDescriptor } from "./lib/stripe-service";
 import express from "express";
@@ -55230,9 +55230,24 @@ ${section('Metadata', metaRows)}
         tenantId: req.tenant!.id,
         contestId: contest.id,
         name: data.name,
+        description: data.description ?? null,
         photoUrl: data.photoUrl || null,
       }).returning();
       res.json(entrant);
+    } catch (error) { next(error); }
+  });
+
+  app.patch('/api/voting-contest-entrants/:id', requireTenant, requireAuth, requireRole('admin', 'owner', 'manager'), async (req, res, next) => {
+    try {
+      const { votingContestEntrants } = await import('@shared/schema');
+      const { description } = votingContestEntrantDescriptionRequestSchema.parse(req.body);
+      const [updated] = await db
+        .update(votingContestEntrants)
+        .set({ description })
+        .where(and(eq(votingContestEntrants.id, req.params.id), eq(votingContestEntrants.tenantId, req.tenant!.id)))
+        .returning();
+      if (!updated) return res.status(404).json({ error: 'Entrant not found' });
+      res.json(updated);
     } catch (error) { next(error); }
   });
 

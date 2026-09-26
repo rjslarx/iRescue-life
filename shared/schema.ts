@@ -7097,6 +7097,7 @@ export const votingContestEntrants = pgTable("voting_contest_entrants", {
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
   contestId: uuid("contest_id").notNull().references(() => votingContests.id, { onDelete: 'cascade' }),
   name: text("name").notNull(),
+  description: text("description"),
   photoUrl: text("photo_url"),
   totalVotes: integer("total_votes").notNull().default(0),
   createdAt: timestamp("created_at").notNull().defaultNow(),

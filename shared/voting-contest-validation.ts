@@ -14,7 +14,16 @@ export const votingContestImageSchema = z.string().refine(value => {
   }
 }, "Choose an uploaded photo or a valid HTTP/HTTPS image URL");
 
+export const votingContestEntrantDescriptionSchema = z.string().trim().max(500)
+  .transform(value => value || null)
+  .nullable();
+
 export const votingContestEntrantRequestSchema = z.object({
   name: z.string().trim().min(1).max(200),
   photoUrl: votingContestImageSchema.optional(),
+  description: votingContestEntrantDescriptionSchema.optional(),
 });
+
+export const votingContestEntrantDescriptionRequestSchema = z.object({
+  description: votingContestEntrantDescriptionSchema,
+}).strict();
