@@ -4,6 +4,7 @@ import { animals, calendars, tenants, donationLinks, shopProducts, customPages, 
 import { eq, and, desc, or, isNull, ne } from 'drizzle-orm';
 import fs from 'fs';
 import path from 'path';
+import { votingSocialVersion, votingSocialPhotoPath, renderVotingSocialImage, type VotingSocialData } from '../lib/voting-social-image';
 
 // In development, Vite's @vitejs/plugin-react normally injects a "preamble"
 // script into index.html via transformIndexHtml. Because this middleware
@@ -641,6 +642,9 @@ export async function injectOGTags(req: Request, res: Response, next: NextFuncti
         title: votingContests.title,
         description: votingContests.description,
         imageUrl: votingContests.imageUrl,
+        primaryColor: votingContests.primaryColor,
+        accentColor: votingContests.accentColor,
+        themeBackground: votingContests.themeBackground,
       }).from(votingContests).where(and(
         eq(votingContests.tenantId, tenant.id),
         eq(votingContests.slug, contestMatch[1]),
@@ -665,7 +669,13 @@ export async function injectOGTags(req: Request, res: Response, next: NextFuncti
         ogData = {
           title: share.title,
           description: share.description,
-          image: resolveImageUrl(share.imageUrl) || defaultImage,
+          image: entrant
+            ? `${baseUrl}/api/public/voting-contest-entrants/${entrant.id}/social-image?v=${votingSocialVersion({
+                name: entrant.name, contestTitle: contest.title, rescueName: tenant.name,
+                photoUrl: entrant.photoUrl, themeBackground: contest.themeBackground,
+                primaryColor: contest.primaryColor, accentColor: contest.accentColor,
+              })}`
+            : resolveImageUrl(share.imageUrl) || defaultImage,
         };
         tenantNoscriptBody = buildTenantNoscript(
           `<h1>${escapeHtml(share.title)}</h1><p>${escapeHtml(share.description)}</p>`
@@ -1395,6 +1405,57 @@ export async function injectOGTags(req: Request, res: Response, next: NextFuncti
 }
 
 export const ogImageRouter = Router();
+
+ogImageRouter.get('/api/public/voting-contest-entrants/:id/social-image', async (req, res) => {
+  const tenant = req.tenant;
+  if (!tenant || !UUID_PATTERN.test(req.params.id)) return res.sendStatus(404);
+  try {
+    const [row] = await db.select({
+      name: votingContestEntrants.name,
+      photoUrl: votingContestEntrants.photoUrl,
+      contestTitle: votingContests.title,
+      themeBackground: votingContests.themeBackground,
+      primaryColor: votingContests.primaryColor,
+      accentColor: votingContests.accentColor,
+    }).from(votingContestEntrants).innerJoin(votingContests, eq(votingContestEntrants.contestId, votingContests.id))
+      .where(and(
+        eq(votingContestEntrants.id, req.params.id),
+        eq(votingContestEntrants.tenantId, tenant.id),
+        eq(votingContests.tenantId, tenant.id),
+        eq(votingContests.isActive, true),
+      )).limit(1);
+    if (!row) return res.sendStatus(404);
+    const data: VotingSocialData = { ...row, rescueName: tenant.name };
+    let photo: Buffer | undefined;
+    const photoPath = votingSocialPhotoPath(row.photoUrl, tenant.id);
+    if (photoPath) {
+      try {
+        const { ObjectStorageService } = await import('../objectStorage');
+        const { ObjectPermission } = await import('../objectAcl');
+        const storage = new ObjectStorageService();
+        const file = await storage.getObjectEntityFile(photoPath);
+        const [metadata] = await file.getMetadata();
+        if (Number(metadata.size) <= 10_000_000 &&
+            await storage.canAccessObjectEntity({ objectFile: file, requestedPermission: ObjectPermission.READ })) {
+          const [download] = await file.download();
+          photo = download;
+        }
+      } catch (error) {
+        console.warn('[VOTING-SOCIAL] Photo unavailable; rendering branded card:', error);
+      }
+    }
+    const image = await renderVotingSocialImage(data, photo);
+    res.set({
+      'Content-Type': 'image/jpeg',
+      'Content-Length': String(image.length),
+      'Cache-Control': 'public, max-age=3600',
+      'Cross-Origin-Resource-Policy': 'cross-origin',
+    }).end(image);
+  } catch (error) {
+    console.error('[VOTING-SOCIAL] Could not render image:', error);
+    res.sendStatus(500);
+  }
+});
 
 /**
  * GET /api/og/vip-club/preview.png

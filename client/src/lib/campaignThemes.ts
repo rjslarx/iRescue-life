@@ -1,5 +1,3 @@
-import type { CSSProperties } from "react";
-
 export const CAMPAIGN_THEME_OPTIONS: { value: string; label: string }[] = [
   { value: "birthday", label: "Birthday" },
   { value: "confetti", label: "Confetti" },
@@ -81,10 +79,15 @@ const THEME_PATTERNS: Record<string, (color: string) => string> = {
     </svg>`,
 };
 
-export function getThemeBackgroundStyle(theme: string | null | undefined, primary: string | null): CSSProperties | undefined {
+export function campaignThemeSvg(theme: string | null | undefined, primary: string | null): string | undefined {
   if (!theme || !THEME_PATTERNS[theme]) return undefined;
   const color = primary || "#6366f1";
-  const svg = THEME_PATTERNS[theme](color).replace(/\s+/g, " ").trim();
+  return THEME_PATTERNS[theme](color).replace(/\s+/g, " ").trim();
+}
+
+export function getThemeBackgroundStyle(theme: string | null | undefined, primary: string | null): { backgroundImage: string } | undefined {
+  const svg = campaignThemeSvg(theme, primary);
+  if (!svg) return undefined;
   return {
     backgroundImage: `url("data:image/svg+xml,${encodeURIComponent(svg)}")`,
   };

@@ -1,5 +1,4 @@
-import type { CSSProperties } from "react";
-import { CAMPAIGN_THEME_OPTIONS, getThemeBackgroundStyle } from "./campaignThemes";
+import { CAMPAIGN_THEME_OPTIONS, campaignThemeSvg } from "./campaignThemes";
 
 export const VOTING_THEME_OPTIONS = [
   ...CAMPAIGN_THEME_OPTIONS,
@@ -116,8 +115,12 @@ const SPECIAL_VOTING_PATTERNS: Record<string, string> = {
     </svg>`,
 };
 
-export function votingBackgroundStyle(theme: string | null | undefined, primary: string | null): CSSProperties | undefined {
+export function votingPatternSvg(theme: string | null | undefined, primary: string | null): string | undefined {
   const svg = theme && SPECIAL_VOTING_PATTERNS[theme];
-  if (!svg) return getThemeBackgroundStyle(theme, validVotingColor(primary));
-  return { backgroundImage: `url("data:image/svg+xml,${encodeURIComponent(svg.replace(/\s+/g, " ").trim())}")` };
+  return svg ? svg.replace(/\s+/g, " ").trim() : campaignThemeSvg(theme, validVotingColor(primary));
+}
+
+export function votingBackgroundStyle(theme: string | null | undefined, primary: string | null): { backgroundImage: string } | undefined {
+  const svg = votingPatternSvg(theme, primary);
+  return svg ? { backgroundImage: `url("data:image/svg+xml,${encodeURIComponent(svg)}")` } : undefined;
 }
