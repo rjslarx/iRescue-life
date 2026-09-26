@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DEFAULT_VOTING_APPEARANCE, HALLOWEEN_COLORS, VOTING_THEME_OPTIONS, contrastText, validVotingColor, votingBackgroundStyle, type VotingAppearance } from "@/lib/votingThemes";
+import { DEFAULT_VOTING_APPEARANCE, VOTING_THEME_OPTIONS, contrastText, validVotingColor, votingAppearanceForTheme, votingBackgroundStyle, type VotingAppearance } from "@/lib/votingThemes";
 
 export function VotingAppearanceControls({ value, onChange, disabled = false }: {
   value: VotingAppearance;
@@ -24,18 +24,14 @@ export function VotingAppearanceControls({ value, onChange, disabled = false }: 
       </div>
       <div className="space-y-2">
         <Label>Background theme</Label>
-        <Select disabled={disabled} value={value.themeBackground || "none"} onValueChange={(theme) => {
-          onChange(theme === "halloween"
-            ? { ...HALLOWEEN_COLORS, themeBackground: theme }
-            : { ...value, themeBackground: theme === "none" ? null : theme });
-        }}>
+        <Select disabled={disabled} value={value.themeBackground || "none"} onValueChange={(theme) => onChange(votingAppearanceForTheme(value, theme))}>
           <SelectTrigger data-testid="select-voting-theme"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="none">None</SelectItem>
             {VOTING_THEME_OPTIONS.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}
           </SelectContent>
         </Select>
-        <p className="text-xs text-muted-foreground">Halloween starts with orange and purple; you can change either color.</p>
+        <p className="text-xs text-muted-foreground">Holiday and LSU Tigers themes start with matching colors; you can change either color afterward.</p>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {(["primaryColor", "accentColor"] as const).map((field) => (
@@ -52,7 +48,7 @@ export function VotingAppearanceControls({ value, onChange, disabled = false }: 
         ))}
       </div>
       {showError && invalid && <p role="alert" className="text-sm text-destructive">Enter colors as six-digit hex values (for example, #7c2d8e), or leave them blank.</p>}
-      <div className={`relative overflow-hidden rounded-xl border p-5 ${value.themeBackground === "halloween" ? "bg-[#fff8f0]" : "bg-background"}`} data-testid="preview-voting-appearance">
+       <div className={`relative overflow-hidden rounded-xl border p-5 ${value.themeBackground === "halloween" ? "bg-[#fff8f0]" : value.themeBackground === "christmas" ? "bg-[#f5faf3]" : value.themeBackground === "easter" ? "bg-[#fff7fc]" : value.themeBackground === "lsu_tigers" ? "bg-[#fcf9ed]" : "bg-background"}`} data-testid="preview-voting-appearance">
         {value.themeBackground && <div aria-hidden="true" className="absolute inset-0 opacity-20 pointer-events-none" style={votingBackgroundStyle(value.themeBackground, primary)} />}
         <div className="relative bg-white rounded-lg shadow-sm border p-4 space-y-2 text-[#27232e]">
           <h3 className="text-lg font-bold" style={primary ? { color: primary } : undefined}>Your contest title</h3>

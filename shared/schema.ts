@@ -6249,7 +6249,7 @@ export const peerCampaigns = pgTable("peer_campaigns", {
 
 export const PEER_CAMPAIGN_THEMES = ['birthday', 'confetti', 'hearts', 'paws', 'stars'] as const;
 export type PeerCampaignTheme = typeof PEER_CAMPAIGN_THEMES[number];
-export const VOTING_CONTEST_THEMES = [...PEER_CAMPAIGN_THEMES, 'halloween'] as const;
+export const VOTING_CONTEST_THEMES = [...PEER_CAMPAIGN_THEMES, 'halloween', 'christmas', 'easter', 'lsu_tigers'] as const;
 export type VotingContestTheme = typeof VOTING_CONTEST_THEMES[number];
 
 export const insertPeerCampaignSchema = createInsertSchema(peerCampaigns).omit({

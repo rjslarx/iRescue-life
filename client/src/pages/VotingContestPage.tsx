@@ -186,7 +186,7 @@ export default function VotingContestPage() {
   const themeStyle = votingBackgroundStyle(contestData.themeBackground, primary);
 
   return (
-    <div className={`min-h-screen relative ${contestData.themeBackground === "halloween" ? "bg-[#fff8f0] dark:bg-[#1e1429]" : "bg-background"}`}>
+    <div className={`min-h-screen relative ${contestData.themeBackground === "halloween" ? "bg-[#fff8f0] dark:bg-[#1e1429]" : contestData.themeBackground === "christmas" ? "bg-[#f5faf3] dark:bg-[#142519]" : contestData.themeBackground === "easter" ? "bg-[#fff7fc] dark:bg-[#251c29]" : contestData.themeBackground === "lsu_tigers" ? "bg-[#fcf9ed] dark:bg-[#1e1429]" : "bg-background"}`}>
       {themeStyle && <div className="absolute inset-0 pointer-events-none opacity-[0.2] dark:opacity-[0.16]" style={themeStyle} aria-hidden="true" data-testid="voting-theme-background" />}
       <div className="relative">
       <PublicHeader

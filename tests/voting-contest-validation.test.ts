@@ -2,9 +2,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { contestAppearanceSchema, VOTING_CONTEST_THEMES, votingContestEntrantDescriptionRequestSchema, votingContestEntrantRequestSchema, votingContestImageSchema } from "../shared/voting-contest-validation";
+import { DEFAULT_VOTING_APPEARANCE, VOTING_THEME_OPTIONS, VOTING_THEME_PRESET_COLORS, votingAppearanceForTheme, votingBackgroundStyle } from "../client/src/lib/votingThemes";
 
 test("contest appearance accepts theme presets and nullable defaults", () => {
-  assert.deepEqual(VOTING_CONTEST_THEMES, ["birthday", "confetti", "hearts", "paws", "stars", "halloween"]);
+  assert.deepEqual(VOTING_CONTEST_THEMES, ["birthday", "confetti", "hearts", "paws", "stars", "halloween", "christmas", "easter", "lsu_tigers"]);
   assert.deepEqual(contestAppearanceSchema.parse({}), {});
   for (const themeBackground of VOTING_CONTEST_THEMES) {
     assert.deepEqual(contestAppearanceSchema.parse({ themeBackground }), { themeBackground });
@@ -21,9 +22,33 @@ test("contest appearance rejects invalid colors and unknown themes", () => {
       assert.equal(contestAppearanceSchema.safeParse({ [field]: color }).success, false, `${field}: ${color}`);
     }
   }
-  for (const themeBackground of ["christmas", "", "Halloween", 10]) {
+  for (const themeBackground of ["", "Halloween", "lsu-tigers", 10]) {
     assert.equal(contestAppearanceSchema.safeParse({ themeBackground }).success, false, String(themeBackground));
   }
+});
+
+test("special voting themes have matching presets and distinct patterned backgrounds", () => {
+  const motifs: Record<string, string[]> = {
+    halloween: ['#b66123', '#55345e'],
+    christmas: ['#166534', '#c62828', '#5185ae'],
+    easter: ['#d9c6f3', '#ffe1d5', '#e8a0bc'],
+    lsu_tigers: ['#461D7C', '#FDD023', 'ellipse'],
+  };
+  for (const [theme, markers] of Object.entries(motifs)) {
+    assert.ok(VOTING_THEME_OPTIONS.some((option) => option.value === theme));
+    const preset = VOTING_THEME_PRESET_COLORS[theme];
+    assert.ok(preset);
+    assert.deepEqual(votingAppearanceForTheme(DEFAULT_VOTING_APPEARANCE, theme), { ...preset, themeBackground: theme });
+    const url = votingBackgroundStyle(theme, preset.primaryColor)?.backgroundImage;
+    assert.ok(typeof url === "string" && url.startsWith('url("data:image/svg+xml,'));
+    const svg = decodeURIComponent(url.slice('url("data:image/svg+xml,'.length, -2));
+    for (const marker of markers) assert.ok(svg.includes(marker), `${theme}: missing ${marker}`);
+  }
+  const customized = { ...votingAppearanceForTheme(DEFAULT_VOTING_APPEARANCE, "lsu_tigers"), primaryColor: "#112233" };
+  assert.equal(customized.primaryColor, "#112233");
+  assert.deepEqual(votingAppearanceForTheme(customized, "none"), { ...customized, themeBackground: null });
+  assert.ok(votingBackgroundStyle("paws", "#123456")?.backgroundImage);
+  assert.equal(votingBackgroundStyle("unknown", null), undefined);
 });
 
 test("contest create and edit validate and persist appearance without changing omitted fields", () => {
