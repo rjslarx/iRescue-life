@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useParams, useSearch } from "wouter";
 import { useSEO } from "@/hooks/useSEO";
+import ContestantShareActions from "@/components/ContestantShareActions";
+import { contestantUrl } from "@/lib/contestShare";
 import { apiRequest } from "@/lib/queryClient";
 import PublicHeader from "@/components/PublicHeader";
 import ContestEntrantPhoto from "@/components/ContestEntrantPhoto";
@@ -40,6 +42,7 @@ export default function VotingContestPage() {
   const searchString = useSearch();
   const searchParams = new URLSearchParams(searchString);
   const votedSuccess = searchParams.get("voted") === "success";
+  const linkedEntrantId = searchParams.get("entrant");
 
   const [selectedEntrant, setSelectedEntrant] = useState<DescribedVotingContestEntrant | null>(null);
   const [selectedPackage, setSelectedPackage] = useState<number | null>(null);
@@ -71,18 +74,32 @@ export default function VotingContestPage() {
 
   const tenant = tenantData?.tenant;
   const rescueName = contestData?.rescueName || tenant?.name || "Animal Rescue";
+  const linkedEntrant = contestData?.entrants?.find((entrant) => entrant.id === linkedEntrantId);
 
-  const pageTitle = contestData
+  const pageTitle = linkedEntrant && contestData
+    ? `${linkedEntrant.name} | ${contestData.title} | ${rescueName}`
+    : contestData
     ? `${contestData.title} | ${rescueName}`
     : `Voting Contest | ${rescueName}`;
 
-  useSEO({
+  useSEO(linkedEntrantId && !contestData ? null : {
     title: pageTitle,
-    description: contestData?.description || `Vote with your dollar in this fundraising contest hosted by ${rescueName}!`,
+    description: linkedEntrant && contestData
+      ? linkedEntrant.description || `Vote for ${linkedEntrant.name} in ${contestData.title}, hosted by ${rescueName}!`
+      : contestData?.description || `Vote with your dollar in this fundraising contest hosted by ${rescueName}!`,
     siteName: rescueName,
-    image: contestData?.imageUrl || undefined,
+    image: linkedEntrant?.photoUrl || contestData?.imageUrl || undefined,
+    url: linkedEntrant && params.slug ? contestantUrl(params.slug, linkedEntrant.id, undefined, true) : undefined,
     type: "website",
   });
+
+  useEffect(() => {
+    if (!linkedEntrant) return;
+    const frame = requestAnimationFrame(() => {
+      document.getElementById(`contest-entrant-${linkedEntrant.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [linkedEntrant?.id, params.slug]);
 
   const handleVote = async () => {
     if (!selectedEntrant) return;
@@ -272,7 +289,8 @@ export default function VotingContestPage() {
               return (
                 <Card
                   key={entrant.id}
-                  className={`overflow-visible relative rounded-[2rem] p-3 ${isLeader ? "ring-2 ring-primary" : ""}`}
+                  id={`contest-entrant-${entrant.id}`}
+                  className={`overflow-visible relative rounded-[2rem] p-3 ${linkedEntrant?.id === entrant.id ? "ring-4 ring-amber-500 bg-amber-50/30 dark:bg-amber-950/20" : isLeader ? "ring-2 ring-primary" : ""}`}
                   data-testid={`card-entrant-${entrant.id}`}
                 >
                   {isLeader && (
@@ -322,6 +340,7 @@ export default function VotingContestPage() {
                         Vote for {entrant.name}!
                       </Button>
                     )}
+                    <ContestantShareActions url={contestantUrl(params.slug!, entrant.id, undefined, true)} name={entrant.name} />
                   </CardContent>
                 </Card>
               );

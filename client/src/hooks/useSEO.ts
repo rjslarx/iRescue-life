@@ -13,10 +13,11 @@ export interface SEOConfig {
 const SEO_OWNER_ATTR = 'data-seo-owner';
 let instanceCounter = 0;
 
-export function useSEO(config: SEOConfig) {
+export function useSEO(config: SEOConfig | null) {
   const instanceIdRef = useRef<string>('');
   
   useEffect(() => {
+    if (!config) return;
     const { title, description, image, url, type = 'website', siteName } = config;
 
     instanceCounter += 1;
@@ -106,7 +107,7 @@ export function useSEO(config: SEOConfig) {
         canonicalLink.setAttribute('href', originalCanonical);
       }
     };
-  }, [config.title, config.description, config.image, config.url, config.type, config.siteName]);
+  }, [config?.title, config?.description, config?.image, config?.url, config?.type, config?.siteName]);
 }
 
 export function useJsonLd(data: Record<string, unknown> | null | undefined) {

@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction, Router } from 'express';
 import { db } from '../db';
-import { animals, calendars, tenants, donationLinks, shopProducts, customPages, peerCampaigns, type PageBlock } from '@shared/schema';
+import { animals, calendars, tenants, donationLinks, shopProducts, customPages, peerCampaigns, votingContests, votingContestEntrants, type PageBlock } from '@shared/schema';
 import { eq, and, desc, or, isNull, ne } from 'drizzle-orm';
 import fs from 'fs';
 import path from 'path';
@@ -304,7 +304,7 @@ function buildPlatformPageNoscript(pathname: string): string | undefined {
 
 // Returns true for known public-facing tenant routes that should always
 // receive server-injected metadata regardless of User-Agent.
-function isKnownPublicTenantRoute(cleanUrl: string): boolean {
+export function isKnownPublicTenantRoute(cleanUrl: string): boolean {
   const staticPublicRoutes = [
     '/',
     '/animals',
@@ -327,7 +327,33 @@ function isKnownPublicTenantRoute(cleanUrl: string): boolean {
   if (/^\/campaign\/[^/?]/.test(cleanUrl)) return true;
   if (/^\/shop\/[^/?]/.test(cleanUrl)) return true;
   if (/^\/fundraise\/[^/?]/.test(cleanUrl)) return true;
+  if (/^\/contest\/[a-zA-Z0-9-]+$/.test(cleanUrl)) return true;
   return false;
+}
+
+const CONTEST_ROUTE = /^\/contest\/([a-zA-Z0-9-]+)$/;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Only a single, valid UUID is eligible for a contestant share preview.
+// Invalid or repeated query values must never make it into the canonical URL.
+export function contestShareEntrantId(url: string): string | null {
+  const params = new URL(url, 'https://localhost').searchParams;
+  const entrants = params.getAll('entrant');
+  return entrants.length === 1 && UUID_PATTERN.test(entrants[0]) ? entrants[0] : null;
+}
+
+export function contestShareMetadata(
+  contest: { title: string; description: string | null; imageUrl: string | null },
+  rescueName: string,
+  entrant?: { name: string; description: string | null; photoUrl: string | null } | null,
+): { title: string; description: string; imageUrl: string | null } {
+  return {
+    title: entrant ? `Vote for ${entrant.name} | ${contest.title}` : `${contest.title} | ${rescueName}`,
+    description: (entrant?.description?.trim() || (entrant
+      ? `Vote for ${entrant.name} in ${contest.title}! $1 = 1 vote. Support ${rescueName}.`
+      : contest.description?.trim() || `Vote in ${contest.title}! $1 = 1 vote. Support ${rescueName}.`)),
+    imageUrl: entrant?.photoUrl || contest.imageUrl,
+  };
 }
 
 const PLATFORM_BASE_URL = 'https://irescue.life';
@@ -604,8 +630,49 @@ export async function injectOGTags(req: Request, res: Response, next: NextFuncti
 
   let ogData: { title: string; description: string; image: string; imageTheme?: string | null } | null = null;
   let tenantNoscriptBody: string | undefined;
+  // A validated contestant is the only query value included in contest canonical URLs.
+  let contestCanonicalEntrantId: string | null = null;
 
   try {
+    const contestMatch = cleanUrl.match(CONTEST_ROUTE);
+    if (contestMatch) {
+      const [contest] = await db.select({
+        id: votingContests.id,
+        title: votingContests.title,
+        description: votingContests.description,
+        imageUrl: votingContests.imageUrl,
+      }).from(votingContests).where(and(
+        eq(votingContests.tenantId, tenant.id),
+        eq(votingContests.slug, contestMatch[1]),
+        eq(votingContests.isActive, true),
+      )).limit(1);
+
+      if (contest) {
+        const requestedId = contestShareEntrantId(url);
+        const [entrant] = requestedId ? await db.select({
+          id: votingContestEntrants.id,
+          name: votingContestEntrants.name,
+          description: votingContestEntrants.description,
+          photoUrl: votingContestEntrants.photoUrl,
+        }).from(votingContestEntrants).where(and(
+          eq(votingContestEntrants.id, requestedId),
+          eq(votingContestEntrants.tenantId, tenant.id),
+          eq(votingContestEntrants.contestId, contest.id),
+        )).limit(1) : [];
+
+        if (entrant) contestCanonicalEntrantId = entrant.id;
+        const share = contestShareMetadata(contest, tenant.name, entrant);
+        ogData = {
+          title: share.title,
+          description: share.description,
+          image: resolveImageUrl(share.imageUrl) || defaultImage,
+        };
+        tenantNoscriptBody = buildTenantNoscript(
+          `<h1>${escapeHtml(share.title)}</h1><p>${escapeHtml(share.description)}</p>`
+        );
+      }
+    }
+
     const calendarMatch = url.match(/^\/dashboard\/calendar(\?|$)/);
     if (calendarMatch) {
       const calendarList = await db.select({ name: calendars.name, type: calendars.type })
@@ -1229,11 +1296,14 @@ export async function injectOGTags(req: Request, res: Response, next: NextFuncti
     // - Legacy subdomain (demo.irescue.life): canonical is at the root of the subdomain host,
     //   with no extra /{tenant.subdomain} path segment
     // - Path-based (irescue.life/demo/...): canonical includes the tenant subdomain prefix
+    const canonicalPath = contestMatch
+      ? `${cleanUrl}${contestCanonicalEntrantId ? `?entrant=${encodeURIComponent(contestCanonicalEntrantId)}` : ''}`
+      : url;
     const canonicalUrl = isCustomDomain
-      ? `${protocol}://${tenant.customDomain}${url}`
+      ? `${protocol}://${tenant.customDomain}${canonicalPath}`
       : isLegacySubdomain
-        ? `${protocol}://${hostname}${url}`
-        : `${protocol}://${hostname}/${tenant.subdomain}${url}`;
+        ? `${protocol}://${hostname}${canonicalPath}`
+        : `${protocol}://${hostname}/${tenant.subdomain}${canonicalPath}`;
 
     let ogImage = ogData.image;
     const ogImageOriginal = ogData.image;

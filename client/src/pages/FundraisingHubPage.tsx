@@ -49,6 +49,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { ObjectUploader } from "@/components/ObjectUploader";
 import ContestEntrantPhoto from "@/components/ContestEntrantPhoto";
+import ContestantShareActions from "@/components/ContestantShareActions";
+import { contestantUrl } from "@/lib/contestShare";
 import {
   Copy,
   Download,
@@ -1296,7 +1298,8 @@ function VotingContestsTab({ tenantSubdomain }: { tenantSubdomain?: string }) {
                       <p className="text-xs text-muted-foreground">votes</p>
                   </div>
                 </CardContent>
-                <CardFooter className="px-3 pt-0 pb-2 justify-end">
+                <CardFooter className="px-3 pt-0 pb-2 flex-wrap justify-end gap-2">
+                  <ContestantShareActions url={contestantUrl(contest.slug, entrant.id, tenantSubdomain)} name={entrant.name} />
                   <Button
                     size="icon"
                     variant="ghost"
