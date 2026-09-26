@@ -1,4 +1,5 @@
 import type { Express } from "express";
+import { votingContestImageSchema, votingContestEntrantRequestSchema } from "@shared/voting-contest-validation";
 import type Stripe from "stripe";
 import { toStripeStatementDescriptor } from "./lib/stripe-service";
 import express from "express";
@@ -55113,7 +55114,7 @@ ${section('Metadata', metaRows)}
       const schema = z.object({
         title: z.string().min(1).max(200),
         description: z.string().max(2000).optional(),
-        imageUrl: z.string().url().optional().or(z.literal('')),
+        imageUrl: votingContestImageSchema.optional(),
         startDate: z.string().optional(),
         endDate: z.string().optional(),
       });
@@ -55180,7 +55181,7 @@ ${section('Metadata', metaRows)}
       const schema = z.object({
         title: z.string().min(1).max(200).optional(),
         description: z.string().max(2000).optional(),
-        imageUrl: z.string().url().optional().or(z.literal('')).or(z.null()),
+        imageUrl: votingContestImageSchema.optional().nullable(),
         startDate: z.string().optional().or(z.null()),
         endDate: z.string().optional().or(z.null()),
         isActive: z.boolean().optional(),
@@ -55224,11 +55225,7 @@ ${section('Metadata', metaRows)}
         .where(and(eq(votingContests.id, req.params.id), eq(votingContests.tenantId, req.tenant!.id)))
         .limit(1);
       if (!contest) return res.status(404).json({ error: 'Contest not found' });
-      const schema = z.object({
-        name: z.string().min(1).max(200),
-        photoUrl: z.string().url().optional().or(z.literal('')),
-      });
-      const data = schema.parse(req.body);
+      const data = votingContestEntrantRequestSchema.parse(req.body);
       const [entrant] = await db.insert(votingContestEntrants).values({
         tenantId: req.tenant!.id,
         contestId: contest.id,
