@@ -36,25 +36,25 @@ export default function ContestantShareActions({ url, name }: ContestantShareAct
     }
   };
 
-  const facebook = async () => {
-    if (isIOS) {
-      // The Facebook web sharer may hand off to the app without the URL on iOS.
-      await share();
-      return;
-    }
-    const popup = window.open("", "_blank", "width=650,height=600");
-    if (!popup) {
-      await copy();
-      return;
-    }
-    popup.opener = null;
-    popup.location.href = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`;
-  };
-
   return (
     <div className="flex flex-nowrap items-center justify-center gap-1 w-full" role="group" aria-label={`Share ${name}`}>
-      <Button type="button" variant="ghost" size="icon" className="h-10 w-10 shrink-0" onClick={facebook} title="Share on Facebook" aria-label={`Share ${name} on Facebook`}>
-        <Facebook className="h-4 w-4" />
+      <Button asChild variant="ghost" size="icon" className="h-10 w-10 shrink-0">
+        <a
+          href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Share on Facebook"
+          aria-label={`Share ${name} on Facebook`}
+          onClick={(event) => {
+            if (isIOS) {
+              // URL-only native sharing avoids Facebook's unreliable iOS web handoff.
+              event.preventDefault();
+              void share();
+            }
+          }}
+        >
+          <Facebook className="h-4 w-4" />
+        </a>
       </Button>
       <Button type="button" variant="ghost" size="icon" className="h-10 w-10 shrink-0" onClick={share} title="Share" aria-label={`Share ${name}`}>
         <Share2 className="h-4 w-4" />
