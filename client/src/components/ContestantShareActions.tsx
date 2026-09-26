@@ -52,15 +52,15 @@ export default function ContestantShareActions({ url, name }: ContestantShareAct
   };
 
   return (
-    <div className="flex flex-wrap gap-2 w-full" role="group" aria-label={`Share ${name}`}>
-      <Button type="button" variant="outline" className="min-h-11 flex-1 gap-1.5 px-3" onClick={facebook} aria-label={`Share ${name} on Facebook`}>
-        <Facebook className="h-4 w-4 shrink-0" /> Facebook
+    <div className="flex flex-nowrap items-center justify-center gap-1 w-full" role="group" aria-label={`Share ${name}`}>
+      <Button type="button" variant="ghost" size="icon" className="h-10 w-10 shrink-0" onClick={facebook} title="Share on Facebook" aria-label={`Share ${name} on Facebook`}>
+        <Facebook className="h-4 w-4" />
       </Button>
-      <Button type="button" variant="outline" className="min-h-11 flex-1 gap-1.5 px-3" onClick={share} aria-label={`Share ${name}`}>
-        <Share2 className="h-4 w-4 shrink-0" /> Share
+      <Button type="button" variant="ghost" size="icon" className="h-10 w-10 shrink-0" onClick={share} title="Share" aria-label={`Share ${name}`}>
+        <Share2 className="h-4 w-4" />
       </Button>
-      <Button type="button" variant="outline" className="min-h-11 flex-1 gap-1.5 px-3" onClick={copy} aria-label={`Copy link for ${name}`}>
-        <Copy className="h-4 w-4 shrink-0" /> Copy link
+      <Button type="button" variant="ghost" size="icon" className="h-10 w-10 shrink-0" onClick={copy} title="Copy link" aria-label={`Copy link for ${name}`}>
+        <Copy className="h-4 w-4" />
       </Button>
     </div>
   );
