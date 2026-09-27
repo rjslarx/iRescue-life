@@ -6249,7 +6249,7 @@ export const peerCampaigns = pgTable("peer_campaigns", {
 
 export const PEER_CAMPAIGN_THEMES = ['birthday', 'confetti', 'hearts', 'paws', 'stars'] as const;
 export type PeerCampaignTheme = typeof PEER_CAMPAIGN_THEMES[number];
-export const VOTING_CONTEST_THEMES = [...PEER_CAMPAIGN_THEMES, 'halloween', 'christmas', 'easter', 'lsu_tigers'] as const;
+export const VOTING_CONTEST_THEMES = [...PEER_CAMPAIGN_THEMES, 'halloween', 'christmas', 'easter', 'lsu_tigers', 'christmas_sweater', 'santa_paws', 'valentines', 'mardi_gras', 'patriotic', 'summer', 'back_to_school'] as const;
 export type VotingContestTheme = typeof VOTING_CONTEST_THEMES[number];
 
 export const insertPeerCampaignSchema = createInsertSchema(peerCampaigns).omit({
@@ -7102,6 +7102,7 @@ export const votingContestEntrants = pgTable("voting_contest_entrants", {
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
   contestId: uuid("contest_id").notNull().references(() => votingContests.id, { onDelete: 'cascade' }),
   name: text("name").notNull(),
+  ownerDisplayName: text("owner_display_name"),
   description: text("description"),
   photoUrl: text("photo_url"),
   totalVotes: integer("total_votes").notNull().default(0),

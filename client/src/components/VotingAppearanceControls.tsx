@@ -3,7 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DEFAULT_VOTING_APPEARANCE, VOTING_THEME_OPTIONS, contrastText, validVotingColor, votingAppearanceForTheme, votingBackgroundStyle, type VotingAppearance } from "@/lib/votingThemes";
+import { DEFAULT_VOTING_APPEARANCE, VOTING_THEME_OPTIONS, VOTING_THEME_SURFACES, contrastText, validVotingColor, votingAppearanceForTheme, votingBackgroundStyle, type VotingAppearance } from "@/lib/votingThemes";
+import ContestEntrantPhoto from "@/components/ContestEntrantPhoto";
 
 export function VotingAppearanceControls({ value, onChange, disabled = false }: {
   value: VotingAppearance;
@@ -31,7 +32,7 @@ export function VotingAppearanceControls({ value, onChange, disabled = false }: 
             {VOTING_THEME_OPTIONS.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}
           </SelectContent>
         </Select>
-        <p className="text-xs text-muted-foreground">Holiday and LSU Tigers themes start with matching colors; you can change either color afterward.</p>
+        <p className="text-xs text-muted-foreground">Themes style the background and each entry portrait. You can change the colors afterward.</p>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {(["primaryColor", "accentColor"] as const).map((field) => (
@@ -48,11 +49,14 @@ export function VotingAppearanceControls({ value, onChange, disabled = false }: 
         ))}
       </div>
       {showError && invalid && <p role="alert" className="text-sm text-destructive">Enter colors as six-digit hex values (for example, #7c2d8e), or leave them blank.</p>}
-       <div className={`relative overflow-hidden rounded-xl border p-5 ${value.themeBackground === "halloween" ? "bg-[#fff8f0]" : value.themeBackground === "christmas" ? "bg-[#f5faf3]" : value.themeBackground === "easter" ? "bg-[#fff7fc]" : value.themeBackground === "lsu_tigers" ? "bg-[#fcf9ed]" : "bg-background"}`} data-testid="preview-voting-appearance">
+       <div className="relative overflow-hidden rounded-xl border bg-background p-5" style={value.themeBackground && VOTING_THEME_SURFACES[value.themeBackground] ? { backgroundColor: VOTING_THEME_SURFACES[value.themeBackground] } : undefined} data-testid="preview-voting-appearance">
         {value.themeBackground && <div aria-hidden="true" className="absolute inset-0 opacity-20 pointer-events-none" style={votingBackgroundStyle(value.themeBackground, primary)} />}
         <div className="relative bg-white rounded-lg shadow-sm border p-4 space-y-2 text-[#27232e]">
           <h3 className="text-lg font-bold" style={primary ? { color: primary } : undefined}>Your contest title</h3>
           <p className="text-sm text-[#504b57]">Supporters can vote for their favorite entrant.</p>
+          <div className="max-w-48">
+            <ContestEntrantPhoto name="Your pet" ownerDisplayName="Owner name" theme={value.themeBackground} primaryColor={primary} accentColor={accent} />
+          </div>
           <div className="flex items-center gap-3">
             <span className="font-bold" style={primary ? { color: primary } : undefined}>42 votes</span>
             <span className="px-3 py-1.5 rounded-md text-sm font-medium bg-primary text-primary-foreground" style={accent ? { backgroundColor: accent, color: contrastText(accent) } : undefined}>Vote now</span>

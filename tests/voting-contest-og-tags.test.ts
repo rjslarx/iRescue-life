@@ -4,8 +4,8 @@ import test from 'node:test';
 import { isKnownPublicTenantRoute, contestShareEntrantId, contestShareMetadata } from '../server/middleware/og-tags';
 import sharp from 'sharp';
 import { renderVotingSocialImage, votingSocialPhotoPath, votingSocialVersion, type VotingSocialData } from '../server/lib/voting-social-image';
-import { votingPatternSvg } from '../shared/voting-theme-patterns';
-import { votingBackgroundStyle } from '../client/src/lib/votingThemes';
+import { votingPatternSvg, votingFrameTileSvg } from '../shared/voting-theme-patterns';
+import { votingBackgroundStyle, votingFrameColors } from '../client/src/lib/votingThemes';
 
 const entrantId = 'ec24ec95-f0dc-497d-a836-50acee3c27c7';
 const contest = { title: 'Cutest Pet', description: 'Meet the pets', imageUrl: '/objects/contest.jpg' };
@@ -58,7 +58,7 @@ test('middleware scopes both lookups and only canonicals a resolved entrant', ()
 });
 
 const socialData: VotingSocialData = {
-  name: 'Biscuit', contestTitle: 'Cutest Pet', rescueName: 'Happy Rescue',
+  name: 'Biscuit', ownerDisplayName: 'Taylor', contestTitle: 'Cutest Pet', rescueName: 'Happy Rescue',
   photoUrl: '/objects/photo.jpg', themeBackground: 'halloween',
   primaryColor: '#38204a', accentColor: '#e4a33a',
 };
@@ -69,6 +69,7 @@ test('contestant OG image is absolute and versioned; other OG images retain gene
   assert.match(source, /if \(ogImage\.includes\('\/objects\/'\)\)/);
   assert.notEqual(votingSocialVersion(socialData), votingSocialVersion({ ...socialData, accentColor: '#112233' }));
   assert.notEqual(votingSocialVersion(socialData), votingSocialVersion({ ...socialData, photoUrl: '/objects/other.jpg' }));
+  assert.notEqual(votingSocialVersion(socialData), votingSocialVersion({ ...socialData, ownerDisplayName: null }));
 });
 
 test('only tenant-owned object paths can be read for social image', () => {
@@ -90,6 +91,26 @@ test('all voting patterns use the exact client background SVG', () => {
   }
 });
 
+test('portrait inlays share internally generated artwork and respect custom colors', () => {
+  const distinctShapes: Record<string, string> = {
+    christmas_sweater: 'M0 20 9 26', santa_paws: 'M-8 2 1-10', valentines: 'M0 8C-15-2',
+    mardi_gras: 'fill="#278447"', easter: 'M-6-2q3-3', patriotic: 'M-10-9H10V9',
+    summer: 'M0 24q9-8', back_to_school: 'rotate(35)',
+    halloween: 'M0 9Q5 3', lsu_tigers: 'M0 0 15 0',
+  };
+  for (const [theme, marker] of Object.entries(distinctShapes)) {
+    const colors = votingFrameColors(theme, '#112233', '#aabbcc');
+    assert.deepEqual(colors, { primary: '#112233', accent: '#aabbcc' });
+    const tile = votingFrameTileSvg(theme, colors!.primary, colors!.accent)!;
+    assert.ok(tile.includes('#112233') && tile.includes('#aabbcc'));
+    assert.ok(tile.includes(marker), `${theme}: expected distinct vector motif`);
+    assert.doesNotMatch(tile, /<text|font-family/, `${theme}: tile must not depend on installed fonts`);
+  }
+  assert.equal(votingFrameColors(null, null, null), null);
+  assert.deepEqual(votingFrameColors('summer', undefined, undefined), { primary: '#086c80', accent: '#e9a23b' });
+  assert.equal(votingFrameTileSvg('unknown', '#112233', '#aabbcc'), undefined);
+});
+
 test('social cards render 1200x630 JPEG with themed/color variations and contain photos', async () => {
   const photo = await sharp({ create: { width: 150, height: 500, channels: 3, background: '#ff0000' } }).png().toBuffer();
   const image = await renderVotingSocialImage(socialData, photo);
@@ -98,6 +119,7 @@ test('social cards render 1200x630 JPEG with themed/color variations and contain
   assert.notDeepEqual(image, noPhoto);
   assert.notDeepEqual(noPhoto, await renderVotingSocialImage({ ...socialData, themeBackground: 'christmas' }));
   assert.notDeepEqual(noPhoto, await renderVotingSocialImage({ ...socialData, primaryColor: '#112233' }));
+  assert.notDeepEqual(noPhoto, await renderVotingSocialImage({ ...socialData, ownerDisplayName: null }));
   // The left/right edge remains theme colored even for a landscape source.
   const landscape = await sharp({ create: { width: 800, height: 100, channels: 3, background: '#ff0000' } }).png().toBuffer();
   const rendered = await renderVotingSocialImage(socialData, landscape);

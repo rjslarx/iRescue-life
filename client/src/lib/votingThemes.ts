@@ -6,6 +6,13 @@ export const VOTING_THEME_OPTIONS = [
   { value: "christmas", label: "Christmas" },
   { value: "easter", label: "Easter" },
   { value: "lsu_tigers", label: "LSU Tigers" },
+  { value: "christmas_sweater", label: "Ugliest Christmas Sweater" },
+  { value: "santa_paws", label: "Santa Paws" },
+  { value: "valentines", label: "Valentine's Love Your Pet" },
+  { value: "mardi_gras", label: "Mardi Gras Pets" },
+  { value: "patriotic", label: "Patriotic Pets" },
+  { value: "summer", label: "Beach / Summer Pets" },
+  { value: "back_to_school", label: "Back-to-School Pets" },
 ];
 
 export const VOTING_THEME_PRESET_COLORS: Record<string, { primaryColor: string; accentColor: string }> = {
@@ -13,6 +20,88 @@ export const VOTING_THEME_PRESET_COLORS: Record<string, { primaryColor: string; 
   christmas: { primaryColor: "#166534", accentColor: "#c62828" },
   easter: { primaryColor: "#9361b5", accentColor: "#d56894" },
   lsu_tigers: { primaryColor: "#461D7C", accentColor: "#FDD023" },
+  christmas_sweater: { primaryColor: "#14532d", accentColor: "#b91c1c" },
+  santa_paws: { primaryColor: "#991b1b", accentColor: "#d4a346" },
+  valentines: { primaryColor: "#9d174d", accentColor: "#f472b6" },
+  mardi_gras: { primaryColor: "#55267c", accentColor: "#c99924" },
+  patriotic: { primaryColor: "#173b77", accentColor: "#c33143" },
+  summer: { primaryColor: "#086c80", accentColor: "#e9a23b" },
+  back_to_school: { primaryColor: "#254962", accentColor: "#e3ac38" },
+};
+
+// Original vector motifs are intentionally drawn along the tile's edges: a
+// narrow portrait inlay shows them even when the middle of the tile is hidden
+// behind the photo. No fonts, uploads or user-provided markup enter the SVG.
+const paw = (color: string) => `<g fill="${color}"><ellipse cy="3" rx="5" ry="4"/><circle cx="-6" cy="-4" r="2"/><circle cx="-2" cy="-7" r="2"/><circle cx="3" cy="-7" r="2"/><circle cx="7" cy="-4" r="2"/></g>`;
+const star = (color: string) => `<path d="M0-9 2.5-3 9-3 4 1 6 8 0 4-6 8-4 1-9-3-2.5-3Z" fill="${color}"/>`;
+const heart = (color: string) => `<path d="M0 8C-15-2-7-12 0-5 7-12 15-2 0 8Z" fill="${color}"/>`;
+const snowflake = (color: string) => `<path d="M0-9V9M-9 0H9M-6-6 6 6M6-6-6 6" stroke="${color}" stroke-width="2" stroke-linecap="round"/>`;
+const FRAME_ARTWORK: Record<string, (primary: string, accent: string) => string> = {
+  birthday: (_, a) => `<path d="M-7 0H7V8H-7ZM-9-3H9V0H-9ZM0-3V8M-2-4C-10-4-8-10-4-9q4 0 4 6m2-1c8 0 6-6 2-5q-4 0-4 6" fill="none" stroke="${a}" stroke-width="2"/>`,
+  confetti: (_, a) => `<path d="M-8-7h4v5h-4ZM3-9l4 2-2 4-4-2ZM-3 3l5 2-2 5-5-2ZM6 4l3 4-4 2-3-4Z" fill="${a}"/>`,
+  hearts: (_, a) => heart(a),
+  paws: (_, a) => paw(a),
+  stars: (_, a) => star(a),
+  halloween: (_, a) => `<path d="M-8-1Q-8-7-3-7H3Q8-7 8-1Q8 7 0 8Q-8 7-8-1ZM0-7v-4m0 4q1-5 5-5" fill="${a}" stroke="#ffffff" stroke-width="1.2"/><path d="M-5 1-2-2 0 1 2-2 5 1M-3 4q3 3 6 0" fill="none" stroke="#ffffff" stroke-width="1.3"/>`,
+  christmas: (_, a) => `<path d="M0-10-8 0h4l-5 6H9L4 0h4Z" fill="${a}"/><rect x="-2" y="6" width="4" height="4" fill="#ffffff"/>`,
+  easter: (_, a) => `<ellipse rx="7" ry="10" fill="${a}" stroke="#ffffff" stroke-width="1.3"/><path d="M-6-2q3-3 6 0t6 0M-6 3q3-3 6 0t6 0" fill="none" stroke="#ffffff" stroke-width="1.5"/>`,
+  lsu_tigers: (_, a) => paw(a),
+  christmas_sweater: (_, a) => snowflake(a),
+  santa_paws: (_, a) => `<path d="M-8 2 1-10 8 2Z" fill="${a}"/><path d="M-9 2H9" stroke="#ffffff" stroke-width="3"/><circle cx="1" cy="-10" r="2.5" fill="#ffffff"/>`,
+  valentines: (_, a) => heart(a),
+  mardi_gras: (_, a) => `<path d="M-10 0Q0-7 10 0" fill="none" stroke="#ffffff" stroke-width="1"/><circle cx="-7" cy="-2" r="3" fill="${a}"/><circle cx="-2" cy="-4" r="3" fill="#278447"/><circle cx="3" cy="-4" r="3" fill="${a}"/><circle cx="8" cy="-2" r="3" fill="#278447"/>`,
+  patriotic: (_, a) => `<path d="M-10-9H10V9H-10Z" fill="#ffffff"/>${star(a)}`,
+  summer: (_, a) => `<circle cy="-2" r="5" fill="${a}"/><path d="M0-10v-3m0 20v3M-8-2h-3m19 0h3M-6-8l-2-2m14 2 2-2" stroke="${a}" stroke-width="2" stroke-linecap="round"/>`,
+  back_to_school: (_, a) => `<g transform="rotate(35)"><path d="M-3-10H3V5L0 10-3 5Z" fill="${a}" stroke="#ffffff" stroke-width="1.2"/><path d="M-3-6H3M-3 5H3" stroke="#ffffff" stroke-width="1.5"/></g>`,
+};
+
+export function votingFrameColors(theme: string | null | undefined, primary: string | null | undefined, accent: string | null | undefined) {
+  if (!theme || !FRAME_ARTWORK[theme]) return null;
+  const preset = VOTING_THEME_PRESET_COLORS[theme];
+  return {
+    primary: validVotingColor(primary) || preset?.primaryColor || "#544079",
+    accent: validVotingColor(accent) || preset?.accentColor || "#edb957",
+  };
+}
+
+export function votingFrameTileSvg(theme: string | null | undefined, primary: string, accent: string): string | undefined {
+  const motif = theme && FRAME_ARTWORK[theme];
+  if (!motif) return undefined;
+  const safePrimary = validVotingColor(primary) || "#544079";
+  const safeAccent = validVotingColor(accent) || "#edb957";
+  const knit = theme === "christmas_sweater"
+    ? `<path d="M0 20 9 26 18 20 27 26 36 20 45 26 54 20 63 26 72 20M0 54 9 48 18 54 27 48 36 54 45 48 54 54 63 48 72 54" fill="none" stroke="${safeAccent}" stroke-width="3"/>`
+    : "";
+  const stripes = theme === "lsu_tigers"
+    ? `<path d="M0 0 15 0 0 15ZM72 0 57 0 72 15ZM0 72 15 72 0 57ZM72 72 57 72 72 57Z" fill="${safeAccent}" opacity=".75"/>`
+    : "";
+  const waves = theme === "summer"
+    ? `<path d="M0 24q9-8 18 0t18 0 18 0 18 0M0 50q9-8 18 0t18 0 18 0 18 0" fill="none" stroke="#ffffff" stroke-width="2" opacity=".75"/>`
+    : "";
+  const ruled = theme === "back_to_school"
+    ? `<path d="M0 24H72M0 48H72" stroke="#ffffff" stroke-width="1.5" opacity=".65"/>`
+    : "";
+  const bats = theme === "halloween"
+    ? `<path d="M0 9Q5 3 10 9l4-4 4 4q5-6 10 0-6-1-7 6-5-3-7 2-2-5-7-2Q6 8 0 9ZM44 67q5-6 10 0l4-4 4 4q5-6 10 0-6-1-7 5-5-3-7 2-2-5-7-2-1-6-7-5Z" fill="#ffffff" opacity=".9"/>`
+    : "";
+  const flowers = theme === "easter"
+    ? `<g transform="translate(9 9)" fill="#ffffff"><circle cx="-4" r="3"/><circle cx="4" r="3"/><circle cy="-4" r="3"/><circle cy="4" r="3"/><circle r="2" fill="${safeAccent}"/></g>`
+    : "";
+  const santaPaws = theme === "santa_paws"
+    ? `<g transform="translate(9 9)">${paw("#ffffff")}</g>`
+    : "";
+  // The four positions hug the outer edges so the 12–22px visible inlay
+  // retains recognizable artwork on both compact cards and wide share cards.
+  const ornaments = [[36, 8], [8, 36], [64, 36], [36, 64]]
+    .map(([x, y]) => `<g transform="translate(${x} ${y})">${motif(safePrimary, safeAccent)}</g>`).join("");
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="72" height="72" viewBox="0 0 72 72"><rect width="72" height="72" fill="${safePrimary}"/>${knit}${stripes}${waves}${ruled}${bats}${flowers}${santaPaws}${ornaments}</svg>`;
+}
+
+export const VOTING_THEME_SURFACES: Record<string, string> = {
+  halloween: "#fff8f0", christmas: "#f5faf3", christmas_sweater: "#f5faf3",
+  santa_paws: "#fff9f2", easter: "#fff7fc", valentines: "#fff5f8",
+  mardi_gras: "#faf5ff", patriotic: "#f3f7fc", summer: "#effafd",
+  back_to_school: "#fcf9f0", lsu_tigers: "#fcf9ed",
 };
 
 export type VotingAppearance = {
@@ -51,6 +140,13 @@ export function readableColor(color: string): string {
 }
 
 const SPECIAL_VOTING_PATTERNS: Record<string, string> = {
+    christmas_sweater: `<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120"><path d="M0 20h120M0 100h120M0 60l20-14 20 28 20-28 20 28 20-28 20 14" fill="none" stroke="#14532d" stroke-width="5"/><path d="M0 30h120M0 90h120" stroke="#b91c1c" stroke-width="4"/></svg>`,
+    santa_paws: `<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120"><path d="M30 45l20-27 20 27Z" fill="#991b1b"/><circle cx="50" cy="18" r="5" fill="#d4a346"/><path d="M25 45h50" stroke="#d4a346" stroke-width="8"/><circle cx="98" cy="96" r="5" fill="#d4a346"/></svg>`,
+    valentines: `<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120"><path d="M60 72C5 35 45 12 60 38c15-26 55-3 0 34Z" fill="#f472b6" stroke="#9d174d" stroke-width="2"/></svg>`,
+    mardi_gras: `<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120"><circle cx="25" cy="45" r="10" fill="#55267c"/><circle cx="50" cy="49" r="10" fill="#c99924"/><circle cx="75" cy="45" r="10" fill="#20804d"/><circle cx="100" cy="35" r="10" fill="#55267c"/></svg>`,
+    patriotic: `<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120"><path d="M30 15l5 14 15 1-12 9 4 15-12-9-12 9 4-15-12-9 15-1Z" fill="#173b77"/><path d="M85 62l5 14 15 1-12 9 4 15-12-9-12 9 4-15-12-9 15-1Z" fill="#c33143"/></svg>`,
+    summer: `<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120"><circle cx="31" cy="31" r="14" fill="#e9a23b"/><path d="M0 82q15-16 30 0t30 0 30 0 30 0M0 100q15-16 30 0t30 0 30 0 30 0" fill="none" stroke="#086c80" stroke-width="5"/></svg>`,
+    back_to_school: `<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120"><path d="M20 18h75v86H20Z" fill="none" stroke="#254962" stroke-width="4"/><path d="M35 18v86M42 38h42M42 57h42M42 76h42" stroke="#e3ac38" stroke-width="3"/></svg>`,
     halloween: `<svg xmlns="http://www.w3.org/2000/svg" width="180" height="180" viewBox="0 0 180 180">
     <g fill="none" stroke="#b66123" stroke-width="2" opacity=".65">
       <path d="M34 49c-3-8 1-15 8-15s11 7 8 15M42 34v-7c0-4 4-6 7-6"/>

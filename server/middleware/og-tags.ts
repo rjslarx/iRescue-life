@@ -656,6 +656,7 @@ export async function injectOGTags(req: Request, res: Response, next: NextFuncti
         const [entrant] = requestedId ? await db.select({
           id: votingContestEntrants.id,
           name: votingContestEntrants.name,
+          ownerDisplayName: votingContestEntrants.ownerDisplayName,
           description: votingContestEntrants.description,
           photoUrl: votingContestEntrants.photoUrl,
         }).from(votingContestEntrants).where(and(
@@ -671,7 +672,7 @@ export async function injectOGTags(req: Request, res: Response, next: NextFuncti
           description: share.description,
           image: entrant
             ? `${baseUrl}/api/public/voting-contest-entrants/${entrant.id}/social-image?v=${votingSocialVersion({
-                name: entrant.name, contestTitle: contest.title, rescueName: tenant.name,
+                name: entrant.name, ownerDisplayName: entrant.ownerDisplayName, contestTitle: contest.title, rescueName: tenant.name,
                 photoUrl: entrant.photoUrl, themeBackground: contest.themeBackground,
                 primaryColor: contest.primaryColor, accentColor: contest.accentColor,
               })}`
@@ -1412,6 +1413,7 @@ ogImageRouter.get('/api/public/voting-contest-entrants/:id/social-image', async 
   try {
     const [row] = await db.select({
       name: votingContestEntrants.name,
+      ownerDisplayName: votingContestEntrants.ownerDisplayName,
       photoUrl: votingContestEntrants.photoUrl,
       contestTitle: votingContests.title,
       themeBackground: votingContests.themeBackground,

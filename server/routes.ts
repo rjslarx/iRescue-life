@@ -55235,6 +55235,7 @@ ${section('Metadata', metaRows)}
         tenantId: req.tenant!.id,
         contestId: contest.id,
         name: data.name,
+        ownerDisplayName: data.ownerDisplayName ?? null,
         description: data.description ?? null,
         photoUrl: data.photoUrl || null,
       }).returning();
@@ -55245,10 +55246,14 @@ ${section('Metadata', metaRows)}
   app.patch('/api/voting-contest-entrants/:id', requireTenant, requireAuth, requireRole('admin', 'owner', 'manager'), async (req, res, next) => {
     try {
       const { votingContestEntrants } = await import('@shared/schema');
-      const { description } = votingContestEntrantDescriptionRequestSchema.parse(req.body);
+      const { name, ownerDisplayName, description } = votingContestEntrantDescriptionRequestSchema.parse(req.body);
+      const changes: { name?: string; ownerDisplayName?: string | null; description?: string | null } = {};
+      if (name !== undefined) changes.name = name;
+      if (ownerDisplayName !== undefined) changes.ownerDisplayName = ownerDisplayName;
+      if (description !== undefined) changes.description = description;
       const [updated] = await db
         .update(votingContestEntrants)
-        .set({ description })
+        .set(changes)
         .where(and(eq(votingContestEntrants.id, req.params.id), eq(votingContestEntrants.tenantId, req.tenant!.id)))
         .returning();
       if (!updated) return res.status(404).json({ error: 'Entrant not found' });

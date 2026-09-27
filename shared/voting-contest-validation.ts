@@ -32,12 +32,18 @@ export const votingContestEntrantDescriptionSchema = z.string().trim().max(500)
   .transform(value => value || null)
   .nullable();
 
+export const votingContestOwnerDisplayNameSchema = z.string().trim().max(100)
+  .transform(value => value || null).nullable();
+
 export const votingContestEntrantRequestSchema = z.object({
   name: z.string().trim().min(1).max(200),
+  ownerDisplayName: votingContestOwnerDisplayNameSchema.optional(),
   photoUrl: votingContestImageSchema.optional(),
   description: votingContestEntrantDescriptionSchema.optional(),
 });
 
 export const votingContestEntrantDescriptionRequestSchema = z.object({
-  description: votingContestEntrantDescriptionSchema,
-}).strict();
+  name: z.string().trim().min(1).max(200).optional(),
+  ownerDisplayName: votingContestOwnerDisplayNameSchema.optional(),
+  description: votingContestEntrantDescriptionSchema.optional(),
+}).strict().refine(value => Object.keys(value).length > 0, "Provide at least one field");

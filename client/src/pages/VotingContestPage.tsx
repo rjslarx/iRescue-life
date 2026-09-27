@@ -4,7 +4,7 @@ import { useParams, useSearch } from "wouter";
 import { useSEO } from "@/hooks/useSEO";
 import ContestantShareActions from "@/components/ContestantShareActions";
 import { contestantUrl } from "@/lib/contestShare";
-import { contrastText, readableColor, validVotingColor, votingBackgroundStyle } from "@/lib/votingThemes";
+import { contrastText, readableColor, validVotingColor, votingBackgroundStyle, VOTING_THEME_SURFACES } from "@/lib/votingThemes";
 import { apiRequest } from "@/lib/queryClient";
 import PublicHeader from "@/components/PublicHeader";
 import ContestEntrantPhoto from "@/components/ContestEntrantPhoto";
@@ -186,7 +186,7 @@ export default function VotingContestPage() {
   const themeStyle = votingBackgroundStyle(contestData.themeBackground, primary);
 
   return (
-    <div className={`min-h-screen relative ${contestData.themeBackground === "halloween" ? "bg-[#fff8f0] dark:bg-[#1e1429]" : contestData.themeBackground === "christmas" ? "bg-[#f5faf3] dark:bg-[#142519]" : contestData.themeBackground === "easter" ? "bg-[#fff7fc] dark:bg-[#251c29]" : contestData.themeBackground === "lsu_tigers" ? "bg-[#fcf9ed] dark:bg-[#1e1429]" : "bg-background"}`}>
+    <div className="min-h-screen relative bg-background" style={contestData.themeBackground && VOTING_THEME_SURFACES[contestData.themeBackground] ? { backgroundColor: VOTING_THEME_SURFACES[contestData.themeBackground] } : undefined}>
       {themeStyle && <div className="absolute inset-0 pointer-events-none opacity-[0.2] dark:opacity-[0.16]" style={themeStyle} aria-hidden="true" data-testid="voting-theme-background" />}
       <div className="relative">
       <PublicHeader
@@ -311,7 +311,7 @@ export default function VotingContestPage() {
                       </Badge>
                     </div>
                   )}
-                  <ContestEntrantPhoto name={entrant.name} photoUrl={entrant.photoUrl} />
+                  <ContestEntrantPhoto name={entrant.name} ownerDisplayName={entrant.ownerDisplayName} photoUrl={entrant.photoUrl} theme={contestData.themeBackground} primaryColor={contestData.primaryColor} accentColor={contestData.accentColor} />
                   <CardContent className="px-3 pt-3 pb-2 flex flex-1 flex-col items-center text-center space-y-4">
 
                     <div>

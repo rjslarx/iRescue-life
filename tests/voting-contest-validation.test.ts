@@ -5,7 +5,7 @@ import { contestAppearanceSchema, VOTING_CONTEST_THEMES, votingContestEntrantDes
 import { DEFAULT_VOTING_APPEARANCE, VOTING_THEME_OPTIONS, VOTING_THEME_PRESET_COLORS, votingAppearanceForTheme, votingBackgroundStyle } from "../client/src/lib/votingThemes";
 
 test("contest appearance accepts theme presets and nullable defaults", () => {
-  assert.deepEqual(VOTING_CONTEST_THEMES, ["birthday", "confetti", "hearts", "paws", "stars", "halloween", "christmas", "easter", "lsu_tigers"]);
+  assert.deepEqual(VOTING_CONTEST_THEMES, ["birthday", "confetti", "hearts", "paws", "stars", "halloween", "christmas", "easter", "lsu_tigers", "christmas_sweater", "santa_paws", "valentines", "mardi_gras", "patriotic", "summer", "back_to_school"]);
   assert.deepEqual(contestAppearanceSchema.parse({}), {});
   for (const themeBackground of VOTING_CONTEST_THEMES) {
     assert.deepEqual(contestAppearanceSchema.parse({ themeBackground }), { themeBackground });
@@ -102,7 +102,17 @@ test("description-only update requires a description and enforces the 500-charac
   assert.equal(votingContestEntrantDescriptionRequestSchema.safeParse({ description: "x".repeat(500) }).success, true);
   assert.equal(votingContestEntrantDescriptionRequestSchema.safeParse({ description: "x".repeat(501) }).success, false);
   assert.equal(votingContestEntrantDescriptionRequestSchema.safeParse({}).success, false);
-  assert.equal(votingContestEntrantDescriptionRequestSchema.safeParse({ description: "ok", name: "changed" }).success, false);
+  assert.deepEqual(votingContestEntrantDescriptionRequestSchema.parse({ name: "  New pet  ", ownerDisplayName: "  Jane  ", description: "ok" }),
+    { name: "New pet", ownerDisplayName: "Jane", description: "ok" });
+  assert.equal(votingContestEntrantDescriptionRequestSchema.safeParse({ description: "ok", extra: "changed" }).success, false);
+});
+
+test("public owner display name is optional, trimmed, bounded and removable", () => {
+  assert.deepEqual(votingContestEntrantRequestSchema.parse({ name: "Pet", ownerDisplayName: "  Taylor  " }),
+    { name: "Pet", ownerDisplayName: "Taylor" });
+  assert.deepEqual(votingContestEntrantDescriptionRequestSchema.parse({ ownerDisplayName: "  " }), { ownerDisplayName: null });
+  assert.equal(votingContestEntrantRequestSchema.safeParse({ name: "Pet", ownerDisplayName: "a".repeat(101) }).success, false);
+  assert.equal(votingContestEntrantDescriptionRequestSchema.safeParse({ ownerDisplayName: 4 }).success, false);
 });
 
 test("entrant update is role-protected and tenant scoped; list endpoints select the whole entrant", () => {
@@ -112,7 +122,8 @@ test("entrant update is role-protected and tenant scoped; list endpoints select 
   assert.ok(update, "description update endpoint exists");
   assert.match(update, /requireTenant, requireAuth, requireRole\('admin', 'owner', 'manager'\)/);
   assert.match(update, /votingContestEntrantDescriptionRequestSchema\.parse\(req\.body\)/);
-  assert.match(update, /\.set\(\{ description \}\)/);
+  assert.match(update, /\.set\(changes\)/);
+  assert.match(update, /changes\.ownerDisplayName = ownerDisplayName/);
   assert.match(update, /eq\(votingContestEntrants\.id, req\.params\.id\), eq\(votingContestEntrants\.tenantId, req\.tenant!\.id\)/);
   assert.match(update, /if \(!updated\) return res\.status\(404\)/);
   const create = routes.split("app.post('/api/voting-contests/:id/entrants'")[1]
