@@ -75,3 +75,4 @@ replit.nix
 
 # Misc
 .cache/
+test-results/
