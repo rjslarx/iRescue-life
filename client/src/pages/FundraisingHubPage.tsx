@@ -1093,12 +1093,10 @@ function VotingContestsTab({ tenantSubdomain }: { tenantSubdomain?: string }) {
   const [addEntrantDialogOpen, setAddEntrantDialogOpen] = useState(false);
   const [entrantName, setEntrantName] = useState("");
   const [entrantOwnerDisplayName, setEntrantOwnerDisplayName] = useState("");
-  const [entrantDescription, setEntrantDescription] = useState("");
   const [entrantPhotoUrls, setEntrantPhotoUrls] = useState<string[]>([]);
   const [editingEntrant, setEditingEntrant] = useState<DescribedVotingContestEntrant | null>(null);
   const [editEntrantName, setEditEntrantName] = useState("");
   const [editEntrantOwnerDisplayName, setEditEntrantOwnerDisplayName] = useState("");
-  const [editEntrantDescription, setEditEntrantDescription] = useState("");
 
   const [newTitle, setNewTitle] = useState("");
   const [newDescription, setNewDescription] = useState("");
@@ -1186,7 +1184,7 @@ function VotingContestsTab({ tenantSubdomain }: { tenantSubdomain?: string }) {
   });
 
   const addEntrantMutation = useMutation({
-    mutationFn: async (data: { name: string; ownerDisplayName?: string; photoUrl?: string; description?: string }) => {
+    mutationFn: async (data: { name: string; ownerDisplayName?: string; photoUrl?: string }) => {
       const res = await apiRequest("POST", `/api/voting-contests/${managingContestId}/entrants`, data);
       return res.json();
     },
@@ -1197,7 +1195,6 @@ function VotingContestsTab({ tenantSubdomain }: { tenantSubdomain?: string }) {
       setAddEntrantDialogOpen(false);
       setEntrantName("");
       setEntrantOwnerDisplayName("");
-      setEntrantDescription("");
       setEntrantPhotoUrls([]);
     },
     onError: (err: Error) => {
@@ -1205,19 +1202,18 @@ function VotingContestsTab({ tenantSubdomain }: { tenantSubdomain?: string }) {
     },
   });
 
-  const editEntrantDescriptionMutation = useMutation({
-    mutationFn: async ({ id, name, ownerDisplayName, description }: { id: string; name: string; ownerDisplayName: string; description: string }) => {
-      await apiRequest("PATCH", `/api/voting-contest-entrants/${id}`, { name, ownerDisplayName, description });
+  const editEntrantMutation = useMutation({
+    mutationFn: async ({ id, name, ownerDisplayName }: { id: string; name: string; ownerDisplayName: string }) => {
+      await apiRequest("PATCH", `/api/voting-contest-entrants/${id}`, { name, ownerDisplayName });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/voting-contests", managingContestId] });
       queryClient.invalidateQueries({ queryKey: ["/api/voting-contests"] });
       toast({ title: "Portrait updated" });
       setEditingEntrant(null);
-      setEditEntrantDescription("");
     },
     onError: (err: Error) => {
-      toast({ title: "Failed to update photo description", description: err.message, variant: "destructive" });
+      toast({ title: "Failed to update portrait", description: err.message, variant: "destructive" });
     },
   });
 
@@ -1309,17 +1305,9 @@ function VotingContestsTab({ tenantSubdomain }: { tenantSubdomain?: string }) {
               <Card key={entrant.id} className="rounded-[2rem] p-3" data-testid={`card-entrant-${entrant.id}`}>
                 <ContestEntrantPhoto name={entrant.name} ownerDisplayName={entrant.ownerDisplayName} photoUrl={entrant.photoUrl} theme={contest.themeBackground} primaryColor={contest.primaryColor} accentColor={contest.accentColor} />
                 <CardContent className="px-3 pt-4 pb-2">
-                    <div className="min-w-0">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="font-medium truncate" data-testid={`text-entrant-name-${entrant.id}`}>{entrant.name}</p>
-                        {idx === 0 && entrants.length > 1 && (
-                          <Trophy className="h-4 w-4 text-amber-500 shrink-0" />
-                        )}
-                      </div>
-                      {entrant.description && (
-                        <p className="text-sm text-muted-foreground whitespace-pre-wrap break-words" data-testid={`text-entrant-description-${entrant.id}`}>
-                          {entrant.description}
-                        </p>
+                    <div className="min-w-0 text-center">
+                      {idx === 0 && entrants.length > 1 && (
+                        <Trophy className="mx-auto mb-1 h-4 w-4 text-amber-500" aria-label="Leading entrant" />
                       )}
                       <p className="text-2xl font-bold" data-testid={`text-entrant-votes-${entrant.id}`}>
                         {(entrant.totalVotes ?? 0).toLocaleString()}
@@ -1336,10 +1324,9 @@ function VotingContestsTab({ tenantSubdomain }: { tenantSubdomain?: string }) {
                       setEditingEntrant(entrant);
                       setEditEntrantName(entrant.name);
                       setEditEntrantOwnerDisplayName(entrant.ownerDisplayName || "");
-                      setEditEntrantDescription(entrant.description || "");
                     }}
                     aria-label={`Edit portrait for ${entrant.name}`}
-                    data-testid={`button-edit-entrant-description-${entrant.id}`}
+                    data-testid={`button-edit-entrant-${entrant.id}`}
                   >
                     <Pencil className="h-4 w-4 text-muted-foreground" />
                   </Button>
@@ -1391,24 +1378,13 @@ function VotingContestsTab({ tenantSubdomain }: { tenantSubdomain?: string }) {
                   buttonText="Upload Photo"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="entrant-description">Photo description (optional)</Label>
-                <Textarea
-                  id="entrant-description"
-                  value={entrantDescription}
-                  onChange={(e) => setEntrantDescription(e.target.value)}
-                  maxLength={500}
-                  data-testid="input-entrant-description"
-                />
-                <p className="text-xs text-muted-foreground text-right">{entrantDescription.length}/500</p>
-              </div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setAddEntrantDialogOpen(false)} data-testid="button-cancel-add-entrant">
                 Cancel
               </Button>
               <Button
-                onClick={() => addEntrantMutation.mutate({ name: entrantName.trim(), ownerDisplayName: entrantOwnerDisplayName.trim(), photoUrl: entrantPhotoUrls[0] || undefined, description: entrantDescription.trim() || undefined })}
+                onClick={() => addEntrantMutation.mutate({ name: entrantName.trim(), ownerDisplayName: entrantOwnerDisplayName.trim(), photoUrl: entrantPhotoUrls[0] || undefined })}
                 disabled={!entrantName.trim() || addEntrantMutation.isPending}
                 data-testid="button-submit-add-entrant"
               >
@@ -1421,13 +1397,12 @@ function VotingContestsTab({ tenantSubdomain }: { tenantSubdomain?: string }) {
         <Dialog
           open={!!editingEntrant}
           onOpenChange={(open) => {
-            if (!open && !editEntrantDescriptionMutation.isPending) {
+            if (!open && !editEntrantMutation.isPending) {
               setEditingEntrant(null);
-              setEditEntrantDescription("");
             }
           }}
         >
-          <DialogContent data-testid="dialog-edit-entrant-description">
+          <DialogContent data-testid="dialog-edit-entrant">
             <DialogHeader>
               <DialogTitle>Edit portrait for {editingEntrant?.name}</DialogTitle>
             </DialogHeader>
@@ -1435,35 +1410,25 @@ function VotingContestsTab({ tenantSubdomain }: { tenantSubdomain?: string }) {
               <div className="space-y-2">
                 <Label htmlFor="edit-entrant-name">Pet's name</Label>
                 <Input id="edit-entrant-name" value={editEntrantName} maxLength={200}
-                  onChange={(e) => setEditEntrantName(e.target.value)} disabled={editEntrantDescriptionMutation.isPending} data-testid="input-edit-entrant-name" />
+                  onChange={(e) => setEditEntrantName(e.target.value)} disabled={editEntrantMutation.isPending} data-testid="input-edit-entrant-name" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="edit-entrant-owner-name">Owner's display name (optional)</Label>
                 <Input id="edit-entrant-owner-name" value={editEntrantOwnerDisplayName} maxLength={100}
-                  onChange={(e) => setEditEntrantOwnerDisplayName(e.target.value)} disabled={editEntrantDescriptionMutation.isPending} data-testid="input-edit-entrant-owner-name" />
+                  onChange={(e) => setEditEntrantOwnerDisplayName(e.target.value)} disabled={editEntrantMutation.isPending} data-testid="input-edit-entrant-owner-name" />
                 <p className="text-xs text-muted-foreground">This name will appear publicly on the portrait and shared images.</p>
               </div>
-              <Label htmlFor="edit-entrant-description">Photo description (optional)</Label>
-              <Textarea
-                id="edit-entrant-description"
-                value={editEntrantDescription}
-                onChange={(e) => setEditEntrantDescription(e.target.value)}
-                maxLength={500}
-                disabled={editEntrantDescriptionMutation.isPending}
-                data-testid="input-edit-entrant-description"
-              />
-              <p className="text-xs text-muted-foreground text-right">{editEntrantDescription.length}/500</p>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setEditingEntrant(null)} disabled={editEntrantDescriptionMutation.isPending}>
+              <Button variant="outline" onClick={() => setEditingEntrant(null)} disabled={editEntrantMutation.isPending}>
                 Cancel
               </Button>
               <Button
-                onClick={() => editingEntrant && editEntrantDescriptionMutation.mutate({ id: editingEntrant.id, name: editEntrantName.trim(), ownerDisplayName: editEntrantOwnerDisplayName.trim(), description: editEntrantDescription.trim() })}
-                disabled={editEntrantDescriptionMutation.isPending || !editEntrantName.trim()}
-                data-testid="button-save-entrant-description"
+                onClick={() => editingEntrant && editEntrantMutation.mutate({ id: editingEntrant.id, name: editEntrantName.trim(), ownerDisplayName: editEntrantOwnerDisplayName.trim() })}
+                disabled={editEntrantMutation.isPending || !editEntrantName.trim()}
+                data-testid="button-save-entrant"
               >
-                {editEntrantDescriptionMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {editEntrantMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Save
               </Button>
             </DialogFooter>

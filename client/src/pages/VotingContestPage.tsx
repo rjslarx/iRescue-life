@@ -86,7 +86,7 @@ export default function VotingContestPage() {
   useSEO(linkedEntrantId && !contestData ? null : {
     title: pageTitle,
     description: linkedEntrant && contestData
-      ? linkedEntrant.description || `Vote for ${linkedEntrant.name} in ${contestData.title}, hosted by ${rescueName}!`
+      ? `Vote for ${linkedEntrant.name} in ${contestData.title}, hosted by ${rescueName}!`
       : contestData?.description || `Vote with your dollar in this fundraising contest hosted by ${rescueName}!`,
     siteName: rescueName,
     image: linkedEntrant?.photoUrl || contestData?.imageUrl || undefined,
@@ -314,20 +314,9 @@ export default function VotingContestPage() {
                   <ContestEntrantPhoto name={entrant.name} ownerDisplayName={entrant.ownerDisplayName} photoUrl={entrant.photoUrl} theme={contestData.themeBackground} primaryColor={contestData.primaryColor} accentColor={contestData.accentColor} />
                   <CardContent className="px-3 pt-3 pb-2 flex flex-1 flex-col items-center text-center space-y-4">
 
-                    <div>
-                      <h3
-                        className="text-lg font-semibold"
-                        data-testid={`text-entrant-name-${entrant.id}`}
-                      >
-                        {entrant.name}
-                      </h3>
-                      {entrant.description && (
-                        <p className="text-sm text-muted-foreground whitespace-pre-wrap break-words" data-testid={`text-entrant-description-${entrant.id}`}>
-                          {entrant.description}
-                        </p>
-                      )}
+                     <div>
                       <p
-                        className="text-2xl font-bold text-primary mt-1"
+                         className="text-2xl font-bold text-primary"
                         style={primaryTextStyle}
                         data-testid={`text-entrant-votes-${entrant.id}`}
                       >

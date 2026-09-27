@@ -25,12 +25,12 @@ test('only one valid entrant UUID is eligible for a contestant preview', () => {
   ]) assert.equal(contestShareEntrantId(url), null, url);
 });
 
-test('contestant share metadata prefers contestant content and falls back to vote CTA and contest image', () => {
+test('contestant share metadata ignores stored entrant descriptions but preserves contest descriptions', () => {
   assert.deepEqual(contestShareMetadata(contest, 'Happy Rescue', {
     name: 'Biscuit', description: 'A sunny pup', photoUrl: '/objects/biscuit.jpg',
   }), {
     title: 'Vote for Biscuit | Cutest Pet',
-    description: 'A sunny pup',
+    description: 'Vote for Biscuit in Cutest Pet! $1 = 1 vote. Support Happy Rescue.',
     imageUrl: '/objects/biscuit.jpg',
   });
   assert.deepEqual(contestShareMetadata(contest, 'Happy Rescue', {
@@ -127,4 +127,19 @@ test('social cards render 1200x630 JPEG with themed/color variations and contain
   const pixel = (x: number, y: number) => [...data.subarray((y * info.width + x) * info.channels, (y * info.width + x) * info.channels + 3)];
   assert.notDeepEqual(pixel(30, 300), pixel(300, 300));
   assert.notDeepEqual(pixel(900, 300), pixel(300, 300));
+});
+
+test('portrait nameplates stay inset and legacy descriptions stay off cards and editor payloads', () => {
+  const portrait = readFileSync(new URL('../client/src/components/ContestEntrantPhoto.tsx', import.meta.url), 'utf8');
+  assert.match(portrait, /<figcaption[\s\S]*?rounded-xl[\s\S]*?data-testid="contest-portrait-nameplate"/);
+  assert.match(portrait, /ownerDisplayName\?\.trim\(\)/);
+  const publicPage = readFileSync(new URL('../client/src/pages/VotingContestPage.tsx', import.meta.url), 'utf8');
+  const staffPage = readFileSync(new URL('../client/src/pages/FundraisingHubPage.tsx', import.meta.url), 'utf8');
+  assert.doesNotMatch(publicPage, /entrant\.description/);
+  assert.doesNotMatch(staffPage, /entrant\.description|entrantDescription|editEntrantDescription/);
+  assert.doesNotMatch(staffPage, /Photo description \(optional\)/);
+  assert.match(staffPage, /const \[newDescription, setNewDescription\]/, 'contest descriptions remain editable');
+  const social = readFileSync(new URL('../server/lib/voting-social-image.ts', import.meta.url), 'utf8');
+  assert.match(social, /<rect x="92" y="460" width="476" height="80" rx="14"/);
+  assert.match(social, /portrait-nameplate-v3/);
 });

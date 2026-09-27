@@ -14,7 +14,7 @@ export type VotingSocialData = {
 };
 
 export function votingSocialVersion(data: VotingSocialData): string {
-  return createHash('sha256').update('portrait-frame-v2').update(JSON.stringify(data)).digest('hex').slice(0, 16);
+  return createHash('sha256').update('portrait-nameplate-v3').update(JSON.stringify(data)).digest('hex').slice(0, 16);
 }
 
 // Only a tenant's own uploaded object can be read for a public card. In particular,
@@ -74,9 +74,9 @@ export async function renderVotingSocialImage(data: VotingSocialData, photo?: Bu
     <rect width="1200" height="14" fill="${primary}"/>
     <rect x="46" y="53" width="568" height="517" rx="25" fill="${frameTile ? 'url(#portrait-frame)' : '#fff'}" stroke="${frameTile ? primary : '#fff'}" stroke-width="5"/>
     <rect x="68" y="75" width="524" height="375" rx="6" fill="${background}"/>
-    <rect x="68" y="450" width="524" height="98" fill="${frame?.primary || '#ffffff'}"/>
-    ${caption.map((s, i) => `<text x="330" y="${owner.length ? 476 + i * 23 : 491 + i * 24}" text-anchor="middle" font-family="Arial,sans-serif" font-size="21" font-weight="bold" fill="${frame ? contrastText(frame.primary) : '#24202b'}">${s}</text>`).join('')}
-    ${owner.map(s => `<text x="330" y="535" text-anchor="middle" font-family="Arial,sans-serif" font-size="17" fill="${frame ? contrastText(frame.primary) : '#24202b'}">${s}</text>`).join('')}
+    <rect x="92" y="460" width="476" height="80" rx="14" fill="${frame?.primary || '#ffffff'}" stroke="${frame?.accent || '#dfd9e8'}" stroke-width="3"/>
+    ${caption.map((s, i) => `<text x="330" y="${owner.length ? 486 + i * 23 : 493 + i * 24}" text-anchor="middle" font-family="Arial,sans-serif" font-size="21" font-weight="bold" fill="${frame ? contrastText(frame.primary) : '#24202b'}">${s}</text>`).join('')}
+    ${owner.map(s => `<text x="330" y="531" text-anchor="middle" font-family="Arial,sans-serif" font-size="17" fill="${frame ? contrastText(frame.primary) : '#24202b'}">${s}</text>`).join('')}
     <rect x="649" y="77" width="504" height="455" rx="24" fill="#fff" fill-opacity=".93"/>
     <rect x="679" y="110" width="108" height="7" rx="3" fill="${accent}"/>
     <text x="679" y="163" font-family="Arial,sans-serif" font-size="28" font-weight="bold" fill="${primary}">VOTE FOR</text>

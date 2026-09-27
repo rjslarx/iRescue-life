@@ -346,13 +346,13 @@ export function contestShareEntrantId(url: string): string | null {
 export function contestShareMetadata(
   contest: { title: string; description: string | null; imageUrl: string | null },
   rescueName: string,
-  entrant?: { name: string; description: string | null; photoUrl: string | null } | null,
+  entrant?: { name: string; description?: string | null; photoUrl: string | null } | null,
 ): { title: string; description: string; imageUrl: string | null } {
   return {
     title: entrant ? `Vote for ${entrant.name} | ${contest.title}` : `${contest.title} | ${rescueName}`,
-    description: (entrant?.description?.trim() || (entrant
+    description: (entrant
       ? `Vote for ${entrant.name} in ${contest.title}! $1 = 1 vote. Support ${rescueName}.`
-      : contest.description?.trim() || `Vote in ${contest.title}! $1 = 1 vote. Support ${rescueName}.`)),
+      : contest.description?.trim() || `Vote in ${contest.title}! $1 = 1 vote. Support ${rescueName}.`),
     imageUrl: entrant?.photoUrl || contest.imageUrl,
   };
 }

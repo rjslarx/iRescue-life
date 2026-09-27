@@ -25,7 +25,7 @@ export default function ContestEntrantPhoto({ name, photoUrl, ownerDisplayName, 
 
   return (
     <figure className={cn("w-full min-w-0 overflow-hidden rounded-[1.5rem]", className)} data-testid="contest-portrait">
-      <div className={cn("relative", colors ? "p-3 sm:p-4" : "")}
+      <div className={cn("relative", colors ? "p-3 sm:p-4" : "bg-muted/40 p-2")}
         style={tile ? { backgroundImage: `url("data:image/svg+xml,${encodeURIComponent(tile)}")`, backgroundColor: colors!.primary } : undefined}>
         <div className={cn("relative", colors && "rounded-xl bg-white p-1 shadow-lg")}>
           <Avatar className="aspect-[4/3] h-auto w-full rounded-xl bg-muted after:rounded-xl">
@@ -33,11 +33,15 @@ export default function ContestEntrantPhoto({ name, photoUrl, ownerDisplayName, 
             <AvatarFallback className="h-full w-full rounded-xl text-3xl font-semibold">{initials}</AvatarFallback>
           </Avatar>
         </div>
+        <figcaption
+          className={cn("mt-2 min-w-0 rounded-xl border px-3 py-2.5 text-center shadow-sm", !colors && "border-border bg-background text-foreground")}
+          style={colors ? { backgroundColor: colors.primary, borderColor: colors.accent, color: contrastText(colors.primary) } : undefined}
+          data-testid="contest-portrait-nameplate"
+        >
+          <span className="block break-words text-base font-bold leading-tight">{name}</span>
+          {ownerDisplayName?.trim() && <span className="block break-words text-xs opacity-90">with {ownerDisplayName.trim()}</span>}
+        </figcaption>
       </div>
-      <figcaption className="min-w-0 px-3 py-2.5 text-center" style={colors ? { backgroundColor: colors.primary, color: contrastText(colors.primary) } : undefined}>
-        <span className="block break-words text-base font-bold leading-tight">{name}</span>
-        {ownerDisplayName?.trim() && <span className="block break-words text-xs opacity-90">with {ownerDisplayName.trim()}</span>}
-      </figcaption>
     </figure>
   );
 }
