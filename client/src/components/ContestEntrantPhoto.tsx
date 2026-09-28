@@ -38,7 +38,7 @@ export default function ContestEntrantPhoto({ name, photoUrl, ownerDisplayName, 
           </Avatar>
         </div>
         <figcaption
-          className={cn("mt-2 min-w-0 rounded-xl border px-3 py-2.5 text-center shadow-sm", !colors && "border-border bg-background text-foreground")}
+          className={cn("mx-auto mt-2 w-4/5 min-w-0 rounded-xl border px-3 py-2.5 text-center shadow-sm", !colors && "border-border bg-background text-foreground")}
           style={colors ? { backgroundColor: colors.primary, borderColor: colors.accent, color: contrastText(colors.primary) } : undefined}
           data-testid="contest-portrait-nameplate"
         >

@@ -140,6 +140,7 @@ test('portrait nameplates stay inset and legacy descriptions stay off cards and 
   assert.doesNotMatch(staffPage, /Photo description \(optional\)/);
   assert.match(staffPage, /const \[newDescription, setNewDescription\]/, 'contest descriptions remain editable');
   const social = readFileSync(new URL('../server/lib/voting-social-image.ts', import.meta.url), 'utf8');
-  assert.match(social, /<rect x="92" y="460" width="476" height="80" rx="14"/);
-  assert.match(social, /portrait-custom-background-v4/);
+  assert.match(portrait, /mx-auto mt-2 w-4\/5/);
+  assert.match(social, /<rect x="140" y="460" width="380" height="80" rx="14"/);
+  assert.match(social, /portrait-narrow-nameplate-v5/);
 });
