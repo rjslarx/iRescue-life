@@ -105,12 +105,16 @@ export const VOTING_THEME_SURFACES: Record<string, string> = {
 };
 
 export type VotingAppearance = {
+  backgroundImageUrl?: string | null;
+  backgroundImageTarget?: "page" | "frames" | "both";
   primaryColor: string | null;
   accentColor: string | null;
   themeBackground: string | null;
 };
 
 export const DEFAULT_VOTING_APPEARANCE: VotingAppearance = {
+  backgroundImageUrl: null,
+  backgroundImageTarget: "both",
   primaryColor: null,
   accentColor: null,
   themeBackground: null,

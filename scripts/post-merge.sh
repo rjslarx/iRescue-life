@@ -1,4 +1,8 @@
 #!/bin/bash
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' || echo "[post-merge] voting background schema skipped (DB unreachable)."
+ALTER TABLE voting_contests ADD COLUMN IF NOT EXISTS background_image_url text;
+ALTER TABLE voting_contests ADD COLUMN IF NOT EXISTS background_image_target text NOT NULL DEFAULT 'both';
+SQL
 set -e
 npm install
 

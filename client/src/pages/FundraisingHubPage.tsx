@@ -1303,7 +1303,7 @@ function VotingContestsTab({ tenantSubdomain }: { tenantSubdomain?: string }) {
               .sort((a, b) => (b.totalVotes ?? 0) - (a.totalVotes ?? 0))
               .map((entrant, idx) => (
               <Card key={entrant.id} className="rounded-[2rem] p-3" data-testid={`card-entrant-${entrant.id}`}>
-                <ContestEntrantPhoto name={entrant.name} ownerDisplayName={entrant.ownerDisplayName} photoUrl={entrant.photoUrl} theme={contest.themeBackground} primaryColor={contest.primaryColor} accentColor={contest.accentColor} />
+                <ContestEntrantPhoto name={entrant.name} ownerDisplayName={entrant.ownerDisplayName} photoUrl={entrant.photoUrl} theme={contest.themeBackground} primaryColor={contest.primaryColor} accentColor={contest.accentColor} backgroundImageUrl={contest.backgroundImageUrl} backgroundImageTarget={contest.backgroundImageTarget} />
                 <CardContent className="px-3 pt-4 pb-2">
                     <div className="min-w-0 text-center">
                       {idx === 0 && entrants.length > 1 && (
@@ -1525,6 +1525,8 @@ function VotingContestsTab({ tenantSubdomain }: { tenantSubdomain?: string }) {
                       primaryColor: contest.primaryColor,
                       accentColor: contest.accentColor,
                       themeBackground: contest.themeBackground,
+                      backgroundImageUrl: contest.backgroundImageUrl,
+                      backgroundImageTarget: contest.backgroundImageTarget,
                     });
                   }} data-testid={`button-edit-voting-appearance-${contest.id}`}>
                     <Palette className="mr-2 h-3.5 w-3.5" />

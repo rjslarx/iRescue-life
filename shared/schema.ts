@@ -7084,6 +7084,8 @@ export const votingContests = pgTable("voting_contests", {
   primaryColor: text("primary_color"),
   accentColor: text("accent_color"),
   themeBackground: text("theme_background").$type<VotingContestTheme>(),
+  backgroundImageUrl: text("background_image_url"),
+  backgroundImageTarget: text("background_image_target").$type<"page" | "frames" | "both">().notNull().default("both"),
   startDate: timestamp("start_date"),
   endDate: timestamp("end_date"),
   isActive: boolean("is_active").notNull().default(true),

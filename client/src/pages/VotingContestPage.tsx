@@ -8,6 +8,7 @@ import { contrastText, readableColor, validVotingColor, votingBackgroundStyle, V
 import { apiRequest } from "@/lib/queryClient";
 import PublicHeader from "@/components/PublicHeader";
 import ContestEntrantPhoto from "@/components/ContestEntrantPhoto";
+import { votingBackgroundApplies } from "@shared/voting-background";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -188,6 +189,7 @@ export default function VotingContestPage() {
   return (
     <div className="min-h-screen relative bg-background" style={contestData.themeBackground && VOTING_THEME_SURFACES[contestData.themeBackground] ? { backgroundColor: VOTING_THEME_SURFACES[contestData.themeBackground] } : undefined}>
       {themeStyle && <div className="absolute inset-0 pointer-events-none opacity-[0.2] dark:opacity-[0.16]" style={themeStyle} aria-hidden="true" data-testid="voting-theme-background" />}
+      {contestData.backgroundImageUrl && votingBackgroundApplies(contestData.backgroundImageTarget, "page") && <div className="absolute inset-0 pointer-events-none bg-cover bg-center" style={{ backgroundImage: `url("${contestData.backgroundImageUrl}")` }} aria-hidden="true" data-testid="voting-custom-background" />}
       <div className="relative">
       <PublicHeader
         rescueName={rescueName}
@@ -219,7 +221,7 @@ export default function VotingContestPage() {
         </div>
       )}
 
-      <main className="max-w-5xl mx-auto px-4 py-8">
+      <main className={`max-w-5xl mx-auto px-4 py-8 ${contestData.backgroundImageUrl && votingBackgroundApplies(contestData.backgroundImageTarget, "page") ? "bg-background rounded-xl my-4" : ""}`}>
         {!contestData.imageUrl && (
           <div className="mb-8">
             <Badge variant="secondary" className="mb-3" data-testid="badge-vote-dollar">
@@ -311,7 +313,7 @@ export default function VotingContestPage() {
                       </Badge>
                     </div>
                   )}
-                  <ContestEntrantPhoto name={entrant.name} ownerDisplayName={entrant.ownerDisplayName} photoUrl={entrant.photoUrl} theme={contestData.themeBackground} primaryColor={contestData.primaryColor} accentColor={contestData.accentColor} />
+                  <ContestEntrantPhoto name={entrant.name} ownerDisplayName={entrant.ownerDisplayName} photoUrl={entrant.photoUrl} theme={contestData.themeBackground} primaryColor={contestData.primaryColor} accentColor={contestData.accentColor} backgroundImageUrl={contestData.backgroundImageUrl} backgroundImageTarget={contestData.backgroundImageTarget} />
                   <CardContent className="px-3 pt-3 pb-2 flex flex-1 flex-col items-center text-center space-y-4">
 
                      <div>

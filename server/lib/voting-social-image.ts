@@ -1,8 +1,11 @@
 import { createHash } from 'node:crypto';
 import sharp from 'sharp';
+import { votingBackgroundApplies } from '../../shared/voting-background';
 import { votingPatternSvg, votingFrameTileSvg, votingFrameColors, validVotingColor, contrastText, VOTING_THEME_PRESET_COLORS, VOTING_THEME_SURFACES } from '@shared/voting-theme-patterns';
 
 export type VotingSocialData = {
+  backgroundImageUrl?: string | null;
+  backgroundImageTarget?: string | null;
   name: string;
   ownerDisplayName: string | null;
   contestTitle: string;
@@ -14,7 +17,7 @@ export type VotingSocialData = {
 };
 
 export function votingSocialVersion(data: VotingSocialData): string {
-  return createHash('sha256').update('portrait-nameplate-v3').update(JSON.stringify(data)).digest('hex').slice(0, 16);
+  return createHash('sha256').update('portrait-custom-background-v4').update(JSON.stringify(data)).digest('hex').slice(0, 16);
 }
 
 // Only a tenant's own uploaded object can be read for a public card. In particular,
@@ -51,7 +54,16 @@ function lines(value: string, maxChars: number, maxLines: number): string[] {
   return result.slice(0, maxLines).map(s => xml(s.length > maxChars ? `${s.slice(0, maxChars - 1)}…` : s));
 }
 
-export async function renderVotingSocialImage(data: VotingSocialData, photo?: Buffer): Promise<Buffer> {
+export async function renderVotingSocialImage(data: VotingSocialData, photo?: Buffer, customBackground?: Buffer): Promise<Buffer> {
+  const backgroundLayer = async (surface: "page" | "frames") => {
+    if (!customBackground || !data.backgroundImageUrl || !votingBackgroundApplies(data.backgroundImageTarget, surface)) return '';
+    const page = surface === "page";
+    const buffer = await sharp(customBackground, { limitInputPixels: 40_000_000 }).rotate()
+      .resize(page ? 1200 : 568, page ? 630 : 517, { fit: 'cover' }).png().toBuffer();
+    return `<image x="${page ? 0 : 46}" y="${page ? 0 : 53}" width="${page ? 1200 : 568}" height="${page ? 630 : 517}" href="data:image/png;base64,${buffer.toString('base64')}"/>`;
+  };
+  const pageLayer = await backgroundLayer("page");
+  const frameLayer = await backgroundLayer("frames");
   const preset = data.themeBackground ? VOTING_THEME_PRESET_COLORS[data.themeBackground] : undefined;
   const primary = validVotingColor(data.primaryColor) || preset?.primaryColor || '#544079';
   const accent = validVotingColor(data.accentColor) || preset?.accentColor || '#edb957';
@@ -71,8 +83,10 @@ export async function renderVotingSocialImage(data: VotingSocialData, photo?: Bu
     <defs>${tile}${frameTile}</defs>
     <rect width="1200" height="630" fill="${background}"/>
     ${tile ? '<rect width="1200" height="630" fill="url(#theme)" opacity=".25"/>' : ''}
+    ${pageLayer}
     <rect width="1200" height="14" fill="${primary}"/>
     <rect x="46" y="53" width="568" height="517" rx="25" fill="${frameTile ? 'url(#portrait-frame)' : '#fff'}" stroke="${frameTile ? primary : '#fff'}" stroke-width="5"/>
+    ${frameLayer}
     <rect x="68" y="75" width="524" height="375" rx="6" fill="${background}"/>
     <rect x="92" y="460" width="476" height="80" rx="14" fill="${frame?.primary || '#ffffff'}" stroke="${frame?.accent || '#dfd9e8'}" stroke-width="3"/>
     ${caption.map((s, i) => `<text x="330" y="${owner.length ? 486 + i * 23 : 493 + i * 24}" text-anchor="middle" font-family="Arial,sans-serif" font-size="21" font-weight="bold" fill="${frame ? contrastText(frame.primary) : '#24202b'}">${s}</text>`).join('')}

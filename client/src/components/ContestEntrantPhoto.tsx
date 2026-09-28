@@ -1,8 +1,11 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
+import { votingBackgroundApplies } from "@shared/voting-background";
 import { votingFrameColors, votingFrameTileSvg, contrastText } from "@/lib/votingThemes";
 
 interface ContestEntrantPhotoProps {
+  backgroundImageUrl?: string | null;
+  backgroundImageTarget?: string | null;
   name: string;
   photoUrl?: string | null;
   ownerDisplayName?: string | null;
@@ -12,7 +15,8 @@ interface ContestEntrantPhotoProps {
   className?: string;
 }
 
-export default function ContestEntrantPhoto({ name, photoUrl, ownerDisplayName, theme, primaryColor, accentColor, className }: ContestEntrantPhotoProps) {
+export default function ContestEntrantPhoto({ name, photoUrl, ownerDisplayName, theme, primaryColor, accentColor, className, backgroundImageUrl, backgroundImageTarget }: ContestEntrantPhotoProps) {
+  const custom = backgroundImageUrl && votingBackgroundApplies(backgroundImageTarget, "frames");
   const colors = votingFrameColors(theme, primaryColor, accentColor);
   const tile = colors && votingFrameTileSvg(theme, colors.primary, colors.accent);
   const initials = name
@@ -26,7 +30,7 @@ export default function ContestEntrantPhoto({ name, photoUrl, ownerDisplayName, 
   return (
     <figure className={cn("w-full min-w-0 overflow-hidden rounded-[1.5rem]", className)} data-testid="contest-portrait">
       <div className={cn("relative", colors ? "p-3 sm:p-4" : "bg-muted/40 p-2")}
-        style={tile ? { backgroundImage: `url("data:image/svg+xml,${encodeURIComponent(tile)}")`, backgroundColor: colors!.primary } : undefined}>
+        style={custom ? { backgroundImage: `url("${backgroundImageUrl}")`, backgroundSize: "cover", backgroundPosition: "center" } : tile ? { backgroundImage: `url("data:image/svg+xml,${encodeURIComponent(tile)}")`, backgroundColor: colors!.primary } : undefined}>
         <div className={cn("relative", colors && "rounded-xl bg-white p-1 shadow-lg")}>
           <Avatar className="aspect-[4/3] h-auto w-full rounded-xl bg-muted after:rounded-xl">
             {photoUrl && <AvatarImage src={photoUrl} alt={name} className="aspect-[4/3] h-full w-full object-contain object-center" />}

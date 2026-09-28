@@ -675,6 +675,7 @@ export async function injectOGTags(req: Request, res: Response, next: NextFuncti
                 name: entrant.name, ownerDisplayName: entrant.ownerDisplayName, contestTitle: contest.title, rescueName: tenant.name,
                 photoUrl: entrant.photoUrl, themeBackground: contest.themeBackground,
                 primaryColor: contest.primaryColor, accentColor: contest.accentColor,
+                backgroundImageUrl: contest.backgroundImageUrl, backgroundImageTarget: contest.backgroundImageTarget,
               })}`
             : resolveImageUrl(share.imageUrl) || defaultImage,
         };
@@ -1416,6 +1417,8 @@ ogImageRouter.get('/api/public/voting-contest-entrants/:id/social-image', async 
       ownerDisplayName: votingContestEntrants.ownerDisplayName,
       photoUrl: votingContestEntrants.photoUrl,
       contestTitle: votingContests.title,
+      backgroundImageUrl: votingContests.backgroundImageUrl,
+      backgroundImageTarget: votingContests.backgroundImageTarget,
       themeBackground: votingContests.themeBackground,
       primaryColor: votingContests.primaryColor,
       accentColor: votingContests.accentColor,
@@ -1446,7 +1449,11 @@ ogImageRouter.get('/api/public/voting-contest-entrants/:id/social-image', async 
         console.warn('[VOTING-SOCIAL] Photo unavailable; rendering branded card:', error);
       }
     }
-    const image = await renderVotingSocialImage(data, photo);
+    let customBackground: Buffer | undefined;
+    if (row.backgroundImageUrl) {
+      customBackground = await (await import('../lib/voting-background')).readVotingBackground(row.backgroundImageUrl, tenant.id);
+    }
+    const image = await renderVotingSocialImage(data, photo, customBackground);
     res.set({
       'Content-Type': 'image/jpeg',
       'Content-Length': String(image.length),

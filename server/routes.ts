@@ -55108,6 +55108,29 @@ ${section('Metadata', metaRows)}
   // VOTING CONTEST ENGINE — "Vote with your Dollar" ($1 = 1 Vote)
   // ═══════════════════════════════════════════════════════════════════
 
+  app.post('/api/voting-contests/background/upload', requireTenant, requireAuth, requireRole('admin', 'owner', 'manager'), async (req, res, next) => {
+    const multer = (await import('multer')).default;
+    const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+      fileFilter: (_req, file, cb) => cb(null, ['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)),
+    }).array('files', 1);
+    upload(req, res, async (error) => {
+      if (error) return res.status(400).json({ error: 'Upload one JPEG, PNG, or WebP under 5 MB' });
+      const file = (req.files as Express.Multer.File[])?.[0];
+      if (!file) return res.status(400).json({ error: 'Choose a JPEG, PNG, or WebP background' });
+      try {
+        const { validateVotingBackground } = await import('./lib/voting-background');
+        let content: Buffer;
+        try { content = await validateVotingBackground(file.buffer); }
+        catch { return res.status(400).json({ error: 'Invalid background: use a static JPEG, PNG, or WebP under 5 MB and 40 megapixels' }); }
+        const { ObjectStorageService } = await import('./objectStorage');
+        const result = await new ObjectStorageService().uploadTenantFile(req.tenant!.id, 'voting-backgrounds', content, 'image/jpeg', undefined, {
+          owner: req.session.userId!, tenantId: req.tenant!.id, visibility: 'public',
+        });
+        res.json({ uploadedPaths: [result.objectPath] });
+      } catch (error) { next(error); }
+    });
+  });
+
   app.post('/api/voting-contests', requireTenant, requireAuth, requireRole('admin', 'owner', 'manager'), async (req, res, next) => {
     try {
       const { votingContests } = await import('@shared/schema');
@@ -55120,7 +55143,13 @@ ${section('Metadata', metaRows)}
       }).merge(contestAppearanceSchema);
       const data = schema.parse(req.body);
       const slug = data.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-' + Date.now().toString(36);
+      if (data.backgroundImageUrl) {
+        try { await (await import('./lib/voting-background')).readVotingBackground(data.backgroundImageUrl, req.tenant!.id); }
+        catch { return res.status(400).json({ error: 'Background must be an available upload owned by this rescue' }); }
+      }
       const [contest] = await db.insert(votingContests).values({
+        backgroundImageUrl: data.backgroundImageUrl ?? null,
+        backgroundImageTarget: data.backgroundImageTarget ?? 'both',
         tenantId: req.tenant!.id,
         title: data.title,
         slug,
@@ -55196,6 +55225,12 @@ ${section('Metadata', metaRows)}
       if (data.primaryColor !== undefined) updateData.primaryColor = data.primaryColor;
       if (data.accentColor !== undefined) updateData.accentColor = data.accentColor;
       if (data.themeBackground !== undefined) updateData.themeBackground = data.themeBackground;
+      if (data.backgroundImageUrl) {
+        try { await (await import('./lib/voting-background')).readVotingBackground(data.backgroundImageUrl, req.tenant!.id); }
+        catch { return res.status(400).json({ error: 'Background must be an available upload owned by this rescue' }); }
+      }
+      if (data.backgroundImageUrl !== undefined) updateData.backgroundImageUrl = data.backgroundImageUrl;
+      if (data.backgroundImageTarget !== undefined) updateData.backgroundImageTarget = data.backgroundImageTarget;
       if (data.startDate !== undefined) updateData.startDate = data.startDate ? new Date(data.startDate) : null;
       if (data.endDate !== undefined) updateData.endDate = data.endDate ? new Date(data.endDate) : null;
       if (data.isActive !== undefined) updateData.isActive = data.isActive;

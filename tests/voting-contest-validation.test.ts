@@ -38,7 +38,7 @@ test("special voting themes have matching presets and distinct patterned backgro
     assert.ok(VOTING_THEME_OPTIONS.some((option) => option.value === theme));
     const preset = VOTING_THEME_PRESET_COLORS[theme];
     assert.ok(preset);
-    assert.deepEqual(votingAppearanceForTheme(DEFAULT_VOTING_APPEARANCE, theme), { ...preset, themeBackground: theme });
+    assert.deepEqual(votingAppearanceForTheme(DEFAULT_VOTING_APPEARANCE, theme), { ...DEFAULT_VOTING_APPEARANCE, ...preset, themeBackground: theme });
     const url = votingBackgroundStyle(theme, preset.primaryColor)?.backgroundImage;
     assert.ok(typeof url === "string" && url.startsWith('url("data:image/svg+xml,'));
     const svg = decodeURIComponent(url.slice('url("data:image/svg+xml,'.length, -2));

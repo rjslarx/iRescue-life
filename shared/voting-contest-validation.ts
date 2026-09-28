@@ -9,6 +9,8 @@ const contestColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/, "Use a 6-digit 
   .optional();
 
 export const contestAppearanceSchema = z.object({
+  backgroundImageUrl: z.string().regex(/^\/objects\/[0-9a-f-]{36}\/voting-backgrounds\/[0-9a-f-]{36}$/i, "Choose an uploaded contest background").nullable().optional(),
+  backgroundImageTarget: z.enum(["page", "frames", "both"]).optional(),
   primaryColor: contestColorSchema,
   accentColor: contestColorSchema,
   themeBackground: z.enum(VOTING_CONTEST_THEMES).nullable().optional(),
