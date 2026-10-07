@@ -329,6 +329,7 @@ router.post('/checkout', requireTenant, async (req, res, next) => {
       );
 
     const productMap = new Map(products.map(p => [p.id, p]));
+    const closedRaffles = await loadPublicRaffleDrawings(products.filter(p => p.productType === 'raffle').map(p => p.id));
 
     // Get variants if needed
     const variantIds = data.items.filter(i => i.variantId).map(i => i.variantId!);
@@ -363,11 +364,20 @@ router.post('/checkout', requireTenant, async (req, res, next) => {
         return res.status(400).json({ error: `Product not found: ${item.productId}` });
       }
 
-      // Check max per order
-      if (product.maxPerOrder && item.quantity > product.maxPerOrder) {
+      if (closedRaffles.has(product.id)) {
+        return res.status(400).json({ error: `This raffle has already been drawn: ${product.name}` });
+      }
+      const productQuantity = data.items.filter(line => line.productId === product.id)
+        .reduce((sum, line) => sum + line.quantity, 0);
+      // Limits apply across all cart lines for this product.
+      if (product.maxPerOrder && productQuantity > product.maxPerOrder) {
         return res.status(400).json({ 
           error: `Maximum ${product.maxPerOrder} allowed per order for ${product.name}` 
         });
+      }
+      if (product.trackInventory && !item.variantId && product.totalInventory !== null &&
+          productQuantity > product.totalInventory) {
+        return res.status(400).json({ error: `Not enough inventory for ${product.name}` });
       }
 
       // Calculate unit price
@@ -383,7 +393,9 @@ router.post('/checkout', requireTenant, async (req, res, next) => {
         variantName = variant.name;
 
         // Check variant inventory
-        if (product.trackInventory && variant.inventory < item.quantity) {
+        const variantQuantity = data.items.filter(line => line.variantId === item.variantId)
+          .reduce((sum, line) => sum + line.quantity, 0);
+        if (product.trackInventory && variant.inventory < variantQuantity) {
           return res.status(400).json({ 
             error: `Not enough inventory for ${product.name} - ${variant.name}` 
           });
@@ -391,8 +403,7 @@ router.post('/checkout', requireTenant, async (req, res, next) => {
       }
 
       // Apply bundle (bulk-discount) pricing when configured — the server is
-      // authoritative: it computes the cheapest combination of bundles +
-      // singles for the requested quantity (e.g. 5 for $20, 15 for $50).
+      // authoritative: exact configured tiers, largest first, then singles.
       let itemTotal = unitPrice * item.quantity;
       if (
         product.productType === 'raffle' &&

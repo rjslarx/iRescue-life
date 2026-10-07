@@ -27,7 +27,7 @@ import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { apiRequest } from "@/lib/queryClient";
 import type { ShopProduct, ShopProductVariant, Tenant } from "@shared/schema";
-import { computeBundledPrice } from "@shared/raffle-pricing";
+import { computeBundledPrice, findSamePriceRaffleBundle } from "@shared/raffle-pricing";
 
 type ProductWithVariants = ShopProduct & {
   variants: ShopProductVariant[];
@@ -232,7 +232,7 @@ export default function ShopCheckoutPage() {
       parseFloat(product.basePrice) + (variant ? parseFloat(variant.priceAdjustment) : 0) : 0;
 
     // Bundle (bulk-discount) pricing for raffle tickets — mirrors the
-    // server's authoritative cheapest-combination calculation.
+    // server's authoritative exact-tier, largest-first calculation.
     let totalPrice = unitPrice * item.quantity;
     if (product && product.productType === 'raffle' && !variant && product.bundlePricing && product.bundlePricing.length > 0) {
       totalPrice = computeBundledPrice(item.quantity, product.basePrice, product.bundlePricing);
@@ -240,6 +240,12 @@ export default function ShopCheckoutPage() {
 
     return {
       ...item,
+      cartIndex: cartItems.indexOf(item),
+      bundleOffer: product ? findSamePriceRaffleBundle(product, item.quantity, {
+        variantId: item.variantId,
+        otherCartQuantity: cartItems.filter(other => other !== item && other.productId === item.productId)
+          .reduce((sum, other) => sum + other.quantity, 0),
+      }) : null,
       product,
       variant,
       unitPrice: item.quantity > 0 ? totalPrice / item.quantity : unitPrice,
@@ -629,8 +635,21 @@ export default function ShopCheckoutPage() {
                         <p className="text-sm text-muted-foreground">{item.variant.name}</p>
                       )}
                       <p className="text-sm text-muted-foreground">
-                        Qty: {item.quantity} x ${item.unitPrice.toFixed(2)}
+                        {item.product?.productType === 'raffle'
+                          ? `${item.quantity} tickets — $${item.totalPrice.toFixed(2)}`
+                          : `Qty: ${item.quantity} x $${item.unitPrice.toFixed(2)}`}
                       </p>
+                      {!orderId && !checkoutMutation.isPending && item.bundleOffer && (
+                        <div className="mt-2 rounded-md border border-primary bg-primary/5 p-2 space-y-2" data-testid={`same-price-bundle-offer-${item.productId}`}>
+                          <p className="text-sm">Get {item.bundleOffer.quantity - item.quantity} more tickets for the same ticket price: {item.bundleOffer.quantity} tickets for ${Number(item.bundleOffer.price).toFixed(2)}.</p>
+                          <Button type="button" size="sm" className="h-auto whitespace-normal" data-testid={`button-accept-bundle-${item.productId}`}
+                            onClick={() => setCartItems(current => current.map((line, index) =>
+                              index === item.cartIndex ? { ...line, quantity: item.bundleOffer!.quantity } : line
+                            ))}>
+                            Choose {item.bundleOffer.quantity} tickets for ${Number(item.bundleOffer.price).toFixed(2)}
+                          </Button>
+                        </div>
+                      )}
                       {item.product?.productType === 'raffle' && (item.product as any).raffleMode === 'split_pot' && (
                         <p className="text-xs text-purple-700 dark:text-purple-300 flex items-center gap-1 mt-0.5" data-testid={`text-split-pot-item-${item.productId}`}>
                           <Trophy className="h-3 w-3" />

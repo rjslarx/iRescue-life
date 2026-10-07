@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import { SiFacebook, SiX } from "react-icons/si";
 import type { ShopProduct, ShopProductVariant, Tenant } from "@shared/schema";
-import { computeBundledPrice, bundleSavingsPercent } from "@shared/raffle-pricing";
+import { computeBundledPrice, bundleSavingsPercent, findSamePriceRaffleBundle } from "@shared/raffle-pricing";
 import { shareOrCopy } from "@/lib/share";
 
 type SplitPotInfo = {
@@ -94,8 +94,7 @@ export default function PublicProductPage() {
     return [...product.bundlePricing].sort((a, b) => a.quantity - b.quantity);
   }, [product]);
 
-  // Total for the selected quantity, applying the cheapest combination of
-  // bundles + single tickets (mirrors the server's authoritative calculation).
+  // Exact configured tiers, largest first, matching server pricing.
   const orderTotal = useMemo(() => {
     if (!product) return 0;
     if (bundleTiers.length > 0 && !selectedVariant) {
@@ -176,6 +175,10 @@ export default function PublicProductPage() {
   const handleQuantityChange = (delta: number) => {
     setQuantity(prev => Math.max(1, Math.min(maxQuantity, prev + delta)));
   };
+
+  const bundleOffer = product ? findSamePriceRaffleBundle(product, quantity, {
+    variantId: selectedVariantId,
+  }) : null;
 
   const getShareUrl = () => {
     if (typeof window === 'undefined') return '';
@@ -532,7 +535,8 @@ export default function PublicProductPage() {
                       <button
                         key={tier.quantity}
                         type="button"
-                        onClick={() => setQuantity(Math.min(maxQuantity, tier.quantity))}
+                        disabled={isClosed || isOutOfStock || tier.quantity > maxQuantity}
+                        onClick={() => setQuantity(tier.quantity)}
                         className={`relative rounded-xl border p-3 text-left transition-all hover:-translate-y-0.5 hover:shadow-sm active-elevate-2 ${quantity === tier.quantity ? 'border-primary bg-primary/10 ring-1 ring-primary' : 'bg-background'}`}
                         data-testid={`button-bundle-${tier.quantity}`}
                       >
@@ -587,6 +591,15 @@ export default function PublicProductPage() {
                 )}
               </div>
             </div>
+
+            {bundleOffer && (
+              <div className="rounded-lg border border-primary bg-primary/5 p-4 space-y-2" data-testid="same-price-bundle-offer">
+                <p className="text-sm">Get {bundleOffer.quantity - quantity} more tickets for the same ticket price: {bundleOffer.quantity} tickets for {formatPrice(Number(bundleOffer.price))} instead of {quantity}.</p>
+                <Button type="button" onClick={() => setQuantity(bundleOffer.quantity)} data-testid="button-accept-bundle">
+                  Choose {bundleOffer.quantity} tickets for {formatPrice(Number(bundleOffer.price))}
+                </Button>
+              </div>
+            )}
 
             <div className={`flex flex-col gap-3 ${isSplitPot ? 'rounded-2xl border border-purple-200 bg-purple-50/70 p-4 shadow-sm dark:border-purple-800 dark:bg-purple-950/30' : ''}`}>
               {isSplitPot && !isClosed && (

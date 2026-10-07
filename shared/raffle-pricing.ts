@@ -3,6 +3,43 @@ export interface BundleTier {
   price: string;
 }
 
+/** Suggest only an exact configured tier at the same cent-rounded line price.
+ * Other cart lines are left intact and count against product-wide limits.
+ */
+export function findSamePriceRaffleBundle(
+  product: {
+    productType: string;
+    basePrice: string | number;
+    bundlePricing?: BundleTier[] | null;
+    status?: string;
+    raffleClosed?: boolean;
+    splitPot?: { isDrawn?: boolean };
+    variants?: readonly unknown[];
+    maxPerOrder?: number | null;
+    trackInventory?: boolean;
+    totalInventory?: number | null;
+  },
+  quantity: number,
+  options: { variantId?: string | null; otherCartQuantity?: number } = {},
+): BundleTier | null {
+  const other = options.otherCartQuantity ?? 0;
+  if (product.productType !== 'raffle' || options.variantId || (product.variants?.length ?? 0) > 0 ||
+      (product.status !== undefined && product.status !== 'active') ||
+      product.raffleClosed || product.splitPot?.isDrawn ||
+      !Number.isSafeInteger(quantity) || quantity < 1 ||
+      !Number.isSafeInteger(other) || other < 0) return null;
+  const currentCents = Math.round(computeBundledPrice(quantity, product.basePrice, product.bundlePricing) * 100);
+  if (!Number.isFinite(currentCents) || currentCents < 0) return null;
+  return [...(product.bundlePricing ?? [])]
+    .filter(tier => Number.isSafeInteger(tier.quantity) && tier.quantity > quantity &&
+      Number.isFinite(Number(tier.price)) && Number(tier.price) >= 0 &&
+      (!product.maxPerOrder || tier.quantity + other <= product.maxPerOrder) &&
+      (!product.trackInventory || product.totalInventory == null || tier.quantity + other <= product.totalInventory) &&
+      Math.round(Number(tier.price) * 100) === currentCents &&
+      Math.round(computeBundledPrice(tier.quantity, product.basePrice, product.bundlePricing) * 100) === currentCents)
+    .sort((a, b) => b.quantity - a.quantity)[0] ?? null;
+}
+
 export interface SplitPotAmounts {
   ticketSalesAmount: string;
   winnerPrizeAmount: string;
