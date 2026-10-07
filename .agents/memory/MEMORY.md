@@ -20,6 +20,7 @@
 - [Insert-schema form/date traps](grant-form-insert-schema-dates.md) — raw createInsertSchema in zodResolver silently blocks submit (tenantId required); timestamp cols reject ISO strings server-side, need coercion.
 - [Raffle bonus tickets & order tokens](raffle-bonus-tickets.md) — one ticket sequence (sold+bonus) under product FOR UPDATE lock; public order actions need shop_orders.access_token, never order number/email.
 - [Raffle bundle pricing](raffle-bundle-pricing.md) — charge EXACT configured tier prices (greedy largest-first, no cheapest-combo optimizer); buyer pays grossed-up card fee; server totals authoritative.
+- [External raffle scope](external-raffle-scope.md) — no provider integration; rescues use external campaign links directly, and Southern Pets' current raffle stays unchanged.
 - [Shop checkout finalization](shop-checkout-confirm-gap.md) — finalize idempotently from Stripe webhooks, redirect returns, or the hourly sweep; manual confirm remains the safe repair path.
 - [Inbound SMS routing & unmatched capture](inbound-sms-routing.md) — replies only match active fosters; unmatched now logged to feed; Twilio webhook must stay fail-closed on signature.
 - [Alumni SMS photo updates](alumni-sms-updates.md) — adopter replies become unpublished happy_tails on the animal (adopters aren't users); Twilio media must be downloaded (Basic auth, URLs expire) into storage.
