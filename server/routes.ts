@@ -23931,7 +23931,7 @@ If you have any questions, please contact us.
    * Primary use case: community-service workers, walk-in volunteers, one-off helpers.
    * Body: { recipientName, recipientEmail?, recipientPhone?, sendMethod: 'email' | 'sms' | 'both' }
    */
-  app.post('/api/hold-harmless/send-adhoc', emailLimiter, requireTenant, requireAuth, requireRoleOrPageAccess(['volunteers', 'volunteer-pipeline'], 'admin', 'staff'), async (req, res, next) => {
+  app.post('/api/hold-harmless/send-adhoc', emailLimiter, requireTenant, requireAuth, requireRoleOrPageAccess(['send-hold-harmless', 'volunteers', 'volunteer-pipeline'], 'admin', 'staff'), async (req, res, next) => {
     try {
       const { customForms, customFormSubmissions } = await import('@shared/schema');
       const { generateSecureToken } = await import('./services/custom-form');

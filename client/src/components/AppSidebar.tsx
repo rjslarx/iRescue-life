@@ -181,6 +181,9 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
   // Filter favorite actions based on user's page permissions
   // Only show actions for pages the user can access
   const favoriteActions = allFavoriteActions.filter(action => {
+    // The hook checks the sending capability against individual grants and
+    // writer roles; canAccessPage has different role-based visibility rules.
+    if (action.id === "send-hold-harmless") return true;
     // If the action has a pageId, check if user can access that page
     if (action.pageId) {
       return canAccessPage(action.pageId);

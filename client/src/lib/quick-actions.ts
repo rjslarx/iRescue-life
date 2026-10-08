@@ -238,7 +238,7 @@ export const ALL_QUICK_ACTIONS: QuickAction[] = [
     icon: ShieldCheck,
     actionType: "callback",
     callbackName: "onSendHoldHarmless",
-    pageId: "volunteers",
+    pageId: "send-hold-harmless",
   },
 ];
 

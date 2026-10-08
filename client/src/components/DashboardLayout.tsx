@@ -52,7 +52,7 @@ export default function DashboardLayout({ children, title, description, actions,
   const [cpoeOpen, setCpoeOpen] = useState(false);
   const [donationDialogOpen, setDonationDialogOpen] = useState(false);
   const [holdHarmlessOpen, setHoldHarmlessOpen] = useState(false);
-  const { actions: quickActions, handleAction } = useQuickActions({
+  const { actions: availableQuickActions, handleAction } = useQuickActions({
     onAddMedicalOrder: () => setCpoeOpen(true),
     onRecordDonation: () => setDonationDialogOpen(true),
     onSendHoldHarmless: () => setHoldHarmlessOpen(true),
@@ -87,7 +87,13 @@ export default function DashboardLayout({ children, title, description, actions,
 
   const rescueName = tenantData?.tenant?.name || "Rescue Portal";
   const activeRole = user?.activeRole || "staff";
-  const showQuickActions = activeRole === "admin" || activeRole === "staff";
+  const isStaffDashboard = activeRole === "admin" || activeRole === "staff";
+  // The calendar is the actual volunteer landing page and uses this layout.
+  // Expose only the sending action in its header, including on mobile.
+  const quickActions = isStaffDashboard
+    ? availableQuickActions
+    : availableQuickActions.filter(action => action.id === "send-hold-harmless");
+  const showQuickActions = quickActions.length > 0;
   const showHelpAssistant = activeRole === "admin" || activeRole === "staff";
   
   const tenant = tenantData?.tenant;
@@ -166,7 +172,7 @@ export default function DashboardLayout({ children, title, description, actions,
                   </DropdownMenuContent>
                 </DropdownMenu>
               )}
-              {showQuickActions && <NotificationBell />}
+              {isStaffDashboard && <NotificationBell />}
               {actions}
             </div>
           </header>

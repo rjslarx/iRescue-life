@@ -1,6 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { ALL_QUICK_ACTIONS, DEFAULT_QUICK_ACTIONS, getQuickActionsByIds, type QuickAction } from "@/lib/quick-actions";
+import { ALL_QUICK_ACTIONS, DEFAULT_QUICK_ACTIONS, getQuickActionsByIds } from "@/lib/quick-actions";
+import { useAuth } from "@/contexts/AuthContext";
+import { usePagePermissions } from "@/hooks/usePagePermissions";
+import { holdHarmlessActionIds } from "@/lib/hold-harmless-access";
 
 interface QuickActionsResponse {
   quickActions: string[];
@@ -14,6 +17,8 @@ interface UseQuickActionsCallbacks {
 
 export function useQuickActions(callbacks?: UseQuickActionsCallbacks) {
   const [, navigate] = useLocation();
+  const { user } = useAuth();
+  const { canAccessPage, userPermissions, isLoading: permissionsLoading } = usePagePermissions();
 
   const { data, isLoading } = useQuery<QuickActionsResponse>({
     queryKey: ['/api/tenant/settings/quick-actions'],
@@ -22,9 +27,14 @@ export function useQuickActions(callbacks?: UseQuickActionsCallbacks) {
 
   // Use default actions if no configuration or empty array
   const configuredActionIds = data?.quickActions?.length ? data.quickActions : DEFAULT_QUICK_ACTIONS;
-  const actions = getQuickActionsByIds(configuredActionIds);
+  const actions = getQuickActionsByIds(
+    holdHarmlessActionIds(configuredActionIds, user?.activeRole, userPermissions),
+  ).filter(action => action.id === "send-hold-harmless"
+    ? !permissionsLoading
+    : !action.pageId || canAccessPage(action.pageId));
 
   const handleAction = (actionId: string) => {
+    if (!actions.some(action => action.id === actionId)) return;
     const action = ALL_QUICK_ACTIONS.find((a) => a.id === actionId);
     if (!action) return;
 

@@ -1,6 +1,7 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { SEND_HOLD_HARMLESS_PERMISSION } from "@/lib/hold-harmless-access";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Plus, X, Lock } from "lucide-react";
@@ -31,6 +32,7 @@ interface UserPagePermissionsManagerProps {
 }
 
 const DEFAULT_GRANTABLE_PAGES = [
+  SEND_HOLD_HARMLESS_PERMISSION,
   { pageId: 'volunteer-applications', displayName: 'Volunteer Applications', description: 'Manage volunteer application pipeline' },
   { pageId: 'applications', displayName: 'Adoption Applications', description: 'Manage adoption application pipeline' },
   { pageId: 'foster-management', displayName: 'Foster Management', description: 'Manage foster application pipeline' },
@@ -62,9 +64,10 @@ export function UserPagePermissionsManager({ userId, userRoles }: UserPagePermis
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/user-page-permissions', userId] });
+      queryClient.invalidateQueries({ queryKey: ['/api/user-page-permissions/me'] });
       toast({
         title: "Permission Granted",
-        description: "The user now has access to this page.",
+        description: "The user now has this additional permission.",
       });
     },
     onError: (error: Error) => {
@@ -82,9 +85,10 @@ export function UserPagePermissionsManager({ userId, userRoles }: UserPagePermis
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/user-page-permissions', userId] });
+      queryClient.invalidateQueries({ queryKey: ['/api/user-page-permissions/me'] });
       toast({
         title: "Permission Revoked",
-        description: "The user no longer has access to this page.",
+        description: "The user's additional permission has been removed.",
       });
     },
     onError: (error: Error) => {
@@ -101,9 +105,14 @@ export function UserPagePermissionsManager({ userId, userRoles }: UserPagePermis
   const userPermissions = userPermsData?.permissions || [];
   const grantedPageIds = new Set(userPermissions.map(p => p.pageId));
 
-  const grantablePages = allPages.length > 0 
+  const catalogPages = allPages.length > 0 
     ? allPages.filter(p => p.isActive).map(p => ({ pageId: p.pageId, displayName: p.displayName, description: p.description }))
     : DEFAULT_GRANTABLE_PAGES;
+  // Older tenants can have a populated page catalog without newly introduced
+  // capabilities. Keep the individual grant available independently of seeding.
+  const grantablePages = catalogPages.some(p => p.pageId === SEND_HOLD_HARMLESS_PERMISSION.pageId)
+    ? catalogPages
+    : [...catalogPages, SEND_HOLD_HARMLESS_PERMISSION];
 
   const availablePages = grantablePages.filter(p => !grantedPageIds.has(p.pageId));
 
@@ -141,7 +150,7 @@ export function UserPagePermissionsManager({ userId, userRoles }: UserPagePermis
     <div className="space-y-3" data-testid="section-user-permissions">
       <div className="flex items-center justify-between">
         <p className="text-xs text-muted-foreground">
-          Grant access to specific pages beyond their role's default permissions.
+          Grant specific pages or actions beyond their role's default permissions.
         </p>
       </div>
 

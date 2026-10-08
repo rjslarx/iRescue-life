@@ -87,6 +87,12 @@ export async function seedDefaultPagePermissions(tenantId: string) {
       allowedRoles: ['admin', 'board_member', 'staff', 'volunteer'],
     },
     {
+      pageId: 'send-hold-harmless',
+      displayName: 'Send Hold Harmless',
+      description: 'Email or text a Hold Harmless agreement without access to volunteer management',
+      allowedRoles: ['admin', 'board_member', 'staff'],
+    },
+    {
       pageId: 'volunteer-applications',
       displayName: 'Volunteer Applications',
       description: 'Review and manage incoming volunteer applications',
