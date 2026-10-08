@@ -1,3 +1,4 @@
+import { useId, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -5,11 +6,6 @@ import { SEND_HOLD_HARMLESS_PERMISSION } from "@/lib/hold-harmless-access";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Plus, X, Lock } from "lucide-react";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 
 interface PagePermission {
   id: string;
@@ -45,6 +41,8 @@ const DEFAULT_GRANTABLE_PAGES = [
 
 export function UserPagePermissionsManager({ userId, userRoles }: UserPagePermissionsManagerProps) {
   const { toast } = useToast();
+  const [permissionListOpen, setPermissionListOpen] = useState(false);
+  const permissionListId = useId();
 
   const { data: allPagesData, isLoading: isLoadingPages } = useQuery<{ pagePermissions: PagePermission[] }>({
     queryKey: ['/api/page-permissions'],
@@ -172,22 +170,35 @@ export function UserPagePermissionsManager({ userId, userRoles }: UserPagePermis
       )}
 
       {availablePages.length > 0 && (
-        <Popover>
-          <PopoverTrigger asChild>
+        <div className="space-y-2">
             <Button
+              type="button"
               variant="outline"
               size="sm"
               className="w-full"
               data-testid="button-add-permission"
+              aria-expanded={permissionListOpen}
+              aria-controls={permissionListId}
+              onClick={() => setPermissionListOpen(open => !open)}
             >
               <Plus className="h-4 w-4 mr-2" />
               Add Page Access
             </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-64 p-1 z-[100]" align="start" side="top" avoidCollisions sideOffset={5}>
-            <div className="space-y-0.5 max-h-[40vh] overflow-y-auto overscroll-contain touch-pan-y -webkit-overflow-scrolling-touch">
+          {permissionListOpen && (
+            // Stay inside DialogContent: a body-portaled popover is outside the
+            // dialog's scroll-lock boundary and can block iPad touch scrolling.
+            <div
+              id={permissionListId}
+              role="region"
+              aria-label="Available page permissions"
+              tabIndex={0}
+              className="space-y-0.5 max-h-[40dvh] overflow-y-auto overscroll-contain touch-pan-y rounded-md border bg-popover p-1"
+              style={{ WebkitOverflowScrolling: "touch" }}
+              data-testid="permission-options-scroll"
+            >
               {availablePages.map((page) => (
                 <Button
+                  type="button"
                   key={page.pageId}
                   variant="ghost"
                   size="sm"
@@ -209,8 +220,8 @@ export function UserPagePermissionsManager({ userId, userRoles }: UserPagePermis
                 </Button>
               ))}
             </div>
-          </PopoverContent>
-        </Popover>
+          )}
+        </div>
       )}
 
       {userPermissions.length === 0 && availablePages.length === 0 && (
