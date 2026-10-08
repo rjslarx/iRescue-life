@@ -1,5 +1,6 @@
 - [E-signature agreements](e-signature-agreements.md) — token-based foster/surrender/adoption sign flows; idempotency + signature-input + sandbox tsc/db:push gotchas.
 - [Platform email quota reset](email-quota-reset.md) — platform-key email is capped (emailsSentThisMonth/emailQuotaLimit); "not configured" errors often mean quota exhausted; monthly rollover is a scheduled job.
+- [Resend inbound routing](resend-inbound-routing.md) — account-level receiving includes unmatched platform mail; acknowledge permanent routing misses without disabling webhook delivery.
 - [Tenant timezone & local-time crons](tenant-timezone-scheduling.md) — tenants.timezone is always null (no UI sets it); per-tenant local-time jobs must default it, never use a midnight-UTC fallback (caused day-early SMS).
 - [Tenant settings data source](tenant-settings-data-source.md) — new tenants columns aren't in req.tenant/`/api/tenant`; read full row via `/api/tenant/settings`.
 - [In-kind donation receipt compliance](in-kind-donation-receipts.md) — IRS gating (no value on receipt; required fields) lives in 3 layers that must stay in lockstep: form, offline-donation route, receipt-service.

@@ -34500,19 +34500,34 @@ Submitted: ${new Date().toLocaleString()}
    */
   app.post('/api/resend/inbound', express.json(), async (req, res) => {
     try {
-      const event = req.body;
+      const { verifyInboundWebhook, inboundRecipients } = await import('./lib/resend-inbound-webhook');
+      const verified = verifyInboundWebhook(req.rawBody, req.headers, process.env.RESEND_WEBHOOK_SIGNING_SECRET);
+      if (!verified.ok) {
+        console.warn(`[Inbound Email] Webhook rejected: ${verified.error}`);
+        return res.status(verified.status).json({ error: verified.error });
+      }
+      const event = verified.event;
       
       // Verify this is an email.received event
-      if (event.type !== 'email.received') {
+      if (!event) {
         return res.json({ received: true });
       }
 
       const emailData = event.data;
-      console.log(`[Inbound Email] Received webhook - subject: ${emailData.subject}, from: ${emailData.from}, to: ${JSON.stringify(emailData.to)}, has attachments field: ${!!emailData.attachments}, attachments count: ${emailData.attachments?.length || 0}`);
+      console.log(`[Inbound Email] Received verified message ${emailData.email_id}`);
       
       // Extract the "to" address from the email payload
-      const toAddress = Array.isArray(emailData.to) ? emailData.to[0] : emailData.to;
-      const normalizedTo = toAddress.trim().toLowerCase();
+      const recipients = inboundRecipients(emailData.to);
+      const toAddress = recipients[0];
+      if (!toAddress) return res.status(400).json({ error: 'Missing email recipient' });
+      const normalizedTo = toAddress;
+
+      const { isPlatformInboundMail, forwardPlatformInboundMail } = await import('./lib/platform-inbound-mail');
+      if (isPlatformInboundMail(recipients)) {
+        const result = await forwardPlatformInboundMail(emailData.email_id);
+        console.log(`[Inbound Email] Platform message ${emailData.email_id} ${result.duplicate ? 'already forwarded' : 'forwarded'}`);
+        return res.json({ received: true, platform: true, duplicate: result.duplicate });
+      }
 
       // Route to tenant: first try system_inbound_email match (supports forwarded emails),
       // then fall back to subdomain extraction for backward compatibility
@@ -34535,18 +34550,23 @@ Submitted: ${new Date().toLocaleString()}
       }
 
       if (!tenant) {
-        console.error('Tenant not found for inbound email address:', normalizedTo);
-        return res.status(404).json({ error: 'Tenant not found' });
+        // An account-level webhook also receives platform mail such as admin@
+        // and notifications@. Retrying cannot turn these into tenant addresses.
+        // The original message remains available in Resend's receiving inbox.
+        console.warn(`[Inbound Email] Unmatched recipient; acknowledged message ${emailData.email_id}`);
+        return res.json({ received: true, ignored: true, reason: 'unmatched_recipient' });
       }
 
-      // Get Resend API key for this tenant or use platform key
-      const { decrypt } = await import('./lib/encryption');
+      const { inboundEmails } = await import('@shared/schema');
+      const [existingEmail] = await db.select({ id: inboundEmails.id }).from(inboundEmails)
+        .where(eq(inboundEmails.messageId, emailData.email_id)).limit(1);
+      if (existingEmail) return res.json({ received: true, duplicate: true });
+
+      // This webhook belongs to the platform Resend account. A tenant's sending
+      // API key may belong to a different account and cannot fetch these emails.
       const { Resend } = await import('resend');
       
-      let resendApiKey = process.env.PLATFORM_RESEND_API_KEY;
-      if (tenant.resendApiKeyEncrypted && tenant.resendEnabled) {
-        resendApiKey = decrypt(tenant.resendApiKeyEncrypted);
-      }
+      const resendApiKey = process.env.PLATFORM_RESEND_API_KEY;
 
       if (!resendApiKey) {
         console.error('No Resend API key available for tenant:', tenant.id);
@@ -34658,8 +34678,6 @@ Submitted: ${new Date().toLocaleString()}
       }
 
       // Save to inbound_emails table
-      const { inboundEmails } = await import('@shared/schema');
-      
       const insertResult = await db.insert(inboundEmails).values({
         tenantId: tenant.id,
         messageId: emailData.email_id,
