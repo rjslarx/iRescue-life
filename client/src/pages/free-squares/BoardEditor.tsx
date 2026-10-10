@@ -21,6 +21,7 @@ export default function BoardEditor({ board, onClose, onSaved }: { board?: FreeS
   }));
   const [validation, setValidation] = useState<string | null>(null);
   const save = useSaveFreeSquareBoard();
+  const digitsAssigned = !!board?.digits_assigned_at;
   const set = <K extends keyof BoardInput>(key: K, value: BoardInput[K]) => setForm(old => ({ ...old, [key]: value }));
   return <Dialog open onOpenChange={open => { if (!open && !save.isPending) onClose(); }}>
     <DialogContent className="free-squares max-h-[90dvh] overflow-y-auto sm:max-w-2xl" onInteractOutside={event => { if (save.isPending) event.preventDefault(); }} onEscapeKeyDown={event => { if (save.isPending) event.preventDefault(); }}>
@@ -31,14 +32,21 @@ export default function BoardEditor({ board, onClose, onSaved }: { board?: FreeS
         const result = freeSquareBoardSchema.safeParse(form);
         if (!result.success) { setValidation(result.error.issues.map(issue => `${issue.path.join(" ")}: ${issue.message}`).join(". ")); return; }
         setValidation(null);
-        save.mutate({ id: board?.id, data: result.data }, { onSuccess: result => onSaved(result.board) });
+        const data = digitsAssigned ? {
+          title: result.data.title, description: result.data.description,
+          home_score: result.data.home_score, away_score: result.data.away_score,
+          email_subject: result.data.email_subject, email_template: result.data.email_template,
+          sms_template: result.data.sms_template,
+        } : result.data;
+        save.mutate({ id: board?.id, data }, { onSuccess: result => onSaved(result.board) });
       }}>
         <fieldset disabled={save.isPending} className="space-y-5 min-w-0">
           <div className="space-y-2"><Label htmlFor="square-title">Board title</Label><Input autoFocus id="square-title" data-testid="input-board-title" required maxLength={120} value={form.title} onChange={event => set("title", event.target.value)} placeholder="Sunday football with our rescue" /></div>
           <div className="space-y-2"><Label htmlFor="square-description">A note for your community</Label><Textarea id="square-description" data-testid="input-board-description" maxLength={2000} value={form.description} onChange={event => set("description", event.target.value)} placeholder="Tell everyone what this gathering is about." /></div>
+          {digitsAssigned && <p className="rounded-lg border bg-muted/30 p-3 text-sm">Score digits are permanent. Team names and reservations are locked; this board cannot return to open or draft. Scores, descriptions and templates can still be updated.</p>}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {(["home", "away"] as const).map(side => <div className="space-y-3" key={side}>
-              <div className="space-y-2"><Label htmlFor={`square-${side}`}>{side === "home" ? "Home" : "Away"} team</Label><Input id={`square-${side}`} data-testid={`input-${side}-team`} required maxLength={80} value={form[`${side}_team`]} onChange={event => set(`${side}_team`, event.target.value)} /></div>
+              <div className="space-y-2"><Label htmlFor={`square-${side}`}>{side === "home" ? "Home team · Columns / top" : "Away team · Rows / left"}</Label><Input id={`square-${side}`} data-testid={`input-${side}-team`} disabled={digitsAssigned} required maxLength={80} value={form[`${side}_team`]} onChange={event => set(`${side}_team`, event.target.value)} /></div>
               <div className="space-y-2"><Label htmlFor={`square-${side}-score`}>Score (optional)</Label><Input id={`square-${side}-score`} data-testid={`input-${side}-score`} type="number" min={0} max={999} step={1} value={form[`${side}_score`] ?? ""} onChange={event => set(`${side}_score`, event.target.value === "" ? null : Number(event.target.value))} /></div>
             </div>)}
           </div>

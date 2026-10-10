@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { Fragment, useEffect } from "react";
 import type { ReactNode } from "react";
 import { AlertCircle, Grid3X3, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -52,20 +52,33 @@ export function SquareScore({ board }: { board: Pick<FreeSquareBoard, "home_team
     <div className="min-w-0 flex-1 text-right"><p className="text-sm font-medium break-words mb-2">{board.away_team}</p><div className="sq-score">{board.away_score ?? "—"}</div></div>
   </div>;
 }
-export function SquareGrid({ claimed, selected = [], onSelect, disabled = false }: { claimed: number[]; selected?: number[]; onSelect?: (square: number) => void; disabled?: boolean }) {
+export function SquareGrid({ board, claimed, selected = [], onSelect, disabled = false }: { board: Pick<FreeSquareBoard, "home_team" | "away_team" | "row_digits" | "column_digits" | "digits_assigned_at">; claimed: number[]; selected?: number[]; onSelect?: (square: number) => void; disabled?: boolean }) {
   const claimedSet = new Set(claimed);
+  const assigned = !!board.digits_assigned_at;
   return <div className="space-y-4">
-    <div className="sq-grid" aria-label="Community board, squares 1 through 100">
+    <div className="sq-axis-board">
+      <p className="sq-axis-label sq-axis-top">{board.home_team} · Home · Columns / top</p>
+      <p className="sq-axis-label sq-axis-left">{board.away_team} · Away · Rows / left</p>
+      <div className="sq-grid" data-assigned={assigned} aria-label="Community board, squares 1 through 100">
+      <span aria-hidden="true" />
+      {Array.from({ length: 10 }, (_, column) => <span className="sq-digit" key={`column-${column}`} data-testid={`column-digit-${column}`} aria-label={`${board.home_team}, column ${column + 1}, ${assigned ? `score digit ${board.column_digits?.[column] ?? "pending"}` : "digit pending"}`}>{assigned ? board.column_digits?.[column] ?? "—" : "—"}</span>)}
       {Array.from({ length: 100 }, (_, index) => index + 1).map(number => {
         const isSelected = selected.includes(number);
         const isClaimed = claimedSet.has(number);
-        return <button key={number} type="button" className="sq-cell" data-testid={`square-${number}`}
+        const row = Math.floor((number - 1) / 10);
+        const column = (number - 1) % 10;
+        return <Fragment key={number}>
+          {column === 0 && <span className="sq-digit" data-testid={`row-digit-${row}`} aria-label={`${board.away_team}, row ${row + 1}, ${assigned ? `score digit ${board.row_digits?.[row] ?? "pending"}` : "digit pending"}`}>{assigned ? board.row_digits?.[row] ?? "—" : "—"}</span>}
+          <button type="button" className="sq-cell" data-testid={`square-${number}`}
           data-claimed={isClaimed} data-selected={isSelected} aria-pressed={isSelected}
-          aria-label={`Square ${number}, ${isClaimed ? "claimed" : isSelected ? "selected" : "available"}`}
-          disabled={disabled || isClaimed || !onSelect || (selected.length >= 10 && !isSelected)}
-          onClick={() => onSelect?.(number)}>{number}</button>;
+          aria-label={`Square ${number}, ${isClaimed ? "claimed" : isSelected ? "selected" : "available"}${assigned ? `, ${board.home_team} score digit ${board.column_digits?.[column]}, ${board.away_team} score digit ${board.row_digits?.[row]}` : ""}`}
+          disabled={disabled || assigned || isClaimed || !onSelect || (selected.length >= 10 && !isSelected)}
+          onClick={() => onSelect?.(number)}>{number}</button>
+        </Fragment>;
       })}
+      </div>
     </div>
+    <p className="text-xs text-muted-foreground">{assigned ? "Headers show the permanent score digits. Use the last digit of each team’s score; square numbers 1–100 stay unchanged." : "Header digits are pending. After all 100 squares are reserved, staff can assign 0–9 once per axis in two independent random shuffles."}</p>
     <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted-foreground">
       <span className="flex gap-1.5 items-center"><span className="h-3 w-3 rounded-sm border bg-card" />Available</span>
       <span className="flex gap-1.5 items-center"><span className="h-3 w-3 rounded-sm border bg-muted" />Claimed</span>

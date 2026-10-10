@@ -131,6 +131,10 @@ export function registerFreeSquaresRoutes(app: Express, deps: {
     res.json(await store.detail(req.tenant!.id, req.params.id))));
   app.patch("/api/free-squares/:id", ...staffGuards, wrap(async (req, res) =>
     res.json({ board: await store.update(req.tenant!.id, req.params.id, req.body) })));
+  app.post("/api/free-squares/:id/assign-digits", ...staffGuards, wrap(async (req, res) => {
+    z.object({}).strict().parse(req.body);
+    res.json({ board: await store.assignDigits(req.tenant!.id, req.params.id, req.user!.id) });
+  }));
   app.post("/api/free-squares/:id/reservations/:reservationId/cancel", ...staffGuards, wrap(async (req, res) => {
     await store.cancel(req.tenant!.id, req.params.id, req.params.reservationId);
     res.json({ success: true });

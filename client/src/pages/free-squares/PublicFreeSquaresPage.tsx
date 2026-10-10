@@ -39,7 +39,7 @@ function PublicBoard({ id }: { id: string }) {
   if (!query.data) return null;
   const { board, claimedSquares } = query.data;
   if (board.status === "draft" || board.status === "archived") return <main className="free-squares mx-auto max-w-3xl p-6"><SquareEmpty title="Board unavailable">This board is not currently shared with the community.</SquareEmpty></main>;
-  const isOpen = board.status === "open";
+  const isOpen = board.status === "open" && !board.digits_assigned_at;
   const submit = async () => {
     if (inFlight.current || !isOpen) return;
     const fingerprint = JSON.stringify({ ...form, squares: selected });
@@ -77,12 +77,12 @@ function PublicBoard({ id }: { id: string }) {
       <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1.3fr)_minmax(280px,.8fr)] gap-6 items-start">
         <section className="sq-panel space-y-6">
           <SquareScore board={board} />
-          <div className="flex items-baseline justify-between gap-3"><h2 className="font-semibold">Choose your squares</h2><span className="text-xs text-muted-foreground">{100 - claimedSquares.length} available</span></div>
-          <SquareGrid claimed={claimedSquares} selected={selected} disabled={!isOpen || reserve.isPending || !!success} onSelect={number => {
+          <div className="flex items-baseline justify-between gap-3"><h2 className="font-semibold">{board.digits_assigned_at ? "Your game-day board" : isOpen ? "Choose your squares" : "Community board"}</h2><span className="text-xs text-muted-foreground">{board.digits_assigned_at ? "Digits locked" : `${100 - claimedSquares.length} available`}</span></div>
+          <SquareGrid board={board} claimed={claimedSquares} selected={selected} disabled={!isOpen || reserve.isPending || !!success} onSelect={number => {
             request.current = null; reserve.reset(); setValidation(null);
             setSelected(old => old.includes(number) ? old.filter(value => value !== number) : old.length < 10 ? [...old, number].sort((a, b) => a - b) : old);
           }} />
-          <p className="text-xs text-muted-foreground">Choose 1–10 available squares. The board refreshes every 10 seconds. Names and contact details are never shown here.</p>
+          <p className="text-xs text-muted-foreground">{isOpen ? "Choose 1–10 available squares. " : ""}The board refreshes every 10 seconds. Names and contact details are never shown here.</p>
         </section>
         <section className="sq-panel space-y-5" aria-label="Reserve your free squares">
           {success ? <div className="space-y-5" role="status" data-testid="reservation-success">

@@ -12,7 +12,7 @@ export function canManageFreeSquares(tenantId: string | null | undefined, role: 
 export type BoardInput = Pick<FreeSquareBoard, "title" | "description" | "status" | "home_team" | "away_team" | "home_score" | "away_score" | "email_subject" | "email_template" | "sms_template">;
 export type BoardDetail = { board: FreeSquareBoard; reservations: FreeSquareReservation[]; messages: FreeSquareMessage[] };
 export type PublicBoardData = {
-  board: Pick<FreeSquareBoard, "id" | "title" | "description" | "status" | "home_team" | "away_team" | "home_score" | "away_score">;
+  board: Pick<FreeSquareBoard, "id" | "title" | "description" | "status" | "home_team" | "away_team" | "home_score" | "away_score" | "row_digits" | "column_digits" | "digits_assigned_at">;
   claimedSquares: number[];
 };
 export async function squareRequest<T>(method: string, url: string, body?: unknown): Promise<T> {
@@ -80,6 +80,24 @@ export function useSaveFreeSquareBoard() {
       queryClient.setQueryData<BoardDetail>([`/api/free-squares/${board.id}`, tenantId], old => old ? { ...old, board } : undefined);
       void queryClient.invalidateQueries({ queryKey: [`/api/free-squares/public/${board.id}`, tenantId] });
     },
+  });
+}
+export function useAssignFreeSquareDigits(id: string) {
+  const { tenantId } = useTenant();
+  const refresh = () => {
+    void queryClient.invalidateQueries({ queryKey: [`/api/free-squares/${id}`, tenantId] });
+    void queryClient.invalidateQueries({ queryKey: ["/api/free-squares", tenantId] });
+    void queryClient.invalidateQueries({ queryKey: [`/api/free-squares/public/${id}`, tenantId] });
+  };
+  return useMutation({
+    retry: false,
+    mutationFn: () => squareRequest<{ board: FreeSquareBoard }>("POST", `/api/free-squares/${id}/assign-digits`, {}),
+    onSuccess: ({ board }) => {
+      queryClient.setQueryData<BoardDetail>([`/api/free-squares/${id}`, tenantId], old => old ? { ...old, board } : undefined);
+      refresh();
+    },
+    // A concurrent release or assignment may have changed readiness.
+    onError: refresh,
   });
 }
 export function useReleaseFreeSquare(id: string) {

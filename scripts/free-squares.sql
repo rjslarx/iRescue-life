@@ -16,6 +16,26 @@ CREATE TABLE IF NOT EXISTS free_square_boards (
 );
 CREATE INDEX IF NOT EXISTS free_square_boards_tenant_idx ON free_square_boards(tenant_id);
 
+-- Additive upgrade for boards created before score-digit assignment existed.
+ALTER TABLE free_square_boards ADD COLUMN IF NOT EXISTS row_digits integer[];
+ALTER TABLE free_square_boards ADD COLUMN IF NOT EXISTS column_digits integer[];
+ALTER TABLE free_square_boards ADD COLUMN IF NOT EXISTS digits_assigned_at timestamptz;
+ALTER TABLE free_square_boards ADD COLUMN IF NOT EXISTS digits_assigned_by uuid REFERENCES users(id) ON DELETE SET NULL;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='free_square_boards_digits_check'
+    AND conrelid='free_square_boards'::regclass) THEN
+    ALTER TABLE free_square_boards ADD CONSTRAINT free_square_boards_digits_check CHECK (
+      (row_digits IS NULL AND column_digits IS NULL AND digits_assigned_at IS NULL)
+      OR (row_digits IS NOT NULL AND column_digits IS NOT NULL AND digits_assigned_at IS NOT NULL
+        AND cardinality(row_digits)=10 AND cardinality(column_digits)=10
+        AND array_ndims(row_digits)=1 AND array_ndims(column_digits)=1
+        AND array_lower(row_digits,1)=1 AND array_lower(column_digits,1)=1
+        AND row_digits @> ARRAY[0,1,2,3,4,5,6,7,8,9]
+        AND column_digits @> ARRAY[0,1,2,3,4,5,6,7,8,9])
+    );
+  END IF;
+END $$;
+
 CREATE TABLE IF NOT EXISTS free_square_reservations (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,

@@ -51,6 +51,7 @@ export const freeSquareMessageSchema = z.object({
 
 export type FreeSquareBoard = z.infer<typeof freeSquareBoardSchema> & {
   id: string; tenant_id: string; created_at: string; reservation_count?: number; claimed_count?: number;
+  row_digits: number[] | null; column_digits: number[] | null; digits_assigned_at: string | null;
 };
 export type FreeSquareReservation = {
   id: string; name: string; email: string | null; phone: string | null;

@@ -26,8 +26,46 @@
 }
 .free-squares .sq-grid {
   display: grid;
-  grid-template-columns: repeat(10, minmax(0, 1fr));
+  grid-template-columns: repeat(11, minmax(0, 1fr));
   gap: clamp(3px, .65vw, 7px);
+}
+.free-squares .sq-axis-board {
+  display: grid;
+  grid-template-columns: 1.25rem minmax(0, 1fr);
+  gap: .4rem;
+}
+.free-squares .sq-axis-top {
+  grid-column: 2;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.free-squares .sq-axis-left {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  text-align: center;
+  overflow-wrap: anywhere;
+  max-height: 100%;
+}
+.free-squares .sq-axis-label {
+  font-size: .7rem;
+  font-weight: 600;
+  color: hsl(var(--sq-accent));
+}
+.free-squares .sq-digit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+  border-radius: .35rem;
+  background: hsl(var(--sq-soft));
+  color: hsl(var(--sq-accent));
+  font-size: clamp(.75rem, 2vw, 1.1rem);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.free-squares .sq-grid[data-assigned="true"] .sq-cell[data-claimed="true"] {
+  text-decoration: none;
+  color: hsl(var(--sq-ink));
 }
 .free-squares .sq-cell {
   aspect-ratio: 1;

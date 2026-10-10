@@ -22,3 +22,9 @@ The user approved automatic reservation emails to the rescue containing the part
 **Why:** Rescue staff need the reservation details without tracking social-media comments; the accepted offer was specifically an automatic email to the rescue.
 
 **How to apply:** Send internal reservation alerts to the rescue, keeping participant messaging and its consent controls separate.
+
+Score-digit assignment is one-time after all 100 squares are filled. Home team corresponds to columns/top; away team corresponds to rows/left. Assignment locks the roster and team identities, but score updates remain allowed.
+
+**Why:** Once digits are revealed, allowing reshuffles, team swaps, or new square selections would change the agreed assignments or let participants choose favorable digits.
+
+**How to apply:** Preserve assignments across retries and edits, and keep the axis convention identical in staff and public views. Do not introduce resets or post-assignment roster edits without an explicit product decision.

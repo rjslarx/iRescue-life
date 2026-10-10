@@ -1,6 +1,7 @@
 import type { Pool, PoolClient } from "pg";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { randomInt } from "node:crypto";
 import {
   freeSquareBoardSchema, freeSquareReservationSchema, freeSquareMessageSchema,
   SQUARE_SMS_CONSENT,
@@ -8,6 +9,15 @@ import {
 
 export class SquareError extends Error {
   constructor(public status: number, message: string) { super(message); }
+}
+export function shuffleScoreDigits() {
+  const digits = Array.from({ length: 10 }, (_, digit) => digit);
+  // Unbiased Fisher–Yates using server-side cryptographic randomness.
+  for (let index = digits.length - 1; index > 0; index--) {
+    const other = randomInt(index + 1);
+    [digits[index], digits[other]] = [digits[other], digits[index]];
+  }
+  return digits;
 }
 export function normalizeSquarePhone(value?: string) {
   if (!value?.trim()) return null;
@@ -35,7 +45,9 @@ export class FreeSquaresStore {
       to_regclass('free_square_boards') IS NOT NULL AND
       to_regclass('free_square_reservations') IS NOT NULL AND
       to_regclass('free_square_claims') IS NOT NULL AND
-      to_regclass('free_square_messages') IS NOT NULL AS ready`);
+      to_regclass('free_square_messages') IS NOT NULL AND
+      EXISTS (SELECT 1 FROM pg_constraint WHERE conname='free_square_boards_digits_check'
+        AND conrelid=to_regclass('free_square_boards')) AS ready`);
     if (existing.rows[0].ready) return;
     const ddl = await readFile(resolve(process.cwd(), "scripts/free-squares.sql"), "utf8");
     await this.transaction(async client => {
@@ -81,10 +93,32 @@ export class FreeSquaresStore {
     const changes = freeSquareBoardSchema.partial().parse(input);
     if (!Object.keys(changes).length) throw new SquareError(400, "No changes supplied.");
     return this.transaction(async client => {
-      await this.getBoard(tenantId, boardId, client, true);
+      const board = await this.getBoard(tenantId, boardId, client, true);
+      if (board.digits_assigned_at && (
+        (changes.home_team !== undefined && changes.home_team !== board.home_team) ||
+        (changes.away_team !== undefined && changes.away_team !== board.away_team) ||
+        (changes.status !== undefined && !["closed", "archived"].includes(changes.status))
+      )) throw new SquareError(409, "Score digits are assigned. Team names and reservations are locked; you can still update scores or archive the board.");
       return (await client.query(`UPDATE free_square_boards SET
         ${Object.keys(changes).map((k, i) => `${k}=$${i + 3}`).join(",")}
         WHERE tenant_id=$1 AND id=$2 RETURNING *`, [tenantId, boardId, ...Object.values(changes)])).rows[0];
+    });
+  }
+  async assignDigits(tenantId: string, boardId: string, userId: string) {
+    return this.transaction(async client => {
+      // Same lock as claims, releases and edits: a full-board check and the
+      // one-time assignment are atomic even across multiple server instances.
+      const board = await this.getBoard(tenantId, boardId, client, true);
+      if (board.digits_assigned_at) return board; // retry never reshuffles
+      if (!["open", "closed"].includes(board.status))
+        throw new SquareError(409, "Open or close the board before assigning score digits.");
+      const count = await client.query(`SELECT count(*)::int AS total FROM free_square_claims WHERE board_id=$1`, [boardId]);
+      if (count.rows[0].total !== 100)
+        throw new SquareError(409, "All 100 squares must be reserved before assigning score digits.");
+      return (await client.query(`UPDATE free_square_boards
+        SET row_digits=$3, column_digits=$4, digits_assigned_at=now(), digits_assigned_by=$5, status='closed'
+        WHERE tenant_id=$1 AND id=$2 RETURNING *`,
+      [tenantId, boardId, shuffleScoreDigits(), shuffleScoreDigits(), userId])).rows[0];
     });
   }
   async detail(tenantId: string, boardId: string) {
@@ -103,7 +137,8 @@ export class FreeSquaresStore {
     // tokens, staff identifiers, or reservation IDs belonging to other people.
     return {
       board: { id: b.id, title: b.title, description: b.description, status: b.status,
-        home_team: b.home_team, away_team: b.away_team, home_score: b.home_score, away_score: b.away_score },
+        home_team: b.home_team, away_team: b.away_team, home_score: b.home_score, away_score: b.away_score,
+        row_digits: b.row_digits, column_digits: b.column_digits, digits_assigned_at: b.digits_assigned_at },
       claimedSquares: claims.rows.map(row => row.square),
     };
   }
@@ -122,6 +157,7 @@ export class FreeSquaresStore {
         return { reservation: { id: r.id, squares: r.squares }, replay: true };
       }
       if (board.status !== "open") throw new SquareError(409, "This board is not accepting reservations.");
+      if (board.digits_assigned_at) throw new SquareError(409, "Reservations are locked after score digits are assigned.");
       const taken = await client.query(`SELECT square FROM free_square_claims WHERE board_id=$1 AND square=ANY($2::int[])`, [boardId, squares]);
       if (taken.rows.length) throw new SquareError(409, `Squares ${taken.rows.map(r => `#${r.square}`).join(", ")} were just reserved. Please choose again.`);
       const result = await client.query(`INSERT INTO free_square_reservations
@@ -136,7 +172,8 @@ export class FreeSquaresStore {
   }
   async cancel(tenantId: string, boardId: string, reservationId: string) {
     await this.transaction(async client => {
-      await this.getBoard(tenantId, boardId, client, true);
+      const board = await this.getBoard(tenantId, boardId, client, true);
+      if (board.digits_assigned_at) throw new SquareError(409, "Reservations are locked after score digits are assigned.");
       const result = await client.query(`UPDATE free_square_reservations SET cancelled_at=COALESCE(cancelled_at,now())
         WHERE id=$1 AND tenant_id=$2 AND board_id=$3 RETURNING id`, [reservationId, tenantId, boardId]);
       if (!result.rows[0]) throw new SquareError(404, "Reservation not found.");

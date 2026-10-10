@@ -4,7 +4,7 @@ import { after, before, test } from "node:test";
 import express from "express";
 import type { Server } from "node:http";
 import { pool } from "../server/db";
-import { FreeSquaresStore, normalizeSquarePhone } from "../server/services/free-squares";
+import { FreeSquaresStore, normalizeSquarePhone, shuffleScoreDigits } from "../server/services/free-squares";
 import { registerFreeSquaresRoutes, type SquareDelivery } from "../server/routes/free-squares";
 import { FREE_SQUARES_TENANTS, hasFreeSquaresAccess, renderSquareMessage } from "../shared/free-squares";
 import { createReservationNotifier } from "../server/services/free-square-notifications";
@@ -105,6 +105,81 @@ test("rescue notification includes contact details and all squares, with safe HT
   assert.match(sent.subject, /Sunday Game/);
   assert.ok(!sent.html.includes("<script>"));
   assert.match(sent.html, /&lt;script&gt;/);
+});
+test("score-digit shuffles contain each digit once and return independent arrays", () => {
+  const expected = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+  const shuffles = Array.from({ length: 25 }, () => shuffleScoreDigits());
+  for (const digits of shuffles) assert.deepEqual([...digits].sort((a, b) => a - b), expected);
+  assert.notEqual(shuffles[0], shuffles[1]);
+  // Do not assert that random sequences differ: equality is a valid random result.
+});
+test("score digits require a full board, persist once, stay private-safe and lock the roster", async () => {
+  const board = await store.create(tenantId, userId, { title: "Score digit test", status: "open" });
+  const path = `/${board.id}/assign-digits`;
+  try {
+    assert.equal((await request(path, "POST", {}, { anonymous: true })).status, 401);
+    assert.equal((await request(path, "POST", {}, { role: "volunteer" })).status, 403);
+    assert.equal((await request(path, "POST", {}, { tenant: otherTenant })).status, 404);
+    assert.equal((await request(path, "POST", { row_digits: [0] })).status, 400);
+    assert.equal((await store.publicBoard(tenantId, board.id)).board.row_digits, null);
+    for (let start = 1; start <= 91; start += 10) {
+      await store.reserve(tenantId, board.id, reservationInput(
+        Array.from({ length: Math.min(10, 100 - start) }, (_, index) => start + index)));
+    }
+    assert.equal((await request(path, "POST", {})).status, 409); // 99 squares
+    const last = await store.reserve(tenantId, board.id, reservationInput([100]));
+    await store.update(tenantId, board.id, { status: "draft" });
+    assert.equal((await request(path, "POST", {})).status, 409);
+    await store.update(tenantId, board.id, { status: "archived" });
+    assert.equal((await request(path, "POST", {})).status, 409);
+    await store.update(tenantId, board.id, { status: "closed" });
+    const assigned = await Promise.all([request(path, "POST", {}), request(path, "POST", {})]);
+    assert.ok(assigned.every(result => result.status === 200));
+    assert.deepEqual(assigned[0].data.board, assigned[1].data.board);
+    const digits = assigned[0].data.board;
+    assert.equal(digits.status, "closed");
+    assert.equal(digits.digits_assigned_by, userId);
+    assert.ok(digits.digits_assigned_at);
+    for (const array of [digits.row_digits, digits.column_digits])
+      assert.deepEqual([...array].sort((a, b) => a - b), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    const published = await store.publicBoard(tenantId, board.id);
+    assert.deepEqual(published.board.row_digits, digits.row_digits);
+    assert.deepEqual(published.board.column_digits, digits.column_digits);
+    assert.ok(!("digits_assigned_by" in published.board));
+    assert.ok(!("email_template" in published.board));
+    assert.equal((await request(`/${board.id}`, "PATCH", { row_digits: [0] })).status, 400);
+    assert.equal((await request(`/${board.id}`, "PATCH", { home_team: "Changed" })).status, 409);
+    assert.equal((await request(`/${board.id}`, "PATCH", { status: "open" })).status, 409);
+    assert.equal((await request(`/${board.id}/reservations/${last.reservation.id}/cancel`, "POST", {})).status, 409);
+    await assert.rejects(store.reserve(tenantId, board.id, reservationInput([100])), /not accepting/);
+    assert.equal((await request(`/${board.id}`, "PATCH", { home_score: 27, away_score: 10 })).status, 200);
+    const reloaded = await new FreeSquaresStore(pool).getBoard(tenantId, board.id);
+    assert.deepEqual(reloaded.row_digits, digits.row_digits);
+    assert.deepEqual(reloaded.column_digits, digits.column_digits);
+    await assert.rejects(pool.query("UPDATE free_square_boards SET row_digits=ARRAY[0,0,2,3,4,5,6,7,8,9] WHERE id=$1", [board.id]),
+      /free_square_boards_digits_check/);
+  } finally {
+    await pool.query("DELETE FROM free_square_boards WHERE id=$1", [board.id]);
+  }
+});
+test("score assignment and releasing a reservation serialize on the same board lock", async () => {
+  const board = await store.create(tenantId, userId, { title: "Assignment race test", status: "open" });
+  try {
+    let firstId = "";
+    for (let start = 1; start <= 91; start += 10) {
+      const result = await store.reserve(tenantId, board.id, reservationInput(Array.from({ length: 10 }, (_, i) => start + i)));
+      if (!firstId) firstId = result.reservation.id;
+    }
+    const results = await Promise.allSettled([
+      store.assignDigits(tenantId, board.id, userId),
+      store.cancel(tenantId, board.id, firstId),
+    ]);
+    assert.equal(results.filter(result => result.status === "fulfilled").length, 1);
+    const afterRace = await store.publicBoard(tenantId, board.id);
+    assert.equal(afterRace.claimedSquares.length, afterRace.board.digits_assigned_at ? 100 : 90);
+  } finally {
+    await pool.query("DELETE FROM free_square_boards WHERE id=$1", [board.id]);
+  }
 });
 test("concurrent reservation retries notify rescue only once; notification failure preserves booking", async () => {
   const input = reservationInput([91, 92]);

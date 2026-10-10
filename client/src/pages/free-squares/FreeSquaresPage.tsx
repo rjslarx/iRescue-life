@@ -12,7 +12,7 @@ import type { FreeSquareBoard, FreeSquareReservation } from "@shared/free-square
 import BoardEditor from "./BoardEditor";
 import MessageComposer from "./MessageComposer";
 import { SquareEmpty, SquareError, SquareFreeNotice, SquareGrid, SquareLoading, SquareScore, SquareStatus, useSquarePrivacy } from "./SquareComponents";
-import { useFreeSquareBoards, useFreeSquareDetail, useFreeSquaresAccess, useReleaseFreeSquare, useSaveFreeSquareBoard } from "./use-free-squares";
+import { useAssignFreeSquareDigits, useFreeSquareBoards, useFreeSquareDetail, useFreeSquaresAccess, useReleaseFreeSquare, useSaveFreeSquareBoard } from "./use-free-squares";
 
 export default function FreeSquaresPage() {
   useSquarePrivacy();
@@ -58,11 +58,13 @@ function BoardDetail({ id, onBack }: { id: string; onBack: () => void }) {
   const detail = useFreeSquareDetail(id, true);
   const save = useSaveFreeSquareBoard();
   const release = useReleaseFreeSquare(id);
+  const assignDigits = useAssignFreeSquareDigits(id);
   const { basePath } = useTenant();
   const [editing, setEditing] = useState(false);
   const [recipient, setRecipient] = useState<FreeSquareReservation | null>(null);
   const [releaseTarget, setReleaseTarget] = useState<FreeSquareReservation | null>(null);
   const [archiveConfirm, setArchiveConfirm] = useState(false);
+  const [digitsConfirm, setDigitsConfirm] = useState(false);
   const [tab, setTab] = useState<"reservations" | "history" | "board">("reservations");
   const [filter, setFilter] = useState("active");
   const [search, setSearch] = useState("");
@@ -72,6 +74,9 @@ function BoardDetail({ id, onBack }: { id: string; onBack: () => void }) {
   const { board, reservations, messages } = detail.data;
   const active = reservations.filter(item => !item.cancelled_at);
   const claimed = active.flatMap(item => item.squares);
+  const digitsAssigned = !!board.digits_assigned_at;
+  const claimedCount = new Set(claimed).size;
+  const canAssignDigits = claimedCount === 100 && (board.status === "open" || board.status === "closed") && !digitsAssigned;
   const publicVisible = board.status === "open" || board.status === "closed";
   const updateStatus = (status: FreeSquareBoard["status"]) => save.mutate({ id, data: { status } }, { onSuccess: () => setArchiveConfirm(false) });
   const filtered = reservations.filter(item =>
@@ -84,7 +89,8 @@ function BoardDetail({ id, onBack }: { id: string; onBack: () => void }) {
       <div className="min-w-0 space-y-2"><SquareStatus status={board.status} /><h1 className="text-2xl md:text-3xl font-bold tracking-tight break-words">{board.title}</h1><p className="text-sm text-muted-foreground">{claimed.length} squares claimed · {active.length} active reservations · Staff-only contact details</p></div>
       <div className="sq-actions">
         <Button variant="outline" onClick={() => setEditing(true)} data-testid="button-edit-board">Edit board & templates</Button>
-        {board.status !== "open" && <Button disabled={save.isPending} onClick={() => updateStatus("open")} data-testid="button-open-board">{board.status === "draft" ? "Open board" : "Reopen board"}</Button>}
+        {board.status !== "open" && !digitsAssigned && <Button disabled={save.isPending || assignDigits.isPending} onClick={() => updateStatus("open")} data-testid="button-open-board">{board.status === "draft" ? "Open board" : "Reopen board"}</Button>}
+        {board.status === "archived" && digitsAssigned && <Button variant="outline" disabled={save.isPending} onClick={() => updateStatus("closed")} data-testid="button-restore-closed-board">Restore as closed</Button>}
         {board.status === "open" && <Button disabled={save.isPending} variant="outline" onClick={() => updateStatus("closed")} data-testid="button-close-board">Close reservations</Button>}
         {board.status !== "archived" && <Button variant="ghost" disabled={save.isPending} onClick={() => setArchiveConfirm(true)} data-testid="button-archive-board">Archive</Button>}
       </div>
@@ -104,11 +110,22 @@ function BoardDetail({ id, onBack }: { id: string; onBack: () => void }) {
       {copyState === "error" && <p role="alert" className="text-sm text-destructive">Could not copy the link. Open “View shared board” and copy its address instead.</p>}
       <p className="text-xs text-muted-foreground">Shared by direct link only. This page and the public board request no search indexing. Reservations are confirmed immediately; your team decides when to reach out.</p>
     </section>
+    <section className="sq-panel space-y-3" aria-label="Score digit assignment">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="space-y-1 min-w-0">
+          <h2 className="font-semibold">{digitsAssigned ? "Score digits are locked" : "Assign score digits"}</h2>
+          <p className="text-sm text-muted-foreground">{digitsAssigned ? "Reservations, releases and team names are locked. You can still update scores, descriptions and message templates, or archive this board." : "Once all 100 squares are reserved, assign 0–9 once each to the home columns and away rows, shuffled independently."}</p>
+        </div>
+        {!digitsAssigned && <Button variant="outline" disabled={!canAssignDigits || assignDigits.isPending || save.isPending || release.isPending || !!detail.error || detail.isFetching} onClick={() => { assignDigits.reset(); setDigitsConfirm(true); }} data-testid="button-assign-digits">Assign digits</Button>}
+      </div>
+      <p className="text-xs text-muted-foreground" role="status">{digitsAssigned ? `Assigned ${new Date(board.digits_assigned_at!).toLocaleString()}. Permanent; no reshuffle.` : canAssignDigits ? "100 of 100 reserved. Ready to assign. This permanently closes reservations and locks releases and team names." : `Readiness: ${claimedCount} of 100 squares reserved.${claimedCount < 100 ? ` ${100 - claimedCount} more needed.` : ""}${board.status !== "open" && board.status !== "closed" ? " The board must be open or closed before assignment." : ""} Digits cannot be assigned early.`}</p>
+      {assignDigits.error && !digitsConfirm && <SquareError error={assignDigits.error} retry={() => void detail.refetch()} />}
+    </section>
     <div className="flex flex-wrap gap-2 border-b pb-3" role="tablist" aria-label="Board sections">
       {(["reservations", "history", "board"] as const).map(value => <Button key={value} role="tab" aria-selected={tab === value} variant={tab === value ? "default" : "ghost"} onClick={() => setTab(value)} data-testid={`tab-${value}`}>{value === "reservations" ? "Reservations" : value === "history" ? `Message history (${messages.length})` : "Board & scores"}</Button>)}
     </div>
     <section role="tabpanel" className="space-y-4">
-      {tab === "board" ? <div className="sq-panel max-w-2xl space-y-6"><SquareScore board={board} /><SquareGrid claimed={claimed} /><p className="text-xs text-muted-foreground">The shared board shows square numbers only. Edit the board to update team names or scores.</p></div> : tab === "history" ? <>
+      {tab === "board" ? <div className="sq-panel max-w-2xl space-y-6"><SquareScore board={board} /><SquareGrid board={board} claimed={claimed} /><p className="text-xs text-muted-foreground">The shared board uses these same team axes and digits. Edit the board to update scores{digitsAssigned ? "." : " or team names."}</p></div> : tab === "history" ? <>
         <p className="text-sm text-muted-foreground">Only staff-initiated individual messages appear here. Accepted does not mean delivered. Sending and unknown outcomes must not be silently retried.</p>
         {messages.length === 0 ? <SquareEmpty title="No messages sent yet">Choose an active reservation to write a personal email or text. Reserving a square never sends a background message.</SquareEmpty> : messages.map(message => <article className="sq-panel space-y-3" key={message.id} data-testid={`message-history-${message.id}`}>
           <div className="flex flex-wrap gap-2 justify-between"><div><p className="font-medium">{reservations.find(item => item.id === message.reservation_id)?.name || "Reservation contact"}</p><p className="text-xs text-muted-foreground">{message.channel === "email" ? "Email" : "Text message"} · {new Date(message.created_at).toLocaleString()}</p></div><Badge variant={message.status === "failed" ? "destructive" : "secondary"} className="h-fit">{message.status === "accepted" ? "Accepted by provider" : message.status === "sending" ? "Processing" : message.status === "unknown" ? "Unknown outcome" : "Failed"}</Badge></div>
@@ -130,7 +147,7 @@ function BoardDetail({ id, onBack }: { id: string; onBack: () => void }) {
             <div className="flex flex-col md:flex-row justify-between gap-4">
               <div className="min-w-0 space-y-2"><div className="flex flex-wrap gap-2 items-center"><h3 className="font-semibold break-words">{reservation.name}</h3>{reservation.cancelled_at && <Badge variant="secondary">Cancelled</Badge>}</div><div className="sq-contact text-sm text-muted-foreground"><p>{reservation.email || "No email provided"}</p><p>{reservation.phone || "No phone provided"}</p></div><p className="text-xs text-muted-foreground">{reservation.sms_revoked_at ? "Text consent revoked" : reservation.sms_consent_at ? `Text consent recorded ${new Date(reservation.sms_consent_at).toLocaleDateString()}` : "No text consent"}</p></div>
               <div className="sq-actions self-start"><Button variant="outline" size="sm" disabled={!!reservation.cancelled_at || (!canEmail && !canSms) || hasUncertainMessage} onClick={() => setRecipient(reservation)} data-testid={`button-message-reservation-${reservation.id}`}><Mail className="h-4 w-4 mr-2" />Message</Button>
-                {!reservation.cancelled_at && <Button variant="ghost" size="sm" onClick={() => { release.reset(); setReleaseTarget(reservation); }} data-testid={`button-release-reservation-${reservation.id}`}>Release squares</Button>}
+                {!reservation.cancelled_at && <Button variant="ghost" size="sm" disabled={digitsAssigned || assignDigits.isPending} title={digitsAssigned ? "Releases are locked after digits are assigned." : undefined} onClick={() => { release.reset(); setReleaseTarget(reservation); }} data-testid={`button-release-reservation-${reservation.id}`}>Release squares</Button>}
               </div>
             </div>
             {reservation.email_revoked_at && <p className="text-xs text-muted-foreground">Email contact opted out; email messaging is disabled.</p>}
@@ -148,14 +165,31 @@ function BoardDetail({ id, onBack }: { id: string; onBack: () => void }) {
         <DialogHeader><DialogTitle>Release this reservation?</DialogTitle><DialogDescription>This cancels the entire reservation and makes its squares available again. No message is sent to the participant.</DialogDescription></DialogHeader>
         <p className="text-sm break-words">{releaseTarget?.name}: {releaseTarget?.squares.map(number => `#${number}`).join(", ")}</p>
         {release.error && <SquareError error={release.error} />}
-        <div className="sq-actions justify-end"><Button variant="outline" disabled={release.isPending} onClick={() => setReleaseTarget(null)}>Keep reservation</Button><Button variant="destructive" disabled={release.isPending} data-testid="button-confirm-release" onClick={() => { if (releaseTarget) release.mutate(releaseTarget.id, { onSuccess: () => setReleaseTarget(null) }); }}>{release.isPending ? "Releasing…" : "Confirm release"}</Button></div>
+        {digitsAssigned && <p className="text-sm text-muted-foreground">Digits have been assigned. This reservation can no longer be released.</p>}
+        <div className="sq-actions justify-end"><Button variant="outline" disabled={release.isPending} onClick={() => setReleaseTarget(null)}>Keep reservation</Button><Button variant="destructive" disabled={release.isPending || digitsAssigned || assignDigits.isPending} data-testid="button-confirm-release" onClick={() => { if (releaseTarget && !digitsAssigned) release.mutate(releaseTarget.id, { onSuccess: () => setReleaseTarget(null) }); }}>{release.isPending ? "Releasing…" : "Confirm release"}</Button></div>
       </DialogContent>
     </Dialog>
     <Dialog open={archiveConfirm} onOpenChange={open => { if (!save.isPending) setArchiveConfirm(open); }}>
       <DialogContent className="free-squares max-h-[90dvh] overflow-y-auto">
-        <DialogHeader><DialogTitle>Archive this board?</DialogTitle><DialogDescription>The public link will stop showing the board. Staff keep the reservations and message history. You can reopen it later.</DialogDescription></DialogHeader>
+        <DialogHeader><DialogTitle>Archive this board?</DialogTitle><DialogDescription>The public link will stop showing the board. Staff keep the reservations and message history. {digitsAssigned ? "You can restore it as closed later; reservations cannot reopen." : "You can reopen it later."}</DialogDescription></DialogHeader>
         {save.error && <SquareError error={save.error} />}
         <div className="sq-actions justify-end"><Button variant="outline" disabled={save.isPending} onClick={() => setArchiveConfirm(false)}>Keep board</Button><Button disabled={save.isPending} onClick={() => updateStatus("archived")} data-testid="button-confirm-archive">{save.isPending ? "Archiving…" : "Archive board"}</Button></div>
+      </DialogContent>
+    </Dialog>
+    <Dialog open={digitsConfirm} onOpenChange={open => { if (!assignDigits.isPending) setDigitsConfirm(open); }}>
+      <DialogContent className="free-squares max-h-[90dvh] overflow-y-auto" onInteractOutside={event => { if (assignDigits.isPending) event.preventDefault(); }} onEscapeKeyDown={event => { if (assignDigits.isPending) event.preventDefault(); }}>
+        <DialogHeader><DialogTitle>Permanently assign score digits?</DialogTitle><DialogDescription>Each axis gets its own independent random shuffle of 0–9, with every digit used exactly once. This cannot be undone or reshuffled.</DialogDescription></DialogHeader>
+        <div className="rounded-lg border bg-muted/30 p-4 space-y-2 text-sm">
+          <p><strong>{board.home_team}</strong>: columns across the top.</p>
+          <p><strong>{board.away_team}</strong>: rows down the left.</p>
+          <p>All 100 reservations stay in place. Reservations close, square releases stop, and team names are locked. Scores, descriptions and message templates remain editable.</p>
+        </div>
+        {!canAssignDigits && <p role="alert" className="text-sm text-destructive">The board has changed and is no longer ready for assignment. Review the updated board before continuing.</p>}
+        {assignDigits.error && <><SquareError error={assignDigits.error} retry={() => void detail.refetch()} /><p className="text-xs text-muted-foreground">Another staff member may have changed the board. We requested the latest details; review them before trying again.</p></>}
+        <div className="sq-actions justify-end">
+          <Button variant="outline" disabled={assignDigits.isPending} onClick={() => setDigitsConfirm(false)}>Not yet</Button>
+          <Button disabled={!canAssignDigits || assignDigits.isPending || save.isPending || release.isPending || !!detail.error || detail.isFetching} data-testid="button-confirm-assign-digits" onClick={() => { if (canAssignDigits) assignDigits.mutate(undefined, { onSuccess: () => { setDigitsConfirm(false); setTab("board"); } }); }}>{assignDigits.isPending ? "Assigning digits…" : "Assign permanently"}</Button>
+        </div>
       </DialogContent>
     </Dialog>
   </div>;
