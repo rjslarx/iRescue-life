@@ -7,6 +7,7 @@ import { pool } from "../server/db";
 import { FreeSquaresStore, normalizeSquarePhone } from "../server/services/free-squares";
 import { registerFreeSquaresRoutes, type SquareDelivery } from "../server/routes/free-squares";
 import { FREE_SQUARES_TENANTS, hasFreeSquaresAccess, renderSquareMessage } from "../shared/free-squares";
+import { createReservationNotifier } from "../server/services/free-square-notifications";
 
 // Run only against the isolated development database, never NEON/production.
 const url = new URL(process.env.DATABASE_URL!);
@@ -20,6 +21,8 @@ let boardId: string;
 let server: Server;
 let base: string;
 let deliveryCount = 0;
+const notifications: string[][] = [];
+let notificationFails = false;
 let deliveryMode: "accept" | "reject" | "throw" = "accept";
 const deliver: SquareDelivery = async () => {
   deliveryCount++;
@@ -55,6 +58,10 @@ before(async () => {
   });
   registerFreeSquaresRoutes(app, {
     store, email: deliver, sms: deliver,
+    notifyReservation: async (...ids) => {
+      notifications.push(ids);
+      if (notificationFails) throw new Error("Simulated notification failure");
+    },
     requireTenant: (_req, _res, next) => next(),
     requireAuth: (req, res, next) => req.user ? next() : void res.status(401).json({ error: "Sign in" }),
     requireRole: () => (req, res, next) => ["staff", "admin"].includes(req.user!.activeRole) ? next() : void res.status(403).json({ error: "No access" }),
@@ -77,6 +84,51 @@ test("access is exact-ID limited, authenticated, role limited and tenant isolate
   assert.equal((await request("", "GET", undefined, { role: "volunteer" })).status, 403);
   assert.equal((await request(`/${boardId}`, "GET", undefined, { tenant: otherTenant })).status, 404);
   assert.equal((await request(`/public/${boardId}`, "GET", undefined, { tenant: otherTenant })).status, 404);
+});
+test("rescue notification includes contact details and all squares, with safe HTML", async () => {
+  let sent: any;
+  const notify = createReservationNotifier({
+    query: async (_sql: string, values: string[]) => {
+      assert.deepEqual(values, [tenantId, boardId, "reservation-test"]);
+      return { rows: [{ contact_email: "rescue@example.invalid", title: "Sunday Game",
+        name: "<script>Test</script>", email: "participant@example.invalid", phone: "+12025550147", squares: [7, 18] }] };
+    },
+  } as any, async (id, message) => {
+    assert.equal(id, tenantId);
+    sent = message;
+  });
+  await notify(tenantId, boardId, "reservation-test");
+  assert.equal(sent.to, "rescue@example.invalid");
+  assert.match(sent.text, /Selected squares: #7, #18/);
+  assert.match(sent.text, /participant@example.invalid/);
+  assert.match(sent.text, /\+12025550147/);
+  assert.match(sent.subject, /Sunday Game/);
+  assert.ok(!sent.html.includes("<script>"));
+  assert.match(sent.html, /&lt;script&gt;/);
+});
+test("concurrent reservation retries notify rescue only once; notification failure preserves booking", async () => {
+  const input = reservationInput([91, 92]);
+  const count = notifications.length;
+  const results = await Promise.all([
+    request(`/public/${boardId}/reservations`, "POST", input, { anonymous: true }),
+    request(`/public/${boardId}/reservations`, "POST", input, { anonymous: true }),
+  ]);
+  assert.ok(results.every(result => result.status === 201));
+  assert.equal(notifications.length, count + 1);
+  assert.deepEqual(notifications.at(-1), [tenantId, boardId, results[0].data.reservation.id]);
+  notificationFails = true;
+  try {
+    const failedEmailInput = reservationInput([93]);
+    const booked = await request(`/public/${boardId}/reservations`, "POST", failedEmailInput, { anonymous: true });
+    assert.equal(booked.status, 201);
+    const retry = await request(`/public/${boardId}/reservations`, "POST", failedEmailInput, { anonymous: true });
+    assert.equal(retry.status, 201);
+    assert.equal(notifications.length, count + 2);
+    assert.deepEqual(retry.data.reservation.squares, [93]);
+  } finally {
+    notificationFails = false;
+    await pool.query("DELETE FROM free_square_reservations WHERE board_id=$1 AND squares && ARRAY[91,92,93]", [boardId]);
+  }
 });
 test("validates squares, consent, contact and normalizes phone", async () => {
   for (const value of [

@@ -15,4 +15,10 @@ The user specified that community football squares should be available only to H
 
 **Why:** The rescues want to stop managing square requests through social-media comments. The implemented scope was agreed after explicitly explaining that entries must be free and messaging is for reservation confirmations/event updates, not payment instructions.
 
-**How to apply:** Treat this as separate from the deferred Zeffy/provider integration and existing raffles. Keep it free-entry with no required donation, payment links, paid-entry tracking, or payouts. Enforce hosting eligibility on the server and UI. Staff texts require optional explicit participant consent; no messages are sent automatically on reservation. Unlisted/share-by-link is not private authentication.
+**How to apply:** Treat this as separate from the deferred Zeffy/provider integration and existing raffles. Keep it free-entry with no required donation, payment links, paid-entry tracking, or payouts. Enforce hosting eligibility on the server and UI. Staff texts require optional explicit participant consent; participant messages remain staff-initiated. Unlisted/share-by-link is not private authentication.
+
+The user approved automatic reservation emails to the rescue containing the participant's name, contact details, and selected squares. This does not authorize automatic participant messages or rescue SMS notifications.
+
+**Why:** Rescue staff need the reservation details without tracking social-media comments; the accepted offer was specifically an automatic email to the rescue.
+
+**How to apply:** Send internal reservation alerts to the rescue, keeping participant messaging and its consent controls separate.

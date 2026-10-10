@@ -5,6 +5,7 @@ import { pool } from "../db";
 import { hasFreeSquaresAccess } from "../../shared/free-squares";
 import { FreeSquaresStore, SquareError } from "../services/free-squares";
 import { getAppBaseUrl } from "../lib/app-base-url";
+import { createReservationNotifier, type ReservationNotifier } from "../services/free-square-notifications";
 
 type DeliveryResult = { accepted: boolean; providerId?: string; error?: string; uncertain?: boolean };
 export type SquareDelivery = (input: {
@@ -44,8 +45,10 @@ export function registerFreeSquaresRoutes(app: Express, deps: {
   store?: FreeSquaresStore;
   email?: SquareDelivery;
   sms?: SquareDelivery;
+  notifyReservation?: ReservationNotifier;
 }) {
   const store = deps.store || new FreeSquaresStore(pool);
+  const notifyReservation = deps.notifyReservation || createReservationNotifier(store.pool);
   const wrap = (handler: (req: Request, res: Response) => Promise<any>): RequestHandler =>
     (req, res, next) => { Promise.resolve(handler(req, res)).catch(error => {
       if (error instanceof SquareError) return res.status(error.status).json({ error: error.message });
@@ -103,7 +106,22 @@ export function registerFreeSquaresRoutes(app: Express, deps: {
   app.get("/api/free-squares/public/:id", ...publicGuards, wrap(async (req, res) =>
     res.json(await store.publicBoard(req.tenant!.id, req.params.id))));
   app.post("/api/free-squares/public/:id/reservations", ...publicGuards, reservationLimit, wrap(async (req, res) => {
-    res.status(201).json(await store.reserve(req.tenant!.id, req.params.id, req.body));
+    const result = await store.reserve(req.tenant!.id, req.params.id, req.body);
+    // reserve() serializes concurrent requests and marks idempotent replays.
+    // Only the request that created the reservation may send this notification.
+    if (!result.replay) {
+      try {
+        await notifyReservation(req.tenant!.id, req.params.id, result.reservation.id);
+      } catch (error) {
+        // Email failure must not undo booked squares or invite a second booking.
+        // Do not auto-retry an uncertain provider response (could duplicate mail).
+        console.error("[free-squares] Rescue notification failed", {
+          tenantId: req.tenant!.id, reservationId: result.reservation.id,
+          error: error instanceof Error ? error.message : "Unknown notification error",
+        });
+      }
+    }
+    res.status(201).json(result);
   }));
   app.get("/api/free-squares", ...staffGuards, wrap(async (req, res) =>
     res.json({ boards: await store.list(req.tenant!.id) })));
