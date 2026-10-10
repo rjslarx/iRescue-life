@@ -1,0 +1,96 @@
+.free-squares {
+  --sq-ink: 168 31% 21%;
+  --sq-soft: 154 29% 95%;
+  --sq-line: 158 19% 82%;
+  --sq-accent: 164 42% 32%;
+  color: hsl(var(--sq-ink));
+}
+.free-squares .sq-panel {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--sq-line));
+  border-radius: 1rem;
+  padding: clamp(1rem, 3vw, 1.75rem);
+}
+.free-squares .sq-banner {
+  background: hsl(var(--sq-soft));
+  border: 1px solid hsl(var(--sq-line));
+  border-radius: 1rem;
+  padding: clamp(1.25rem, 4vw, 2.5rem);
+}
+.free-squares .sq-eyebrow {
+  font-size: .7rem;
+  font-weight: 700;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: hsl(var(--sq-accent));
+}
+.free-squares .sq-grid {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: clamp(3px, .65vw, 7px);
+}
+.free-squares .sq-cell {
+  aspect-ratio: 1;
+  min-width: 0;
+  border-radius: .35rem;
+  border: 1px solid hsl(var(--sq-line));
+  background: hsl(var(--card));
+  color: hsl(var(--sq-ink));
+  font-size: clamp(.68rem, 2vw, .95rem);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.free-squares .sq-cell:not(:disabled):hover {
+  background: hsl(var(--sq-soft));
+  border-color: hsl(var(--sq-accent));
+}
+.free-squares .sq-cell:focus-visible {
+  outline: 3px solid hsl(var(--sq-accent));
+  outline-offset: 2px;
+}
+.free-squares .sq-cell[data-claimed="true"] {
+  background: hsl(var(--sq-line) / .5);
+  color: hsl(var(--sq-ink) / .6);
+  text-decoration: line-through;
+}
+.free-squares .sq-cell[data-selected="true"] {
+  background: hsl(var(--sq-accent));
+  color: hsl(150 35% 97%);
+  border-color: hsl(var(--sq-accent));
+}
+.free-squares .sq-score {
+  font-size: clamp(2rem, 6vw, 3.5rem);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -.04em;
+  font-variant-numeric: tabular-nums;
+}
+.free-squares .sq-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .5rem;
+}
+.free-squares .sq-contact {
+  overflow-wrap: anywhere;
+}
+.free-squares .sq-message {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.free-squares .sq-enter {
+  animation: sq-enter .25s ease-out both;
+}
+@keyframes sq-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.dark .free-squares {
+  --sq-ink: 151 25% 86%;
+  --sq-soft: 165 20% 17%;
+  --sq-line: 162 15% 30%;
+  --sq-accent: 153 29% 60%;
+}
+@media (prefers-reduced-motion: reduce) {
+  .free-squares .sq-enter { animation: none; }
+}

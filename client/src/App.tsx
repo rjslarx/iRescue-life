@@ -21,6 +21,8 @@ import FindDuplicatesPage from "@/pages/FindDuplicatesPage";
 import ApplicationsPage from "@/pages/ApplicationsPage";
 import FinancePage from "@/pages/FinancePage";
 import DonationLinksPage from "@/pages/DonationLinksPage";
+import FreeSquaresPage from "@/pages/free-squares/FreeSquaresPage";
+import PublicFreeSquaresPage from "@/pages/free-squares/PublicFreeSquaresPage";
 import GrantsPage from "@/pages/GrantsPage";
 import DonorsPage from "@/pages/DonorsPage";
 import VipClubPage from "@/pages/VipClubPage";
@@ -257,6 +259,7 @@ function RouterSwitch() {
       <Route path="/surgery-day-request" component={PublicSurgeryDayRequestPage} />
       <Route path="/form-success/:formType" component={FormSuccessPage} />
       <Route path="/contact" component={PublicContactPage} />
+      <Route path="/squares/:id" component={PublicFreeSquaresPage} />
       <Route path="/fundraise/:slug" component={PeerCampaignPage} />
       <Route path="/fundraisers" component={PublicFundraisersPage} />
       <Route path="/donate/event/:eventId" component={FundraiserEventPage} />
@@ -306,6 +309,8 @@ function RouterSwitch() {
       <Route path="/confirm/:token" component={PublicConfirmationPage} />
       
       {/* Protected dashboard routes */}
+      {/* This page enforces its explicit active-role and stable tenant-ID allowlist. */}
+      <Route path="/dashboard/free-squares" component={FreeSquaresPage} />
       <ProtectedRoute path="/dashboard" pageId="dashboard" component={Dashboard} />
       <ProtectedRoute path="/dashboard/animals" pageId="animals" component={AnimalsPage} />
       <ProtectedRoute path="/dashboard/profile-contributions" pageId="profile-contributions" component={ProfileContributionsPage} />

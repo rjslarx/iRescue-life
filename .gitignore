@@ -65,6 +65,7 @@ vite.config.ts.*
 # Database files and backups
 *.sql
 !migrations/*.sql
+!scripts/free-squares.sql
 *.db
 *.sqlite
 *.sqlite3

@@ -2,6 +2,7 @@ import { pgTable, uuid, text, timestamp, integer, boolean, jsonb, unique, unique
 import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+export * from "./free-squares-tables";
 
 // --- $5 Friday recurring-day helpers (shared between client and server) ---
 // The $5 campaign runs all day on one weekday each week. Day numbering matches

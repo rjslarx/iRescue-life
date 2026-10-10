@@ -4,6 +4,7 @@ ALTER TABLE voting_contests ADD COLUMN IF NOT EXISTS background_image_url text;
 ALTER TABLE voting_contests ADD COLUMN IF NOT EXISTS background_image_target text NOT NULL DEFAULT 'both';
 SQL
 set -e
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/free-squares.sql
 npm install
 
 # Voting contest appearance overrides. Nullable columns preserve defaults for older contests.

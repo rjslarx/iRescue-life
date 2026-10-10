@@ -11,8 +11,8 @@ The user decided not to build an external raffle-provider integration. Rescues c
 
 ## Separate football-pool scope
 
-The user subsequently specified that football squares pools based on the uploaded prototype should be available only to Haseyas and Southern Pets, not platform-wide. Pool-entry payments must not involve Stripe; participants would pay the rescues through Venmo or Cash App.
+The user specified that community football squares should be available only to Haseyas and Southern Pets, not platform-wide. They initially requested Venmo/Cash App paid entries with no Stripe involvement, but subsequently accepted the explicitly scoped free-entry board with custom staff email/text messaging.
 
-**Why:** The user wants Stripe excluded from this activity and says the rescues will handle their own payment-provider policy issues. This statement is not evidence of provider approval or legal eligibility.
+**Why:** The rescues want to stop managing square requests through social-media comments. The implemented scope was agreed after explicitly explaining that entries must be free and messaging is for reservation confirmations/event updates, not payment instructions.
 
-**How to apply:** Treat this as separate from the deferred Zeffy/provider integration and existing raffles. Enforce hosting eligibility on the server as well as in the UI. Do not describe payment links as verified payments or unlisted pages as a compliance exemption.
+**How to apply:** Treat this as separate from the deferred Zeffy/provider integration and existing raffles. Keep it free-entry with no required donation, payment links, paid-entry tracking, or payouts. Enforce hosting eligibility on the server and UI. Staff texts require optional explicit participant consent; no messages are sent automatically on reservation. Unlisted/share-by-link is not private authentication.

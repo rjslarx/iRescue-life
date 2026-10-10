@@ -7,6 +7,7 @@ import { createServer, type Server } from "http";
 import { requireTenant } from "./middleware/tenant";
 import { requireAuth, requireRole, requireRoleOrPageAccess } from "./middleware/auth";
 import { registerReceiptSignatureRoutes } from "./routes/receipt-signature";
+import { registerFreeSquaresRoutes } from "./routes/free-squares";
 import { loginUser, createTenantWithAdmin, createUser } from "./services/auth";
 import { PushNotificationService } from "./services/push-notifications";
 import { db } from "./db";
@@ -300,6 +301,7 @@ function sanitizeContentModuleStyling(styling: any): any {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  registerFreeSquaresRoutes(app, { requireTenant, requireAuth, requireRole });
   // ============================================================================
   // Short-lived document view tokens (in-memory, no DB needed)
   // Issued by POST /api/help-documents/:id/view-token, consumed by /objects/ route

@@ -223,6 +223,16 @@ app.use(sessionMiddleware);
 // Tenant resolution middleware
 app.use(resolveTenant);
 
+// These community boards are shared by direct link, not search discovery.
+// Set this before HTML/OG middleware so crawlers see it without running JS.
+app.use((req, res, next) => {
+  if (/^\/(?:squares\/|dashboard\/free-squares(?:\/|$))/.test(req.path)) {
+    res.set("X-Robots-Tag", "noindex, nofollow, noarchive");
+    res.set("Cache-Control", "no-store");
+  }
+  next();
+});
+
 // User authentication middleware
 app.use(authenticateUser);
 

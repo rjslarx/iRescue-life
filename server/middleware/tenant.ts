@@ -7,6 +7,9 @@ export function redactTrainingTokenFromUrl(value: string): string {
   return value.replace(
     /(\/(?:api\/public\/)?volunteer-training\/)[^/?#\s]+/g,
     '$1[REDACTED]',
+  ).replace(
+    /(\/api\/free-squares\/unsubscribe\/)[^/?#\s]+/g,
+    '$1[REDACTED]',
   );
 }
 

@@ -27,13 +27,14 @@ import {
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { LitterPawsIcon } from "@/components/icons/LitterPawsIcon";
 import { useAuth } from "@/contexts/AuthContext";
+import { canManageFreeSquares } from "@/pages/free-squares/use-free-squares";
 import { useToast } from "@/hooks/use-toast";
 import { usePagePermissions } from "@/hooks/usePagePermissions";
 import { useQuickActions } from "@/hooks/useQuickActions";
 import { RecordOfflineDonationDialog } from "@/components/RecordOfflineDonationDialog";
 import { AddMedicalOrderDialog } from "@/components/AddMedicalOrderDialog";
 import { SendHoldHarmlessDialog } from "@/components/SendHoldHarmlessDialog";
-import { Zap, FileUp, ScanLine } from "lucide-react";
+import { Zap, FileUp, ScanLine, Grid3X3 } from "lucide-react";
 import {
   LayoutDashboard,
   Heart,
@@ -167,7 +168,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
   const [holdHarmlessOpen, setHoldHarmlessOpen] = useState(false);
   const { canAccessPage, getAccessiblePages } = usePagePermissions();
   
-  const { data: tenantData } = useQuery<{ tenant: { subscriptionTier: string; tnrEnabled?: boolean; microchipClinicEnabled?: boolean } }>({
+  const { data: tenantData } = useQuery<{ tenant: { id: string; subscriptionTier: string; tnrEnabled?: boolean; microchipClinicEnabled?: boolean } }>({
     queryKey: ['/api/tenant'],
   });
   const tnrEnabled = tenantData?.tenant?.tnrEnabled === true;
@@ -717,6 +718,16 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
     filteredGroups.push({
       title: "Additional Access",
       items: additionalItems,
+      defaultOpen: true,
+    });
+  }
+
+  // This deliberately bypasses general page grants: community squares have an
+  // explicit tenant + active-role entitlement, not a fundraising entitlement.
+  if (canManageFreeSquares(tenantData?.tenant?.id, user?.activeRole)) {
+    filteredGroups.push({
+      title: "Community",
+      items: [{ title: "Free football squares", url: "/dashboard/free-squares", icon: Grid3X3 }],
       defaultOpen: true,
     });
   }
