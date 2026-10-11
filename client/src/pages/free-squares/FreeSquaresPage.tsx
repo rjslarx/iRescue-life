@@ -29,7 +29,7 @@ export default function FreeSquaresPage() {
     <div className="free-squares space-y-6 sq-enter" data-testid="free-squares-management">
       {selectedId ? <BoardDetail key={selectedId} id={selectedId} onBack={() => setSelectedId(null)} /> : <>
         <header className="flex flex-wrap items-start justify-between gap-4">
-          <div><p className="sq-eyebrow mb-2">Community, not comment threads</p><h1 className="text-2xl md:text-3xl font-bold tracking-tight">Free football squares</h1><p className="text-muted-foreground mt-2 max-w-2xl text-sm">A shared board for your rescue. Clear reservations and personal follow-up, all in one place.</p></div>
+          <div><p className="sq-eyebrow mb-2">Community, not comment threads</p><h1 className="text-2xl md:text-3xl font-bold tracking-tight">Football squares</h1><p className="text-muted-foreground mt-2 max-w-2xl text-sm">A shared board for your rescue. Clear reservations and personal follow-up, all in one place.</p></div>
           <Button onClick={() => setCreateOpen(true)} data-testid="button-create-board"><Plus className="h-4 w-4 mr-2" />Create board</Button>
         </header>
         <section className="sq-banner flex flex-col md:flex-row md:items-center justify-between gap-5">

@@ -9,12 +9,20 @@ CREATE TABLE IF NOT EXISTS free_square_boards (
   home_score integer CHECK (home_score BETWEEN 0 AND 999),
   away_score integer CHECK (away_score BETWEEN 0 AND 999),
   email_subject text NOT NULL DEFAULT 'Your squares for {event}',
-  email_template text NOT NULL DEFAULT 'Hi {name}, your free squares for {event} are {squares}. Thank you for joining us!',
-  sms_template text NOT NULL DEFAULT 'Hi {name}, your free squares for {event} are {squares}. Thank you for joining us!',
+  email_template text NOT NULL DEFAULT 'Hi {name}, your squares for {event} are {squares}. Thank you for joining us!',
+  sms_template text NOT NULL DEFAULT 'Hi {name}, your squares for {event} are {squares}. Thank you for joining us!',
   created_by uuid REFERENCES users(id) ON DELETE SET NULL,
   created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS free_square_boards_tenant_idx ON free_square_boards(tenant_id);
+
+ALTER TABLE free_square_boards ALTER COLUMN email_template SET DEFAULT 'Hi {name}, your squares for {event} are {squares}. Thank you for joining us!';
+ALTER TABLE free_square_boards ALTER COLUMN sms_template SET DEFAULT 'Hi {name}, your squares for {event} are {squares}. Thank you for joining us!';
+-- Only replace our original defaults; preserve rescue-authored templates and sent-message/consent history.
+UPDATE free_square_boards SET email_template='Hi {name}, your squares for {event} are {squares}. Thank you for joining us!'
+WHERE email_template='Hi {name}, your free squares for {event} are {squares}. Thank you for joining us!';
+UPDATE free_square_boards SET sms_template='Hi {name}, your squares for {event} are {squares}. Thank you for joining us!'
+WHERE sms_template='Hi {name}, your free squares for {event} are {squares}. Thank you for joining us!';
 
 -- Additive upgrade for boards created before score-digit assignment existed.
 ALTER TABLE free_square_boards ADD COLUMN IF NOT EXISTS row_digits integer[];

@@ -26,7 +26,7 @@ export default function BoardEditor({ board, onClose, onSaved }: { board?: FreeS
   return <Dialog open onOpenChange={open => { if (!open && !save.isPending) onClose(); }}>
     <DialogContent className="free-squares max-h-[90dvh] overflow-y-auto sm:max-w-2xl" onInteractOutside={event => { if (save.isPending) event.preventDefault(); }} onEscapeKeyDown={event => { if (save.isPending) event.preventDefault(); }}>
       <DialogHeader><DialogTitle>{board ? "Edit community board" : "Create a community board"}</DialogTitle>
-        <DialogDescription>Free-entry football squares, with personal follow-up from your team. New boards start as drafts.</DialogDescription></DialogHeader>
+        <DialogDescription>Football squares, with personal follow-up from your team. New boards start as drafts.</DialogDescription></DialogHeader>
       <form className="space-y-5" onSubmit={event => {
         event.preventDefault();
         const result = freeSquareBoardSchema.safeParse(form);

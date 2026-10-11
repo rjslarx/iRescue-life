@@ -9,9 +9,9 @@ export const FREE_SQUARES_TENANTS = [
 export function hasFreeSquaresAccess(tenantId?: string | null) {
   return FREE_SQUARES_TENANTS.some(id => id === tenantId);
 }
-export const SQUARE_SMS_CONSENT = "I agree to receive texts from this rescue about my free square reservation and event updates. Consent is optional and is not required to reserve. Message and data rates may apply. Message frequency varies. Reply STOP to unsubscribe.";
+export const SQUARE_SMS_CONSENT = "I agree to receive texts from this rescue about my square reservation and event updates. Consent is optional and is not required to reserve. Message and data rates may apply. Message frequency varies. Reply STOP to unsubscribe.";
 export const DEFAULT_SQUARE_EMAIL_SUBJECT = "Your squares for {event}";
-export const DEFAULT_SQUARE_MESSAGE = "Hi {name}, your free squares for {event} are {squares}. Thank you for joining us!";
+export const DEFAULT_SQUARE_MESSAGE = "Hi {name}, your squares for {event} are {squares}. Thank you for joining us!";
 export function renderSquareMessage(template: string, data: { name: string; event: string; squares: number[] }) {
   const replacements: Record<string, string> = {
     name: data.name, event: data.event, squares: data.squares.map(n => `#${n}`).join(", "),

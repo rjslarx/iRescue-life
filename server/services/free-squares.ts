@@ -47,7 +47,10 @@ export class FreeSquaresStore {
       to_regclass('free_square_claims') IS NOT NULL AND
       to_regclass('free_square_messages') IS NOT NULL AND
       EXISTS (SELECT 1 FROM pg_constraint WHERE conname='free_square_boards_digits_check'
-        AND conrelid=to_regclass('free_square_boards')) AS ready`);
+        AND conrelid=to_regclass('free_square_boards')) AND
+      (SELECT count(*)=2 FROM information_schema.columns WHERE table_schema='public'
+        AND table_name='free_square_boards' AND column_name IN ('email_template','sms_template')
+        AND column_default NOT LIKE '%your free squares%') AS ready`);
     if (existing.rows[0].ready) return;
     const ddl = await readFile(resolve(process.cwd(), "scripts/free-squares.sql"), "utf8");
     await this.transaction(async client => {

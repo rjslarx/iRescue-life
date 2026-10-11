@@ -17,8 +17,8 @@ export const freeSquareBoards = pgTable("free_square_boards", {
   digitsAssignedAt: timestamp("digits_assigned_at", { withTimezone: true }),
   digitsAssignedBy: uuid("digits_assigned_by"),
   emailSubject: text("email_subject").notNull().default("Your squares for {event}"),
-  emailTemplate: text("email_template").notNull().default("Hi {name}, your free squares for {event} are {squares}. Thank you for joining us!"),
-  smsTemplate: text("sms_template").notNull().default("Hi {name}, your free squares for {event} are {squares}. Thank you for joining us!"),
+  emailTemplate: text("email_template").notNull().default("Hi {name}, your squares for {event} are {squares}. Thank you for joining us!"),
+  smsTemplate: text("sms_template").notNull().default("Hi {name}, your squares for {event} are {squares}. Thank you for joining us!"),
   createdBy: uuid("created_by"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, t => ({ tenantIdx: index("free_square_boards_tenant_idx").on(t.tenantId) }));

@@ -43,7 +43,7 @@ export function SquareEmpty({ title, children }: { title: string; children: Reac
   </div>;
 }
 export function SquareFreeNotice() {
-  return <p className="flex gap-2 text-sm items-start text-muted-foreground"><ShieldCheck className="h-4 w-4 mt-0.5 shrink-0" />Free entry. No purchase or donation required. Your contact details stay private.</p>;
+  return <p className="flex gap-2 text-sm items-start text-muted-foreground"><ShieldCheck className="h-4 w-4 mt-0.5 shrink-0" />Your contact details stay private.</p>;
 }
 export function SquareScore({ board }: { board: Pick<FreeSquareBoard, "home_team" | "away_team" | "home_score" | "away_score"> }) {
   return <div className="flex items-center justify-between gap-4 rounded-xl border bg-background/50 p-5">

@@ -32,14 +32,14 @@ export function createReservationNotifier(database: Pick<Pool, "query">, send: S
     if (!reservation) throw new Error("Reservation not found for notification.");
     if (!reservation.contact_email?.trim()) throw new Error("Rescue contact email is not configured.");
     const text = [
-      `New free-square reservation for ${reservation.title}`,
+      `New square reservation for ${reservation.title}`,
       "",
       `Participant: ${reservation.name}`,
       `Email: ${reservation.email || "Not provided"}`,
       `Phone: ${reservation.phone || "Not provided"}`,
       `Selected squares: ${reservation.squares.map((square: number) => `#${square}`).join(", ")}`,
       "",
-      "These squares have been reserved. View the reservation in Community → Free football squares in your rescue dashboard.",
+      "These squares have been reserved. View the reservation in Community → Football squares in your rescue dashboard.",
     ].join("\n");
     await send(tenantId, {
       to: reservation.contact_email.trim(),

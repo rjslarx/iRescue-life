@@ -84,14 +84,14 @@ function PublicBoard({ id }: { id: string }) {
           }} />
           <p className="text-xs text-muted-foreground">{isOpen ? "Choose 1–10 available squares. " : ""}The board refreshes every 10 seconds. Names and contact details are never shown here.</p>
         </section>
-        <section className="sq-panel space-y-5" aria-label="Reserve your free squares">
+        <section className="sq-panel space-y-5" aria-label="Reserve your squares">
           {success ? <div className="space-y-5" role="status" data-testid="reservation-success">
             <CheckCircle2 className="h-10 w-10 text-primary" /><div><p className="sq-eyebrow mb-2">You're on the board</p><h2 className="text-2xl font-bold">Your squares are reserved.</h2></div>
             <div className="flex flex-wrap gap-2">{success.map(number => <span className="rounded-lg bg-primary/10 px-3 py-2 font-semibold tabular-nums" key={number}>#{number}</span>)}</div>
-            <p className="text-sm text-muted-foreground">Your free reservation is confirmed now. Save these numbers for your records. Rescue staff may follow up personally using the contact details you shared.</p>
+            <p className="text-sm text-muted-foreground">Your reservation is confirmed now. Save these numbers for your records. Rescue staff may follow up personally using the contact details you shared.</p>
             <Button variant="outline" data-testid="button-new-reservation" onClick={() => { setSuccess(null); setForm({ name: "", email: "", phone: "", smsConsent: false }); setSelected([]); setNotice(null); reserve.reset(); request.current = null; }}>Back to the board</Button>
           </div> : !isOpen ? <div className="space-y-3"><h2 className="text-xl font-semibold">Reservations are closed</h2><p className="text-sm text-muted-foreground">You can still follow the board and scores. No new squares can be reserved.</p></div> : <form className="space-y-5" onSubmit={event => { event.preventDefault(); void submit(); }}>
-            <div><p className="sq-eyebrow mb-2">Make it yours</p><h2 className="text-xl font-semibold">Reserve for free</h2><p className="text-sm text-muted-foreground mt-2">Pick your squares, then leave a way for our team to reach you.</p></div>
+            <div><p className="sq-eyebrow mb-2">Make it yours</p><h2 className="text-xl font-semibold">Reserve your squares</h2><p className="text-sm text-muted-foreground mt-2">Pick your squares, then leave a way for our team to reach you.</p></div>
             <div className="rounded-lg bg-muted/50 p-3 space-y-2"><p className="text-sm font-medium" data-testid="selected-squares">{selected.length} of 10 selected</p><p className="text-sm">{selected.length ? selected.map(number => `#${number}`).join(", ") : "Tap an available square to get started."}</p>{selected.length > 0 && <Button type="button" variant="ghost" size="sm" disabled={reserve.isPending} onClick={() => { setSelected([]); request.current = null; reserve.reset(); }}>Clear selection</Button>}</div>
             <fieldset disabled={reserve.isPending} className="space-y-4">
               <div className="space-y-2"><Label htmlFor="square-name">Your name</Label><Input id="square-name" data-testid="input-reservation-name" autoComplete="name" required maxLength={100} value={form.name} onChange={event => change({ ...form, name: event.target.value })} /></div>
@@ -103,7 +103,7 @@ function PublicBoard({ id }: { id: string }) {
             {notice && <p role="alert" className="rounded-lg border p-3 text-sm">{notice}</p>}
             {validation && <SquareError error={new Error(validation)} />}
             {reserve.error && !notice && <SquareError error={reserve.error} />}
-            <Button className="w-full" type="submit" data-testid="button-reserve-squares" disabled={reserve.isPending || !selected.length || !!query.error}>{reserve.isPending ? "Confirming reservation…" : reserve.error && squareErrorStatus(reserve.error) !== 409 ? "Retry this reservation" : "Confirm free reservation"}</Button>
+            <Button className="w-full" type="submit" data-testid="button-reserve-squares" disabled={reserve.isPending || !selected.length || !!query.error}>{reserve.isPending ? "Confirming reservation…" : reserve.error && squareErrorStatus(reserve.error) !== 409 ? "Retry this reservation" : "Confirm reservation"}</Button>
             <SquareFreeNotice />
           </form>}
         </section>

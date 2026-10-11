@@ -28,3 +28,9 @@ Score-digit assignment is one-time after all 100 squares are filled. Home team c
 **Why:** Once digits are revealed, allowing reshuffles, team swaps, or new square selections would change the agreed assignments or let participants choose favorable digits.
 
 **How to apply:** Preserve assignments across retries and edits, and keep the axis convention identical in staff and public views. Do not introduce resets or post-assignment roster edits without an explicit product decision.
+
+Use “Football squares” and neutral reservation wording in the interface and generated messages; do not reintroduce “free” promotional copy.
+
+**Why:** On 2026-10-11 the user explicitly requested removing all mentions of “free” for football squares. This was a wording change, not a request to add payments.
+
+**How to apply:** Keep reservations and permissions unchanged. Preserve rescue-written content, previously sent messages and historical consent records rather than rewriting their history.

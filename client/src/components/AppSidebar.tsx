@@ -727,7 +727,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
   if (canManageFreeSquares(tenantData?.tenant?.id, user?.activeRole)) {
     filteredGroups.push({
       title: "Community",
-      items: [{ title: "Free football squares", url: "/dashboard/free-squares", icon: Grid3X3 }],
+      items: [{ title: "Football squares", url: "/dashboard/free-squares", icon: Grid3X3 }],
       defaultOpen: true,
     });
   }
