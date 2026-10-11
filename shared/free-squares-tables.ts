@@ -29,6 +29,7 @@ export const freeSquareReservations = pgTable("free_square_reservations", {
   boardId: uuid("board_id").notNull().references(() => freeSquareBoards.id, { onDelete: "cascade" }),
   requestKey: uuid("request_key").notNull(),
   name: text("name").notNull(),
+  displayName: text("display_name"),
   email: text("email"),
   phone: text("phone"),
   squares: integer("squares").array().notNull(),

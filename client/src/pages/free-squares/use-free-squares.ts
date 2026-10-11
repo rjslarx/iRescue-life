@@ -14,6 +14,7 @@ export type BoardDetail = { board: FreeSquareBoard; reservations: FreeSquareRese
 export type PublicBoardData = {
   board: Pick<FreeSquareBoard, "id" | "title" | "description" | "status" | "home_team" | "away_team" | "home_score" | "away_score" | "row_digits" | "column_digits" | "digits_assigned_at">;
   claimedSquares: number[];
+  squareDisplayNames: Record<string, string | null>;
 };
 export async function squareRequest<T>(method: string, url: string, body?: unknown): Promise<T> {
   const response = await apiRequest(method, url, body);

@@ -19,7 +19,7 @@ function PublicBoard({ id }: { id: string }) {
   const access = useFreeSquaresAccess();
   const query = usePublicFreeSquare(id, access.publicAllowed);
   const [selected, setSelected] = useState<number[]>([]);
-  const [form, setForm] = useState({ name: "", email: "", phone: "", smsConsent: false });
+  const [form, setForm] = useState({ displayName: "", name: "", email: "", phone: "", smsConsent: false });
   const [validation, setValidation] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [success, setSuccess] = useState<number[] | null>(null);
@@ -37,14 +37,18 @@ function PublicBoard({ id }: { id: string }) {
   if (query.isLoading) return <SquareLoading />;
   if (query.error && !query.data) return <main className="free-squares mx-auto max-w-3xl p-6"><SquareError error={new Error(squareErrorStatus(query.error) === 404 ? "This board is not available. It may still be a draft or have been archived." : "We could not load this community board.")} retry={() => void query.refetch()} /></main>;
   if (!query.data) return null;
-  const { board, claimedSquares } = query.data;
+  const { board, claimedSquares, squareDisplayNames } = query.data;
   if (board.status === "draft" || board.status === "archived") return <main className="free-squares mx-auto max-w-3xl p-6"><SquareEmpty title="Board unavailable">This board is not currently shared with the community.</SquareEmpty></main>;
   const isOpen = board.status === "open" && !board.digits_assigned_at;
   const submit = async () => {
     if (inFlight.current || !isOpen) return;
+    if (!form.displayName.trim() || form.displayName.trim().length > 30) {
+      setValidation("Choose a display name between 1 and 30 characters. This name will appear on the public board.");
+      return;
+    }
     const fingerprint = JSON.stringify({ ...form, squares: selected });
     if (!request.current || request.current.fingerprint !== fingerprint) request.current = { fingerprint, key: crypto.randomUUID() };
-    const parsed = freeSquareReservationSchema.safeParse({ ...form, squares: selected, requestKey: request.current.key });
+    const parsed = freeSquareReservationSchema.safeParse({ ...form, displayName: form.displayName.trim(), squares: selected, requestKey: request.current.key });
     if (!parsed.success) { setValidation(parsed.error.issues.map(issue => issue.message).join(". ")); return; }
     setValidation(null); setNotice(null); inFlight.current = true;
     try {
@@ -60,7 +64,7 @@ function PublicBoard({ id }: { id: string }) {
           setSelected(old => old.filter(number => !refreshed.data!.claimedSquares.includes(number)));
           request.current = null;
         }
-        setNotice("The board changed while you were choosing. We refreshed it and removed any newly claimed squares from your selection. Your contact details are still here; review your selection and try again.");
+        setNotice("The board changed while you were choosing. We refreshed it and removed any newly claimed squares from your selection. Your display name and contact details are still here; review your selection and try again.");
       }
     } finally { inFlight.current = false; }
   };
@@ -75,26 +79,27 @@ function PublicBoard({ id }: { id: string }) {
       </section>
       {query.error && <SquareError error={new Error("The board could not refresh. Please refresh before reserving.")} retry={() => void query.refetch()} />}
       <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1.3fr)_minmax(280px,.8fr)] gap-6 items-start">
-        <section className="sq-panel space-y-6">
+        <section className="sq-panel space-y-6 min-w-0">
           <SquareScore board={board} />
           <div className="flex items-baseline justify-between gap-3"><h2 className="font-semibold">{board.digits_assigned_at ? "Your game-day board" : isOpen ? "Choose your squares" : "Community board"}</h2><span className="text-xs text-muted-foreground">{board.digits_assigned_at ? "Digits locked" : `${100 - claimedSquares.length} available`}</span></div>
-          <SquareGrid board={board} claimed={claimedSquares} selected={selected} disabled={!isOpen || reserve.isPending || !!success} onSelect={number => {
+          <SquareGrid board={board} claimed={claimedSquares} displayNames={squareDisplayNames} selected={selected} disabled={!isOpen || reserve.isPending || !!success} onSelect={number => {
             request.current = null; reserve.reset(); setValidation(null);
             setSelected(old => old.includes(number) ? old.filter(value => value !== number) : old.length < 10 ? [...old, number].sort((a, b) => a - b) : old);
           }} />
-          <p className="text-xs text-muted-foreground">{isOpen ? "Choose 1–10 available squares. " : ""}The board refreshes every 10 seconds. Names and contact details are never shown here.</p>
+          <p className="text-xs text-muted-foreground">{isOpen ? "Choose 1–10 available squares. " : ""}The board refreshes every 10 seconds. Only chosen display names are public; real names and contact details stay private.</p>
         </section>
         <section className="sq-panel space-y-5" aria-label="Reserve your squares">
           {success ? <div className="space-y-5" role="status" data-testid="reservation-success">
             <CheckCircle2 className="h-10 w-10 text-primary" /><div><p className="sq-eyebrow mb-2">You're on the board</p><h2 className="text-2xl font-bold">Your squares are reserved.</h2></div>
             <div className="flex flex-wrap gap-2">{success.map(number => <span className="rounded-lg bg-primary/10 px-3 py-2 font-semibold tabular-nums" key={number}>#{number}</span>)}</div>
-            <p className="text-sm text-muted-foreground">Your reservation is confirmed now. Save these numbers for your records. Rescue staff may follow up personally using the contact details you shared.</p>
-            <Button variant="outline" data-testid="button-new-reservation" onClick={() => { setSuccess(null); setForm({ name: "", email: "", phone: "", smsConsent: false }); setSelected([]); setNotice(null); reserve.reset(); request.current = null; }}>Back to the board</Button>
+            <p className="text-sm text-muted-foreground break-words">Your reservation is confirmed now. Your public display name is “{form.displayName.trim()}”. Save these square numbers for your records. Rescue staff may follow up personally using the contact details you shared.</p>
+            <Button variant="outline" data-testid="button-new-reservation" onClick={() => { setSuccess(null); setForm({ displayName: "", name: "", email: "", phone: "", smsConsent: false }); setSelected([]); setNotice(null); reserve.reset(); request.current = null; }}>Back to the board</Button>
           </div> : !isOpen ? <div className="space-y-3"><h2 className="text-xl font-semibold">Reservations are closed</h2><p className="text-sm text-muted-foreground">You can still follow the board and scores. No new squares can be reserved.</p></div> : <form className="space-y-5" onSubmit={event => { event.preventDefault(); void submit(); }}>
             <div><p className="sq-eyebrow mb-2">Make it yours</p><h2 className="text-xl font-semibold">Reserve your squares</h2><p className="text-sm text-muted-foreground mt-2">Pick your squares, then leave a way for our team to reach you.</p></div>
             <div className="rounded-lg bg-muted/50 p-3 space-y-2"><p className="text-sm font-medium" data-testid="selected-squares">{selected.length} of 10 selected</p><p className="text-sm">{selected.length ? selected.map(number => `#${number}`).join(", ") : "Tap an available square to get started."}</p>{selected.length > 0 && <Button type="button" variant="ghost" size="sm" disabled={reserve.isPending} onClick={() => { setSelected([]); request.current = null; reserve.reset(); }}>Clear selection</Button>}</div>
             <fieldset disabled={reserve.isPending} className="space-y-4">
-              <div className="space-y-2"><Label htmlFor="square-name">Your name</Label><Input id="square-name" data-testid="input-reservation-name" autoComplete="name" required maxLength={100} value={form.name} onChange={event => change({ ...form, name: event.target.value })} /></div>
+              <div className="space-y-2"><Label htmlFor="square-display-name">Display name</Label><Input id="square-display-name" data-testid="input-reservation-display-name" autoComplete="off" required maxLength={30} aria-describedby="square-display-name-help" value={form.displayName} onChange={event => change({ ...form, displayName: event.target.value })} /><p id="square-display-name-help" className="text-xs text-muted-foreground">Visible on the public board for each square you reserve. Choose a nickname or another name you are comfortable sharing. Required; up to 30 characters.</p></div>
+              <div className="space-y-2"><Label htmlFor="square-name">Your name (staff only)</Label><Input id="square-name" data-testid="input-reservation-name" autoComplete="name" required maxLength={100} value={form.name} onChange={event => change({ ...form, name: event.target.value })} /></div>
               <p className="text-xs text-muted-foreground">Provide an email address or phone number. Only one is required.</p>
               <div className="space-y-2"><Label htmlFor="square-email">Email address</Label><Input id="square-email" data-testid="input-reservation-email" type="email" autoComplete="email" maxLength={254} value={form.email} onChange={event => change({ ...form, email: event.target.value })} /></div>
               <div className="space-y-2"><Label htmlFor="square-phone">Phone number</Label><Input id="square-phone" data-testid="input-reservation-phone" type="tel" autoComplete="tel" maxLength={32} value={form.phone} onChange={event => change({ ...form, phone: event.target.value })} /></div>

@@ -64,6 +64,10 @@ CREATE TABLE IF NOT EXISTS free_square_reservations (
 );
 CREATE INDEX IF NOT EXISTS free_square_reservations_board_idx ON free_square_reservations(board_id);
 
+-- Existing private names must never be copied into the new public label.
+ALTER TABLE free_square_reservations ADD COLUMN IF NOT EXISTS display_name text
+  CHECK (display_name IS NULL OR (length(btrim(display_name)) BETWEEN 1 AND 30));
+
 CREATE TABLE IF NOT EXISTS free_square_claims (
   board_id uuid NOT NULL REFERENCES free_square_boards(id) ON DELETE CASCADE,
   square integer NOT NULL CHECK (square BETWEEN 1 AND 100),

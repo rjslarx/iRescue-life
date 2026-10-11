@@ -27,7 +27,7 @@ export function normalizeSquarePhone(value?: string) {
   if (/^\+[1-9]\d{7,14}$/.test(value.trim())) return value.trim();
   throw new SquareError(400, "Enter a valid phone number with country code.");
 }
-export const reservationColumns = `id, name, email, phone, squares, sms_consent_at,
+export const reservationColumns = `id, name, display_name, email, phone, squares, sms_consent_at,
   sms_revoked_at, email_revoked_at, cancelled_at, created_at`;
 export const messageColumns = `id, reservation_id, channel, subject, body, status, error, created_at`;
 
@@ -50,7 +50,9 @@ export class FreeSquaresStore {
         AND conrelid=to_regclass('free_square_boards')) AND
       (SELECT count(*)=2 FROM information_schema.columns WHERE table_schema='public'
         AND table_name='free_square_boards' AND column_name IN ('email_template','sms_template')
-        AND column_default NOT LIKE '%your free squares%') AS ready`);
+        AND column_default NOT LIKE '%your free squares%') AND
+      EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public'
+        AND table_name='free_square_reservations' AND column_name='display_name') AS ready`);
     if (existing.rows[0].ready) return;
     const ddl = await readFile(resolve(process.cwd(), "scripts/free-squares.sql"), "utf8");
     await this.transaction(async client => {
@@ -135,14 +137,17 @@ export class FreeSquaresStore {
   async publicBoard(tenantId: string, boardId: string) {
     const b = await this.getBoard(tenantId, boardId);
     if (!["open", "closed"].includes(b.status)) throw new SquareError(404, "Board not found.");
-    const claims = await this.pool.query(`SELECT square FROM free_square_claims WHERE board_id=$1 ORDER BY square`, [boardId]);
-    // Explicit public whitelist: never return names, contacts, message templates,
+    const claims = await this.pool.query(`SELECT c.square, r.display_name FROM free_square_claims c
+      JOIN free_square_reservations r ON r.id=c.reservation_id AND r.board_id=c.board_id
+      WHERE c.board_id=$1 AND r.tenant_id=$2 AND r.cancelled_at IS NULL ORDER BY c.square`, [boardId, tenantId]);
+    // Explicit public whitelist: chosen display names only, never private names, contacts, message templates,
     // tokens, staff identifiers, or reservation IDs belonging to other people.
     return {
       board: { id: b.id, title: b.title, description: b.description, status: b.status,
         home_team: b.home_team, away_team: b.away_team, home_score: b.home_score, away_score: b.away_score,
         row_digits: b.row_digits, column_digits: b.column_digits, digits_assigned_at: b.digits_assigned_at },
       claimedSquares: claims.rows.map(row => row.square),
+      squareDisplayNames: Object.fromEntries(claims.rows.map(row => [row.square, row.display_name])),
     };
   }
   async reserve(tenantId: string, boardId: string, input: unknown) {
@@ -151,11 +156,11 @@ export class FreeSquaresStore {
     const squares = [...data.squares].sort((a, b) => a - b);
     return this.transaction(async client => {
       const board = await this.getBoard(tenantId, boardId, client, true);
-      const prior = await client.query(`SELECT id, board_id, squares, cancelled_at
+      const prior = await client.query(`SELECT id, board_id, squares, cancelled_at, display_name
         FROM free_square_reservations WHERE tenant_id=$1 AND request_key=$2`, [tenantId, data.requestKey]);
       if (prior.rows[0]) {
         const r = prior.rows[0];
-        if (r.board_id !== boardId || r.cancelled_at || JSON.stringify(r.squares) !== JSON.stringify(squares))
+        if (r.board_id !== boardId || r.cancelled_at || JSON.stringify(r.squares) !== JSON.stringify(squares) || r.display_name !== data.displayName)
           throw new SquareError(409, "This reservation request was already used. Start a new reservation.");
         return { reservation: { id: r.id, squares: r.squares }, replay: true };
       }
@@ -164,9 +169,9 @@ export class FreeSquaresStore {
       const taken = await client.query(`SELECT square FROM free_square_claims WHERE board_id=$1 AND square=ANY($2::int[])`, [boardId, squares]);
       if (taken.rows.length) throw new SquareError(409, `Squares ${taken.rows.map(r => `#${r.square}`).join(", ")} were just reserved. Please choose again.`);
       const result = await client.query(`INSERT INTO free_square_reservations
-        (tenant_id,board_id,request_key,name,email,phone,squares,sms_consent_at,sms_consent_text)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,CASE WHEN $8 THEN now() ELSE NULL END,$9) RETURNING id,squares`,
-      [tenantId, boardId, data.requestKey, data.name, data.email?.toLowerCase() || null, phone, squares, data.smsConsent, data.smsConsent ? SQUARE_SMS_CONSENT : null]);
+        (tenant_id,board_id,request_key,name,email,phone,squares,sms_consent_at,sms_consent_text,display_name)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,CASE WHEN $8 THEN now() ELSE NULL END,$9,$10) RETURNING id,squares`,
+      [tenantId, boardId, data.requestKey, data.name, data.email?.toLowerCase() || null, phone, squares, data.smsConsent, data.smsConsent ? SQUARE_SMS_CONSENT : null, data.displayName]);
       const reservation = result.rows[0];
       await client.query(`INSERT INTO free_square_claims(board_id,square,reservation_id)
         SELECT $1,unnest($2::int[]),$3`, [boardId, squares, reservation.id]);

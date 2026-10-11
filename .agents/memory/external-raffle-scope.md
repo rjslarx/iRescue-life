@@ -34,3 +34,9 @@ Use “Football squares” and neutral reservation wording in the interface and 
 **Why:** On 2026-10-11 the user explicitly requested removing all mentions of “free” for football squares. This was a wording change, not a request to add payments.
 
 **How to apply:** Keep reservations and permissions unchanged. Preserve rescue-written content, previously sent messages and historical consent records rather than rewriting their history.
+
+Participants choose a separate public display name for their claimed squares; their contact name remains private.
+
+**Why:** The user requested showing who reserved each square, while existing reservations were collected with a promise of private contact details.
+
+**How to apply:** Never backfill or fall back to a participant's private name for older reservations. Show “Reserved” when no public display name was provided, and clearly disclose public visibility when collecting new names.

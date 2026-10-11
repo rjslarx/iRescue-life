@@ -34,6 +34,8 @@ export const freeSquareBoardSchema = z.object({
 export const freeSquareReservationSchema = z.object({
   requestKey: z.string().uuid(),
   name: shortText(100),
+  displayName: z.string().trim().min(1, "Enter a display name").max(30, "Display name must be 30 characters or fewer")
+    .refine(value => !/[\u0000-\u001f\u007f]/.test(value), "Display name must be a single line"),
   email: z.union([z.string().trim().email().max(254), z.literal("")]).optional(),
   phone: z.string().trim().max(32).optional(),
   smsConsent: z.boolean().default(false),
@@ -54,7 +56,7 @@ export type FreeSquareBoard = z.infer<typeof freeSquareBoardSchema> & {
   row_digits: number[] | null; column_digits: number[] | null; digits_assigned_at: string | null;
 };
 export type FreeSquareReservation = {
-  id: string; name: string; email: string | null; phone: string | null;
+  id: string; name: string; display_name: string | null; email: string | null; phone: string | null;
   sms_consent_at: string | null; sms_revoked_at: string | null; email_revoked_at: string | null; squares: number[];
   cancelled_at: string | null; created_at: string;
 };

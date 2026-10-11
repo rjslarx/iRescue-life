@@ -22,7 +22,7 @@ export function createReservationNotifier(database: Pick<Pool, "query">, send: S
     // Read the committed reservation, not contact details supplied in a replay.
     // The recipient is the rescue's configured contact address, never the visitor.
     const result = await database.query(`
-      SELECT t.contact_email, b.title, r.name, r.email, r.phone, r.squares
+      SELECT t.contact_email, b.title, r.name, r.display_name, r.email, r.phone, r.squares
       FROM free_square_reservations r
       JOIN free_square_boards b ON b.id=r.board_id AND b.tenant_id=r.tenant_id
       JOIN tenants t ON t.id=r.tenant_id
@@ -35,6 +35,7 @@ export function createReservationNotifier(database: Pick<Pool, "query">, send: S
       `New square reservation for ${reservation.title}`,
       "",
       `Participant: ${reservation.name}`,
+      `Display name: ${reservation.display_name || "Not provided"}`,
       `Email: ${reservation.email || "Not provided"}`,
       `Phone: ${reservation.phone || "Not provided"}`,
       `Selected squares: ${reservation.squares.map((square: number) => `#${square}`).join(", ")}`,

@@ -6,7 +6,7 @@ import type { Server } from "node:http";
 import { pool } from "../server/db";
 import { FreeSquaresStore, normalizeSquarePhone, shuffleScoreDigits } from "../server/services/free-squares";
 import { registerFreeSquaresRoutes, type SquareDelivery } from "../server/routes/free-squares";
-import { FREE_SQUARES_TENANTS, hasFreeSquaresAccess, renderSquareMessage } from "../shared/free-squares";
+import { FREE_SQUARES_TENANTS, hasFreeSquaresAccess, renderSquareMessage, freeSquareReservationSchema } from "../shared/free-squares";
 import { createReservationNotifier } from "../server/services/free-square-notifications";
 
 // Run only against the isolated development database, never NEON/production.
@@ -39,7 +39,7 @@ const request = async (path: string, method = "GET", body?: unknown, options: { 
   return { status: response.status, data: await response.json() };
 };
 const reservationInput = (squares: number[], overrides = {}) => ({
-  requestKey: randomUUID(), name: "Square Test Participant", email: "square-test@example.invalid",
+  requestKey: randomUUID(), name: "Square Test Participant", displayName: "Grid Friend", email: "square-test@example.invalid",
   phone: "2025550147", smsConsent: false, squares, ...overrides,
 });
 before(async () => {
@@ -105,6 +105,35 @@ test("rescue notification includes contact details and all squares, with safe HT
   assert.match(sent.subject, /Sunday Game/);
   assert.ok(!sent.html.includes("<script>"));
   assert.match(sent.html, /&lt;script&gt;/);
+});
+test("display names are explicit, validated, public on every claimed square, and never expose private names", async () => {
+  for (const displayName of [undefined, "", "   ", "x".repeat(31), "Line\nBreak"]) {
+    assert.equal(freeSquareReservationSchema.safeParse(reservationInput([1], { displayName })).success, false);
+  }
+  const board = await store.create(tenantId, userId, { title: "Display name privacy test", status: "open" });
+  try {
+    const input = reservationInput([1, 10, 100], { displayName: "  Grid Pal  ", name: "Private Legal Identity" });
+    const { reservation } = await store.reserve(tenantId, board.id, input);
+    const publicData = await store.publicBoard(tenantId, board.id);
+    assert.deepEqual(publicData.squareDisplayNames, { 1: "Grid Pal", 10: "Grid Pal", 100: "Grid Pal" });
+    for (const privateValue of [input.name, input.email, input.phone, reservation.id, input.requestKey]) {
+      assert.ok(!JSON.stringify(publicData).includes(privateValue));
+    }
+    const detail = await store.detail(tenantId, board.id);
+    assert.equal(detail.reservations[0].display_name, "Grid Pal");
+    assert.equal(detail.reservations[0].name, input.name);
+    assert.equal((await store.reserve(tenantId, board.id, input)).replay, true);
+    await assert.rejects(store.reserve(tenantId, board.id, { ...input, displayName: "Different Label" }), /already used/);
+    // Simulate a reservation from before display-name collection. No private-name fallback.
+    await pool.query("UPDATE free_square_reservations SET display_name=NULL WHERE id=$1", [reservation.id]);
+    const legacy = await store.publicBoard(tenantId, board.id);
+    assert.deepEqual(legacy.squareDisplayNames, { 1: null, 10: null, 100: null });
+    assert.ok(!JSON.stringify(legacy).includes(input.name));
+    await store.cancel(tenantId, board.id, reservation.id);
+    assert.deepEqual((await store.publicBoard(tenantId, board.id)).squareDisplayNames, {});
+  } finally {
+    await pool.query("DELETE FROM free_square_boards WHERE id=$1", [board.id]);
+  }
 });
 test("score-digit shuffles contain each digit once and return independent arrays", () => {
   const expected = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
@@ -234,7 +263,7 @@ test("retrying one reservation returns the same record, with no public contact d
   assert.equal(second.replay, true);
   const response = await request(`/public/${boardId}`, "GET", undefined, { anonymous: true });
   assert.equal(response.status, 200);
-  assert.deepEqual(Object.keys(response.data).sort(), ["board", "claimedSquares"]);
+  assert.deepEqual(Object.keys(response.data).sort(), ["board", "claimedSquares", "squareDisplayNames"]);
   const json = JSON.stringify(response.data);
   for (const hidden of ["square-test", "phone", "email", "unsubscribe", "request_key", "Square Test Participant"])
     assert.equal(json.includes(hidden), false);

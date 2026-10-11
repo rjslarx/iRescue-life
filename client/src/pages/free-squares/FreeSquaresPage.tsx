@@ -33,7 +33,7 @@ export default function FreeSquaresPage() {
           <Button onClick={() => setCreateOpen(true)} data-testid="button-create-board"><Plus className="h-4 w-4 mr-2" />Create board</Button>
         </header>
         <section className="sq-banner flex flex-col md:flex-row md:items-center justify-between gap-5">
-          <div className="space-y-2"><h2 className="font-semibold text-lg">A place for everyone on game day.</h2><SquareFreeNotice /><p className="text-sm text-muted-foreground">Share the board link directly. Participant details stay staff-only; messages are always sent individually by your team.</p></div>
+          <div className="space-y-2"><h2 className="font-semibold text-lg">A place for everyone on game day.</h2><SquareFreeNotice /><p className="text-sm text-muted-foreground">Share the board link directly. Chosen display names appear on the board; real names and contact details stay staff-only. Messages are always sent individually by your team.</p></div>
           <Grid3X3 className="hidden md:block h-14 w-14 shrink-0 opacity-40" strokeWidth={1.1} />
         </section>
         <div className="flex flex-wrap justify-between items-center gap-3">
@@ -74,6 +74,8 @@ function BoardDetail({ id, onBack }: { id: string; onBack: () => void }) {
   const { board, reservations, messages } = detail.data;
   const active = reservations.filter(item => !item.cancelled_at);
   const claimed = active.flatMap(item => item.squares);
+  const displayNames: Record<string, string | null> = {};
+  active.forEach(reservation => reservation.squares.forEach(number => { displayNames[String(number)] = reservation.display_name ?? null; }));
   const digitsAssigned = !!board.digits_assigned_at;
   const claimedCount = new Set(claimed).size;
   const canAssignDigits = claimedCount === 100 && (board.status === "open" || board.status === "closed") && !digitsAssigned;
@@ -81,7 +83,7 @@ function BoardDetail({ id, onBack }: { id: string; onBack: () => void }) {
   const updateStatus = (status: FreeSquareBoard["status"]) => save.mutate({ id, data: { status } }, { onSuccess: () => setArchiveConfirm(false) });
   const filtered = reservations.filter(item =>
     (filter === "all" || (filter === "active" ? !item.cancelled_at : !!item.cancelled_at)) &&
-    `${item.name} ${item.email || ""} ${item.phone || ""} ${item.squares.join(" ")}`.toLowerCase().includes(search.toLowerCase()));
+    `${item.name} ${item.display_name || ""} ${item.email || ""} ${item.phone || ""} ${item.squares.join(" ")}`.toLowerCase().includes(search.toLowerCase()));
   const latestRecipient = recipient ? reservations.find(item => item.id === recipient.id) ?? recipient : null;
   return <div className="space-y-6">
     <Button variant="ghost" onClick={onBack} data-testid="button-all-boards"><ArrowLeft className="h-4 w-4 mr-2" />All boards</Button>
@@ -125,7 +127,7 @@ function BoardDetail({ id, onBack }: { id: string; onBack: () => void }) {
       {(["reservations", "history", "board"] as const).map(value => <Button key={value} role="tab" aria-selected={tab === value} variant={tab === value ? "default" : "ghost"} onClick={() => setTab(value)} data-testid={`tab-${value}`}>{value === "reservations" ? "Reservations" : value === "history" ? `Message history (${messages.length})` : "Board & scores"}</Button>)}
     </div>
     <section role="tabpanel" className="space-y-4">
-      {tab === "board" ? <div className="sq-panel max-w-2xl space-y-6"><SquareScore board={board} /><SquareGrid board={board} claimed={claimed} /><p className="text-xs text-muted-foreground">The shared board uses these same team axes and digits. Edit the board to update scores{digitsAssigned ? "." : " or team names."}</p></div> : tab === "history" ? <>
+      {tab === "board" ? <div className="sq-panel max-w-2xl space-y-6 min-w-0"><SquareScore board={board} /><SquareGrid board={board} claimed={claimed} displayNames={displayNames} /><p className="text-xs text-muted-foreground">The shared board uses these same display names, team axes and digits. Edit the board to update scores{digitsAssigned ? "." : " or team names."}</p></div> : tab === "history" ? <>
         <p className="text-sm text-muted-foreground">Only staff-initiated individual messages appear here. Accepted does not mean delivered. Sending and unknown outcomes must not be silently retried.</p>
         {messages.length === 0 ? <SquareEmpty title="No messages sent yet">Choose an active reservation to write a personal email or text. Reserving a square never sends a background message.</SquareEmpty> : messages.map(message => <article className="sq-panel space-y-3" key={message.id} data-testid={`message-history-${message.id}`}>
           <div className="flex flex-wrap gap-2 justify-between"><div><p className="font-medium">{reservations.find(item => item.id === message.reservation_id)?.name || "Reservation contact"}</p><p className="text-xs text-muted-foreground">{message.channel === "email" ? "Email" : "Text message"} · {new Date(message.created_at).toLocaleString()}</p></div><Badge variant={message.status === "failed" ? "destructive" : "secondary"} className="h-fit">{message.status === "accepted" ? "Accepted by provider" : message.status === "sending" ? "Processing" : message.status === "unknown" ? "Unknown outcome" : "Failed"}</Badge></div>
@@ -150,6 +152,7 @@ function BoardDetail({ id, onBack }: { id: string; onBack: () => void }) {
                 {!reservation.cancelled_at && <Button variant="ghost" size="sm" disabled={digitsAssigned || assignDigits.isPending} title={digitsAssigned ? "Releases are locked after digits are assigned." : undefined} onClick={() => { release.reset(); setReleaseTarget(reservation); }} data-testid={`button-release-reservation-${reservation.id}`}>Release squares</Button>}
               </div>
             </div>
+            <p className="text-sm break-words"><span className="text-muted-foreground">Public display name: </span><span className="font-medium">{reservation.display_name?.trim() || "Reserved"}</span>{!reservation.display_name?.trim() && <span className="text-xs text-muted-foreground"> · No display name recorded</span>}</p>
             {reservation.email_revoked_at && <p className="text-xs text-muted-foreground">Email contact opted out; email messaging is disabled.</p>}
             {hasUncertainMessage && <p className="text-xs text-muted-foreground">A message is processing or has an unknown outcome. Check message history and the provider before sending another message.</p>}
             <div className="flex flex-wrap gap-1.5">{reservation.squares.map(number => <span key={number} className={`rounded-md border px-2 py-1 text-xs tabular-nums ${reservation.cancelled_at ? "line-through text-muted-foreground" : "bg-muted/40 font-medium"}`}>#{number}</span>)}</div>
