@@ -46,6 +46,8 @@ export function registerFreeSquaresRoutes(app: Express, deps: {
   email?: SquareDelivery;
   sms?: SquareDelivery;
   notifyReservation?: ReservationNotifier;
+  // Dependency injection for testing the preserved feature while it is paused.
+  accessPolicy?: typeof hasFreeSquaresAccess;
 }) {
   const store = deps.store || new FreeSquaresStore(pool);
   const notifyReservation = deps.notifyReservation || createReservationNotifier(store.pool);
@@ -61,7 +63,7 @@ export function registerFreeSquaresRoutes(app: Express, deps: {
   const enabled: RequestHandler = (req, res, next) => {
     res.set("Cache-Control", "no-store");
     res.set("X-Robots-Tag", "noindex, nofollow");
-    if (!hasFreeSquaresAccess(req.tenant?.id)) return res.status(404).json({ error: "Feature not available." });
+    if (!(deps.accessPolicy || hasFreeSquaresAccess)(req.tenant?.id)) return res.status(404).json({ error: "Feature not available." });
     next();
   };
   const ready: RequestHandler = (_req, res, next) => {

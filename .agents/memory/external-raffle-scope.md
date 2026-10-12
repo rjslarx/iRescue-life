@@ -11,6 +11,12 @@ The user decided not to build an external raffle-provider integration. Rescues c
 
 ## Separate football-pool scope
 
+Football squares are paused for all tenants, including Haseyas and Southern Pets. Preserve the implementation and existing data, but hide dashboard access and deny staff/public board operations.
+
+**Why:** The user decided the risk was not worthwhile and intends to apply to Stripe for raffle approval. That intention is not approval and does not authorize re-enabling this feature.
+
+**How to apply:** Do not re-enable football squares without an explicit request. Keep unsubscribe links working for prior recipients. The scope below describes the preserved implementation, not permission to expose it.
+
 The user specified that community football squares should be available only to Haseyas and Southern Pets, not platform-wide. They initially requested Venmo/Cash App paid entries with no Stripe involvement, but subsequently accepted the explicitly scoped free-entry board with custom staff email/text messaging.
 
 **Why:** The rescues want to stop managing square requests through social-media comments. The implemented scope was agreed after explicitly explaining that entries must be free and messaging is for reservation confirmations/event updates, not payment instructions.

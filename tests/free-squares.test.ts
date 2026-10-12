@@ -58,6 +58,7 @@ before(async () => {
   });
   registerFreeSquaresRoutes(app, {
     store, email: deliver, sms: deliver,
+    accessPolicy: id => FREE_SQUARES_TENANTS.some(tenant => tenant === id),
     notifyReservation: async (...ids) => {
       notifications.push(ids);
       if (notificationFails) throw new Error("Simulated notification failure");
@@ -77,13 +78,54 @@ after(async () => {
   await pool.end();
 });
 test("access is exact-ID limited, authenticated, role limited and tenant isolated", async () => {
-  assert.equal(hasFreeSquaresAccess(tenantId), true);
+  assert.equal(hasFreeSquaresAccess(tenantId), false);
+  assert.equal(hasFreeSquaresAccess(otherTenant), false);
   assert.equal(hasFreeSquaresAccess("haseyas"), false);
   assert.equal((await request("", "GET", undefined, { tenant: randomUUID() })).status, 404);
   assert.equal((await request("", "GET", undefined, { anonymous: true })).status, 401);
   assert.equal((await request("", "GET", undefined, { role: "volunteer" })).status, 403);
   assert.equal((await request(`/${boardId}`, "GET", undefined, { tenant: otherTenant })).status, 404);
   assert.equal((await request(`/public/${boardId}`, "GET", undefined, { tenant: otherTenant })).status, 404);
+});
+test("paused default policy blocks both tenants before any board access or mutation", async () => {
+  const app = express();
+  app.use(express.json());
+  app.use((req: any, _res, next) => {
+    req.tenant = { id: req.headers["x-test-tenant"] };
+    next();
+  });
+  const unexpected = () => { throw new Error("Disabled feature reached authentication or data access"); };
+  registerFreeSquaresRoutes(app, {
+    store,
+    requireTenant: (_req, _res, next) => next(),
+    requireAuth: unexpected,
+    requireRole: () => unexpected,
+    notifyReservation: async () => unexpected(),
+  });
+  const pausedServer = app.listen(0, "127.0.0.1");
+  await new Promise<void>(resolve => pausedServer.once("listening", resolve));
+  try {
+    const pausedBase = `http://127.0.0.1:${(pausedServer.address() as any).port}/api/free-squares`;
+    for (const tenant of FREE_SQUARES_TENANTS) {
+      for (const [path, method] of [
+        ["", "GET"], ["", "POST"], [`/${boardId}`, "GET"], [`/${boardId}`, "PATCH"],
+        [`/public/${boardId}`, "GET"], [`/public/${boardId}/reservations`, "POST"],
+        [`/${boardId}/assign-digits`, "POST"],
+        [`/${boardId}/reservations/${randomUUID()}/cancel`, "POST"],
+        [`/${boardId}/reservations/${randomUUID()}/messages`, "POST"],
+      ]) {
+        const response = await fetch(pausedBase + path, {
+          method, headers: { "x-test-tenant": tenant },
+        });
+        assert.equal(response.status, 404, `${tenant}: ${method} ${path}`);
+        assert.equal(response.headers.get("cache-control"), "no-store");
+        assert.deepEqual(await response.json(), { error: "Feature not available." });
+      }
+    }
+    assert.ok(await store.detail(tenantId, boardId), "Existing board remains intact");
+  } finally {
+    await new Promise<void>(resolve => pausedServer.close(() => resolve()));
+  }
 });
 test("rescue notification includes contact details and all squares, with safe HTML", async () => {
   let sent: any;

@@ -6,8 +6,11 @@ export const FREE_SQUARES_TENANTS = [
   "3a4c2321-6a54-41a4-acf3-a7f2ffe0c051",
   "87f318e1-ffe9-4cc1-9911-633336446f1f",
 ] as const;
+// Paused at the platform owner's request. Keep boards, reservations and code
+// intact, but deny both dashboard and public access until explicitly reapproved.
+export const FREE_SQUARES_ENABLED = false;
 export function hasFreeSquaresAccess(tenantId?: string | null) {
-  return FREE_SQUARES_TENANTS.some(id => id === tenantId);
+  return FREE_SQUARES_ENABLED && FREE_SQUARES_TENANTS.some(id => id === tenantId);
 }
 export const SQUARE_SMS_CONSENT = "I agree to receive texts from this rescue about my square reservation and event updates. Consent is optional and is not required to reserve. Message and data rates may apply. Message frequency varies. Reply STOP to unsubscribe.";
 export const DEFAULT_SQUARE_EMAIL_SUBJECT = "Your squares for {event}";
