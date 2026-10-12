@@ -234,7 +234,7 @@ export default function PublicHeader({ rescueName, logoUrl }: PublicHeaderProps)
             </Link>
           ) : null}
           <Link href="/donate">
-            <Button variant="default" data-testid="button-donate">
+            <Button variant="default" className="public-header-donate" data-testid="button-donate">
               Donate
             </Button>
           </Link>
@@ -426,7 +426,7 @@ export default function PublicHeader({ rescueName, logoUrl }: PublicHeaderProps)
               <Link href="/donate">
                 <Button 
                   variant="default" 
-                  className="w-full justify-start" 
+                  className="w-full justify-start public-header-donate"
                   data-testid="button-donate-mobile"
                   onClick={() => setMobileMenuOpen(false)}
                 >
