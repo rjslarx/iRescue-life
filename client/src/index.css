@@ -519,14 +519,15 @@ html:not(.dark) .admin-portal-theme {
   inset: 0;
   border-radius: inherit;
   pointer-events: none;
-  box-shadow: 0 0 14px 3px hsl(var(--primary) / 0.28);
+  box-shadow: 0 0 0 2px hsl(var(--primary) / 0.38),
+    0 0 20px 5px hsl(var(--primary) / 0.42);
   opacity: 0;
-  animation: public-header-donate-glow 7s ease-in-out infinite;
+  animation: public-header-donate-glow 5s ease-in-out infinite;
 }
 
 @keyframes public-header-donate-glow {
-  0%, 24%, 100% { opacity: 0; }
-  12% { opacity: 1; }
+  0%, 40%, 100% { opacity: 0; }
+  20% { opacity: 1; }
 }
 
 @media (prefers-reduced-motion: reduce) {
