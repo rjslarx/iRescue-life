@@ -72,6 +72,13 @@ export default function PublicHeader({ rescueName, logoUrl }: PublicHeaderProps)
 
   const navigationPages = pagesData?.pages || [];
   const hasWishlistItems = (supplyData?.items?.length || 0) > 0;
+  const donationSection = (tenant as any)?.donationSection as {
+    chewyWishListUrl?: string;
+    amazonWishListUrl?: string;
+  } | undefined;
+  const showWishlist = hasWishlistItems || Boolean(
+    donationSection?.amazonWishListUrl?.trim() || donationSection?.chewyWishListUrl?.trim()
+  );
   const activeCampaigns = campaignsData?.campaigns || [];
   const hasActiveFundraisers = (fundraiserData?.events?.length || 0) > 0;
   
@@ -188,7 +195,7 @@ export default function PublicHeader({ rescueName, logoUrl }: PublicHeaderProps)
                     </Link>
                   </DropdownMenuItem>
                 )}
-                {hasWishlistItems && (
+                {showWishlist && (
                   <DropdownMenuItem asChild>
                     <Link 
                       href="/wishlist"
@@ -382,7 +389,7 @@ export default function PublicHeader({ rescueName, logoUrl }: PublicHeaderProps)
                       </Button>
                     </Link>
                   )}
-                  {hasWishlistItems && (
+                  {showWishlist && (
                     <Link href="/wishlist">
                       <Button 
                         variant="ghost" 

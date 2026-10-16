@@ -41,6 +41,9 @@ export default function PublicWishlist() {
     chewyWishListUrl?: string;
     amazonWishListUrl?: string;
   } | undefined;
+  const chewyWishListUrl = donationSection?.chewyWishListUrl?.trim();
+  const amazonWishListUrl = donationSection?.amazonWishListUrl?.trim();
+  const hasRetailerLinks = Boolean(chewyWishListUrl || amazonWishListUrl);
 
   // Handle donation success/cancelled from URL params
   useEffect(() => {
@@ -404,10 +407,10 @@ export default function PublicWishlist() {
           </div>
         </div>
 
-        {showChewyButton && donationSection?.chewyWishListUrl && (
+        {showChewyButton && chewyWishListUrl && (
           <div className="mt-4 text-center">
             <Button size="lg" asChild className="gap-2" data-testid="button-view-chewy-wishlist">
-              <a href={donationSection.chewyWishListUrl} target="_blank" rel="noopener noreferrer">
+              <a href={chewyWishListUrl} target="_blank" rel="noopener noreferrer">
                 View Full Wish List on Chewy
                 <ExternalLink className="w-4 h-4" />
               </a>
@@ -439,7 +442,9 @@ export default function PublicWishlist() {
               <Heart className="w-16 h-16 text-muted-foreground mb-4" />
               <p className="text-xl font-medium mb-2">Thank you!</p>
               <p className="text-muted-foreground text-center">
-                We currently have all the supplies we need. Check back soon or consider a monetary donation.
+                {hasRetailerLinks
+                  ? 'Shop our retailer wishlists below to send needed supplies directly to our rescue.'
+                  : 'We currently have all the supplies we need. Check back soon or consider a monetary donation.'}
               </p>
             </CardContent>
           </Card>
@@ -482,30 +487,30 @@ export default function PublicWishlist() {
               </section>
             )}
 
-            {/* External Wishlist Links */}
-            {(donationSection?.chewyWishListUrl || donationSection?.amazonWishListUrl) && (
-              <div className="text-center py-8 border-t">
-                <h3 className="text-lg font-semibold mb-4">Shop Our Full Wishlists</h3>
-                <div className="flex justify-center gap-4 flex-wrap">
-                  {donationSection?.chewyWishListUrl && (
-                    <Button size="lg" asChild className="gap-2" data-testid="button-chewy-wishlist">
-                      <a href={donationSection.chewyWishListUrl} target="_blank" rel="noopener noreferrer">
-                        View Chewy Wishlist
-                        <ExternalLink className="w-4 h-4" />
-                      </a>
-                    </Button>
-                  )}
-                  {donationSection?.amazonWishListUrl && (
-                    <Button size="lg" variant="outline" asChild className="gap-2" data-testid="button-amazon-wishlist">
-                      <a href={donationSection.amazonWishListUrl} target="_blank" rel="noopener noreferrer">
-                        View Amazon Wishlist
-                        <ExternalLink className="w-4 h-4" />
-                      </a>
-                    </Button>
-                  )}
-                </div>
-              </div>
-            )}
+          </div>
+        )}
+        {/* External Wishlist Links */}
+        {hasRetailerLinks && (
+          <div className="text-center py-8 border-t">
+            <h3 className="text-lg font-semibold mb-4">Shop Our Full Wishlists</h3>
+            <div className="flex justify-center gap-4 flex-wrap">
+              {chewyWishListUrl && (
+                <Button size="lg" asChild className="gap-2" data-testid="button-chewy-wishlist">
+                  <a href={chewyWishListUrl} target="_blank" rel="noopener noreferrer">
+                    View Chewy Wishlist
+                    <ExternalLink className="w-4 h-4" />
+                  </a>
+                </Button>
+              )}
+              {amazonWishListUrl && (
+                <Button size="lg" variant="outline" asChild className="gap-2" data-testid="button-amazon-wishlist">
+                  <a href={amazonWishListUrl} target="_blank" rel="noopener noreferrer">
+                    View Amazon Wishlist
+                    <ExternalLink className="w-4 h-4" />
+                  </a>
+                </Button>
+              )}
+            </div>
           </div>
         )}
       </div>
