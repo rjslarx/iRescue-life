@@ -15,6 +15,8 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import JsBarcode from "jsbarcode";
 import QRCode from "qrcode";
+import { generateAnimalProfileQr } from "@/lib/animal-profile-qr";
+import { DownloadAnimalProfileQrButton } from "@/components/DownloadAnimalProfileQrButton";
 
 interface MedicalFundStatus {
   hasCampaign: boolean;
@@ -137,10 +139,8 @@ export default function KennelCardPage() {
   // Generate QR codes when animal data is loaded
   useEffect(() => {
     if (animal?.id) {
-      // Public QR: Links to public animals page with highlight query param
-      // Using animal.animalId (human-readable ID like "A12345") for the highlight
-      const publicUrl = `${window.location.origin}${basePath}/animals?highlight=${encodeURIComponent(animal.animalId || animal.id)}`;
-      QRCode.toDataURL(publicUrl, { width: 150, margin: 1 })
+      // Public QR links directly to this record's visitor-safe profile using its UUID.
+      generateAnimalProfileQr(basePath, animal.id)
         .then(setPublicQrCode)
         .catch(console.error);
       
@@ -150,7 +150,7 @@ export default function KennelCardPage() {
         .then(setStaffQrCode)
         .catch(console.error);
     }
-  }, [animal?.id, animal?.animalId, basePath]);
+  }, [animal?.id, basePath]);
 
   // Callback ref for barcode SVG — generates barcode immediately when element mounts
   // Using cardTemplate in deps ensures a new ref callback when switching templates,
@@ -1076,6 +1076,16 @@ export default function KennelCardPage() {
             ? 'Staff card includes medications, dietary restrictions, and internal notes' 
             : 'Public card shows adoption info with QR code for potential adopters'}
         </p>
+        {cardTemplate === "public" && (
+          <div className="no-print flex flex-col items-center gap-2">
+            <DownloadAnimalProfileQrButton animal={animal} basePath={basePath} className="max-w-full" />
+            <p className="max-w-md text-center text-xs text-muted-foreground">
+              For mailers: download a 1024px PNG linking directly to this animal's public profile.
+              Visitors can view it only while the animal is eligible for public adoption listing.
+              Downloading does not change visibility.
+            </p>
+          </div>
+        )}
 
         {/* Edit Panel - Font size and notes only */}
         {isEditMode && (

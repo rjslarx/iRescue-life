@@ -16,6 +16,7 @@ import {
 import { cn } from "@/lib/utils";
 import { type Animal } from "@shared/schema";
 import { MedicalFundDialog } from "@/components/MedicalFundDialog";
+import { DownloadAnimalProfileQrButton } from "@/components/DownloadAnimalProfileQrButton";
 
 function getThumbUrl(url: string): string {
   if (!url || !url.startsWith('/objects/') || url.endsWith('-thumb')) return url;
@@ -458,6 +459,7 @@ export function AnimalHudCard({
               )}
 
               <div className="grid grid-cols-2 gap-1.5 pt-1">
+                <DownloadAnimalProfileQrButton animal={animal} basePath={basePath} className="col-span-2" />
                 {variant === "active" && (
                   <>
                     <Button
