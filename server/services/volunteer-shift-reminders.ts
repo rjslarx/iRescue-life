@@ -8,7 +8,7 @@ import {
 } from "@shared/schema";
 import { eq, and, gte, lte, inArray, isNull } from "drizzle-orm";
 import { EmailService } from "../lib/email-service";
-import { format } from "date-fns";
+import { volunteerEmailTime } from "../lib/volunteer-email-time";
 
 // Default local hour (0–23) at which the day-before reminder fires when a tenant
 // hasn't chosen one. 17 == 5 PM the evening before the shift.
@@ -94,16 +94,7 @@ function localDateString(timezone: string, when: Date): string | null {
 
 /** Format an absolute instant as a friendly local time (e.g. "9:00 AM") in tz. */
 function localTimeString(timezone: string, when: Date): string {
-  try {
-    return new Intl.DateTimeFormat("en-US", {
-      timeZone: timezone,
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true,
-    }).format(when);
-  } catch {
-    return format(when, "h:mm a");
-  }
+  return volunteerEmailTime(when, timezone);
 }
 
 /**

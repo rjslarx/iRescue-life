@@ -8,7 +8,8 @@ import {
 } from "@shared/schema";
 import { eq, and, gte, lte, inArray } from "drizzle-orm";
 import { EmailService } from "../lib/email-service";
-import { format, addDays, startOfDay, endOfDay, parseISO } from "date-fns";
+import { format, parseISO } from "date-fns";
+import { resolveVolunteerEmailTimezone, volunteerEmailDate, volunteerEmailTime } from "../lib/volunteer-email-time";
 
 interface VolunteerCommitment {
   calendarName: string;
@@ -51,6 +52,7 @@ export class VolunteerScheduleDigestService {
     result.tenantName = tenant.name;
     const settings = tenant.volunteerDigestSettings || {};
     const daysAhead = settings.includeUpcomingDays || 7;
+    const timezone = resolveVolunteerEmailTimezone(tenant.timezone);
 
     const volunteerCalendars = await db
       .select()
@@ -65,6 +67,15 @@ export class VolunteerScheduleDigestService {
     const calendarIds = volunteerCalendars.map((c) => c.id);
 
     const now = new Date();
+    const firstDate = volunteerEmailDate(now, timezone);
+    const lastDay = new Date(`${firstDate}T12:00:00Z`);
+    lastDay.setUTCDate(lastDay.getUTCDate() + daysAhead);
+    const lastDate = lastDay.toISOString().slice(0, 10);
+    // Fetch a broad UTC range, then select exact tenant-local calendar dates.
+    const windowStart = new Date(`${firstDate}T00:00:00Z`);
+    windowStart.setUTCDate(windowStart.getUTCDate() - 1);
+    const windowEnd = new Date(`${lastDate}T00:00:00Z`);
+    windowEnd.setUTCDate(windowEnd.getUTCDate() + 2);
     const events = await db
       .select()
       .from(calendarEvents)
@@ -72,8 +83,8 @@ export class VolunteerScheduleDigestService {
         and(
           eq(calendarEvents.tenantId, tenantId),
           inArray(calendarEvents.calendarId, calendarIds),
-          gte(calendarEvents.startTime, startOfDay(now)),
-          lte(calendarEvents.startTime, endOfDay(addDays(now, daysAhead)))
+          gte(calendarEvents.startTime, windowStart),
+          lte(calendarEvents.startTime, windowEnd)
         )
       );
 
@@ -104,6 +115,8 @@ export class VolunteerScheduleDigestService {
     const commitmentsByEmail = new Map<string, { name: string; commitments: VolunteerCommitment[] }>();
 
     for (const event of events) {
+      const localDate = volunteerEmailDate(event.startTime, timezone);
+      if (localDate < firstDate || localDate > lastDate) continue;
       const cal = calendarMap.get(event.calendarId);
       if (!cal) continue;
 
@@ -120,9 +133,9 @@ export class VolunteerScheduleDigestService {
 
       const commitment: VolunteerCommitment = {
         calendarName: cal.name,
-        date: format(event.startTime, 'yyyy-MM-dd'),
-        startTime: format(event.startTime, 'h:mm a'),
-        endTime: event.endTime ? format(event.endTime, 'h:mm a') : '',
+        date: localDate,
+        startTime: volunteerEmailTime(event.startTime, timezone),
+        endTime: event.endTime ? volunteerEmailTime(event.endTime, timezone) : '',
         location: event.location || '',
       };
 

@@ -25,6 +25,14 @@ system 1, not system 2. Confirm which one the user means before building.
    YYYY-MM-DD text, `time` free-form, `calendar_id`) + `volunteer_signups`
    (`applicantEmail` notNull). Separate public flow. **No linkage** to system 1.
 
+## Haseya's shift schedule
+
+The user confirmed on 2026-10-19 that morning cleaning is 8–11 AM and evening/night meds/potty break is 4–6 PM, Central time.
+
+**Why:** Volunteers reported incorrect times in email reminders despite correctly configured calendar shifts. Weekly schedule digests and day-before reminders are separate email paths; checking one does not establish that the other is correct.
+
+**How to apply:** Preserve these local shift hours and account for daylight saving time. When investigating volunteer email times, check both email paths rather than changing correctly stored shift timestamps.
+
 **How to apply:** the day-before shift reminder
 (`server/services/volunteer-shift-reminders.ts`) is calendar-only (system 1) by
 design — the opportunity path was intentionally removed after the user clarified
