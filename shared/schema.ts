@@ -2,6 +2,7 @@ import { pgTable, uuid, text, timestamp, integer, boolean, jsonb, unique, unique
 import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import { supplyItemUnitPriceSchema } from "./supply-item-validation";
 export * from "./free-squares-tables";
 
 // --- $5 Friday recurring-day helpers (shared between client and server) ---
@@ -2972,7 +2973,7 @@ export const insertSupplyItemSchema = createInsertSchema(supplyItems).omit({
   title: z.string().min(1).max(200),
   description: z.string().max(1000).optional(),
   quantityNeeded: z.number().int().min(1),
-  unitPrice: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
+  unitPrice: supplyItemUnitPriceSchema,
   amazonUrl: z.string().url().optional().or(z.literal("")),
   chewyUrl: z.string().url().optional().or(z.literal("")),
   petsmartUrl: z.string().url().optional().or(z.literal("")),

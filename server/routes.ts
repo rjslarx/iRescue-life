@@ -46250,6 +46250,7 @@ Email: ${application.applicantEmail || ''}`
   app.patch('/api/supply-items/:id', requireTenant, requireAuth, requireRole('staff'), async (req, res, next) => {
     try {
       const { supplyItems } = await import('@shared/schema');
+      const { supplyItemUnitPriceSchema } = await import('@shared/supply-item-validation');
       
       const updateSchema = z.object({
         categoryId: z.string().uuid().optional(),
@@ -46258,7 +46259,7 @@ Email: ${application.applicantEmail || ''}`
         imageUrl: z.string().optional(),
         quantityNeeded: z.number().int().min(1).optional(),
         quantityFulfilled: z.number().int().min(0).optional(),
-        unitPrice: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
+        unitPrice: supplyItemUnitPriceSchema,
         priority: z.enum(['low', 'normal', 'high', 'urgent']).optional(),
         status: z.enum(['active', 'fulfilled', 'paused']).optional(),
         amazonUrl: z.string().url().optional().or(z.literal("")),
