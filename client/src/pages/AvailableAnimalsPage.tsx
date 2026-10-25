@@ -105,7 +105,7 @@ export default function AvailableAnimalsPage() {
   const uniqueSpecies = Array.from(new Set(availableAnimals.map(a => a.species)));
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background overflow-x-clip">
       <PublicHeader rescueName={rescueName} />
       
       {/* Wall of Love Ticker */}
@@ -179,7 +179,7 @@ export default function AvailableAnimalsPage() {
       <section className="py-12 bg-background">
         <div className="w-full max-w-7xl mx-auto px-6 sm:px-8">
           {isLoadingAnimals ? (
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 w-full">
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 w-full">
               {Array.from({ length: 8 }).map((_, i) => (
                 <div key={i} className="space-y-3 w-full">
                   <Skeleton className="h-48 w-full" data-testid="skeleton-animal" />
@@ -189,7 +189,7 @@ export default function AvailableAnimalsPage() {
               ))}
             </div>
           ) : filteredAnimals.length > 0 ? (
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 w-full">
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 w-full">
               {filteredAnimals.map((animal) => (
                 <AnimalCard
                   key={animal.id}

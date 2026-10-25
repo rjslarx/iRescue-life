@@ -173,7 +173,7 @@ export default function AnimalCard({
   };
 
   return (
-    <Card className="rounded-[2rem] p-3 w-full h-full flex flex-col hover-elevate" data-testid={`card-animal-${name.toLowerCase().replace(/\s/g, '-')}`}>
+    <Card className="rounded-[2rem] p-3 w-full min-w-0 max-w-full h-full flex flex-col hover-elevate" data-testid={`card-animal-${name.toLowerCase().replace(/\s/g, '-')}`}>
       <div 
         className="overflow-hidden bg-muted relative aspect-[4/3] rounded-[1.5rem]"
         onMouseEnter={() => setIsActive(true)}
@@ -212,20 +212,20 @@ export default function AnimalCard({
           </div>
         )}
       </div>
-      <CardContent className="px-4 pt-5 pb-2 space-y-3 flex-1 text-center">
+      <CardContent className="px-4 pt-5 pb-2 space-y-3 flex-1 min-w-0 break-words text-center">
         <div className="space-y-1.5">
           <h3 className="font-display text-2xl font-bold" data-testid={`text-animal-name-${name.toLowerCase().replace(/\s/g, '-')}`}>
             <a href={profileUrl} className="hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm">
               {name}
             </a>
           </h3>
-          <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground font-medium uppercase tracking-wider">
-            <span>{breed}</span>
+          <div className="flex flex-wrap items-center justify-center gap-2 text-sm text-muted-foreground font-medium uppercase tracking-wider">
+            <span className="min-w-0 max-w-full">{breed}</span>
             <span>·</span>
-            <span>{age}</span>
+            <span className="min-w-0 max-w-full">{age}</span>
           </div>
-          <div className="flex justify-center gap-1.5 pt-1">
-            <Badge variant="secondary">
+          <div className="flex flex-wrap justify-center gap-1.5 pt-1">
+            <Badge variant="secondary" className="min-w-0 max-w-full whitespace-normal break-words">
               {species}
             </Badge>
             {isAdoptionPending && (
@@ -277,7 +277,7 @@ export default function AnimalCard({
         <div className={featuredActions ? "contents" : "flex gap-2 w-full"}>
           {isUnavailable ? (
             <Button 
-              className={featuredActions ? "h-12 w-full rounded-xl text-base font-semibold" : "flex-1"}
+              className={featuredActions ? "h-12 w-full rounded-xl text-base font-semibold" : "flex-1 min-w-0 whitespace-normal"}
               variant="secondary"
               disabled
               data-testid="button-adopt-disabled"
@@ -288,7 +288,7 @@ export default function AnimalCard({
             <Button 
               className={featuredActions
                 ? "h-12 w-full rounded-xl text-base font-bold shadow-sm transition-transform hover:-translate-y-0.5"
-                : "flex-1"
+                : "flex-1 min-w-0 whitespace-normal"
               }
               onClick={onAdopt}
               data-testid="button-adopt"
@@ -394,12 +394,12 @@ export default function AnimalCard({
         {onSponsor && !featuredActions && (
           <Button 
             variant="outline"
-            className="w-full"
+            className="w-full min-w-0 whitespace-normal"
             onClick={handleSponsorClick}
             data-testid="button-sponsor"
           >
             <Heart className="h-4 w-4 mr-2" />
-            Sponsor {name}
+            <span className="min-w-0 break-words">Sponsor {name}</span>
           </Button>
         )}
       </CardFooter>
