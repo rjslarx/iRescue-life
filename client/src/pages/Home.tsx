@@ -455,7 +455,8 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    // Clip horizontal overflow without creating a scroll container for the sticky header.
+    <div className="min-h-screen bg-background overflow-x-clip">
       <PublicHeader rescueName={rescueName} logoUrl={tenant?.logoUrl || undefined} />
       
       {announcementBar?.enabled && announcementBar?.text && (

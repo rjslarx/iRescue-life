@@ -67,9 +67,10 @@ export default function MobileAnimalCarousel({
   }
 
   return (
-    <div className="relative w-full" data-testid="mobile-animal-carousel">
-      <div className="overflow-hidden" ref={emblaRef}>
-        <div className="flex touch-pan-y">
+    <div className="relative w-full min-w-0 max-w-full overflow-x-clip" data-testid="mobile-animal-carousel">
+      {/* Embla handles horizontal swipes; the browser keeps vertical scroll and pinch zoom. */}
+      <div className="overflow-hidden" style={{ touchAction: "pan-y pinch-zoom" }} ref={emblaRef}>
+        <div className="flex">
           {animals.map((animal) => (
             <div
               key={animal.id}
