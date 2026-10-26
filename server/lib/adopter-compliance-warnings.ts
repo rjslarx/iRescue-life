@@ -17,6 +17,7 @@ import {
   applications,
   complianceObligations,
   preventativeCareRecords,
+  preventativeCareTypes,
   adopterComplianceConfirmations,
   adopterComplianceWarnings,
   adopterComplianceWarningTemplates,
@@ -27,6 +28,7 @@ import {
 import { and, eq, gte, lte, sql, desc, isNotNull, inArray } from 'drizzle-orm';
 import { isTwilioEnabled } from './twilio-service';
 import { sendCommunication } from './unified-comms';
+import { currentHeartwormRecordIds, protectedHeartwormAnimalIds } from './heartworm-warning-eligibility';
 
 /**
  * Build a per-animal phone fallback map: when `adoptions.adopter_phone` is
@@ -354,7 +356,34 @@ export async function findEligibleHeartwormWarnings(
     const b = existing.adoptionDate ? new Date(existing.adoptionDate).getTime() : 0;
     if (a > b) dedupMap.set(key, r);
   }
-  const rows = Array.from(dedupMap.values());
+  // Check ALL administered records, not just overdue rows. Otherwise a current
+  // six-month injection is invisible while an old monthly product keeps warning.
+  const candidateAnimalIds = Array.from(new Set([
+    ...rawRows.map(r => r.animalId),
+    ...obligationRows.map(r => r.animalId),
+  ]));
+  const coverageRecords = candidateAnimalIds.length ? await db
+    .select({
+      id: preventativeCareRecords.id,
+      animalId: preventativeCareRecords.animalId,
+      status: preventativeCareRecords.status,
+      dateAdministered: preventativeCareRecords.dateAdministered,
+      nextDueDate: preventativeCareRecords.nextDueDate,
+      coversHeartworm: preventativeCareTypes.coversHeartworm,
+    })
+    .from(preventativeCareRecords)
+    .leftJoin(preventativeCareTypes, and(
+      eq(preventativeCareTypes.id, preventativeCareRecords.careTypeId),
+      sql`(${preventativeCareTypes.tenantId} IS NULL OR ${preventativeCareTypes.tenantId} = ${tenantId})`,
+    ))
+    .where(and(
+      eq(preventativeCareRecords.tenantId, tenantId),
+      eq(preventativeCareRecords.careCategory, 'parasite_prevention'),
+      inArray(preventativeCareRecords.animalId, candidateAnimalIds),
+    )) : [];
+  const currentIds = currentHeartwormRecordIds(coverageRecords, new Date());
+  const currentlyProtectedAnimals = protectedHeartwormAnimalIds(coverageRecords, new Date(), today);
+  const rows = Array.from(dedupMap.values()).filter(r => currentIds.has(r.itemId));
 
   // Dedup obligation rows by obligation id (the adoption left-join can yield
   // multiple rows when an animal was returned & re-adopted) — keep the row
@@ -565,6 +594,9 @@ export async function findEligibleHeartwormWarnings(
   // filtered for above), the contract obligation is unmet — there is no
   // covering proof to consider.
   for (const o of obligationCandidates) {
+    // A proof obligation can remain open for staff review, but do not claim
+    // prevention is overdue while a recorded administered dose is still current.
+    if (currentlyProtectedAnimals.has(o.animalId)) continue;
     const dueDate = new Date(o.contractualDueDate);
     if (Number.isNaN(dueDate.getTime())) continue;
     const dueDateStr = o.contractualDueDate; // already YYYY-MM-DD on the column
@@ -967,6 +999,18 @@ export interface SendWarningResult {
  * transactional contract-enforcement notice.
  */
 export async function sendComplianceWarning(input: SendWarningInput): Promise<SendWarningResult> {
+  // Re-check at send time for both cron and staff actions. A new dose may have
+  // been recorded since the dashboard/cron initially collected candidates.
+  const eligible = await findEligibleHeartwormWarnings(input.tenantId);
+  if (!eligible.some(c => c.animalId === input.animalId && c.itemId === input.itemId &&
+    c.adopterEmail.toLowerCase() === input.adopterEmail.toLowerCase())) {
+    return {
+      success: false,
+      channelsSent: [],
+      deadlineDate: '',
+      reason: 'This heartworm warning is no longer eligible; prevention or adopter records have changed.',
+    };
+  }
   const [tenant] = await db
     .select({
       id: tenants.id,

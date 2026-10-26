@@ -33,6 +33,7 @@
 - [UTC "today" date-shift](utc-today-date-shift.md) — never default date inputs with toISOString() (UTC = tomorrow in the evening); use todayLocalISO() in client/src/lib/utils.ts.
 - [Scheduled delivery runtime guard](scheduled-delivery-runtime-guard.md) — autonomous jobs run only when REPLIT_DEPLOYMENT=1; NODE_ENV=production alone is unsafe in workspaces.
 - [Public animal visibility](public-animal-visibility.md) — animal API, profile OG tags, and sitemap must share one public-status/privacy policy; public data is whitelist-only.
+- [Heartworm warning coverage](heartworm-warning-coverage.md) — evaluate coverage separately from product history; newer heartworm care must not erase flea/tick obligations.
 - [Public lead contact safety](public-lead-contact-safety.md) — anonymous forms must preserve existing contact identity and atomically dedupe lead side effects.
 - [Staged media cleanup races](staged-media-cleanup-races.md) — cleanup and new references must share one parent-record lock plus in-lock object re-verification.
 - [Facebook sharing on iOS](facebook-sharing-ios.md) — share raffle URLs without attached files; Facebook reads the uploaded image from Open Graph metadata.
