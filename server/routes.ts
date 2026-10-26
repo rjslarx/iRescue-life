@@ -32986,6 +32986,7 @@ Submitted: ${new Date().toLocaleString()}
               // `total_matched_cents`. Total impact = raised + matched.
               const { expenseCampaigns, campaignMatchPools } = await import('@shared/schema');
               const { calculateMatch } = await import('@shared/expense-campaign-match');
+              const { allocateMilestoneMatch } = await import('@shared/matching-milestones');
               const campaignId = sessionMetadata.expenseCampaignId;
               type PoolRow = {
                 id: string;
@@ -32997,6 +32998,7 @@ Submitted: ${new Date().toLocaleString()}
                 per_gift_cap_cents: number | null;
                 starts_at: string | Date | null;
                 ends_at: string | Date | null;
+                tiers: import("@shared/matching-milestones").MatchingTier[] | null;
               };
               donationRecord = await db.transaction(async (tx) => {
                 const campaignRowsRes = await tx.execute(sql`
@@ -33020,6 +33022,7 @@ Submitted: ${new Date().toLocaleString()}
                 const pool: PoolRow | undefined =
                   (poolRowsRes as unknown as { rows: PoolRow[] }).rows[0];
                 let matched = 0;
+                let matchAllocations: import("@shared/matching-milestones").MatchAllocation[] | null = null;
                 if (pool) {
                   const result = calculateMatch(baseAmountCents, {
                     status: pool.status,
@@ -33032,10 +33035,15 @@ Submitted: ${new Date().toLocaleString()}
                     endsAt: pool.ends_at ? new Date(pool.ends_at) : null,
                   });
                   matched = result.matchedCents;
+                  if (pool.tiers?.length) {
+                    matchAllocations = allocateMilestoneMatch(pool.tiers, pool.total_matched_cents, matched);
+                    // Persist the sum actually attributed, never an unallocated obligation.
+                    matched = matchAllocations.reduce((sum, allocation) => sum + allocation.matchedCents, 0);
+                  }
                 }
                 const [d] = await tx
                   .insert(donations)
-                  .values({ ...donationValuesBase, matchedAmountCents: matched })
+                  .values({ ...donationValuesBase, matchedAmountCents: matched, matchAllocations })
                   .returning();
                 if (pool && matched > 0) {
                   const newTotal = pool.total_matched_cents + matched;

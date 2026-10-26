@@ -791,7 +791,12 @@ export async function generateAndEmailReceipt(
           ))
           .limit(1);
         if (pool) {
-          const sponsorLabel = publicSponsorLabel(pool.publicSponsorName, pool.showSponsorPublicly);
+          const escapeMatchLabel = (value: string) => value.replace(/[&<>"']/g, (char) =>
+            ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]!));
+          const sponsorLabel = donation.matchAllocations?.length
+            ? donation.matchAllocations.map((allocation) =>
+              `${escapeMatchLabel(allocation.sponsorLabel)} (${formatCurrency(allocation.matchedCents)})`).join(" and ")
+            : escapeMatchLabel(publicSponsorLabel(pool.publicSponsorName, pool.showSponsorPublicly));
           matchLineHtml = `
   <p style="background: #eef7ee; border-left: 4px solid #4caf50; padding: 12px 15px; border-radius: 6px; margin: 20px 0;">
     Your gift unlocked an additional <strong>${formatCurrency(matchedCents)}</strong> from ${sponsorLabel}.

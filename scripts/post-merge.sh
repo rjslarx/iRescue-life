@@ -612,3 +612,9 @@ ALTER TABLE adoption_agreement_direct_sends ADD COLUMN IF NOT EXISTS cat_safety_
 ALTER TABLE adoption_agreement_direct_sends ADD COLUMN IF NOT EXISTS cat_safety_addendum_answers jsonb;
 CREATE INDEX IF NOT EXISTS cat_safety_addendum_settings_enabled_idx ON cat_safety_addendum_settings (enabled);
 SQL
+
+# Sequential sponsor commitments and immutable per-gift attribution.
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' || echo "[post-merge] matching milestone columns skipped (already applied or DB unreachable)."
+ALTER TABLE campaign_match_pools ADD COLUMN IF NOT EXISTS tiers jsonb;
+ALTER TABLE donations ADD COLUMN IF NOT EXISTS match_allocations jsonb;
+SQL

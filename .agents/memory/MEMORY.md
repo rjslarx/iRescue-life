@@ -39,3 +39,4 @@
 - [Facebook sharing on iOS](facebook-sharing-ios.md) — share raffle URLs without attached files; Facebook reads the uploaded image from Open Graph metadata.
 - [Destination-charge economics](destination-charge-economics.md) — route whenever a destination exists; keep processing recovery separate; reconcile disputes from actual Stripe cashflows.
 - [Volunteer training tracking](volunteer-training-compliance.md) — informational only; never block invitations or access. Preserve exact-version history, identity ownership, and token security.
+- [Matching milestones](matching-milestone-rules.md) — consecutive 1:1 angel-donor commitments; split boundary-crossing gifts and preserve historical sponsor obligations.

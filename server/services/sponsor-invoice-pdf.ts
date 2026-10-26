@@ -1,5 +1,6 @@
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import type { ExpenseCampaign, CampaignMatchPool } from "@shared/schema";
+import { matchingTierProgress } from "@shared/matching-milestones";
 
 interface SponsorInvoiceInput {
   tenantName: string;
@@ -69,6 +70,19 @@ export async function generateSponsorInvoicePdf(input: SponsorInvoiceInput): Pro
   newLine();
   drawText(`Email: ${pool.internalSponsorEmail}`, 50);
   newLine(22);
+
+  if (pool.tiers?.length) {
+    drawText("Sequential sponsor commitments (dollar-for-dollar)", 50, { bold: true });
+    newLine(20);
+    for (const tier of matchingTierProgress(pool.tiers, pool.totalMatchedCents)) {
+      drawText(tier.internalSponsorName.slice(0, 65), 50, { bold: true });
+      newLine();
+      drawText(tier.internalSponsorEmail.slice(0, 80), 50, { size: 10 });
+      newLine();
+      drawText(`Pledged: ${fmt(tier.pledgedCapCents)} | Match owed: ${fmt(tier.totalMatchedCents)} | Remaining: ${fmt(tier.remainingCents)}`, 50, { size: 10 });
+      newLine(22);
+    }
+  }
 
   drawText("Pledge Summary", 50, { bold: true, size: 12 });
   newLine();

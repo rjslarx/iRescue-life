@@ -1121,6 +1121,7 @@ export const donations = pgTable("donations", {
   // by the matching-donor pool (see migration 0021).
   expenseCampaignId: uuid("expense_campaign_id"),
   matchedAmountCents: integer("matched_amount_cents").notNull().default(0),
+  matchAllocations: jsonb("match_allocations").$type<import("./matching-milestones").MatchAllocation[]>(),
   date: timestamp("date").notNull().defaultNow(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
@@ -7308,8 +7309,8 @@ export type MicrochipClinicRecord = typeof microchipClinicRecords.$inferSelect;
 // ============================================================================
 // Standalone goal-based fundraisers for organizational expenses (A/C unit,
 // electrical upgrade, replacement van). Not tied to an animal, event, or
-// peer fundraiser. Optionally paired with a single `campaign_match_pools`
-// row that doubles/multiplies each gift up to a pledged cap.
+// peer fundraiser. Optionally paired with a `campaign_match_pools` row:
+// one configurable-ratio sponsor or ordered dollar-for-dollar milestones.
 export const expenseCampaigns = pgTable("expense_campaigns", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
@@ -7350,6 +7351,7 @@ export const campaignMatchPools = pgTable("campaign_match_pools", {
   ratioNumerator: integer("ratio_numerator").notNull().default(1),
   ratioDenominator: integer("ratio_denominator").notNull().default(1),
   perGiftCapCents: integer("per_gift_cap_cents"),
+  tiers: jsonb("tiers").$type<import("./matching-milestones").MatchingTier[]>(),
   startsAt: timestamp("starts_at"),
   endsAt: timestamp("ends_at"),
   totalMatchedCents: integer("total_matched_cents").notNull().default(0),

@@ -10,6 +10,7 @@ import {
   auditLogs,
 } from "@shared/schema";
 import { calculateMatch, publicSponsorLabel, computeEffectiveMatchStatus } from "@shared/expense-campaign-match";
+import { matchingTiersSchema, matchingTierProgress } from "@shared/matching-milestones";
 import { requireAuth, requireRole } from "../middleware/auth";
 
 const router = Router();
@@ -37,15 +38,35 @@ const matchPoolSchema = z
   .object({
     publicSponsorName: z.string().max(200).nullable().optional(),
     showSponsorPublicly: z.boolean().default(true),
-    internalSponsorName: z.string().min(1).max(200),
-    internalSponsorEmail: z.string().email().max(200),
-    pledgedCapCents: z.number().int().min(100),
+    internalSponsorName: z.string().trim().max(200).default(""),
+    internalSponsorEmail: z.union([z.string().trim().email().max(200), z.literal("")]).default(""),
+    pledgedCapCents: z.number().int().min(100).max(2_000_000_000),
     ratioNumerator: z.number().int().min(1).max(10).default(1),
     ratioDenominator: z.number().int().min(1).max(10).default(1),
     perGiftCapCents: z.number().int().min(0).nullable().optional(),
     startsAt: z.string().datetime().nullable().optional(),
     endsAt: z.string().datetime().nullable().optional(),
+    tiers: matchingTiersSchema.nullable().optional(),
   })
+  .superRefine((pool, ctx) => {
+    if (!pool.tiers?.length && (!pool.internalSponsorName || !pool.internalSponsorEmail)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Sponsor name and email are required for a single matching donor" });
+    }
+    if (pool.tiers?.length && (pool.ratioNumerator !== 1 || pool.ratioDenominator !== 1 || pool.perGiftCapCents != null)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Sequential milestones require dollar-for-dollar matching with no per-gift cap" });
+    }
+    if (pool.startsAt && pool.endsAt && new Date(pool.endsAt) <= new Date(pool.startsAt)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Match end must be after its start" });
+    }
+  })
+  .transform((pool) => pool.tiers?.length ? {
+    ...pool,
+    publicSponsorName: "Matching sponsors",
+    showSponsorPublicly: true,
+    internalSponsorName: "Matching sponsors",
+    internalSponsorEmail: "",
+    pledgedCapCents: pool.tiers.reduce((sum, tier) => sum + tier.pledgedCapCents, 0),
+  } : pool)
   .nullable();
 
 const upsertCampaignSchema = z.object({
@@ -157,6 +178,7 @@ router.post(
       const data = upsertCampaignSchema.parse(req.body);
       const slug = await ensureUniqueSlug(tenantId, slugify(data.slug || data.title));
 
+      const result = await db.transaction(async (db) => {
       const [campaign] = await db
         .insert(expenseCampaigns)
         .values({
@@ -191,6 +213,7 @@ router.post(
             ratioNumerator: mp.ratioNumerator,
             ratioDenominator: mp.ratioDenominator,
             perGiftCapCents: mp.perGiftCapCents ?? null,
+            tiers: mp.tiers ?? null,
             startsAt: mp.startsAt ? new Date(mp.startsAt) : null,
             endsAt: mp.endsAt ? new Date(mp.endsAt) : null,
           })
@@ -199,7 +222,9 @@ router.post(
         await logCampaignAudit(req, "campaign_match_pool.create", created.id, { after: created });
       }
 
-      res.status(201).json({ campaign: { ...campaign, matchPool: pool } });
+      return { campaign: { ...campaign, matchPool: pool } };
+      });
+      res.status(201).json(result);
     } catch (err) {
       next(err);
     }
@@ -216,13 +241,23 @@ router.patch(
       const { id } = req.params;
       const data = upsertCampaignSchema.partial().parse(req.body);
 
+      const result = await db.transaction(async (db) => {
       const existing = await db
         .select()
         .from(expenseCampaigns)
         .where(and(eq(expenseCampaigns.id, id), eq(expenseCampaigns.tenantId, tenantId)))
-        .limit(1)
+        .limit(1).for("update")
         .then((r) => r[0]);
-      if (!existing) return res.status(404).json({ error: "Campaign not found" });
+      if (!existing) return { status: 404, body: { error: "Campaign not found" } };
+
+      const [currentPool] = await db.select().from(campaignMatchPools)
+        .where(and(eq(campaignMatchPools.expenseCampaignId, id), eq(campaignMatchPools.tenantId, tenantId)));
+      // Do not relabel historical obligations or reinterpret gifts already received.
+      // The parent campaign lock is shared with the payment finalizer.
+      if (existing.raisedAmountCents > 0 && data.matchPool !== undefined &&
+          (currentPool?.tiers?.length || data.matchPool?.tiers?.length)) {
+        return { status: 409, body: { error: "Matching milestones are locked after the first donation. Leave the matching setup unchanged or create a new campaign." } };
+      }
 
       const updates: Record<string, any> = { updatedAt: new Date() };
       if (data.title !== undefined) updates.title = data.title;
@@ -273,6 +308,7 @@ router.patch(
           ratioNumerator: mp.ratioNumerator,
           ratioDenominator: mp.ratioDenominator,
           perGiftCapCents: mp.perGiftCapCents ?? null,
+          tiers: mp.tiers ?? null,
           startsAt: mp.startsAt ? new Date(mp.startsAt) : null,
           endsAt: mp.endsAt ? new Date(mp.endsAt) : null,
           updatedAt: new Date(),
@@ -321,7 +357,9 @@ router.patch(
           .then((r) => r[0] ?? null);
       }
 
-      res.json({ campaign: { ...campaign, matchPool: pool } });
+      return { status: 200, body: { campaign: { ...campaign, matchPool: pool } } };
+      });
+      res.status(result.status).json(result.body);
     } catch (err) {
       next(err);
     }
@@ -470,6 +508,7 @@ router.get(
           donorEmail: donations.donorEmail,
           amount: donations.amount,
           matchedAmountCents: donations.matchedAmountCents,
+          matchAllocations: donations.matchAllocations,
         })
         .from(donations)
         .where(and(eq(donations.tenantId, tenantId), eq(donations.expenseCampaignId, id)))
@@ -522,12 +561,18 @@ router.get(
         .then((r) => r[0] ?? null);
       if (!pool) return res.status(400).json({ error: "No match pool configured" });
 
+      const tierId = typeof req.query.tierId === "string" ? req.query.tierId : undefined;
+      const tier = tierId ? matchingTierProgress(pool.tiers ?? [], pool.totalMatchedCents)
+        .find((t) => t.id === tierId) : undefined;
+      if (tierId && !tier) return res.status(404).json({ error: "Matching milestone not found" });
+
       const rows = await db
         .select({
           date: donations.date,
           donorName: donations.donorName,
           amount: donations.amount,
           matchedAmountCents: donations.matchedAmountCents,
+          matchAllocations: donations.matchAllocations,
         })
         .from(donations)
         .where(
@@ -546,8 +591,19 @@ router.get(
         tenantName: tenant?.name ?? "Animal Rescue",
         tenantEin: tenant?.ein ?? null,
         campaign,
-        pool,
-        donations: rows,
+        pool: tier ? {
+          ...pool,
+          internalSponsorName: tier.internalSponsorName,
+          internalSponsorEmail: tier.internalSponsorEmail,
+          pledgedCapCents: tier.pledgedCapCents,
+          totalMatchedCents: tier.totalMatchedCents,
+          tiers: null,
+        } : pool,
+        donations: tier ? rows.map((row) => ({
+          ...row,
+          matchedAmountCents: (row.matchAllocations ?? [])
+            .filter((a) => a.tierId === tier.id).reduce((sum, a) => sum + a.matchedCents, 0),
+        })).filter((row) => row.matchedAmountCents > 0) : rows,
       });
 
       res.setHeader("Content-Type", "application/pdf");
@@ -634,6 +690,15 @@ publicRouter.get("/:slug", async (req: Request, res: Response, next: NextFunctio
           effectiveStatus: computeEffectiveMatchStatus(pool),
           startsAt: pool.startsAt,
           endsAt: pool.endsAt,
+          tiers: pool.tiers?.length
+            ? matchingTierProgress(pool.tiers, pool.totalMatchedCents).map((tier) => ({
+              id: tier.id,
+              sponsorLabel: tier.sponsorLabel,
+              pledgedCapCents: tier.pledgedCapCents,
+              totalMatchedCents: tier.totalMatchedCents,
+              remainingCents: tier.remainingCents,
+            }))
+            : null,
         }
       : null;
 

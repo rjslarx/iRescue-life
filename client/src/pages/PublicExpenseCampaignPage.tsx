@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -15,6 +15,13 @@ import PublicHeader from "@/components/PublicHeader";
 import type { Tenant } from "@shared/schema";
 
 interface MatchPoolPublic {
+  tiers?: {
+    id: string;
+    sponsorLabel: string;
+    pledgedCapCents: number;
+    totalMatchedCents: number;
+    remainingCents: number;
+  }[] | null;
   sponsorLabel: string;
   pledgedCapCents: number;
   totalMatchedCents: number;
@@ -44,7 +51,7 @@ interface CampaignPublic {
 }
 
 const usd = (cents: number) =>
-  `$${(cents / 100).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+  `$${(cents / 100).toLocaleString("en-US", { minimumFractionDigits: cents % 100 ? 2 : 0, maximumFractionDigits: 2 })}`;
 
 const PRESETS = [25, 50, 100, 250];
 
@@ -52,6 +59,11 @@ export default function PublicExpenseCampaignPage() {
   const { slug } = useParams<{ slug: string }>();
   const { toast } = useToast();
   const [amountDollars, setAmountDollars] = useState<string>("50");
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const { data, isLoading } = useQuery<{ campaign: CampaignPublic; matchPool: MatchPoolPublic | null }>({
     queryKey: ["/api/public/expense-campaigns", slug],
@@ -70,7 +82,7 @@ export default function PublicExpenseCampaignPage() {
   const checkoutMutation = useMutation({
     mutationFn: async () => {
       const cents = Math.round(parseFloat(amountDollars || "0") * 100);
-      if (cents < 100) throw new Error("Minimum donation is $1.");
+      if (!Number.isSafeInteger(cents) || cents < 100 || cents > 2_000_000_000) throw new Error("Enter a donation from $1 to $20,000,000.");
       const res = await apiRequest("POST", `/api/public/expense-campaigns/${data!.campaign.id}/checkout`, {
         amountCents: cents,
       });
@@ -105,15 +117,30 @@ export default function PublicExpenseCampaignPage() {
 
   const { campaign, matchPool } = data;
   const pct = Math.min(100, Math.round((campaign.raisedAmountCents / Math.max(1, campaign.goalAmountCents)) * 100));
+  const matchingStatus = !matchPool ? null
+    : matchPool.remainingCents <= 0 || matchPool.status === "exhausted" ? "exhausted"
+    : matchPool.status === "ended" || (matchPool.endsAt && now >= new Date(matchPool.endsAt).getTime()) ? "ended"
+    : matchPool.startsAt && now < new Date(matchPool.startsAt).getTime() ? "pending"
+    : matchPool.effectiveStatus === "ended" || matchPool.effectiveStatus === "exhausted" ? matchPool.effectiveStatus
+    : "active";
+  const tiered = !!matchPool?.tiers?.length;
+  const giftCents = Math.round(Number(amountDollars || "0") * 100);
 
   const previewMatch = (() => {
-    if (!matchPool || matchPool.effectiveStatus !== "active") return 0;
-    const cents = Math.round(parseFloat(amountDollars || "0") * 100);
-    if (cents <= 0) return 0;
-    const raw = Math.floor((cents * matchPool.ratioNumerator) / matchPool.ratioDenominator);
-    const capped = matchPool.perGiftCapCents != null ? Math.min(raw, matchPool.perGiftCapCents) : raw;
+    if (!matchPool || matchingStatus !== "active" || campaign.status !== "active") return 0;
+    const cents = giftCents;
+    if (!Number.isSafeInteger(cents) || cents < 100 || cents > 2_000_000_000) return 0;
+    const raw = tiered ? cents : Math.floor((cents * matchPool.ratioNumerator) / matchPool.ratioDenominator);
+    const capped = !tiered && matchPool.perGiftCapCents != null ? Math.min(raw, matchPool.perGiftCapCents) : raw;
     return Math.max(0, Math.min(capped, matchPool.remainingCents));
   })();
+  let unallocatedPreview = previewMatch;
+  const previewAllocations = (matchPool?.tiers ?? []).map((tier) => {
+    const matchedCents = Math.min(unallocatedPreview, Math.max(0, tier.remainingCents));
+    unallocatedPreview -= matchedCents;
+    return { ...tier, matchedCents };
+  }).filter((tier) => tier.matchedCents > 0);
+  const currentTierId = matchPool?.tiers?.find((tier) => tier.remainingCents > 0)?.id;
 
   return (
     <div className="min-h-screen bg-background" data-testid="page-public-expense-campaign">
@@ -179,7 +206,7 @@ export default function PublicExpenseCampaignPage() {
               </div>
             )}
 
-            {matchPool && matchPool.effectiveStatus === "active" && (
+            {matchPool && matchingStatus === "active" && (
               <div
                 className="rounded-md border-2 border-primary/40 bg-primary/5 p-4 space-y-1"
                 data-testid="banner-match-pool"
@@ -187,8 +214,8 @@ export default function PublicExpenseCampaignPage() {
                 <div className="flex items-center gap-2">
                   <Heart className="h-5 w-5 text-primary" />
                   <span className="font-semibold">
-                    Every gift {matchPool.ratioNumerator === matchPool.ratioDenominator
-                      ? "is matched"
+                    Eligible gifts {matchPool.ratioNumerator === matchPool.ratioDenominator
+                      ? "are matched"
                       : `gets a ${matchPool.ratioNumerator}:${matchPool.ratioDenominator} match`}{" "}
                     by {matchPool.sponsorLabel}
                   </span>
@@ -199,13 +226,13 @@ export default function PublicExpenseCampaignPage() {
               </div>
             )}
 
-            {matchPool && matchPool.effectiveStatus === "pending" && (
+            {matchPool && matchingStatus === "pending" && (
               <Badge variant="secondary" data-testid="badge-match-pending">
                 Matching window opens soon
               </Badge>
             )}
 
-            {matchPool && matchPool.effectiveStatus === "exhausted" && (
+            {matchPool && matchingStatus === "exhausted" && (
               <div
                 className="rounded-md border-2 border-primary/40 bg-primary/5 p-4 flex items-center gap-2"
                 data-testid="banner-match-exhausted"
@@ -218,10 +245,42 @@ export default function PublicExpenseCampaignPage() {
               </div>
             )}
 
-            {matchPool && matchPool.effectiveStatus === "ended" && (
+            {matchPool && matchingStatus === "ended" && (
               <Badge variant="secondary" data-testid="badge-match-ended">
                 Matching window has ended
               </Badge>
+            )}
+
+            {tiered && matchPool && (
+              <section className="space-y-3" aria-label="Matching milestones" data-testid="section-matching-milestones">
+                <div>
+                  <h2 className="font-semibold">Matching milestones</h2>
+                  <p className="text-sm text-muted-foreground">
+                    Sponsors match eligible donations dollar-for-dollar, in order, up to {usd(matchPool.pledgedCapCents)} in total commitments. A gift may unlock support from more than one sponsor.
+                  </p>
+                  {(matchPool.startsAt || matchPool.endsAt) && <p className="text-xs text-muted-foreground mt-1">Matching window: {matchPool.startsAt ? new Date(matchPool.startsAt).toLocaleString() : "Started immediately"} — {matchPool.endsAt ? new Date(matchPool.endsAt).toLocaleString() : "no end date"}.</p>}
+                </div>
+                <ol className="space-y-3">
+                  {matchPool.tiers!.map((tier, index) => {
+                    const completed = tier.remainingCents <= 0;
+                    const current = tier.id === currentTierId && matchingStatus === "active" && campaign.status === "active";
+                    const label = completed ? "Completed" : matchingStatus === "ended" || campaign.status !== "active" ? "Matching closed" : current ? "Matching now" : "Upcoming";
+                    return (
+                      <li key={tier.id} className={`rounded-md border p-3 space-y-2 ${current ? "border-primary/40 bg-primary/5" : ""}`} data-testid={`matching-milestone-${tier.id}`}>
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <h3 className="text-sm font-medium">{index + 1}. {tier.sponsorLabel}</h3>
+                          <Badge variant={current ? "default" : "secondary"}>{label}</Badge>
+                        </div>
+                        <Progress aria-label={`${tier.sponsorLabel} matching progress`} value={Math.min(100, Math.max(0, tier.totalMatchedCents / Math.max(1, tier.pledgedCapCents) * 100))} />
+                        <div className="flex flex-wrap justify-between gap-1 text-xs text-muted-foreground">
+                          <span>{usd(tier.totalMatchedCents)} unlocked of {usd(tier.pledgedCapCents)}</span>
+                          <span>{usd(tier.remainingCents)} remaining</span>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ol>
+              </section>
             )}
 
             {campaign.goalMet && (
@@ -255,6 +314,7 @@ export default function PublicExpenseCampaignPage() {
                   <Input
                     type="number"
                     min="1"
+                    max="20000000"
                     step="0.01"
                     value={amountDollars}
                     onChange={(e) => setAmountDollars(e.target.value)}
@@ -263,17 +323,23 @@ export default function PublicExpenseCampaignPage() {
                   />
                   <Button
                     onClick={() => checkoutMutation.mutate()}
-                    disabled={checkoutMutation.isPending}
+                    disabled={checkoutMutation.isPending || !Number.isSafeInteger(giftCents) || giftCents < 100 || giftCents > 2_000_000_000}
                     data-testid="button-donate"
                   >
                     {checkoutMutation.isPending ? "Redirecting…" : "Donate"}
                   </Button>
                 </div>
                 {previewMatch > 0 && (
-                  <p className="text-sm text-primary" data-testid="text-match-preview">
-                    Your {usd(Math.round(parseFloat(amountDollars || "0") * 100))} gift unlocks an additional{" "}
+                  <div className="text-sm text-primary" aria-live="polite" data-testid="text-match-preview">
+                    <p>Your {usd(giftCents)} gift unlocks an additional{" "}
                     {usd(previewMatch)} from {matchPool!.sponsorLabel}.
-                  </p>
+                    </p>
+                    {previewAllocations.length > 0 && <ul className="mt-1 space-y-1 text-xs">
+                      {previewAllocations.map((tier) => <li key={tier.id}>{tier.sponsorLabel}: {usd(tier.matchedCents)} in matching support</li>)}
+                    </ul>}
+                    {tiered && previewMatch < giftCents && <p className="mt-1 text-xs text-muted-foreground">Only {usd(previewMatch)} of this gift can be matched before the commitments are fully unlocked.</p>}
+                    <p className="mt-1 text-xs text-muted-foreground">Estimated match; availability is confirmed when your donation completes.</p>
+                  </div>
                 )}
               </div>
             ) : (

@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { MatchingTierEditor, allocateMatchingTiers, dollarsToCents, newMatchingTier, tierValidationError, type MatchingTier, type MatchingTierDraft } from "./MatchingTierEditor";
 import { RichTextEditor } from "@/components/RichTextEditor";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +16,7 @@ import { Plus, Pencil, Trash2, FileDown, DollarSign, ExternalLink, Copy } from "
 import { useToast } from "@/hooks/use-toast";
 
 interface MatchPool {
+  tiers?: MatchingTier[] | null;
   id?: string;
   publicSponsorName: string | null;
   showSponsorPublicly: boolean;
@@ -67,6 +68,8 @@ const emptyForm = {
   perGiftCapDollars: "",
   matchStartsAt: "",
   matchEndsAt: "",
+  matchMode: "single" as "single" | "tiers",
+  tiers: [] as MatchingTierDraft[],
 };
 
 export function ExpenseCampaignsTab({ tenantSubdomain }: { tenantSubdomain?: string }) {
@@ -75,6 +78,20 @@ export function ExpenseCampaignsTab({ tenantSubdomain }: { tenantSubdomain?: str
   const [reconCampaignId, setReconCampaignId] = useState<string | null>(null);
   const [editing, setEditing] = useState<ExpenseCampaign | null>(null);
   const [form, setForm] = useState(emptyForm);
+  const funded = (editing?.raisedAmountCents ?? 0) > 0;
+  const matchingLocked = funded && !!editing?.matchPool?.tiers?.length;
+  const matchingError = matchingLocked || !form.hasMatch ? null
+    : form.matchMode === "tiers" && tierValidationError(form.tiers)
+      ? tierValidationError(form.tiers)
+    : form.matchMode === "single" && dollarsToCents(form.pledgedCapDollars) === null
+      ? "Enter a pledged cap from $1 to $20,000,000 with no more than two decimal places."
+    : form.matchMode === "single" && !form.internalSponsorName.trim()
+      ? "Enter an internal sponsor name."
+    : form.matchMode === "single" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.internalSponsorEmail.trim())
+      ? "Enter a valid sponsor email."
+    : form.matchStartsAt && form.matchEndsAt && new Date(form.matchEndsAt) <= new Date(form.matchStartsAt)
+      ? "The matching window must end after it starts."
+    : null;
 
   const { data, isLoading } = useQuery<{ campaigns: ExpenseCampaign[] }>({
     queryKey: ["/api/expense-campaigns"],
@@ -82,7 +99,9 @@ export function ExpenseCampaignsTab({ tenantSubdomain }: { tenantSubdomain?: str
 
   const upsertMutation = useMutation({
     mutationFn: async () => {
+      if (matchingError) throw new Error(matchingError);
       type MatchPoolPayload = {
+        tiers?: MatchingTier[] | null;
         publicSponsorName: string | null;
         showSponsorPublicly: boolean;
         internalSponsorName: string;
@@ -103,7 +122,7 @@ export function ExpenseCampaignsTab({ tenantSubdomain }: { tenantSubdomain?: str
         endDate: string | null;
         status: "active" | "ended" | "archived";
         slug?: string;
-        matchPool: MatchPoolPayload | null;
+        matchPool?: MatchPoolPayload | null;
       };
       const payload: CampaignPayload = {
         title: form.title,
@@ -116,7 +135,7 @@ export function ExpenseCampaignsTab({ tenantSubdomain }: { tenantSubdomain?: str
         matchPool: null,
       };
       if (form.slug && form.slug.trim()) payload.slug = form.slug.trim();
-      if (form.hasMatch) {
+      if (form.hasMatch && !matchingLocked) {
         payload.matchPool = {
           publicSponsorName: form.publicSponsorName || null,
           showSponsorPublicly: form.showSponsorPublicly,
@@ -131,9 +150,28 @@ export function ExpenseCampaignsTab({ tenantSubdomain }: { tenantSubdomain?: str
           startsAt: form.matchStartsAt ? new Date(form.matchStartsAt).toISOString() : null,
           endsAt: form.matchEndsAt ? new Date(form.matchEndsAt).toISOString() : null,
         };
+        if (form.matchMode === "tiers") {
+          payload.matchPool.tiers = form.tiers.map(({ capDollars, ...tier }) => ({
+            ...tier,
+            internalSponsorName: tier.internalSponsorName.trim(),
+            internalSponsorEmail: tier.internalSponsorEmail.trim(),
+            publicSponsorName: tier.publicSponsorName?.trim() || null,
+            pledgedCapCents: dollarsToCents(capDollars)!,
+          }));
+          payload.matchPool.pledgedCapCents = payload.matchPool.tiers.reduce((sum, tier) => sum + tier.pledgedCapCents, 0);
+          payload.matchPool.internalSponsorName = "";
+          payload.matchPool.internalSponsorEmail = "";
+          payload.matchPool.publicSponsorName = null;
+          payload.matchPool.ratioNumerator = 1;
+          payload.matchPool.ratioDenominator = 1;
+          payload.matchPool.perGiftCapCents = null;
+        } else {
+          payload.matchPool.tiers = null;
+        }
       } else {
         payload.matchPool = null;
       }
+      if (matchingLocked) delete payload.matchPool;
       const url = editing ? `/api/expense-campaigns/${editing.id}` : "/api/expense-campaigns";
       const method = editing ? "PATCH" : "POST";
       const res = await apiRequest(method, url, payload);
@@ -163,8 +201,12 @@ export function ExpenseCampaignsTab({ tenantSubdomain }: { tenantSubdomain?: str
 
   const startEdit = (c: ExpenseCampaign) => {
     setEditing(c);
-    const toDtLocal = (iso: string | null | undefined) =>
-      iso ? new Date(iso).toISOString().slice(0, 16) : "";
+    const toDtLocal = (iso: string | null | undefined) => {
+      if (!iso) return "";
+      const date = new Date(iso);
+      const pad = (value: number) => String(value).padStart(2, "0");
+      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+    };
     setForm({
       title: c.title,
       slug: c.slug,
@@ -186,6 +228,10 @@ export function ExpenseCampaignsTab({ tenantSubdomain }: { tenantSubdomain?: str
         c.matchPool?.perGiftCapCents != null ? (c.matchPool.perGiftCapCents / 100).toFixed(2) : "",
       matchStartsAt: toDtLocal(c.matchPool?.startsAt),
       matchEndsAt: toDtLocal(c.matchPool?.endsAt),
+      matchMode: c.matchPool?.tiers?.length ? "tiers" : "single",
+      tiers: (c.matchPool?.tiers ?? []).map(({ pledgedCapCents, ...tier }) => ({
+        ...tier, capDollars: (pledgedCapCents / 100).toFixed(2),
+      })),
     });
     setDialogOpen(true);
   };
@@ -255,9 +301,9 @@ export function ExpenseCampaignsTab({ tenantSubdomain }: { tenantSubdomain?: str
                 </div>
                 {c.matchPool && (
                   <div className="rounded-md border p-3 text-sm">
-                    <div className="font-medium mb-1">Matching donor</div>
+                    <div className="font-medium mb-1">{c.matchPool.tiers?.length ? `${c.matchPool.tiers.length} matching milestones` : "Matching donor"}</div>
                     <div className="text-muted-foreground">
-                      {c.matchPool.showSponsorPublicly && c.matchPool.publicSponsorName
+                      {c.matchPool.tiers?.length ? "Matching sponsors" : c.matchPool.showSponsorPublicly && c.matchPool.publicSponsorName
                         ? c.matchPool.publicSponsorName
                         : "an anonymous donor"}{" "}
                       · {c.matchPool.ratioNumerator}:{c.matchPool.ratioDenominator} match up to{" "}
@@ -429,7 +475,8 @@ export function ExpenseCampaignsTab({ tenantSubdomain }: { tenantSubdomain?: str
               </Select>
             </div>
 
-            <div className="rounded-md border p-4 space-y-3">
+            {matchingLocked && <p className="rounded-md bg-muted p-3 text-sm" role="status">Matching settings are locked because this campaign has received donations. You can still edit the campaign details above.</p>}
+            <fieldset disabled={matchingLocked} className="min-w-0 rounded-md border p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <div>
                   <div className="font-medium">Matching donor pledge</div>
@@ -438,6 +485,7 @@ export function ExpenseCampaignsTab({ tenantSubdomain }: { tenantSubdomain?: str
                   </div>
                 </div>
                 <Switch
+                  disabled={matchingLocked || funded}
                   checked={form.hasMatch}
                   onCheckedChange={(v) => setForm({ ...form, hasMatch: v })}
                   data-testid="switch-has-match"
@@ -446,6 +494,20 @@ export function ExpenseCampaignsTab({ tenantSubdomain }: { tenantSubdomain?: str
 
               {form.hasMatch && (
                 <div className="space-y-3 pt-2">
+                  <div>
+                    <Label htmlFor="mp-mode">Matching setup</Label>
+                  <Select value={form.matchMode} disabled={funded || matchingLocked} onValueChange={(value) => setForm({ ...form, matchMode: value as "single" | "tiers", tiers: value === "tiers" && form.tiers.length === 0 ? [newMatchingTier()] : form.tiers })}>
+                      <SelectTrigger id="mp-mode"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="single">Single matching sponsor</SelectItem>
+                        <SelectItem value="tiers">Sequential sponsor milestones (1:1)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {form.matchMode === "tiers" ? (
+                    <MatchingTierEditor tiers={form.tiers} disabled={matchingLocked} onChange={(tiers) => setForm({ ...form, tiers })} />
+                  ) : (
+                  <>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <Label htmlFor="mp-internal-name">Sponsor name (internal)</Label>
@@ -535,7 +597,9 @@ export function ExpenseCampaignsTab({ tenantSubdomain }: { tenantSubdomain?: str
                       />
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
+                  </>
+                  )}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <Label htmlFor="mp-starts">Match window starts (optional)</Label>
                       <Input
@@ -560,9 +624,11 @@ export function ExpenseCampaignsTab({ tenantSubdomain }: { tenantSubdomain?: str
                   <p className="text-xs text-muted-foreground">
                     Leave blank for "starts immediately" / "no end date." Outside the window, donations still count but the matching donor stops matching.
                   </p>
+                  {matchingError && <p className="text-sm text-destructive" role="status">{matchingError}</p>}
                 </div>
               )}
-            </div>
+              {funded && !matchingLocked && <p className="text-xs text-muted-foreground">Matching mode cannot change after a campaign receives donations.</p>}
+            </fieldset>
           </div>
 
           <DialogFooter>
@@ -571,7 +637,7 @@ export function ExpenseCampaignsTab({ tenantSubdomain }: { tenantSubdomain?: str
             </Button>
             <Button
               onClick={() => upsertMutation.mutate()}
-              disabled={upsertMutation.isPending || !form.title || !form.goalDollars}
+              disabled={upsertMutation.isPending || !form.title.trim() || !form.goalDollars || !!matchingError}
               data-testid="button-save-campaign"
             >
               {upsertMutation.isPending ? "Saving…" : editing ? "Save changes" : "Create campaign"}
@@ -605,6 +671,7 @@ function ReconciliationDialog({
       donorEmail: string | null;
       amount: number;
       matchedAmountCents: number;
+      matchAllocations?: { tierId: string; sponsorLabel: string; matchedCents: number }[] | null;
     }>;
     summary: {
       totalDonations: number;
@@ -639,7 +706,26 @@ function ReconciliationDialog({
               <Stat label="Remaining pool" value={usd(data.summary.remainingPoolCents)} />
             </div>
 
-            {data.matchPool && (
+            {!!data.matchPool?.tiers?.length && (
+              <div className="space-y-3" data-testid="section-tier-reconciliation">
+                <h3 className="font-semibold">Matching sponsors (staff-only)</h3>
+                {allocateMatchingTiers(data.matchPool.tiers, data.matchPool.totalMatchedCents ?? data.summary.totalMatchedCents).map((tier, index) => (
+                  <div key={tier.id} className="rounded-md border p-3 space-y-2 text-sm">
+                    <div className="font-medium">Milestone {index + 1}: {tier.internalSponsorName}</div>
+                    <p className="text-muted-foreground">{tier.internalSponsorEmail || "No sponsor email"}</p>
+                    <p className="text-xs text-muted-foreground">Public display: {tier.showSponsorPublicly && tier.publicSponsorName ? tier.publicSponsorName : "an anonymous donor"}</p>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1">
+                      <span>Pledged: {usd(tier.pledgedCapCents)}</span>
+                      <span className="font-medium">Amount owed: {usd(tier.matchedCents)}</span>
+                      <span>Remaining: {usd(tier.remainingCents)}</span>
+                    </div>
+                    <Progress value={Math.min(100, tier.matchedCents / Math.max(1, tier.pledgedCapCents) * 100)} />
+                    <Button asChild size="sm" variant="outline"><a href={`/api/expense-campaigns/${campaignId}/sponsor-invoice.pdf?tierId=${encodeURIComponent(tier.id)}`} download><FileDown className="h-4 w-4 mr-2" />Download sponsor {index + 1} invoice (PDF)</a></Button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {data.matchPool && !data.matchPool.tiers?.length && (
               <div
                 className="rounded-md border p-3 space-y-1 text-sm"
                 data-testid="section-sponsor-details"
@@ -673,7 +759,7 @@ function ReconciliationDialog({
               </div>
             )}
 
-            {data.matchPool && (
+            {data.matchPool && !data.matchPool.tiers?.length && (
               <Button asChild data-testid="button-download-sponsor-invoice">
                 <a href={`/api/expense-campaigns/${campaignId}/sponsor-invoice.pdf`} download>
                   <FileDown className="h-4 w-4 mr-2" />
@@ -698,7 +784,10 @@ function ReconciliationDialog({
                       <td className="p-2">{d.date ? new Date(d.date).toLocaleDateString() : "—"}</td>
                       <td className="p-2">{d.donorName || "Anonymous"}</td>
                       <td className="p-2 text-right">{usd(d.amount)}</td>
-                      <td className="p-2 text-right">{usd(d.matchedAmountCents ?? 0)}</td>
+                      <td className="p-2 text-right">
+                        {usd(d.matchedAmountCents ?? 0)}
+                        {d.matchAllocations?.map((allocation) => <div key={allocation.tierId} className="text-xs text-muted-foreground">{allocation.sponsorLabel}: {usd(allocation.matchedCents)}</div>)}
+                      </td>
                     </tr>
                   ))}
                   {data.donations.length === 0 && (

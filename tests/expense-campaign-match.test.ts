@@ -215,10 +215,11 @@ describe("concurrency safety: sequential pool draining never overspends", () => 
 
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 describe("migration round-trip: 0021_add_expense_campaigns.sql", () => {
   const sql = readFileSync(
-    resolve(__dirname, "../migrations/0021_add_expense_campaigns.sql"),
+    resolve(fileURLToPath(new URL(".", import.meta.url)), "../migrations/0021_add_expense_campaigns.sql"),
     "utf8",
   );
   it("creates the expense_campaigns table with required columns", () => {
