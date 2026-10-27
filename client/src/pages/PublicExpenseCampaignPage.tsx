@@ -147,13 +147,11 @@ export default function PublicExpenseCampaignPage() {
     <div className="min-h-screen bg-background" data-testid="page-public-expense-campaign">
       <PublicHeader rescueName={rescueName} logoUrl={tenant?.logoUrl || undefined} />
       {campaign.heroImageUrl && (
-        <div
-          className="relative h-64 md:h-80 bg-cover bg-center"
-          style={{ backgroundImage: `url(${campaign.heroImageUrl})` }}
-        >
+        <div className="relative">
+          <img src={campaign.heroImageUrl} alt="" className="block w-full h-auto" />
           {campaign.showTitleOnHero !== false ? (
-            <div className="absolute inset-0 flex items-end p-6">
-              <h1 className="text-white text-3xl md:text-4xl font-bold" style={{ textShadow: "0 2px 4px rgba(0, 0, 0, 0.7)" }} data-testid="text-campaign-title">
+            <div className="absolute inset-0 flex items-end p-3 sm:p-6">
+              <h1 className="min-w-0 max-w-full [overflow-wrap:anywhere] text-white text-xl sm:text-3xl md:text-4xl font-bold" style={{ textShadow: "0 2px 4px rgba(0, 0, 0, 0.7)" }} data-testid="text-campaign-title">
                 {campaign.title}
               </h1>
             </div>
