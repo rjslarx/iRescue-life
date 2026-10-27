@@ -7319,6 +7319,7 @@ export const expenseCampaigns = pgTable("expense_campaigns", {
   shortDescription: text("short_description"),
   longDescription: text("long_description"),
   heroImageUrl: text("hero_image_url"),
+  showTitleOnHero: boolean("show_title_on_hero").notNull().default(true),
   goalAmountCents: integer("goal_amount_cents").notNull(),
   raisedAmountCents: integer("raised_amount_cents").notNull().default(0),
   endDate: timestamp("end_date"),

@@ -40,6 +40,7 @@ interface ExpenseCampaign {
   shortDescription: string | null;
   longDescription: string | null;
   heroImageUrl: string | null;
+  showTitleOnHero?: boolean;
   goalAmountCents: number;
   raisedAmountCents: number;
   endDate: string | null;
@@ -55,6 +56,7 @@ const emptyForm = {
   shortDescription: "",
   longDescription: "",
   heroImageUrl: "",
+  showTitleOnHero: true,
   goalDollars: "",
   endDate: "",
   status: "active" as "active" | "ended" | "archived",
@@ -119,6 +121,7 @@ export function ExpenseCampaignsTab({ tenantSubdomain }: { tenantSubdomain?: str
         shortDescription: string | null;
         longDescription: string | null;
         heroImageUrl: string | null;
+        showTitleOnHero: boolean;
         goalAmountCents: number;
         endDate: string | null;
         status: "active" | "ended" | "archived";
@@ -130,6 +133,7 @@ export function ExpenseCampaignsTab({ tenantSubdomain }: { tenantSubdomain?: str
         shortDescription: form.shortDescription || null,
         longDescription: form.longDescription || null,
         heroImageUrl: form.heroImageUrl || null,
+        showTitleOnHero: form.showTitleOnHero,
         goalAmountCents: Math.round(parseFloat(form.goalDollars || "0") * 100),
         endDate: form.endDate ? new Date(form.endDate).toISOString() : null,
         status: form.status,
@@ -214,6 +218,7 @@ export function ExpenseCampaignsTab({ tenantSubdomain }: { tenantSubdomain?: str
       shortDescription: c.shortDescription ?? "",
       longDescription: c.longDescription ?? "",
       heroImageUrl: c.heroImageUrl ?? "",
+      showTitleOnHero: c.showTitleOnHero ?? true,
       goalDollars: (c.goalAmountCents / 100).toFixed(2),
       endDate: c.endDate ? new Date(c.endDate).toISOString().slice(0, 10) : "",
       status: c.status,
@@ -485,6 +490,20 @@ export function ExpenseCampaignsTab({ tenantSubdomain }: { tenantSubdomain?: str
               <p id="ec-image-help" className="text-xs text-muted-foreground">
                 Choose a JPEG, PNG, or WebP image from your device, up to 5 MB. Save the campaign to apply image changes.
                 Removing an image only clears it from this campaign; it does not delete the stored file.
+              </p>
+              <div className="flex items-center gap-2">
+                <input
+                  id="ec-show-title-on-hero"
+                  type="checkbox"
+                  checked={form.showTitleOnHero}
+                  onChange={(e) => setForm((prior) => ({ ...prior, showTitleOnHero: e.target.checked }))}
+                  aria-describedby="ec-show-title-on-hero-help"
+                  data-testid="checkbox-show-title-on-hero"
+                />
+                <Label htmlFor="ec-show-title-on-hero">Show campaign title over header image</Label>
+              </div>
+              <p id="ec-show-title-on-hero-help" className="text-xs text-muted-foreground">
+                Uncheck if your image already contains the campaign title. Without a header image, the title is always shown.
               </p>
             </div>
             <div>

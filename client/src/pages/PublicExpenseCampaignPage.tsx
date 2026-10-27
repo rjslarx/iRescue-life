@@ -42,6 +42,7 @@ interface CampaignPublic {
   shortDescription: string | null;
   longDescription: string | null;
   heroImageUrl: string | null;
+  showTitleOnHero?: boolean;
   goalAmountCents: number;
   raisedAmountCents: number;
   endDate: string | null;
@@ -150,12 +151,17 @@ export default function PublicExpenseCampaignPage() {
           className="relative h-64 md:h-80 bg-cover bg-center"
           style={{ backgroundImage: `url(${campaign.heroImageUrl})` }}
         >
-          <div className="absolute inset-0 bg-black/40" />
-          <div className="absolute inset-0 flex items-end p-6">
-            <h1 className="text-white text-3xl md:text-4xl font-bold" data-testid="text-campaign-title">
+          {campaign.showTitleOnHero !== false ? (
+            <div className="absolute inset-0 flex items-end p-6">
+              <h1 className="text-white text-3xl md:text-4xl font-bold" style={{ textShadow: "0 2px 4px rgba(0, 0, 0, 0.7)" }} data-testid="text-campaign-title">
+                {campaign.title}
+              </h1>
+            </div>
+          ) : (
+            <h1 className="sr-only" data-testid="text-campaign-title">
               {campaign.title}
             </h1>
-          </div>
+          )}
         </div>
       )}
 

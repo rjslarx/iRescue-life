@@ -107,6 +107,7 @@ const upsertCampaignSchema = z.object({
   shortDescription: z.string().max(500).nullable().optional(),
   longDescription: z.string().max(20000).nullable().optional(),
   heroImageUrl: z.string().max(1000).nullable().optional(),
+  showTitleOnHero: z.boolean().optional(),
   goalAmountCents: z.number().int().min(100),
   endDate: z.string().datetime().nullable().optional(),
   status: z.enum(["active", "ended", "archived"]).default("active"),
@@ -220,6 +221,7 @@ router.post(
           shortDescription: data.shortDescription ?? null,
           longDescription: data.longDescription ?? null,
           heroImageUrl: data.heroImageUrl ?? null,
+          showTitleOnHero: data.showTitleOnHero ?? true,
           goalAmountCents: data.goalAmountCents,
           endDate: data.endDate ? new Date(data.endDate) : null,
           status: data.status,
@@ -296,6 +298,7 @@ router.patch(
       if (data.shortDescription !== undefined) updates.shortDescription = data.shortDescription;
       if (data.longDescription !== undefined) updates.longDescription = data.longDescription;
       if (data.heroImageUrl !== undefined) updates.heroImageUrl = data.heroImageUrl;
+      if (data.showTitleOnHero !== undefined) updates.showTitleOnHero = data.showTitleOnHero;
       if (data.goalAmountCents !== undefined) updates.goalAmountCents = data.goalAmountCents;
       if (data.endDate !== undefined)
         updates.endDate = data.endDate ? new Date(data.endDate) : null;
@@ -671,6 +674,7 @@ publicRouter.get("/", async (req: Request, res: Response, next: NextFunction) =>
         title: c.title,
         shortDescription: c.shortDescription,
         heroImageUrl: c.heroImageUrl,
+        showTitleOnHero: c.showTitleOnHero,
         goalAmountCents: c.goalAmountCents,
         raisedAmountCents: c.raisedAmountCents,
       })),
@@ -750,6 +754,7 @@ publicRouter.get("/:slug", async (req: Request, res: Response, next: NextFunctio
         shortDescription: campaign.shortDescription,
         longDescription: campaign.longDescription,
         heroImageUrl: campaign.heroImageUrl,
+        showTitleOnHero: campaign.showTitleOnHero,
         goalAmountCents: campaign.goalAmountCents,
         raisedAmountCents: campaign.raisedAmountCents,
         endDate: campaign.endDate,
