@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MatchingTierEditor, allocateMatchingTiers, dollarsToCents, newMatchingTier, tierValidationError, type MatchingTier, type MatchingTierDraft } from "./MatchingTierEditor";
 import { RichTextEditor } from "@/components/RichTextEditor";
+import { ObjectUploader } from "@/components/ObjectUploader";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -448,15 +449,43 @@ export function ExpenseCampaignsTab({ tenantSubdomain }: { tenantSubdomain?: str
                 />
               </div>
             </div>
-            <div>
-              <Label htmlFor="ec-hero">Hero image URL (optional)</Label>
-              <Input
-                id="ec-hero"
-                value={form.heroImageUrl}
-                onChange={(e) => setForm({ ...form, heroImageUrl: e.target.value })}
-                placeholder="https://..."
-                data-testid="input-hero-url"
+            <div className="space-y-2" role="group" aria-labelledby="ec-image-label" aria-describedby="ec-image-help">
+              <Label id="ec-image-label">Campaign image (optional)</Label>
+              {form.heroImageUrl && (
+                <div className="space-y-2">
+                  <img
+                    src={form.heroImageUrl}
+                    alt="Campaign image preview"
+                    className="max-h-48 w-full rounded-md border object-contain bg-muted"
+                    data-testid="preview-campaign-image"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setForm((prior) => ({ ...prior, heroImageUrl: "" }))}
+                    data-testid="button-remove-campaign-image"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" aria-hidden="true" />
+                    Remove campaign image
+                  </Button>
+                </div>
+              )}
+              <ObjectUploader
+                value={[]}
+                onChange={(urls) => setForm((prior) => ({ ...prior, heroImageUrl: urls[0] ?? prior.heroImageUrl }))}
+                uploadEndpoint="/api/expense-campaigns/image/upload"
+                accept="image/jpeg,image/png,image/webp"
+                maxFiles={1}
+                maxFileSize={5 * 1024 * 1024}
+                showPreview={false}
+                buttonText={form.heroImageUrl ? "Replace campaign image" : "Upload campaign image"}
+                data-testid="button-upload-campaign-image"
               />
+              <p id="ec-image-help" className="text-xs text-muted-foreground">
+                Choose a JPEG, PNG, or WebP image from your device, up to 5 MB. Save the campaign to apply image changes.
+                Removing an image only clears it from this campaign; it does not delete the stored file.
+              </p>
             </div>
             <div>
               <Label htmlFor="ec-status">Status</Label>

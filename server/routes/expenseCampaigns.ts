@@ -12,6 +12,9 @@ import {
 import { calculateMatch, publicSponsorLabel, computeEffectiveMatchStatus } from "@shared/expense-campaign-match";
 import { matchingTiersSchema, matchingTierProgress } from "@shared/matching-milestones";
 import { requireAuth, requireRole } from "../middleware/auth";
+import multer from "multer";
+import { prepareCampaignImage, CAMPAIGN_IMAGE_MAX_BYTES } from "../lib/expense-campaign-image";
+import { ObjectStorageService } from "../objectStorage";
 
 const router = Router();
 
@@ -24,6 +27,35 @@ const router = Router();
 const requireCampaignEdit = requireRole("admin", "owner", "board_member");
 const requireCampaignView = requireRole("admin", "owner", "board_member", "staff");
 const requireCampaignDelete = requireRole("admin", "owner");
+
+const campaignImageUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: CAMPAIGN_IMAGE_MAX_BYTES, files: 1 },
+  fileFilter: (_req, file, cb) => cb(null, ["image/jpeg", "image/png", "image/webp"].includes(file.mimetype)),
+}).array("files", 1);
+
+router.post("/image/upload", requireAuth, requireCampaignEdit, (req, res, next) => {
+  campaignImageUpload(req, res, async (error) => {
+    if (error) return res.status(400).json({ error: "Upload one JPEG, PNG, or WebP image under 5 MB." });
+    const file = (req.files as Express.Multer.File[] | undefined)?.[0];
+    if (!file) return res.status(400).json({ error: "Choose a JPEG, PNG, or WebP image." });
+    let content: Buffer;
+    try {
+      content = await prepareCampaignImage(file.buffer);
+    } catch {
+      return res.status(400).json({ error: "Invalid image. Use a static JPEG, PNG, or WebP under 5 MB and 40 megapixels." });
+    }
+    try {
+      const result = await new ObjectStorageService().uploadTenantFile(
+        req.tenant!.id, "expense-campaign-images", content, "image/webp", undefined,
+        { owner: req.user!.id, tenantId: req.tenant!.id, visibility: "public" },
+      );
+      res.json({ uploadedPaths: [result.objectPath] });
+    } catch (err) {
+      next(err);
+    }
+  });
+});
 
 function slugify(s: string): string {
   return s
