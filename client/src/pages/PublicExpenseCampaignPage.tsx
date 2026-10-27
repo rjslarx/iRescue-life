@@ -171,6 +171,58 @@ export default function PublicExpenseCampaignPage() {
           </p>
         )}
 
+        {campaign.status === "active" ? (
+          <div className="space-y-3 pt-2">
+            <div className="flex flex-wrap gap-2">
+              {PRESETS.map((p) => (
+                <Button
+                  key={p}
+                  variant={amountDollars === String(p) ? "default" : "outline"}
+                  onClick={() => setAmountDollars(String(p))}
+                  data-testid={`button-preset-${p}`}
+                >
+                  ${p}
+                </Button>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <Input
+                type="number"
+                min="1"
+                max="20000000"
+                step="0.01"
+                value={amountDollars}
+                onChange={(e) => setAmountDollars(e.target.value)}
+                placeholder="Other amount"
+                data-testid="input-amount"
+              />
+              <Button
+                onClick={() => checkoutMutation.mutate()}
+                disabled={checkoutMutation.isPending || !Number.isSafeInteger(giftCents) || giftCents < 100 || giftCents > 2_000_000_000}
+                data-testid="button-donate"
+              >
+                {checkoutMutation.isPending ? "Redirecting…" : "Donate"}
+              </Button>
+            </div>
+            {previewMatch > 0 && (
+              <div className="text-sm text-primary" aria-live="polite" data-testid="text-match-preview">
+                <p>Your {usd(giftCents)} gift unlocks an additional{" "}
+                {usd(previewMatch)} from {matchPool!.sponsorLabel}.
+                </p>
+                {previewAllocations.length > 0 && <ul className="mt-1 space-y-1 text-xs">
+                  {previewAllocations.map((tier) => <li key={tier.id}>{tier.sponsorLabel}: {usd(tier.matchedCents)} in matching support</li>)}
+                </ul>}
+                {tiered && previewMatch < giftCents && <p className="mt-1 text-xs text-muted-foreground">Only {usd(previewMatch)} of this gift can be matched before the commitments are fully unlocked.</p>}
+                <p className="mt-1 text-xs text-muted-foreground">Estimated match; availability is confirmed when your donation completes.</p>
+              </div>
+            )}
+          </div>
+        ) : (
+          <p className="text-muted-foreground" data-testid="text-campaign-closed">
+            This campaign is no longer accepting donations.
+          </p>
+        )}
+
         <Card>
           <CardContent className="pt-6 space-y-4">
             <div>
@@ -296,57 +348,6 @@ export default function PublicExpenseCampaignPage() {
               </div>
             )}
 
-            {campaign.status === "active" ? (
-              <div className="space-y-3 pt-2">
-                <div className="flex flex-wrap gap-2">
-                  {PRESETS.map((p) => (
-                    <Button
-                      key={p}
-                      variant={amountDollars === String(p) ? "default" : "outline"}
-                      onClick={() => setAmountDollars(String(p))}
-                      data-testid={`button-preset-${p}`}
-                    >
-                      ${p}
-                    </Button>
-                  ))}
-                </div>
-                <div className="flex gap-2">
-                  <Input
-                    type="number"
-                    min="1"
-                    max="20000000"
-                    step="0.01"
-                    value={amountDollars}
-                    onChange={(e) => setAmountDollars(e.target.value)}
-                    placeholder="Other amount"
-                    data-testid="input-amount"
-                  />
-                  <Button
-                    onClick={() => checkoutMutation.mutate()}
-                    disabled={checkoutMutation.isPending || !Number.isSafeInteger(giftCents) || giftCents < 100 || giftCents > 2_000_000_000}
-                    data-testid="button-donate"
-                  >
-                    {checkoutMutation.isPending ? "Redirecting…" : "Donate"}
-                  </Button>
-                </div>
-                {previewMatch > 0 && (
-                  <div className="text-sm text-primary" aria-live="polite" data-testid="text-match-preview">
-                    <p>Your {usd(giftCents)} gift unlocks an additional{" "}
-                    {usd(previewMatch)} from {matchPool!.sponsorLabel}.
-                    </p>
-                    {previewAllocations.length > 0 && <ul className="mt-1 space-y-1 text-xs">
-                      {previewAllocations.map((tier) => <li key={tier.id}>{tier.sponsorLabel}: {usd(tier.matchedCents)} in matching support</li>)}
-                    </ul>}
-                    {tiered && previewMatch < giftCents && <p className="mt-1 text-xs text-muted-foreground">Only {usd(previewMatch)} of this gift can be matched before the commitments are fully unlocked.</p>}
-                    <p className="mt-1 text-xs text-muted-foreground">Estimated match; availability is confirmed when your donation completes.</p>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <p className="text-muted-foreground" data-testid="text-campaign-closed">
-                This campaign is no longer accepting donations.
-              </p>
-            )}
           </CardContent>
         </Card>
 
