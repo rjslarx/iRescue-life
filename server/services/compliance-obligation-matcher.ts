@@ -566,6 +566,10 @@ function obligationMatch(
   }
 
   // 4. rabies (and rabies_booster legacy)
+  // Current pre-adoption coverage is deliberately NOT a new completion
+  // criterion here. Outbound reminders resolve an effective deadline using
+  // both medical sources independently, without closing proof obligations
+  // or rewriting contractual dates (see current-rabies-coverage).
   if (type === "rabies" || type === "rabies_booster" || /rabies/.test(labelLower)) {
     const v = findCoveringVaccine(state, obl, "rabies");
     if (v) return { kind: "vaccine", eventId: v.id };

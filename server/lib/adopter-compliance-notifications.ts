@@ -16,6 +16,8 @@ import {
 } from '@shared/schema';
 import { eq, and, lte, sql, desc, isNull, gte, lt, isNotNull, like } from 'drizzle-orm';
 import { sendCommunication } from './unified-comms';
+import { getLatestRabiesExpiry } from '../services/portal-rabies-coverage';
+import { rabiesReminderCovered, rabiesReminderDeadline } from './current-rabies-coverage';
 
 interface NotificationResult {
   tenantId: string;
@@ -86,7 +88,7 @@ interface ComplianceItem {
   animalName: string;
 }
 
-async function getComplianceItemsForAnimal(tenantId: string, animalId: string, animalName: string): Promise<ComplianceItem[]> {
+export async function getComplianceItemsForAnimal(tenantId: string, animalId: string, animalName: string): Promise<ComplianceItem[]> {
   const items: ComplianceItem[] = [];
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -124,11 +126,21 @@ async function getComplianceItemsForAnimal(tenantId: string, animalId: string, a
       sql`${adopterComplianceConfirmations.status} IN ('pending_review', 'approved')`
     ));
   const confirmedRecordIds = new Set(existingConfirmations.map(c => c.preventativeCareRecordId));
+  const rabiesExpiry = await getLatestRabiesExpiry(tenantId, animalId);
+  let rabiesIncluded = false;
 
   for (const record of careRecords) {
     if (!record.nextDueDate) continue;
     if (confirmedRecordIds.has(record.id)) continue;
-    const rawDate = record.nextDueDate instanceof Date ? record.nextDueDate : new Date(record.nextDueDate);
+    const isRabies = record.careCategory === 'vaccine' && /rabies/i.test(record.careName || '');
+    const storedDate = new Date(record.nextDueDate);
+    const rawDate = isRabies
+      ? rabiesReminderDeadline(record.careName, storedDate, rabiesExpiry)
+      : storedDate;
+    if (rawDate > threeDaysFromNow) continue;
+    // Multiple historical doses/placeholders may now resolve to one renewal.
+    if (isRabies && rabiesIncluded) continue;
+    if (isRabies) rabiesIncluded = true;
     const dueDateStr = rawDate.toISOString().split('T')[0];
     const isOverdue = dueDateStr < todayStr;
     const isPrevention = record.careCategory === 'parasite_prevention';
@@ -656,9 +668,10 @@ export async function sendAnnualVaccineReminders(tenantId: string): Promise<{ se
       .from(vaccineRecords)
       .innerJoin(animals, and(
         eq(animals.id, vaccineRecords.animalId),
+        eq(animals.tenantId, tenantId),
         eq(animals.status, 'adopted'),
       ))
-      .innerJoin(adoptions, eq(adoptions.animalId, vaccineRecords.animalId))
+      .innerJoin(adoptions, and(eq(adoptions.animalId, vaccineRecords.animalId), eq(adoptions.tenantId, tenantId)))
       .where(and(
         eq(vaccineRecords.tenantId, tenantId),
         eq(vaccineRecords.validDurationMonths, 12),
@@ -671,6 +684,10 @@ export async function sendAnnualVaccineReminders(tenantId: string): Promise<{ se
       if (!vaccine.adopterPhone) continue;
 
       try {
+        if (/rabies/i.test(vaccine.itemName)) {
+          const expiry = await getLatestRabiesExpiry(tenantId, vaccine.animalId);
+          if (rabiesReminderCovered(vaccine.itemName, vaccine.dateDue, expiry)) continue;
+        }
         // Dedup: skip if we sent an annual vaccine reminder to this phone in last 20 days
         const twentyDaysAgo = new Date();
         twentyDaysAgo.setDate(twentyDaysAgo.getDate() - 20);
