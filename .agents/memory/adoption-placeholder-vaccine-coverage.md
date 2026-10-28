@@ -18,3 +18,9 @@ New checkout deadlines belong only in compliance obligations, not in administere
 **Why:** Legitimately overdue animals must remain adoptable, and a contractual requirement is not evidence that a vaccine was administered. Completion must retain signed deadlines even when later medical evidence differs.
 
 **How to apply:** Validate before creating agreements and retain staff review evidence. Never “repair” existing signed dates or vaccination history during completion.
+
+For outbound reminders, match non-rabies combination vaccines conservatively: DHPP/DAPP/DA2PP are aliases, but standalone distemper or parvovirus must not establish coverage for the entire combination.
+
+**Why:** The broader medical supersession grouping treats these names together; using that grouping as renewal evidence would let a single-antigen dose suppress a combination-vaccine reminder.
+
+**How to apply:** Keep reminder evidence family-specific across both sources, and retain separate deadlines when they do not resolve to the same family and expiry.
