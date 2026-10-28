@@ -33,6 +33,8 @@ import {
 import { eq, and, isNull, gt, desc, sql, asc, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { EmailService } from '../lib/email-service';
+import { getPortalRabiesExpiry } from '../services/portal-rabies-coverage';
+import { rabiesReminderCovered } from '../lib/current-rabies-coverage';
 
 const router = Router();
 const SALT_ROUNDS = 10;
@@ -1005,8 +1007,10 @@ router.get('/pets/:animalId/due-care', async (req: Request, res: Response) => {
 
     const confirmedIds = new Set(existingConfirmations.map(c => c.preventativeCareRecordId));
 
+    const rabiesExpiry = await getPortalRabiesExpiry(auth.tenantId, animalId);
     const dueItems = records
       .filter(r => !confirmedIds.has(r.id))
+      .filter(r => r.careCategory !== 'vaccine' || !rabiesReminderCovered(r.careName, r.nextDueDate, rabiesExpiry))
       .map(r => ({
         ...r,
         isOverdue: r.nextDueDate ? new Date(r.nextDueDate) < today : false,
@@ -2185,8 +2189,10 @@ router.get('/admin/adopter-preview/:adopterId/pets/:animalId/due-care', async (r
       }
     }
 
+    const rabiesExpiry = await getPortalRabiesExpiry(auth.tenantId, animalId);
     const dueItems = records
       .filter(r => !confirmedIds.has(r.id))
+      .filter(r => r.careCategory !== 'vaccine' || !rabiesReminderCovered(r.careName, r.nextDueDate, rabiesExpiry))
       .map(r => ({
         ...r,
         isOverdue: r.nextDueDate ? new Date(r.nextDueDate) < today : false,
@@ -2283,7 +2289,11 @@ router.get('/admin/adopter-preview/:adopterId/pets/:animalId/compliance-obligati
       ))
       .orderBy(asc(complianceObligations.contractualDueDate));
 
-    res.json(obligations);
+    const rabiesExpiry = await getPortalRabiesExpiry(auth.tenantId, animalId);
+    res.json(obligations.filter(o =>
+      !['pending', 'overdue'].includes(o.status) ||
+      !rabiesReminderCovered(o.obligationType, o.contractualDueDate, rabiesExpiry)
+    ));
   } catch (error) {
     console.error('[Adopter Portal Admin] Error fetching compliance obligations:', error);
     res.status(500).json({ error: 'Failed to load compliance obligations' });
@@ -2394,7 +2404,11 @@ router.get('/pets/:animalId/compliance-obligations', async (req: Request, res: R
       ))
       .orderBy(asc(complianceObligations.contractualDueDate));
 
-    res.json(obligations);
+    const rabiesExpiry = await getPortalRabiesExpiry(auth.tenantId, animalId);
+    res.json(obligations.filter(o =>
+      !['pending', 'overdue'].includes(o.status) ||
+      !rabiesReminderCovered(o.obligationType, o.contractualDueDate, rabiesExpiry)
+    ));
   } catch (error) {
     console.error('[Adopter Portal] Error fetching compliance obligations:', error);
     res.status(500).json({ error: 'Failed to fetch compliance obligations' });
