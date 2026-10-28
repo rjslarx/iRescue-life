@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { AdoptionMedicalDeadlines, useAdoptionMedicalDeadlines } from "./AdoptionMedicalDeadlines";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -53,6 +54,7 @@ interface FinalizeAdoptionDialogProps {
 
 export function FinalizeAdoptionDialog({ open, onOpenChange, animal }: FinalizeAdoptionDialogProps) {
   const { toast } = useToast();
+  const medicalReview = useAdoptionMedicalDeadlines(animal.id, open);
   const { basePath } = useTenant();
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [checkoutToken, setCheckoutToken] = useState<string | null>(null);
@@ -223,7 +225,11 @@ export function FinalizeAdoptionDialog({ open, onOpenChange, animal }: FinalizeA
 
   const createSessionMutation = useMutation({
     mutationFn: async (data: FormData) => {
-      const response = await apiRequest('POST', '/api/adoptions/checkouts', data);
+      if (!medicalReview.ready) throw new Error("Review and confirm medical deadlines before continuing.");
+      const response = await apiRequest('POST', '/api/adoptions/checkouts', {
+        ...data, animalId: animal.id, medicalDueDates: medicalReview.dates,
+        medicalDatesConfirmed: medicalReview.confirmed,
+      });
       return response.json();
     },
     onSuccess: (data) => {
@@ -683,6 +689,8 @@ export function FinalizeAdoptionDialog({ open, onOpenChange, animal }: FinalizeA
                   )}
                 />
               )}
+
+              <AdoptionMedicalDeadlines review={medicalReview} />
 
               {selectedGrant && (
                 <Card className="bg-muted">

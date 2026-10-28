@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { AdoptionMedicalDeadlines, useAdoptionMedicalDeadlines } from "./AdoptionMedicalDeadlines";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -142,11 +143,8 @@ export function ApproveAndSendAgreementDialog({
   });
   const smsEnabled = !!tenantData?.tenant?.twilioEnabled;
   const [staffConfirmValues, setStaffConfirmValues] = useState<Record<string, string>>({});
-  const [medicalDueDates, setMedicalDueDates] = useState<MedicalDueDates>({
-    rabiesDueDate: "",
-    dhppDueDate: "",
-  });
-  const [medicalDatesLoaded, setMedicalDatesLoaded] = useState(false);
+  const medicalReview = useAdoptionMedicalDeadlines(application?.animalId, open);
+  const medicalDueDates = { rabiesDueDate: "", dhppDueDate: "", ...medicalReview.dates };
   const [carePriorities, setCarePriorities] = useState<CarePriorities>({
     enabled: false,
     flags: {},
@@ -175,24 +173,6 @@ export function ApproveAndSendAgreementDialog({
     enabled: open,
   });
 
-  const { data: preventativeCareData } = useQuery<{ records: PreventativeCareRecord[] }>({
-    queryKey: [`/api/animals/${application?.animalId}/preventative-care`],
-    enabled: open && !!application?.animalId,
-  });
-
-  const { data: preventativeCareTypesData } = useQuery<{ types: PreventativeCareType[] }>({
-    queryKey: ['/api/preventative-care-types'],
-    enabled: open,
-  });
-
-  const { data: vaccineRecordsData } = useQuery<{ vaccines: { id: string; itemName: string; dateGiven: string; dateDue: string | null }[] }>({
-    queryKey: ['/api/animals', application?.animalId, 'medical', 'vaccines'],
-    queryFn: async () => {
-      const res = await apiRequest('GET', `/api/animals/${application?.animalId}/medical/vaccines`);
-      return res.json();
-    },
-    enabled: open && !!application?.animalId,
-  });
 
   const contractTemplates = contractTemplatesData?.templates || [];
   const defaultTemplate = contractTemplates.find(t => t.isDefault);
@@ -224,11 +204,6 @@ export function ApproveAndSendAgreementDialog({
       setSpayNeuterNotApplicable(false);
       setSendMethod(smsEnabled && application?.applicantPhone ? 'sms' : 'email');
       setStaffConfirmValues({});
-      setMedicalDatesLoaded(false);
-      setMedicalDueDates({
-        rabiesDueDate: "",
-        dhppDueDate: "",
-      });
       setCarePriorities({ enabled: false, flags: {} });
       setCustomObligations([]);
       setShowAddCustom(false);
@@ -237,43 +212,6 @@ export function ApproveAndSendAgreementDialog({
     }
   }, [open, animal, form, smsEnabled, application?.applicantPhone]);
 
-  useEffect(() => {
-    if (open && !medicalDatesLoaded) {
-      const pcReady = preventativeCareData?.records !== undefined;
-      const typesReady = preventativeCareTypesData?.types !== undefined;
-      const vaccReady = vaccineRecordsData?.vaccines !== undefined;
-
-      if (!pcReady && !vaccReady) return;
-
-      const records = preventativeCareData?.records || [];
-      const types = preventativeCareTypesData?.types || [];
-      const vaccines = vaccineRecordsData?.vaccines || [];
-      const newDates: MedicalDueDates = {
-        rabiesDueDate: "",
-        dhppDueDate: "",
-      };
-
-      for (const field of MEDICAL_DATE_FIELDS) {
-        const matchingRecord = findMatchingRecord(records, types, field.careNames);
-        if (matchingRecord?.nextDueDate) {
-          const dateStr = new Date(matchingRecord.nextDueDate).toISOString().split('T')[0];
-          newDates[field.key] = dateStr;
-        } else {
-          const matchingVaccine = vaccines.find(v => {
-            const name = (v.itemName || '').toLowerCase();
-            return field.careNames.some(cn => name.includes(cn.toLowerCase()));
-          });
-          if (matchingVaccine?.dateDue) {
-            const dateStr = new Date(matchingVaccine.dateDue).toISOString().split('T')[0];
-            newDates[field.key] = dateStr;
-          }
-        }
-      }
-
-      setMedicalDueDates(newDates);
-      setMedicalDatesLoaded(true);
-    }
-  }, [open, medicalDatesLoaded, preventativeCareData, preventativeCareTypesData, vaccineRecordsData]);
 
   useEffect(() => {
     if (open && defaultTemplate && !form.getValues('contractTemplateId')) {
@@ -323,10 +261,13 @@ export function ApproveAndSendAgreementDialog({
   }, [isFeeWaived]);
 
   const allMedicalDatesFilled = approvalAction !== "approve_and_send" ||
-    Object.values(medicalDueDates).every(d => d.trim() !== "");
+    MEDICAL_DATE_FIELDS.every(field => medicalDueDates[field.key].trim() !== "");
 
   const approveAndSendMutation = useMutation({
     mutationFn: async (data: FormData & { applicationId: string }) => {
+      if (data.approvalAction === "approve_and_send" && !medicalReview.ready) {
+        throw new Error("Review and confirm medical deadlines before continuing.");
+      }
       const response = await apiRequest('POST', '/api/applications/approve-and-send', {
         applicationId: data.applicationId,
         sendContract: data.approvalAction === "approve_and_send",
@@ -337,6 +278,7 @@ export function ApproveAndSendAgreementDialog({
         spayNeuterDate: data.spayNeuterDate || null,
         staffConfirmValues: Object.keys(staffConfirmValues).length > 0 ? staffConfirmValues : null,
         medicalDueDates: data.approvalAction === "approve_and_send" ? medicalDueDates : null,
+        medicalDatesConfirmed: medicalReview.confirmed,
         carePriorities: carePriorities.enabled ? carePriorities : null,
         customComplianceObligations: data.approvalAction === "approve_and_send" && customObligations.length > 0 ? customObligations : null,
         isFeeWaived: data.isFeeWaived || false,
@@ -411,7 +353,7 @@ export function ApproveAndSendAgreementDialog({
 
   if (!application) return null;
 
-  const medicalDatesMissing = Object.values(medicalDueDates).filter(d => !d.trim()).length;
+  const medicalDatesMissing = MEDICAL_DATE_FIELDS.filter(field => !medicalDueDates[field.key].trim()).length;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -731,32 +673,7 @@ export function ApproveAndSendAgreementDialog({
                       These high-stakes items will be tracked in the compliance monitor. Pre-filled from {animal?.name || "the animal"}'s records when available.
                     </p>
                     <div className="space-y-3">
-                      {MEDICAL_DATE_FIELDS.map((field) => {
-                        const hasValue = medicalDueDates[field.key].trim() !== "";
-                        return (
-                          <div key={field.key} className="flex items-center gap-3 flex-wrap">
-                            <div className="flex items-center gap-2 min-w-[180px]">
-                              <Syringe className="h-3 w-3 text-muted-foreground shrink-0" />
-                              <Label className="text-sm whitespace-nowrap" htmlFor={`medical-${field.key}`}>
-                                {field.label} <span className="text-destructive">*</span>
-                              </Label>
-                            </div>
-                            <div className="flex-1 min-w-[140px]">
-                              <Input
-                                id={`medical-${field.key}`}
-                                type="date"
-                                value={medicalDueDates[field.key]}
-                                onChange={(e) => setMedicalDueDates(prev => ({
-                                  ...prev,
-                                  [field.key]: e.target.value,
-                                }))}
-                                className={!hasValue ? "border-destructive" : ""}
-                                data-testid={`input-medical-${field.key}`}
-                              />
-                            </div>
-                          </div>
-                        );
-                      })}
+                      <AdoptionMedicalDeadlines review={medicalReview} />
                       {animal?.heartwormPositive && (
                         <div className="p-2 border border-amber-300/50 bg-amber-50 dark:bg-amber-950/20 rounded-md">
                           <p className="text-xs font-medium text-amber-700 dark:text-amber-300 mb-1">

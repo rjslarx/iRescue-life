@@ -1,4 +1,6 @@
 import crypto from 'crypto';
+import { validateMedicalDeadlines } from '@shared/adoption-medical-dates';
+import { getAdoptionMedicalDates } from './adoption-medical-dates';
 import bcrypt from 'bcrypt';
 import { db } from '../db';
 import { sendCommunication } from '../lib/unified-comms';
@@ -19,8 +21,6 @@ import {
   personDocuments,
   users,
   adopterMagicTokens,
-  preventativeCareRecords,
-  preventativeCareTypes,
   complianceObligations,
   type InsertAdoptionCheckoutSession,
   type InsertAdoptionContract,
@@ -33,7 +33,7 @@ import {
   type Tenant,
   type CatSafetyAddendumAnswers,
 } from '@shared/schema';
-import { eq, and, or, desc, sql, isNull, ilike, inArray } from 'drizzle-orm';
+import { eq, and, or, desc, sql, isNull, inArray } from 'drizzle-orm';
 import { EmailService } from '../lib/email-service';
 import { stripeService } from '../lib/stripe-service';
 import { generatePaymentReceiptPDF } from './payment-receipt-pdf';
@@ -200,6 +200,7 @@ export async function createCheckoutSession(
     vetAppointmentDate?: string;
     spayNeuterDate?: string;
     staffConfirmValues?: Record<string, string>;
+    medicalDatesConfirmed?: boolean;
     medicalDueDates?: {
       rabiesDueDate?: string;
       dhppDueDate?: string;
@@ -254,6 +255,10 @@ export async function createCheckoutSession(
   if (!animal) {
     throw new Error('Animal not found or does not belong to this organization');
   }
+  const medicalEvidence = await getAdoptionMedicalDates(tenantId, data.animalId);
+  const medicalWarnings = validateMedicalDeadlines(
+    data.medicalDueDates || {}, medicalEvidence.dates, medicalEvidence.today, data.medicalDatesConfirmed === true,
+  );
   let catSafetySnapshot: { html: string; version: string } | null = null;
   if (data.includeCatSafetyAddendum) {
     const { getOrCreateCatSafetyAddendum } = await import('./cat-safety-addendum');
@@ -344,6 +349,14 @@ export async function createCheckoutSession(
         sendAttempts: 0,
         createdBy: data.staffInitiatedBy,
         createdAt: new Date().toISOString(),
+        medicalDateReview: {
+          confirmed: data.medicalDatesConfirmed === true,
+          warnings: medicalWarnings,
+          evidence: medicalEvidence.dates,
+          deadlines: data.medicalDueDates || {},
+          reviewedBy: data.staffInitiatedBy,
+          reviewedAt: new Date().toISOString(),
+        },
         customComplianceObligations: data.customComplianceObligations || null,
       },
     })
@@ -1448,82 +1461,9 @@ export async function finalizeAdoption(sessionId: string): Promise<void> {
     console.error('Failed to save payment receipt to adopter documents:', error);
   }
 
-  // Create preventative care records from medical due dates for compliance monitoring
-  try {
-    const medDates = session.medicalDueDates as any;
-    if (medDates && typeof medDates === 'object') {
-      const CARE_MAP: { dateKey: string; careName: string; category: 'vaccine' | 'parasite_prevention'; searchTerms: string[] }[] = [
-        { dateKey: 'rabiesDueDate', careName: 'Rabies', category: 'vaccine', searchTerms: ['rabies'] },
-        { dateKey: 'dhppDueDate', careName: 'DHPP', category: 'vaccine', searchTerms: ['dhpp', 'da2pp', 'dapp', 'distemper'] },
-        { dateKey: 'bordetellaDueDate', careName: 'Bordetella', category: 'vaccine', searchTerms: ['bordetella', 'kennel cough'] },
-        { dateKey: 'heartwormDueDate', careName: 'Heartworm Prevention', category: 'parasite_prevention', searchTerms: ['heartworm'] },
-        { dateKey: 'fleaTickDueDate', careName: 'Flea/Tick Prevention', category: 'parasite_prevention', searchTerms: ['flea', 'tick'] },
-      ];
-
-      const allCareTypes = await db
-        .select()
-        .from(preventativeCareTypes)
-        .where(
-          or(
-            eq(preventativeCareTypes.tenantId, session.tenantId),
-            isNull(preventativeCareTypes.tenantId)
-          )
-        );
-
-      for (const mapping of CARE_MAP) {
-        const dueDateStr = medDates[mapping.dateKey];
-        if (!dueDateStr) continue;
-
-        const dueDate = new Date(dueDateStr);
-        if (isNaN(dueDate.getTime())) continue;
-
-        const matchingType = allCareTypes.find(ct => {
-          const name = ct.name.toLowerCase();
-          return mapping.searchTerms.some(term => name.includes(term));
-        });
-
-        const existingRecords = await db
-          .select()
-          .from(preventativeCareRecords)
-          .where(
-            and(
-              eq(preventativeCareRecords.animalId, session.animalId),
-              eq(preventativeCareRecords.tenantId, session.tenantId),
-              matchingType
-                ? eq(preventativeCareRecords.careTypeId, matchingType.id)
-                : ilike(preventativeCareRecords.careName, `%${mapping.careName}%`)
-            )
-          )
-          .orderBy(sql`${preventativeCareRecords.dateAdministered} DESC`)
-          .limit(1);
-
-        if (existingRecords.length > 0) {
-          await db
-            .update(preventativeCareRecords)
-            .set({
-              nextDueDate: dueDate,
-              updatedAt: new Date(),
-            })
-            .where(eq(preventativeCareRecords.id, existingRecords[0].id));
-        } else {
-          await db.insert(preventativeCareRecords).values({
-            animalId: session.animalId,
-            tenantId: session.tenantId,
-            careTypeId: matchingType?.id || null,
-            careName: matchingType?.name || mapping.careName,
-            careCategory: mapping.category,
-            dateAdministered: new Date(),
-            nextDueDate: dueDate,
-            administeredBy: 'Set at adoption',
-            notes: `Due date confirmed during adoption checkout`,
-          });
-        }
-      }
-      console.log(`[Adoption] Created/updated preventative care records from medical due dates for animal ${session.animalId}`);
-    }
-  } catch (error) {
-    console.error('Failed to create preventative care records from medical due dates:', error);
-  }
+  // Checkout dates are contractual deadlines, not administered doses.
+  // Preserve medical history and the signed session dates; compliance obligations
+  // below track these deadlines without creating or rewriting vaccination records.
 
   try {
     const cp = session.carePriorities as any;
@@ -1600,6 +1540,18 @@ export async function finalizeAdoption(sessionId: string): Promise<void> {
           suggestedDueDate: medDatesForCompliance.dhppDueDate,
           contractualDueDate: medDatesForCompliance.dhppDueDate,
           status: 'pending',
+        });
+      }
+      for (const [key, label] of [
+        ['bordetellaDueDate', 'Bordetella Vaccine'],
+        ['heartwormDueDate', 'Heartworm Prevention'],
+        ['fleaTickDueDate', 'Flea/Tick Prevention'],
+      ]) {
+        if (medDatesForCompliance[key]) obligationsToInsert.push({
+          tenantId: session.tenantId, animalId: session.animalId, sessionId: session.id,
+          adopterName, adopterEmail, obligationType: 'custom', label,
+          suggestedDueDate: medDatesForCompliance[key],
+          contractualDueDate: medDatesForCompliance[key], status: 'pending',
         });
       }
     }

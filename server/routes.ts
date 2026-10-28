@@ -12036,6 +12036,7 @@ Crawl-delay: 1
         vetAppointmentDate: z.string().optional().nullable(),
         spayNeuterDate: z.string().optional().nullable(),
         staffConfirmValues: z.record(z.string()).optional().nullable(),
+        medicalDatesConfirmed: z.boolean().optional(),
         medicalDueDates: z.object({
           rabiesDueDate: z.string(),
           dhppDueDate: z.string(),
@@ -12064,7 +12065,7 @@ Crawl-delay: 1
         includeCatSafetyAddendum: z.boolean().optional().default(false),
       });
       
-      const { applicationId, sendContract, baseFee, grantId, contractTemplateId, vetAppointmentDate, spayNeuterDate, staffConfirmValues, medicalDueDates, carePriorities, customComplianceObligations, isFeeWaived, feeWaiverReason, sendMethod, includeCatSafetyAddendum } = approveSchema.parse(req.body);
+      const { applicationId, sendContract, baseFee, grantId, contractTemplateId, vetAppointmentDate, spayNeuterDate, staffConfirmValues, medicalDueDates, medicalDatesConfirmed, carePriorities, customComplianceObligations, isFeeWaived, feeWaiverReason, sendMethod, includeCatSafetyAddendum } = approveSchema.parse(req.body);
       
       // Get the application details
       const application = await getApplicationById(req.tenant!.id, applicationId);
@@ -12110,6 +12111,15 @@ Crawl-delay: 1
         }
       }
       
+      // Validate before changing the application stage; the checkout service also
+      // revalidates against current records before inserting the session.
+      if (sendContract) {
+        const { getAdoptionMedicalDates } = await import('./services/adoption-medical-dates');
+        const { validateMedicalDeadlines } = await import('@shared/adoption-medical-dates');
+        const evidence = await getAdoptionMedicalDates(req.tenant!.id, application.animalId);
+        validateMedicalDeadlines(medicalDueDates || {}, evidence.dates, evidence.today, medicalDatesConfirmed === true);
+      }
+
       // Update application stage to approved (auto-dismisses from pending widget)
       const updatedApplication = await updateApplicationStage(req.tenant!.id, applicationId, 'approved', req.user!.id);
       if (!updatedApplication) {
@@ -12134,6 +12144,7 @@ Crawl-delay: 1
           spayNeuterDate: spayNeuterDate || undefined,
           staffConfirmValues: staffConfirmValues || undefined,
           medicalDueDates: medicalDueDates || undefined,
+          medicalDatesConfirmed,
           carePriorities: carePriorities || undefined,
           customComplianceObligations: customComplianceObligations || undefined,
           isFeeWaived: isFeeWaived || false,
@@ -12200,6 +12211,14 @@ Crawl-delay: 1
         donationBoost: z.string().optional(),
         coverFees: z.boolean().optional(),
         processor: z.enum(['stripe']).optional(),
+        medicalDatesConfirmed: z.boolean().optional(),
+        medicalDueDates: z.object({
+          rabiesDueDate: z.string().optional(),
+          dhppDueDate: z.string().optional(),
+          bordetellaDueDate: z.string().optional(),
+          heartwormDueDate: z.string().optional(),
+          fleaTickDueDate: z.string().optional(),
+        }).optional(),
         isFeeWaived: z.boolean().optional(),
         feeWaiverReason: z.string().max(500).optional().nullable(),
         includeCatSafetyAddendum: z.boolean().optional().default(false),
@@ -12228,6 +12247,7 @@ Crawl-delay: 1
       
       const result = await createCheckoutSession(req.tenant!.id, {
         ...data,
+        feeWaiverReason: data.feeWaiverReason || undefined,
         contractTemplateId: data.contractTemplateId ? parseInt(data.contractTemplateId) : undefined,
         staffInitiatedBy: req.user!.id,
       });
@@ -12246,6 +12266,13 @@ Crawl-delay: 1
    * GET /api/adoptions/checkouts
    * List all checkout sessions (staff only)
    */
+  app.get('/api/adoptions/medical-dates/:animalId', requireTenant, requireAuth, requireRoleOrPageAccess('applications', 'admin', 'staff'), async (req, res, next) => {
+    try {
+      const { getAdoptionMedicalDates } = await import('./services/adoption-medical-dates');
+      res.json(await getAdoptionMedicalDates(req.tenant!.id, req.params.animalId));
+    } catch (error) { next(error); }
+  });
+
   app.get('/api/adoptions/checkouts', requireTenant, requireAuth, requireRoleOrPageAccess('applications', 'admin', 'staff'), async (req, res, next) => {
     try {
       const { listCheckoutSessions } = await import('./services/adoption-checkout');

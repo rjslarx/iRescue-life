@@ -12,3 +12,9 @@ Treat “Set at adoption” preventative-care rows as deadline placeholders, not
 Outbound reminders must retain valid historical expiry evidence even after it expires, resolving obsolete deadlines forward to that expiry rather than reviving the original date.
 
 **Why:** Filtering only while coverage is current makes an erroneous ancient deadline reappear as years overdue on the day coverage expires. Upcoming renewal reminders at the actual expiry must still be allowed.
+
+New checkout deadlines belong only in compliance obligations, not in administered-care records. A past deadline or one differing from actual medical history requires staff confirmation, but remains allowed.
+
+**Why:** Legitimately overdue animals must remain adoptable, and a contractual requirement is not evidence that a vaccine was administered. Completion must retain signed deadlines even when later medical evidence differs.
+
+**How to apply:** Validate before creating agreements and retain staff review evidence. Never “repair” existing signed dates or vaccination history during completion.
