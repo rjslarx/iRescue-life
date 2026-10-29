@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db } from "../db";
 import { preventativeCareRecords, vaccineRecords } from "@shared/schema";
 import { latestRabiesExpiry } from "../lib/current-rabies-coverage";
@@ -21,19 +21,38 @@ export async function getLatestVaccineExpiries(tenantId: string, animalId: strin
 }
 
 async function getVaccineEvidence(tenantId: string, animalId: string) {
+  return getVaccineEvidenceForAnimals(tenantId, [animalId]);
+}
+
+/** Batch evidence lookup for staff dashboards; both sources stay tenant-scoped. */
+export async function getLatestVaccineExpiriesForAnimals(tenantId: string, animalIds: string[], now = new Date()) {
+  const rows = await getVaccineEvidenceForAnimals(tenantId, [...new Set(animalIds)]);
+  const grouped = new Map<string, typeof rows>();
+  for (const row of rows) {
+    const group = grouped.get(row.animalId) || [];
+    group.push(row);
+    grouped.set(row.animalId, group);
+  }
+  return new Map([...grouped].map(([animalId, evidence]) => [animalId, latestVaccineExpiries(evidence, now)]));
+}
+
+async function getVaccineEvidenceForAnimals(tenantId: string, animalIds: string[]) {
+  if (!animalIds.length) return [];
   const [vaccines, care] = await Promise.all([
     db.select({
+      animalId: vaccineRecords.animalId,
       name: vaccineRecords.itemName,
       administeredAt: vaccineRecords.dateGiven,
       expiresAt: vaccineRecords.dateDue,
-    }).from(vaccineRecords).where(and(eq(vaccineRecords.tenantId, tenantId), eq(vaccineRecords.animalId, animalId))),
+    }).from(vaccineRecords).where(and(eq(vaccineRecords.tenantId, tenantId), inArray(vaccineRecords.animalId, animalIds))),
     db.select({
+      animalId: preventativeCareRecords.animalId,
       name: preventativeCareRecords.careName,
       administeredAt: preventativeCareRecords.dateAdministered,
       expiresAt: preventativeCareRecords.nextDueDate,
       administeredBy: preventativeCareRecords.administeredBy,
       status: preventativeCareRecords.status,
-    }).from(preventativeCareRecords).where(and(eq(preventativeCareRecords.tenantId, tenantId), eq(preventativeCareRecords.animalId, animalId), eq(preventativeCareRecords.careCategory, "vaccine"))),
+    }).from(preventativeCareRecords).where(and(eq(preventativeCareRecords.tenantId, tenantId), inArray(preventativeCareRecords.animalId, animalIds), eq(preventativeCareRecords.careCategory, "vaccine"))),
   ]);
   return [...vaccines, ...care];
 }

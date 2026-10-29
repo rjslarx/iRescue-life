@@ -26,3 +26,9 @@ The same rule applies to feline combinations: FVRCP/HCP evidence is distinct fro
 **Why:** Single-antigen doses do not establish combination coverage. This constraint applies to cleanup as well as reminders, because clearing the stored combination deadline also suppresses its reminder.
 
 **How to apply:** Keep reminder evidence family-specific across both sources, and retain separate deadlines when they do not resolve to the same family and expiry.
+
+Staff compliance dashboards must resolve coverage before classifying overdue/upcoming items or computing at-risk counts; updating adopter views alone is insufficient.
+
+**Why:** The Command Center retained the old contractual date after portal and reminder corrections, leaving a false overdue alert visible to staff.
+
+**How to apply:** Keep recorded contract dates immutable and distinguish effective display deadlines from signed deadlines. Do not treat current vaccination coverage as proof review or contract completion.
