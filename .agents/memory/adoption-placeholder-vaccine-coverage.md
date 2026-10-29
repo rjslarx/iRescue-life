@@ -21,6 +21,8 @@ New checkout deadlines belong only in compliance obligations, not in administere
 
 For outbound reminders, match non-rabies combination vaccines conservatively: DHPP/DAPP/DA2PP are aliases, but standalone distemper or parvovirus must not establish coverage for the entire combination.
 
+The same rule applies to feline combinations: FVRCP/HCP evidence is distinct from standalone panleukopenia. Do not infer or restore previously cleared historical deadlines when correcting grouping.
+
 **Why:** Single-antigen doses do not establish combination coverage. This constraint applies to cleanup as well as reminders, because clearing the stored combination deadline also suppresses its reminder.
 
 **How to apply:** Keep reminder evidence family-specific across both sources, and retain separate deadlines when they do not resolve to the same family and expiry.

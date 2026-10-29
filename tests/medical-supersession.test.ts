@@ -5,6 +5,7 @@ import { transformSync } from "esbuild";
 import * as orm from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import * as schema from "../shared/schema";
+import { reminderVaccineFamily } from "../server/lib/vaccine-renewal-coverage";
 
 function load(file: string, deps: Record<string, any>, extra = "") {
   const code = transformSync(readFileSync(file, "utf8") + extra, {
@@ -115,4 +116,54 @@ test("same standalone series still renews, while missing or invalid deadlines do
       { id: "new", itemName: "DAPP", dateDue }), 0);
     assert.deepEqual(invalid.updates, []);
   }
+});
+
+test("feline standalone evidence cannot supersede combination deadlines in either cleanup path", async () => {
+  for (const combo of ["FVRCP", "HCP", " fvrcp ", "HCP (panleukopenia)", "FVRCP - feline distemper"]) {
+    for (const single of ["Panleukopenia", "Feline panleukopenia", "Panleuk", "Feline distemper", "notfvrcp", "hcpfoo"]) {
+      const older = row("old", combo);
+      const newer = row("new", single, "2027-01-01");
+      const h = harness([older]);
+      assert.equal(h.vaccineFamily(combo), reminderVaccineFamily(combo));
+      assert.equal(h.vaccineFamily(single), reminderVaccineFamily(single));
+      assert.notEqual(h.vaccineFamily(single), h.vaccineFamily(combo));
+      assert.equal(await h.supersedeOlderVaccineRecords("animal", "tenant", newer), 0);
+      assert.deepEqual(h.updates, []);
+      const historical = harness([older, newer]);
+      assert.deepEqual(await historical.backfillTenant("tenant"), { pcr: 0, vax: 0 });
+      assert.deepEqual(historical.updates, []);
+    }
+  }
+});
+
+test("feline combination aliases clear only older combination dates, preserving other series and ties", async () => {
+  for (const name of ["FVRCP", "HCP", "HCP (panleukopenia)"]) {
+    const records = [
+      row("old-fvrcp", "FVRCP"), row("old-hcp", "HCP"),
+      row("single", "Panleukopenia"), row("felv", "FeLV"), row("rabies", "Rabies"),
+      row("tie", "HCP", "2027-01-01"),
+      row("missing", "FVRCP", null as any), row("invalid", "HCP", "invalid"),
+    ];
+    const before = JSON.stringify(records);
+    const newer = row("new", name, "2027-01-01");
+    const h = harness([...records, row("later", "FVRCP", "2028-01-01")]);
+    assert.equal(await h.supersedeOlderVaccineRecords("animal", "tenant", newer), 2);
+    assert.deepEqual(h.updates, [["old-fvrcp", "old-hcp"]]);
+    const historical = harness([...records, newer,
+      { ...row("other-animal", "FVRCP"), animalId: "another-animal" }]);
+    assert.deepEqual(await historical.backfillTenant("tenant"), { pcr: 0, vax: 2 });
+    assert.deepEqual(historical.updates, [["old-fvrcp", "old-hcp"]]);
+    assert.equal(JSON.stringify(records), before);
+  }
+});
+
+test("standalone panleukopenia still renews its own series without clearing feline combination dates", async () => {
+  const records = [row("old", "Panleukopenia"), row("combo", "FVRCP")];
+  const newer = row("new", "  PANLEUKOPENIA ", "2027-01-01");
+  const h = harness(records);
+  assert.equal(await h.supersedeOlderVaccineRecords("animal", "tenant", newer), 1);
+  assert.deepEqual(h.updates, [["old"]]);
+  const historical = harness([...records, newer]);
+  assert.deepEqual(await historical.backfillTenant("tenant"), { pcr: 0, vax: 1 });
+  assert.deepEqual(historical.updates, [["old"]]);
 });

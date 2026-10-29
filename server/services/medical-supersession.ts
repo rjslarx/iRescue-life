@@ -32,7 +32,10 @@ export function vaccineFamily(raw: string | null | undefined): string {
   if (/lepto/.test(n)) return "lepto";
   if (/canine\s*influenza|civ\b|\bflu\b/.test(n)) return "influenza";
   if (/lyme/.test(n)) return "lyme";
-  if (/fvrcp|hcp|panleuk/.test(n)) return "fvrcp";
+  // Only explicit combination names establish feline combination coverage.
+  // Standalone panleukopenia retains its own normalized series, matching
+  // vaccine-renewal-coverage's conservative reminder evidence.
+  if (/\b(fvrcp|hcp)\b/.test(n)) return "fvrcp";
   if (/felv|feline\s*leukemia/.test(n)) return "felv";
   if (/heartworm.*test|hw.*test|antigen/.test(n)) return "hw_test";
   return `other:${n.replace(/\s+/g, " ")}`;
