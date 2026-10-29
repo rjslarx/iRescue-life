@@ -32,3 +32,9 @@ Staff compliance dashboards must resolve coverage before classifying overdue/upc
 **Why:** The Command Center retained the old contractual date after portal and reminder corrections, leaving a false overdue alert visible to staff.
 
 **How to apply:** Keep recorded contract dates immutable and distinguish effective display deadlines from signed deadlines. Do not treat current vaccination coverage as proof review or contract completion.
+
+Use explicit obligation types or unambiguous exact custom labels to identify coverage requirements. Heartworm treatment and heartworm testing must never be inferred satisfied from prevention coverage.
+
+**Why:** Treatment obligations can coexist with prevention prescriptions and conflicting exam summaries. A dose or prescription alone is not evidence that the treatment course was completed.
+
+**How to apply:** Resolve heartworm and flea/tick prevention independently using product coverage flags and actual given doses with known renewal dates. Leave ambiguous custom instructions and treatment obligations for staff review.

@@ -20,8 +20,8 @@ import {
 } from '@shared/schema';
 import { eq, and, or, ilike, desc, sql, inArray, ne } from 'drizzle-orm';
 import { z } from 'zod';
-import { getLatestVaccineExpiriesForAnimals } from '../services/portal-rabies-coverage';
-import { resolveDashboardComplianceDeadlines } from '../lib/dashboard-compliance-deadlines';
+import { getDashboardComplianceCoverage } from '../services/dashboard-compliance-coverage';
+import { dashboardCoverageKey, resolveDashboardComplianceDeadlines } from '../lib/dashboard-compliance-deadlines';
 import {
   findEligibleHeartwormWarnings,
   findRecentlyWarnedItems,
@@ -73,10 +73,10 @@ router.get(
         .where(eq(complianceObligations.tenantId, tenantId))
         .orderBy(desc(complianceObligations.createdAt));
 
-      const rabiesAnimalIds = storedObligations
-        .filter(o => o.status === 'pending' && ['rabies', 'rabies_booster'].includes(o.obligationType))
+      const coverageAnimalIds = storedObligations
+        .filter(o => o.status === 'pending' && dashboardCoverageKey(o))
         .map(o => o.animalId);
-      const vaccineExpiries = await getLatestVaccineExpiriesForAnimals(tenantId, rabiesAnimalIds, now);
+      const vaccineExpiries = await getDashboardComplianceCoverage(tenantId, coverageAnimalIds, now);
       const obligations = resolveDashboardComplianceDeadlines(storedObligations, vaccineExpiries);
       const pending = obligations.filter((o) => o.status === 'pending');
 
