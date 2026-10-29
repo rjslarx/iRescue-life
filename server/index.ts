@@ -2,6 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import cookieParser from "cookie-parser";
 import path from "path";
 import fs from "fs";
+import { donationAuditSchemaSql } from "./lib/donation-audit";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { sessionMiddleware, authenticateUser } from "./middleware/auth";
@@ -273,6 +274,9 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Run before any route can select the new donation columns.
+  const { pool } = await import("./db");
+  await pool.query(donationAuditSchemaSql);
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

@@ -1122,6 +1122,8 @@ export const donations = pgTable("donations", {
   expenseCampaignId: uuid("expense_campaign_id"),
   matchedAmountCents: integer("matched_amount_cents").notNull().default(0),
   matchAllocations: jsonb("match_allocations").$type<import("./matching-milestones").MatchAllocation[]>(),
+  recordedByUserId: uuid("recorded_by_user_id").references(() => users.id, { onDelete: 'set null' }),
+  recordedByName: text("recorded_by_name"),
   date: timestamp("date").notNull().defaultNow(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
@@ -1129,6 +1131,8 @@ export const donations = pgTable("donations", {
 export const insertDonationSchema = createInsertSchema(donations).omit({
   id: true,
   createdAt: true,
+  recordedByUserId: true,
+  recordedByName: true,
 });
 export type InsertDonation = z.infer<typeof insertDonationSchema>;
 export type Donation = typeof donations.$inferSelect;

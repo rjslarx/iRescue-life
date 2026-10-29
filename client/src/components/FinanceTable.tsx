@@ -25,6 +25,8 @@ interface Donation {
   description?: string;
   date: string;
   source: string;
+  recordedByName?: string | null;
+  createdAt?: Date | string;
   receiptNumber?: string;
   receiptSentAt?: string;
   // Recurring donation tracking
@@ -381,6 +383,8 @@ export default function FinanceTable({ donations, expenditures, grants, onAddDon
                       <TableHead>Amount/Items</TableHead>
                       <TableHead>Date</TableHead>
                       <TableHead>Source</TableHead>
+                      <TableHead>Recorded by</TableHead>
+                      <TableHead>Recorded on</TableHead>
                       <TableHead>Tax Receipt</TableHead>
                       <TableHead className="w-[50px]"></TableHead>
                     </TableRow>
@@ -428,6 +432,10 @@ export default function FinanceTable({ donations, expenditures, grants, onAddDon
                         </TableCell>
                         <TableCell>{donation.date}</TableCell>
                         <TableCell>{donation.source}</TableCell>
+                        <TableCell>{donation.recordedByName || "Not recorded"}</TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          {donation.createdAt ? new Date(donation.createdAt).toLocaleString() : "Not recorded"}
+                        </TableCell>
                         <TableCell>
                           {donation.receiptSentAt ? (
                             <Badge variant="outline" className="text-xs text-green-600 border-green-600">

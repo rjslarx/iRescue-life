@@ -67,6 +67,7 @@ export function treasurerReportCsv(report: ReturnType<typeof buildTreasurerRepor
     "Donation ID", "Donation date", "Donor name", "Donor email", "Donation type",
     "Monetary amount (USD)", "Check number", "Description", "Notes", "Source",
     "Receipt number", "Receipt sent at", "In-kind estimated value (USD, internal only)",
+    "Recorded by", "Recorded on (UTC)",
   ];
   const rows = report.rows.map(d => {
     const category = categories[d.donationType];
@@ -77,6 +78,8 @@ export function treasurerReportCsv(report: ReturnType<typeof buildTreasurerRepor
       d.checkNumber, d.description, d.message, d.source, d.receiptNumber,
       d.receiptSentAt ? new Date(d.receiptSentAt).toISOString() : "",
       category?.inKind && d.estimatedValue != null ? (cents(d.estimatedValue) / 100).toFixed(2) : "",
+      d.recordedByName || "Not recorded",
+      d.createdAt ? new Date(d.createdAt).toISOString() : "",
     ];
   });
   return [headers, ...rows].map(row => row.map(csvCell).join(",")).join("\r\n") + "\r\n";

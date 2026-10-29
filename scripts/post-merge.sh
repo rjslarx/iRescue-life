@@ -623,3 +623,6 @@ SQL
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' || echo "[post-merge] campaign header setting skipped (already applied or DB unreachable)."
 ALTER TABLE expense_campaigns ADD COLUMN IF NOT EXISTS show_title_on_hero boolean NOT NULL DEFAULT true;
 SQL
+
+# Additive donation attribution, sharing the same SQL as application startup.
+npx tsx scripts/ensure-donation-audit.ts

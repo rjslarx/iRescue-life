@@ -252,6 +252,8 @@ export default function FinancePage() {
     description: (d as any).description,
     date: new Date(d.date).toISOString().split('T')[0],
     source: d.source,
+    recordedByName: d.recordedByName,
+    createdAt: d.createdAt,
     receiptNumber: (d as any).receiptNumber,
     receiptSentAt: (d as any).receiptSentAt,
     // Recurring donation tracking

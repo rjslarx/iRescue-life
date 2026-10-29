@@ -1,4 +1,5 @@
 import type { Express } from "express";
+import { donationRecorder } from "./lib/donation-audit";
 import { votingContestImageSchema, votingContestEntrantRequestSchema, votingContestEntrantDescriptionRequestSchema, contestAppearanceSchema } from "@shared/voting-contest-validation";
 import type Stripe from "stripe";
 import { toStripeStatementDescriptor } from "./lib/stripe-service";
@@ -18271,6 +18272,7 @@ ${renderedHtml}
         .values({
           tenantId: req.tenant!.id,
           donorId: existingDonor.id,
+          ...donationRecorder(req.user!),
           donorName: data.donorName,
           donorEmail: data.donorEmail,
           donorAddress: data.donorAddress,
@@ -18433,6 +18435,7 @@ ${renderedHtml}
         .values({
           tenantId: req.tenant!.id,
           donorId: donorId,
+          ...donationRecorder(req.user!),
           donorName: data.donorName,
           donorEmail: data.donorEmail || '',
           donorAddress: data.donorAddress || null,
@@ -18649,6 +18652,7 @@ ${renderedHtml}
           try {
             const donationData = {
               tenantId: req.tenant!.id,
+              ...donationRecorder(req.user!),
               donorName: row.donorName || 'Anonymous',
               donorEmail: row.donorEmail || 'csv-import@unknown.com', // Use a placeholder email for CSV imports
               amount: row.amount,
