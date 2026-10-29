@@ -33,8 +33,9 @@ import {
 import { eq, and, isNull, gt, desc, sql, asc, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { EmailService } from '../lib/email-service';
-import { getPortalRabiesExpiry } from '../services/portal-rabies-coverage';
+import { getPortalRabiesExpiry, getLatestVaccineExpiries } from '../services/portal-rabies-coverage';
 import { rabiesReminderCovered } from '../lib/current-rabies-coverage';
+import { resolvePortalDueCare } from '../lib/portal-due-care';
 
 const router = Router();
 const SALT_ROUNDS = 10;
@@ -1007,14 +1008,8 @@ router.get('/pets/:animalId/due-care', async (req: Request, res: Response) => {
 
     const confirmedIds = new Set(existingConfirmations.map(c => c.preventativeCareRecordId));
 
-    const rabiesExpiry = await getPortalRabiesExpiry(auth.tenantId, animalId);
-    const dueItems = records
-      .filter(r => !confirmedIds.has(r.id))
-      .filter(r => r.careCategory !== 'vaccine' || !rabiesReminderCovered(r.careName, r.nextDueDate, rabiesExpiry))
-      .map(r => ({
-        ...r,
-        isOverdue: r.nextDueDate ? new Date(r.nextDueDate) < today : false,
-      }));
+    const vaccineExpiries = await getLatestVaccineExpiries(auth.tenantId, animalId);
+    const dueItems = resolvePortalDueCare(records, confirmedIds, vaccineExpiries, today, threeDaysFromNow);
 
     res.json(dueItems);
   } catch (error) {
@@ -2189,14 +2184,8 @@ router.get('/admin/adopter-preview/:adopterId/pets/:animalId/due-care', async (r
       }
     }
 
-    const rabiesExpiry = await getPortalRabiesExpiry(auth.tenantId, animalId);
-    const dueItems = records
-      .filter(r => !confirmedIds.has(r.id))
-      .filter(r => r.careCategory !== 'vaccine' || !rabiesReminderCovered(r.careName, r.nextDueDate, rabiesExpiry))
-      .map(r => ({
-        ...r,
-        isOverdue: r.nextDueDate ? new Date(r.nextDueDate) < today : false,
-      }));
+    const vaccineExpiries = await getLatestVaccineExpiries(auth.tenantId, animalId);
+    const dueItems = resolvePortalDueCare(records, confirmedIds, vaccineExpiries, today, threeDaysFromNow);
 
     res.json(dueItems);
   } catch (error) {

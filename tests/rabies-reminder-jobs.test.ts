@@ -7,6 +7,7 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import * as schema from "../shared/schema";
 import * as coverage from "../server/lib/current-rabies-coverage";
 import * as vaccineCoverage from "../server/lib/vaccine-renewal-coverage";
+import { resolvePortalDueCare } from "../server/lib/portal-due-care";
 
 // Exercise the real loaders and reminder jobs with a read-only DB double.
 // SQL predicates are inspected as well as evaluated for tenant/animal scoping.
@@ -274,5 +275,85 @@ test("unfulfilled scheduled doses and backfill deadlines are not renewal evidenc
       assert.equal(h.sent.length, 1);
       assert.equal(JSON.stringify({ vaccines, care }), before);
     }
+  }
+});
+
+test("portal due care resolves all families from either source, including expired renewals", async () => {
+  const today = new Date(day(0));
+  const horizon = new Date(day(3));
+  for (const [name, renewalName] of [...families, ["Rabies", "Rabies (3-Year)"]]) {
+    for (const source of ["vaccine", "care"]) {
+      for (const offset of [100, 3, 0, -2]) {
+        const vaccines = source === "vaccine" ? [vax({ item_name: renewalName, date_due: day(offset) })] : [];
+        const care = [placeholder({ care_name: name })];
+        if (source === "care") care.push(placeholder({
+          care_name: renewalName, administered_by: "Vet",
+          date_administered: day(-100), next_due_date: day(offset),
+        }));
+        const records = [{
+          id: "old", careName: name, careCategory: "vaccine", nextDueDate: "2009-08-24",
+        }];
+        const before = JSON.stringify({ vaccines, care, records });
+        const expiries = await harness(vaccines, care).getLatestVaccineExpiries("tenant-a", "animal-a");
+        const result = resolvePortalDueCare(records, new Set(), expiries, today, horizon);
+        assert.equal(result.length, offset > 3 ? 0 : 1, `${name}/${source}/${offset}`);
+        if (result.length) {
+          assert.equal(new Date(result[0].nextDueDate!).toISOString().slice(0, 10), day(offset));
+          assert.equal(result[0].isOverdue, offset < 0);
+          assert.equal(result[0].id, "old");
+        }
+        assert.equal(JSON.stringify({ vaccines, care, records }), before);
+        assert.deepEqual(resolvePortalDueCare(records, new Set(["old"]), expiries, today, horizon), []);
+      }
+    }
+  }
+});
+
+test("portal placeholders, invalid evidence and single antigens never clear DHPP", async () => {
+  const records = [{ id: "old", careName: "DHPP", careCategory: "vaccine", nextDueDate: "2009-08-24" }];
+  for (const extra of [
+    { item_name: "Distemper (Single)" }, { item_name: "Parvovirus (Single)" },
+    { date_given: day(10) }, { date_due: null }, { date_due: day(-200) },
+    { tenantId: "tenant-b" }, { animalId: "animal-b" },
+  ]) {
+    const expiries = await harness([vax({ item_name: "DAPP", ...extra })], [])
+      .getLatestVaccineExpiries("tenant-a", "animal-a");
+    assert.equal(resolvePortalDueCare(records, new Set(), expiries, new Date(day(0)), new Date(day(3)))[0].nextDueDate, "2009-08-24");
+  }
+  for (const extra of [
+    { administered_by: "Set at adoption" }, { administered_by: "Set during backfill import" },
+    { administered_by: "Vet", status: "pending" },
+  ]) {
+    const expiries = await harness([], [placeholder({
+      care_name: "DAPP", date_administered: day(-10), next_due_date: day(100), ...extra,
+    })]).getLatestVaccineExpiries("tenant-a", "animal-a");
+    assert.equal(resolvePortalDueCare(records, new Set(), expiries, new Date(day(0)), new Date(day(3)))[0].nextDueDate, "2009-08-24");
+  }
+});
+
+test("portal leaves other families, prevention, and later deadlines unchanged", () => {
+  const records = [
+    { id: "other", careName: "Bordetella", careCategory: "vaccine", nextDueDate: day(-10) },
+    { id: "prevention", careName: "DHPP", careCategory: "parasite_prevention", nextDueDate: day(-10) },
+    { id: "later", careName: "DAPP", careCategory: "vaccine", nextDueDate: day(2) },
+    { id: "equal", careName: "DHPP", careCategory: "vaccine", nextDueDate: day(1) },
+  ];
+  const result = resolvePortalDueCare(records, new Set(), new Map([["dhpp", new Date(day(1))]]), new Date(day(0)), new Date(day(3)));
+  assert.deepEqual(result.map(r => r.nextDueDate), records.map(r => r.nextDueDate));
+});
+
+test("both portal views use shared due-care resolution without extending contract filtering", () => {
+  const source = readFileSync("server/routes/adopterPortal.ts", "utf8");
+  for (const path of ["/pets/:animalId/due-care", "/admin/adopter-preview/:adopterId/pets/:animalId/due-care"]) {
+    const handler = source.split(`router.get('${path}'`)[1]?.split("\nrouter.")[0];
+    assert.ok(handler, path);
+    assert.match(handler, /getLatestVaccineExpiries\(auth\.tenantId, animalId\)/);
+    assert.match(handler, /resolvePortalDueCare\(records, confirmedIds, vaccineExpiries, today, threeDaysFromNow\)/);
+  }
+  for (const path of ["/pets/:animalId/compliance-obligations", "/admin/adopter-preview/:adopterId/pets/:animalId/compliance-obligations"]) {
+    const handler = source.split(`router.get('${path}'`)[1]?.split("\nrouter.")[0];
+    assert.ok(handler, path);
+    assert.doesNotMatch(handler, /resolvePortalDueCare|getLatestVaccineExpiries/);
+    assert.match(handler, /contractualDueDate: complianceObligations.contractualDueDate/);
   }
 });
