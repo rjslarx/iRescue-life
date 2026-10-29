@@ -17,8 +17,8 @@ import {
  *   - The startup backfill in server/scripts/backfill-superseded-
  *     preventative-care.ts (one-time historical cleanup).
  *
- * If you change vaccineFamily / seriesKeysForPcr here, also update the
- * inline copies in those two sites.
+ * Both the coming-due endpoint and historical backfill import these helpers;
+ * keep their grouping consistent with write-time cleanup.
  */
 
 export function vaccineFamily(raw: string | null | undefined): string {
@@ -26,7 +26,9 @@ export function vaccineFamily(raw: string | null | undefined): string {
   const n = raw.trim().toLowerCase();
   if (/rabies/.test(n)) return "rabies";
   if (/bordet|bordat|brachy|kennel\s*cough/.test(n)) return "bordetella";
-  if (/dapp|dhpp|da2p|distemper|parvo/.test(n)) return "dhpp";
+  // A standalone distemper/parvovirus dose is not evidence of combination
+  // coverage. Unrecognized names retain their own exact normalized series.
+  if (/dapp|dhpp|da2p/.test(n)) return "dhpp";
   if (/lepto/.test(n)) return "lepto";
   if (/canine\s*influenza|civ\b|\bflu\b/.test(n)) return "influenza";
   if (/lyme/.test(n)) return "lyme";
