@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import FinanceTable from "@/components/FinanceTable";
+import TreasurerReport from "@/components/TreasurerReport";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePagePermissions } from "@/hooks/usePagePermissions";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -146,7 +147,7 @@ export default function FinancePage() {
   const isPrivilegedRole = user?.activeRole === 'admin' || user?.activeRole === 'board_member' || user?.activeRole === 'owner';
   const hasFinanceAccess = isPrivilegedRole || canAccessPage('finance');
 
-  const { data, isLoading } = useQuery<FinanceData>({
+  const { data, isLoading, isError: isFinanceError, refetch: refetchFinance, isFetching: isFetchingFinance } = useQuery<FinanceData>({
     queryKey: ['/api/finance'],
   });
 
@@ -599,12 +600,32 @@ export default function FinancePage() {
             )}
           </TabsList>
 
-          <TabsContent value="records" className="mt-4">
+          <TabsContent value="records" className="mt-4 space-y-6">
             {isLoading ? (
               <div className="flex items-center justify-center h-64" data-testid="loading-finance">
                 <Loader2 className="h-8 w-8 animate-spin" />
               </div>
+            ) : isFinanceError || !data ? (
+              <Alert variant="destructive" role="alert" data-testid="error-finance-records">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription className="space-y-3">
+                  <p>Unable to load finance records. Donation totals and the Treasurer Report are unavailable until records load successfully.</p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => refetchFinance()}
+                    disabled={isFetchingFinance}
+                    data-testid="button-retry-finance-records"
+                  >
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    {isFetchingFinance ? "Retrying…" : "Retry loading records"}
+                  </Button>
+                </AlertDescription>
+              </Alert>
             ) : (
+              <>
+              {hasFinanceAccess && <TreasurerReport donations={data.donations} />}
               <FinanceTable 
                 donations={donations}
                 expenditures={expenditures}
@@ -614,6 +635,7 @@ export default function FinancePage() {
                 onUploadCSV={handleUploadCSV}
                 isImporting={importCSVMutation.isPending}
               />
+              </>
             )}
           </TabsContent>
 
