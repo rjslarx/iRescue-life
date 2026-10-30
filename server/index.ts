@@ -277,9 +277,13 @@ app.use((req, res, next) => {
 (async () => {
   // Run before any route can select the new donation columns.
   const { pool } = await import("./db");
+  console.log("[Startup] Preparing donation audit schema");
   await pool.query(donationAuditSchemaSql);
+  console.log("[Startup] Preparing cat vaccine safeguards");
   await pool.query(catVaccineGuardSql);
+  console.log("[Startup] Registering application routes");
   const server = await registerRoutes(app);
+  console.log("[Startup] Application routes registered");
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     if ((err?.constraint || err?.cause?.constraint) === "cat_canine_vaccine_guard") {

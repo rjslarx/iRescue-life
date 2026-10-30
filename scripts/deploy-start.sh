@@ -6,4 +6,4 @@
 # Schema changes are applied via idempotent SQL ALTERs (see scripts/post-merge.sh).
 
 echo "Starting production server..."
-NODE_ENV=production exec node dist/index.js
+NODE_ENV=production exec node scripts/deploy-bootstrap.mjs
