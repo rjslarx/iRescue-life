@@ -624,9 +624,11 @@ router.post(
         }
 
         // Insert all obligations for this session
-        if (obligationsToCreate.length > 0) {
-          await db.insert(complianceObligations).values(obligationsToCreate);
-          backfilledCount += obligationsToCreate.length;
+        const { speciesAppropriateObligations } = await import("../lib/cat-vaccine-guard");
+        const applicable = await speciesAppropriateObligations(tenantId, session.animalId, obligationsToCreate);
+        if (applicable.length > 0) {
+          await db.insert(complianceObligations).values(applicable);
+          backfilledCount += applicable.length;
         }
       }
 

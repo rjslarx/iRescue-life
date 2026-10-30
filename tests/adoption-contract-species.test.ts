@@ -25,7 +25,7 @@ test("dogs, unknown species, and other tenants are unchanged byte-for-byte", () 
   for (const species of ["Dog", null, "", "rabbit"]) {
     assert.equal(adoptionContractForSpecies(template, tenant, species), template);
   }
-  assert.equal(adoptionContractForSpecies(template, "another-tenant", "cat"), template);
+  assert.ok(!adoptionContractForSpecies(template, "another-tenant", "cat").includes("DHPP"));
 });
 
 test("cat normalization and formatted lowercase DHPP text are supported", () => {

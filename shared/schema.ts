@@ -6043,6 +6043,9 @@ export const preventativeCareRecords = pgTable("preventative_care_records", {
   careTypeId: uuid("care_type_id").references(() => preventativeCareTypes.id, { onDelete: 'set null' }),
   // Denormalized for display (in case care type is deleted)
   careName: text("care_name").notNull(), // e.g., "Rabies (1-Year)"
+  speciesCorrectionSnapshot: jsonb("species_correction_snapshot").$type<{
+    reason: string; originalNextDueDate: string | null; originalStatus: string; correctedAt: string;
+  }>(),
   careCategory: text("care_category").notNull().$type<"vaccine" | "parasite_prevention" | "test" | "other">(),
   // Status tracking
   status: text("status").$type<"given" | "pending">().notNull().default("given"),

@@ -1,4 +1,5 @@
 import { db } from '../db';
+import { isInvalidCatVaccine } from './cat-vaccine-guard';
 import { 
   tenants, 
   animals, 
@@ -145,6 +146,7 @@ export async function createRemindersForDuePreventativeCare(tenantId: string): P
       ));
 
     for (const record of careRecords) {
+      if (await isInvalidCatVaccine(tenantId, record.animalId, record.careName)) continue;
       const fosterAnimal = fosterAnimalMap.get(record.animalId);
       if (!fosterAnimal || !record.nextDueDate) continue;
 
@@ -257,6 +259,7 @@ export async function send3DayWarningEmails(tenantId: string): Promise<{ sent: n
     }
 
     for (const reminder of reminders) {
+      if (await isInvalidCatVaccine(tenantId, reminder.animalId, reminder.careName)) continue;
       if (!reminder.fosterId) continue;
 
       const [foster] = await db
@@ -386,6 +389,7 @@ export async function sendMorningOfSmsReminders(tenantId: string): Promise<{ sen
       .where(eq(tenants.id, tenantId));
 
     for (const reminder of reminders) {
+      if (await isInvalidCatVaccine(tenantId, reminder.animalId, reminder.careName)) continue;
       if (!reminder.fosterId) continue;
 
       const [foster] = await db

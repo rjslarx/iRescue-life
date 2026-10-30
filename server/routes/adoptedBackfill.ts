@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
+import { assertCatVaccineCompatible } from "@shared/vaccine-species";
 import bcrypt from 'bcrypt';
 import { db } from '../db';
 import {
@@ -51,6 +52,7 @@ router.post('/adopted-backfill', async (req: Request, res: Response) => {
       spayNeuterDate,
     } = req.body;
 
+    if (dhppDueDate) assertCatVaccineCompatible(species, "DHPP");
     if (!animalName || !species || !breed || !age || !adopterName || !adopterEmail || !adoptionDate) {
       return res.status(400).json({ error: 'Missing required fields: animalName, species, breed, age, adopterName, adopterEmail, adoptionDate' });
     }

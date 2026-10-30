@@ -370,7 +370,7 @@ function AdoptedAnimalBackfill() {
       });
       return;
     }
-    mutation.mutate(form);
+    mutation.mutate({ ...form, dhppDueDate: /^(cat|cats|feline)$/i.test(form.species.trim()) ? "" : form.dhppDueDate });
   };
 
   return (
@@ -532,7 +532,7 @@ function AdoptedAnimalBackfill() {
                   data-testid="input-backfill-rabies-due"
                 />
               </div>
-              <div className="space-y-1.5">
+              {!/^(cat|cats|feline)$/i.test(form.species.trim()) && <div className="space-y-1.5">
                 <Label htmlFor="backfill-dhpp">DHPP Due Date</Label>
                 <Input
                   id="backfill-dhpp"
@@ -541,7 +541,7 @@ function AdoptedAnimalBackfill() {
                   onChange={(e) => updateField("dhppDueDate", e.target.value)}
                   data-testid="input-backfill-dhpp-due"
                 />
-              </div>
+              </div>}
               <div className="space-y-1.5">
                 <Label htmlFor="backfill-bordetella">Bordetella Due Date</Label>
                 <Input

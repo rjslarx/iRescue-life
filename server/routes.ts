@@ -1,4 +1,6 @@
 import type { Express } from "express";
+import { assertAnimalVaccine } from "./lib/cat-vaccine-guard";
+import { isCatSpecies, assertCatVaccineCompatible } from "@shared/vaccine-species";
 import { adoptionContractForSpecies } from "@shared/adoption-contract-species";
 import { donationRecorder } from "./lib/donation-audit";
 import { votingContestImageSchema, votingContestEntrantRequestSchema, votingContestEntrantDescriptionRequestSchema, contestAppearanceSchema } from "@shared/voting-contest-validation";
@@ -7073,7 +7075,8 @@ Crawl-delay: 1
         await secureAdoptionContractObject(contract.driversLicenseImageUrl, tenantId, 'drivers-licenses');
       }
       const newPdfUrl = await generateAdoptionContractPDF(session, contract.signatureImageUrl || undefined, {
-        isNewAgreement: (contract.templateSnapshot as any)?.speciesAwareVaccineTerms === true,
+        isNewAgreement: (contract.templateSnapshot as any)?.sitewideSpeciesVaccineTerms === true ||
+          (session.tenantId === "87f318e1-ffe9-4cc1-9911-633336446f1f" && (contract.templateSnapshot as any)?.speciesAwareVaccineTerms === true),
         ipAddress: contract.signedIp || undefined,
         signedAt: contract.signedAt,
         driversLicenseNumber: contract.driversLicenseNumber || undefined,
@@ -12042,7 +12045,7 @@ Crawl-delay: 1
         medicalDatesConfirmed: z.boolean().optional(),
         medicalDueDates: z.object({
           rabiesDueDate: z.string(),
-          dhppDueDate: z.string(),
+          dhppDueDate: z.string().optional(),
           bordetellaDueDate: z.string().optional(),
           heartwormDueDate: z.string().optional(),
           fleaTickDueDate: z.string().optional(),
@@ -12095,10 +12098,15 @@ Crawl-delay: 1
         }
         
         // Validate mandatory medical due dates are present when sending contract (rabies + DHPP)
-        if (!medicalDueDates || !medicalDueDates.rabiesDueDate || !medicalDueDates.dhppDueDate) {
+        const [adoptionAnimal] = await db.select({ species: animals.species }).from(animals)
+          .where(and(eq(animals.id, application.animalId), eq(animals.tenantId, req.tenant!.id))).limit(1);
+        if (isCatSpecies(adoptionAnimal?.species) && medicalDueDates?.dhppDueDate) {
+          assertCatVaccineCompatible(adoptionAnimal?.species, "DHPP");
+        }
+        if (!medicalDueDates || !medicalDueDates.rabiesDueDate || (!isCatSpecies(adoptionAnimal?.species) && !medicalDueDates.dhppDueDate)) {
           return res.status(400).json({ 
             error: 'Medical due dates required', 
-            message: 'Rabies and DHPP due dates must be provided when sending an agreement' 
+            message: isCatSpecies(adoptionAnimal?.species) ? 'Rabies due date must be provided when sending an agreement' : 'Rabies and DHPP due dates must be provided when sending an agreement'
           });
         }
         
@@ -38597,6 +38605,7 @@ ${attachmentsList.length > 0 ? `\n⚠️ This email had ${attachmentsList.length
       }
       
       const data = insertVaccineRecordSchema.parse(req.body);
+      await assertAnimalVaccine(req.tenant!.id, req.params.animalId, data.itemName);
 
       // Sanitize numeric fields - convert empty strings to null
       const sanitizedBillAmount = data.billAmount && data.billAmount.toString().trim() ? data.billAmount : null;
@@ -42425,6 +42434,7 @@ Email: ${application.applicantEmail || ''}`
       }
 
       const effectiveNextDueDate = data.nextDueDate || nextDueDate;
+      await assertAnimalVaccine(req.tenant!.id, data.animalId, resolvedCareName);
 
       // Auto-set status to pending for future-dated orders
       const prevTodayEnd = new Date();
@@ -51961,6 +51971,7 @@ ${section('Metadata', metaRows)}
         item: { name: string; category: string; defaultDose: string | null; defaultFrequency: string | null },
         fd: any
       ): Promise<{ name: string; category: string; table: string }> {
+        await assertAnimalVaccine(tenantId, animalId, item.name);
         const dose = fd.dose || item.defaultDose || 'See notes';
         const frequency = fd.frequency || item.defaultFrequency || 'Once';
         const route = fd.route || 'PO';

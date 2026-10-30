@@ -1,4 +1,5 @@
 import { db } from '../db';
+import { isInvalidCatVaccine } from './cat-vaccine-guard';
 import {
   users,
   animals,
@@ -684,6 +685,7 @@ export async function sendAnnualVaccineReminders(tenantId: string): Promise<{ se
       ));
 
     for (const vaccine of dueVaccines) {
+      if (await isInvalidCatVaccine(tenantId, vaccine.animalId, vaccine.itemName)) continue;
       if (!vaccine.adopterPhone) continue;
 
       try {

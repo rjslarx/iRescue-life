@@ -445,6 +445,7 @@ export function AddMedicalOrderDialog({ animalId: propsAnimalId, animalSpecies: 
   const speciesFilteredCatalog = useMemo(() => {
     if (!animalSpecies) return catalogItems;
     return catalogItems.filter(ci => {
+      if (/^(cat|cats|feline)$/i.test(animalSpecies) && /\b(dhpp|dhlpp|da2pp|da2p|dapp|dappv|dappl)\b/i.test(ci.name)) return false;
       if (ci.category !== 'Preventative') return true;
       if (!ci.speciesTarget) return true;
       return ci.speciesTarget === animalSpecies || ci.speciesTarget === 'Both';

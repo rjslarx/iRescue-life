@@ -1,4 +1,5 @@
 import { db } from "../db";
+import { isInvalidCatVaccine } from "./cat-vaccine-guard";
 import { 
   tenants,
   animals,
@@ -146,6 +147,7 @@ export async function getUpcomingMedicalItems(tenantId: string, daysAhead: numbe
   // Priority: dateGiven (newest wins), then createdAt for same-date tiebreaker.
   const latestVaccineMap = new Map<string, typeof vaccines[0]>();
   for (const v of vaccines) {
+    if (await isInvalidCatVaccine(tenantId, v.animalId, v.itemName)) continue;
     if (!v.dateDue) continue;
     const key = `${v.animalId}::${v.itemName}`;
     const existing = latestVaccineMap.get(key);

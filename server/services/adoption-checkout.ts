@@ -256,6 +256,11 @@ export async function createCheckoutSession(
     throw new Error('Animal not found or does not belong to this organization');
   }
   const medicalEvidence = await getAdoptionMedicalDates(tenantId, data.animalId);
+  const { assertCatVaccineCompatible } = await import("@shared/vaccine-species");
+  if (data.medicalDueDates?.dhppDueDate) assertCatVaccineCompatible(medicalEvidence.species, "DHPP");
+  for (const obligation of data.customComplianceObligations || []) {
+    assertCatVaccineCompatible(medicalEvidence.species, `${obligation.obligationType.replaceAll("_", " ")} ${obligation.label}`);
+  }
   const medicalWarnings = validateMedicalDeadlines(
     data.medicalDueDates || {}, medicalEvidence.dates, medicalEvidence.today, data.medicalDatesConfirmed === true,
   );
@@ -964,6 +969,7 @@ export async function captureSignature(
       templateSnapshot: {
         id: signatureData.templateId || 1, capturedAt: signedAt.toISOString(),
         speciesAwareVaccineTerms: true,
+        sitewideSpeciesVaccineTerms: true,
         catSafetyAddendum: session.catSafetyAddendumHtmlSnapshot ? {
           htmlTemplate: session.catSafetyAddendumHtmlSnapshot,
           version: session.catSafetyAddendumVersion,
@@ -1612,8 +1618,10 @@ export async function finalizeAdoption(sessionId: string): Promise<void> {
       }
     }
 
-    if (obligationsToInsert.length > 0) {
-      await db.insert(complianceObligations).values(obligationsToInsert);
+    const { speciesAppropriateObligations } = await import("../lib/cat-vaccine-guard");
+    const applicableObligations = await speciesAppropriateObligations(session.tenantId, session.animalId, obligationsToInsert);
+    if (applicableObligations.length > 0) {
+      await db.insert(complianceObligations).values(applicableObligations);
       console.log(`[Adoption] Created ${obligationsToInsert.length} compliance obligations for animal ${session.animalId}`);
     }
   } catch (error) {

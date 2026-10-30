@@ -2,12 +2,13 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Input } from "@/components/ui/input";
+import { isCatSpecies } from "@shared/vaccine-species";
 import { medicalDeadlineFields, medicalDeadlineWarnings, type MedicalDeadlines } from "@shared/adoption-medical-dates";
 
 export function useAdoptionMedicalDeadlines(animalId: string | undefined, open: boolean) {
   const [edited, setEdited] = useState<MedicalDeadlines | null>(null);
   const [confirmedSnapshot, setConfirmedSnapshot] = useState<string | null>(null);
-  const query = useQuery<{ dates: MedicalDeadlines; today: string }>({
+  const query = useQuery<{ dates: MedicalDeadlines; today: string; species?: string }>({
     queryKey: ["/api/adoptions/medical-dates", animalId],
     queryFn: async () => (await apiRequest("GET", `/api/adoptions/medical-dates/${animalId}`)).json(),
     enabled: open && !!animalId,
@@ -22,7 +23,8 @@ export function useAdoptionMedicalDeadlines(animalId: string | undefined, open: 
   const snapshot = JSON.stringify({ dates, warnings });
   const confirmed = confirmedSnapshot === snapshot;
   const ready = !!query.data && !query.isFetching && !query.isError && !invalid && (!warnings.length || confirmed);
-  return { dates, setDates: setEdited, warnings, invalid, confirmed, ready,
+  const fields = medicalDeadlineFields.filter(f => f.key !== "dhppDueDate" || !isCatSpecies(query.data?.species));
+  return { dates, fields, setDates: setEdited, warnings, invalid, confirmed, ready,
     confirm: (value: boolean) => setConfirmedSnapshot(value ? snapshot : null),
     loading: query.isFetching, error: query.isError };
 }
@@ -36,7 +38,7 @@ export function AdoptionMedicalDeadlines({ review }: { review: ReturnType<typeof
     </p>
     {review.loading && <p role="status">Loading medical records…</p>}
     {review.error && <p role="alert">Could not load medical records. Reopen this dialog to retry.</p>}
-    {medicalDeadlineFields.map(field => <label key={field.key} className="block text-sm">
+    {review.fields.map(field => <label key={field.key} className="block text-sm">
       {field.label}
       <Input type="date" value={review.dates[field.key] || ""} disabled={review.loading || review.error}
         onChange={event => review.setDates({ ...review.dates, [field.key]: event.target.value })} />

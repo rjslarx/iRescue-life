@@ -2,6 +2,8 @@ import { and, eq, or, isNull } from "drizzle-orm";
 import { db } from "../db";
 import { preventativeCareRecords, preventativeCareTypes, vaccineRecords, tenants } from "@shared/schema";
 import { resolveMedicalDeadlines } from "@shared/adoption-medical-dates";
+import { animals } from "@shared/schema";
+import { isCatSpecies } from "@shared/vaccine-species";
 
 export async function getAdoptionMedicalDates(tenantId: string, animalId: string) {
   const [vaccines, care, [tenant]] = await Promise.all([
@@ -24,7 +26,11 @@ export async function getAdoptionMedicalDates(tenantId: string, animalId: string
   const today = new Intl.DateTimeFormat("en-CA", {
     timeZone: tenant?.timezone || "America/Chicago", year: "numeric", month: "2-digit", day: "2-digit",
   }).format(new Date());
-  return { dates: resolveMedicalDeadlines([
+  const [animal] = await db.select({ species: animals.species }).from(animals)
+    .where(and(eq(animals.id, animalId), eq(animals.tenantId, tenantId))).limit(1);
+  const dates = resolveMedicalDeadlines([
     ...vaccines.map(record => ({ ...record, category: "vaccine", status: "given" })), ...care,
-  ]), today };
+  ]);
+  if (isCatSpecies(animal?.species)) delete dates.dhppDueDate;
+  return { dates, today, species: animal?.species };
 }

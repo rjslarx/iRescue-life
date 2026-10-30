@@ -1,5 +1,5 @@
 - [E-signature agreements](e-signature-agreements.md) — token-based foster/surrender/adoption sign flows; idempotency + signature-input + sandbox tsc/db:push gotchas.
-- [Southern Pets cat contracts](southern-pets-cat-contracts.md) — omit DHPP for cats only; preserve dog contracts and executed agreements.
+- [Cat vaccine safeguards](southern-pets-cat-contracts.md) — site-wide exclusion of canine combinations for cats; preserve dog contracts, history, and executed agreements.
 - [Lightweight browser checks](browser-validation.md) — Puppeteer's bundled Chrome may be absent; distinguish compiled-CSS checks from live navigation verification.
 - [Deployment telemetry access](deployment-telemetry-access.md) — revision logs may report no deployment despite a working live app; unavailable telemetry is not an empty log.
 - [Platform email quota reset](email-quota-reset.md) — platform-key email is capped (emailsSentThisMonth/emailQuotaLimit); "not configured" errors often mean quota exhausted; monthly rollover is a scheduled job.

@@ -261,7 +261,8 @@ export function ApproveAndSendAgreementDialog({
   }, [isFeeWaived]);
 
   const allMedicalDatesFilled = approvalAction !== "approve_and_send" ||
-    MEDICAL_DATE_FIELDS.every(field => medicalDueDates[field.key].trim() !== "");
+    medicalReview.fields.filter(field => MEDICAL_DATE_FIELDS.some(required => required.key === field.key))
+      .every(field => (medicalDueDates[field.key] || "").trim() !== "");
 
   const approveAndSendMutation = useMutation({
     mutationFn: async (data: FormData & { applicationId: string }) => {
@@ -353,7 +354,7 @@ export function ApproveAndSendAgreementDialog({
 
   if (!application) return null;
 
-  const medicalDatesMissing = MEDICAL_DATE_FIELDS.filter(field => !medicalDueDates[field.key].trim()).length;
+  const medicalDatesMissing = medicalReview.fields.filter(field => MEDICAL_DATE_FIELDS.some(required => required.key === field.key) && !(medicalDueDates[field.key] || "").trim()).length;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

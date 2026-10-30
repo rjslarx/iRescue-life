@@ -2,6 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import cookieParser from "cookie-parser";
 import path from "path";
 import fs from "fs";
+import { catVaccineGuardSql } from "./lib/cat-vaccine-guard";
 import { donationAuditSchemaSql } from "./lib/donation-audit";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
@@ -277,9 +278,13 @@ app.use((req, res, next) => {
   // Run before any route can select the new donation columns.
   const { pool } = await import("./db");
   await pool.query(donationAuditSchemaSql);
+  await pool.query(catVaccineGuardSql);
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+    if ((err?.constraint || err?.cause?.constraint) === "cat_canine_vaccine_guard") {
+      return res.status(400).json({error: "Canine combination vaccines cannot be assigned to cats. Select the appropriate feline vaccine."});
+    }
     // Translate Zod validation errors → 400 (instead of leaking as 500s).
     // Detect by name as well as instanceof so it works regardless of which
     // copy of zod the throwing module imported.
