@@ -1,4 +1,5 @@
 import puppeteer from 'puppeteer';
+import { adoptionContractForSpecies } from '@shared/adoption-contract-species';
 import sharp from 'sharp';
 import DOMPurify from 'isomorphic-dompurify';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
@@ -813,6 +814,7 @@ export async function generateAdoptionContractPDF(
     signerName?: string;
     signerEmail?: string;
     catSafetyAddendumAnswers?: import('@shared/schema').CatSafetyAddendumAnswers;
+    isNewAgreement?: boolean;
   },
   precomputedDataUris?: { signatureDataUri?: string; driversLicenseDataUri?: string },
   driversLicenseImageUrlOverride?: string,
@@ -1048,7 +1050,9 @@ export async function generateAdoptionContractPDF(
   // Add a standard appendix whenever an ID was uploaded so regeneration also
   // repairs older signed contracts.
   const templateHtml = ensureDriversLicenseSection(
-    template.htmlTemplate,
+    signatureMetadata?.isNewAgreement
+      ? adoptionContractForSpecies(template.htmlTemplate, session.tenantId, animal.species)
+      : template.htmlTemplate,
     Boolean(mergeData.drivers_license_image_url),
   );
 

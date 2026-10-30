@@ -1,4 +1,5 @@
 import type { Express } from "express";
+import { adoptionContractForSpecies } from "@shared/adoption-contract-species";
 import { donationRecorder } from "./lib/donation-audit";
 import { votingContestImageSchema, votingContestEntrantRequestSchema, votingContestEntrantDescriptionRequestSchema, contestAppearanceSchema } from "@shared/voting-contest-validation";
 import type Stripe from "stripe";
@@ -7072,6 +7073,7 @@ Crawl-delay: 1
         await secureAdoptionContractObject(contract.driversLicenseImageUrl, tenantId, 'drivers-licenses');
       }
       const newPdfUrl = await generateAdoptionContractPDF(session, contract.signatureImageUrl || undefined, {
+        isNewAgreement: (contract.templateSnapshot as any)?.speciesAwareVaccineTerms === true,
         ipAddress: contract.signedIp || undefined,
         signedAt: contract.signedAt,
         driversLicenseNumber: contract.driversLicenseNumber || undefined,
@@ -12652,7 +12654,7 @@ Crawl-delay: 1
             }
           }
           
-          let processedHtml = template.htmlTemplate;
+          let processedHtml = adoptionContractForSpecies(template.htmlTemplate, session.tenantId, animal?.species);
           for (const [placeholder, value] of Object.entries(mergeFieldValues)) {
             processedHtml = processedHtml.replace(new RegExp(placeholder.replace(/[{}]/g, '\\$&'), 'g'), value);
           }
@@ -14767,7 +14769,7 @@ Crawl-delay: 1
           .limit(1);
       }
 
-      const mergedHtml = mergePlaceholders(send.templateHtmlSnapshot, {
+      const mergedHtml = mergePlaceholders(adoptionContractForSpecies(send.templateHtmlSnapshot, send.tenantId, animal?.species), {
         organization_name: tenant?.name || '',
         organization_email: tenant?.contactEmail || '',
         adopter_name: send.recipientName,
@@ -14903,7 +14905,7 @@ Crawl-delay: 1
       }
 
       const signedAt = new Date();
-      let renderedContract = mergePlaceholders(send.templateHtmlSnapshot, {
+      let renderedContract = mergePlaceholders(adoptionContractForSpecies(send.templateHtmlSnapshot, send.tenantId, animal?.species), {
         organization_name: tenant?.name || '',
         organization_email: tenant?.contactEmail || '',
         adopter_name: signatureData.signerName,

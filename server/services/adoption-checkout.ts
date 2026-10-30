@@ -947,6 +947,7 @@ export async function captureSignature(
 
   // Generate PDF contract with signature, including IP, timestamp, and driver's license for legal verification
   const contractPdfUrl = await generateAdoptionContractPDF(session, signatureImageUrl, {
+    isNewAgreement: true,
     ipAddress: signatureData.ipAddress,
     signedAt,
     driversLicenseNumber: signatureData.driversLicenseNumber,
@@ -962,6 +963,7 @@ export async function captureSignature(
       sessionId,
       templateSnapshot: {
         id: signatureData.templateId || 1, capturedAt: signedAt.toISOString(),
+        speciesAwareVaccineTerms: true,
         catSafetyAddendum: session.catSafetyAddendumHtmlSnapshot ? {
           htmlTemplate: session.catSafetyAddendumHtmlSnapshot,
           version: session.catSafetyAddendumVersion,
