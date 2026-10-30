@@ -1,4 +1,3 @@
-import { GoogleAdsApi } from 'google-ads-api';
 import { db } from './db';
 import { tenants, applications } from '@shared/schema';
 import { eq } from 'drizzle-orm';
@@ -66,6 +65,9 @@ export async function uploadConversionToGoogleAds(
       return { success: false, error: 'Missing Google Ads credentials' };
     }
 
+    // The Ads SDK loads a large generated API graph. Keep it out of server
+    // startup; only configured conversion uploads need it.
+    const { GoogleAdsApi } = await import('google-ads-api');
     const client = new GoogleAdsApi({
       client_id: clientId,
       client_secret: clientSecret,

@@ -1,4 +1,9 @@
-import { google } from 'googleapis';
+// Do not import googleapis' root: it eagerly loads every Google API/version
+// and can exhaust the production cold-start readiness window.
+import { auth, oauth2 } from 'googleapis/build/src/apis/oauth2/index.js';
+import { gmail } from 'googleapis/build/src/apis/gmail/index.js';
+import { calendar } from 'googleapis/build/src/apis/calendar/index.js';
+import { drive } from 'googleapis/build/src/apis/drive/index.js';
 import { OAuth2Client } from 'google-auth-library';
 import { Readable } from 'stream';
 import { decrypt, encrypt } from './encryption';
@@ -6,6 +11,8 @@ import { db } from '../db';
 import { platformIntegrations } from '@shared/schema';
 import { eq, and } from 'drizzle-orm';
 import type { EmailAttachment } from './email-service';
+
+const google = { auth, oauth2, gmail, calendar, drive };
 
 // Note: We use native raw MIME message construction instead of Nodemailer's MailComposer
 // for better compatibility with gmail.send OAuth scope
