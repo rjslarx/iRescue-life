@@ -57,7 +57,8 @@ import {
   AlertTriangle
 } from "lucide-react";
 import { useGooglePicker, PickerDocument } from "@/hooks/useGooglePicker";
-import { format } from "date-fns";
+import { formatMedicalDate as format, formatMedicalDateOnly as formatDateOnly } from "@/lib/medical-date-display";
+import { isValidMedicalDate, medicalDateInput } from "@shared/medical-dates";
 import { AddVaccineDialog } from "@/components/AddVaccineDialog";
 import { AddDiagnosticDialog } from "@/components/AddDiagnosticDialog";
 import { AddProcedureDialog } from "@/components/AddProcedureDialog";
@@ -75,12 +76,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useTenant } from "@/contexts/TenantContext";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-
-function formatDateOnly(value: string | Date, formatStr: string = 'MMM d, yyyy'): string {
-  const d = typeof value === 'string' ? new Date(value) : value;
-  const dateStr = d.toISOString().split('T')[0];
-  return format(new Date(dateStr + 'T12:00:00'), formatStr);
-}
 
 interface MedicalFileItem {
   id: string;
@@ -1003,6 +998,16 @@ export default function AnimalMedicalPage() {
         </div>
 
         {/* Quarantine Banner */}
+        {prescriptions.some((rx: any) =>
+          !isValidMedicalDate(rx.startDate) ||
+          (rx.endDate != null && !isValidMedicalDate(rx.endDate)) ||
+          (rx.nextScheduledDose != null && !isValidMedicalDate(rx.nextScheduledDose))
+        ) && (
+          <div role="alert" className="mx-6 rounded-md border border-amber-500 bg-amber-50 p-4 text-amber-950">
+            A medication record has an invalid or missing date. Open Medications &amp; Prescriptions
+            and edit the affected record to correct it. No dates have been changed automatically.
+          </div>
+        )}
         {animal.isQuarantined && (
           <div className="mx-6 flex items-center justify-between gap-3 rounded-md border border-red-500/40 bg-red-500/10 px-4 py-3" data-testid="banner-quarantine">
             <div className="flex items-center gap-2 min-w-0">
@@ -1360,7 +1365,7 @@ export default function AnimalMedicalPage() {
                               <span className="text-sm text-muted-foreground">
                                 {entry.date
                                   ? entry.type === 'dose'
-                                    ? format(new Date(entry.date), 'MMM d, yyyy h:mm a')
+                                    ? format(entry.date, 'MMM d, yyyy h:mm a')
                                     : formatDateOnly(entry.date)
                                   : 'Date unknown'}
                               </span>
@@ -2166,7 +2171,7 @@ export default function AnimalMedicalPage() {
                             size="sm"
                             onClick={() => {
                               let newStartDate = todayLocalISO();
-                              if (rx.lastGivenAt) {
+                              if (isValidMedicalDate(rx.lastGivenAt)) {
                                 const lastDate = new Date(rx.lastGivenAt);
                                 const freqDaysMap: Record<string, number> = { SID: 1, BID: 1, TID: 1, QID: 1, 'Every 12 hours': 1, 'Every 8 hours': 1, 'Every 6 hours': 1, ONCE: 0 };
                                 const daysToAdd = freqDaysMap[rx.frequency] ?? 1;
@@ -2229,7 +2234,7 @@ export default function AnimalMedicalPage() {
                       {rx.lastGivenAt && (
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Last Given:</span>
-                          <span className="font-medium">{format(new Date(rx.lastGivenAt), 'MMM d, yyyy h:mm a')}</span>
+                          <span className="font-medium">{format(rx.lastGivenAt, 'MMM d, yyyy h:mm a')}</span>
                         </div>
                       )}
                     </div>
@@ -2667,8 +2672,8 @@ export default function AnimalMedicalPage() {
             <div className="space-y-4">
               {preventativeCareRecords.map((record) => {
                 const careType = getPreventativeCareType(record.careTypeId);
-                const dueDateNorm = record.nextDueDate 
-                  ? new Date(new Date(record.nextDueDate).toISOString().split('T')[0] + 'T12:00:00')
+                const dueDateNorm = isValidMedicalDate(record.nextDueDate)
+                  ? new Date(medicalDateInput(record.nextDueDate) + 'T12:00:00')
                   : null;
                 const todayNorm = new Date(todayLocalISO() + 'T12:00:00');
                 const isPending = record.status === 'pending';
@@ -2919,7 +2924,7 @@ export default function AnimalMedicalPage() {
                               <Badge variant="secondary" className="text-xs">Drive</Badge>
                             </CardTitle>
                             <CardDescription className="text-xs mt-1">
-                              Attached {format(new Date(file.attachedAt), 'MMM d, yyyy h:mm a')}
+                              Attached {format(file.attachedAt, 'MMM d, yyyy h:mm a')}
                             </CardDescription>
                           </div>
                         </div>
@@ -3002,7 +3007,7 @@ export default function AnimalMedicalPage() {
                           <div>
                             <CardTitle className="text-base">{file.fileName}</CardTitle>
                             <CardDescription className="text-xs mt-1">
-                              {formatFileSize(file.fileSize)} • {format(new Date(file.uploadDate), 'MMM d, yyyy h:mm a')}
+                              {formatFileSize(file.fileSize)} • {format(file.uploadDate, 'MMM d, yyyy h:mm a')}
                             </CardDescription>
                           </div>
                         </div>
@@ -3770,7 +3775,7 @@ function PrescriptionDoseHistory({ prescriptionId, onAdministerDose, isAdministe
                 )}
                 <span className="text-muted-foreground">
                   {dose.givenAt
-                    ? format(new Date(dose.givenAt), 'MMM d, yyyy h:mm a')
+                    ? format(dose.givenAt, 'MMM d, yyyy h:mm a')
                     : dose.dueDate
                       ? formatDateOnly(dose.dueDate)
                       : ''}

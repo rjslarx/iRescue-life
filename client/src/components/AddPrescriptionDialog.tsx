@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { todayLocalISO } from "@/lib/utils";
+import { medicalDateInput, medicalDateInputSchema, optionalMedicalDateInputSchema, isValidMedicalDate } from "@shared/medical-dates";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -23,9 +24,9 @@ const prescriptionSchema = z.object({
   dosage: z.string().min(1, "Dosage is required"),
   frequency: z.string().min(1, "Frequency is required"),
   route: z.string().min(1, "Route is required"),
-  startDate: z.string().min(1, "Start date is required"),
-  nextScheduledDose: z.string().optional(),
-  endDate: z.string().optional(),
+  startDate: medicalDateInputSchema,
+  nextScheduledDose: optionalMedicalDateInputSchema,
+  endDate: optionalMedicalDateInputSchema,
   durationDays: z.string().optional(),
   isControlledSubstance: z.boolean().optional(),
   requiresRefill: z.boolean().optional(),
@@ -166,9 +167,9 @@ export function AddPrescriptionDialog({ animalId, open, onOpenChange, prescripti
         dosage: prescription.dosage || "",
         frequency: prescription.frequency || "",
         route: prescription.route || "",
-        startDate: prescription.startDate ? new Date(prescription.startDate).toISOString().split('T')[0] : todayLocalISO(),
-        nextScheduledDose: prescription.nextScheduledDose ? new Date(prescription.nextScheduledDose).toISOString().split('T')[0] : "",
-        endDate: prescription.endDate ? new Date(prescription.endDate).toISOString().split('T')[0] : "",
+        startDate: medicalDateInput(prescription.startDate),
+        nextScheduledDose: medicalDateInput(prescription.nextScheduledDose),
+        endDate: medicalDateInput(prescription.endDate),
         durationDays: "",
         isControlledSubstance: prescription.isControlledSubstance || false,
         requiresRefill: prescription.requiresRefill || false,
@@ -238,12 +239,13 @@ export function AddPrescriptionDialog({ animalId, open, onOpenChange, prescripti
 
   // When the user enters a Duration, auto-compute endDate = startDate + (duration-1) days.
   useEffect(() => {
-    if (!watchedDurationDays || !watchedStartDate) return;
+    if (!watchedDurationDays || !isValidMedicalDate(watchedStartDate)) return;
     const days = parseInt(watchedDurationDays, 10);
     if (!Number.isFinite(days) || days < 1) return;
     const start = new Date(watchedStartDate + "T00:00:00");
     const end = new Date(start);
     end.setDate(end.getDate() + (days - 1));
+    if (!isValidMedicalDate(end)) return;
     const endStr = end.toISOString().split('T')[0];
     if (watchedEndDate !== endStr) {
       form.setValue("endDate", endStr);
@@ -261,7 +263,7 @@ export function AddPrescriptionDialog({ animalId, open, onOpenChange, prescripti
   }, [open, prescription]);
 
   useEffect(() => {
-    if (!watchedStartDate || !watchedFrequency || isOneTime || watchedFrequency === "PRN" || userEditedNextDose) return;
+    if (!isValidMedicalDate(watchedStartDate) || !watchedFrequency || isOneTime || watchedFrequency === "PRN" || userEditedNextDose) return;
 
     const frequencyDaysMap: Record<string, number> = {
       SID: 1,

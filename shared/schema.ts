@@ -2,6 +2,7 @@ import { pgTable, uuid, text, timestamp, integer, boolean, jsonb, unique, unique
 import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import { medicalDateSchema } from "./medical-dates";
 import { supplyItemUnitPriceSchema } from "./supply-item-validation";
 export * from "./free-squares-tables";
 
@@ -2290,9 +2291,9 @@ export const insertMedicalPrescriptionSchema = createInsertSchema(medicalPrescri
   lastEditedAt: true,
   lastEditedBy: true,
 }).extend({
-  startDate: z.coerce.date(),
-  nextScheduledDose: z.coerce.date().optional(),
-  endDate: z.coerce.date().optional(),
+  startDate: medicalDateSchema,
+  nextScheduledDose: medicalDateSchema.optional(),
+  endDate: medicalDateSchema.optional(),
 });
 export type InsertMedicalPrescription = z.infer<typeof insertMedicalPrescriptionSchema>;
 export type MedicalPrescription = typeof medicalPrescriptions.$inferSelect;
