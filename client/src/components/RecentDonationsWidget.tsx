@@ -137,10 +137,14 @@ export function RecentDonationsWidget({ tenantSubdomain, className }: RecentDona
               <Button
                 variant="outline"
                 size="sm"
-                className="text-primary border-primary"
+                className="text-primary border-primary recent-donations-donate"
                 onClick={handleDonateClick}
                 data-testid="button-donate-widget"
               >
+                <span className="recent-donations-donate__shimmer" aria-hidden="true">
+                  <span className="recent-donations-donate__shimmer-light" />
+                </span>
+                <span className="recent-donations-donate__sparkle" aria-hidden="true" />
                 Donate
               </Button>
             </div>

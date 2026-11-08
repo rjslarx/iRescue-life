@@ -511,6 +511,83 @@ html:not(.dark) .admin-portal-theme {
   animation-play-state: paused;
 }
 
+/* Recent-donation CTA: a border-only light sweep and a tiny four-point glint.
+   Child layers leave elevation's ::after and the focus-ring shadow untouched. */
+.recent-donations-donate {
+  position: relative;
+}
+
+.recent-donations-donate__shimmer {
+  position: absolute;
+  inset: -1px;
+  padding: 2px;
+  border-radius: inherit;
+  overflow: hidden;
+  pointer-events: none;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+
+.recent-donations-donate__shimmer-light {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    110deg,
+    transparent 25%,
+    hsl(var(--primary) / 0.85) 42%,
+    hsl(var(--primary-foreground) / 0.95) 50%,
+    hsl(var(--primary) / 0.85) 58%,
+    transparent 75%
+  );
+  opacity: 0;
+  transform: translateX(-110%);
+  animation: recent-donations-border-shimmer 6.8s ease-in-out infinite;
+}
+
+.recent-donations-donate__sparkle {
+  position: absolute;
+  top: -5px;
+  right: 8px;
+  width: 10px;
+  height: 10px;
+  pointer-events: none;
+  background: hsl(var(--primary));
+  clip-path: polygon(50% 0%, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0% 50%, 38% 38%);
+  opacity: 0;
+  transform: scale(0.55) rotate(-20deg);
+  animation: recent-donations-sparkle 6.8s ease-in-out infinite;
+}
+
+@keyframes recent-donations-border-shimmer {
+  0% { opacity: 0; transform: translateX(-110%); }
+  5% { opacity: 1; }
+  27% { opacity: 1; transform: translateX(110%); }
+  32%, 100% { opacity: 0; transform: translateX(110%); }
+}
+
+@keyframes recent-donations-sparkle {
+  0%, 15% { opacity: 0; transform: scale(0.55) rotate(-20deg); }
+  23% { opacity: 0.95; transform: scale(1) rotate(0deg); }
+  35%, 100% { opacity: 0; transform: scale(0.65) rotate(20deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .recent-donations-donate__shimmer-light {
+    animation: none;
+    transform: none;
+    opacity: 0.6;
+  }
+
+  .recent-donations-donate__sparkle {
+    animation: none;
+    transform: none;
+    opacity: 0.7;
+  }
+}
+
 /* Header Donate: a brief soft halo, then stillness. Keep elevation's ::after
    and the button's focus-ring box-shadow independent from the glow. */
 .public-header-donate::before {
