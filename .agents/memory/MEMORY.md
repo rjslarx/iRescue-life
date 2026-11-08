@@ -45,4 +45,4 @@
 - [Adoption vaccine placeholders](adoption-placeholder-vaccine-coverage.md) — checkout due-date placeholders are not new doses; portal coverage must consult actual vaccination history.
 - [Medical date integrity](medical-date-integrity.md) — malformed dates must remain correctable; successful API reads do not prove medical-page rendering works.
 - [Expense campaign fee policy](expense-campaign-fee-policy.md) — donor fee coverage is optional; otherwise fees come from rescue proceeds, not the platform.
-- [Donation notification navigation](donation-widget-navigation.md) — the notification CTA opens the tenant Donate page, never a homepage scroll shortcut.
+- [Donation notification navigation](donation-widget-navigation.md) — scroll to the home page donation section, with tenant-aware Donate navigation as fallback.

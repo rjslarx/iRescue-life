@@ -119,9 +119,9 @@ for (const [url, destination] of [
     assert.deepEqual(scrolls, []);
   });
 
-  test(`existing donation section still navigates to Donate: ${url}`, () => {
+  test(`existing donation section scrolls without leaving the rescue home page: ${url}`, () => {
     const { location, scrolls } = harness(url, true);
-    assert.equal(location.href, destination);
-    assert.deepEqual(scrolls, []);
+    assert.equal(location.href, url);
+    assert.deepEqual(scrolls, ['smooth']);
   });
 }

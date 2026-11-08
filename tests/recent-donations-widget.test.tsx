@@ -171,13 +171,13 @@ for (const phase of ['initial', 'rotation', 'dismissal', 'donate'] as const) {
   });
 }
 
-test('donate navigates after the exit delay instead of scrolling, even with repeated clicks', async () => {
+test('donate scrolls to the donation section after the exit delay, even with repeated clicks', async () => {
   await mount();
   let scrolls = 0;
   const section = document.createElement('div');
   section.id = 'donation-section';
   section.scrollIntoView = (options) => {
-    assert.deepEqual(options, { behavior: 'smooth' });
+    assert.deepEqual(options, { behavior: 'smooth', block: 'start' });
     scrolls++;
   };
   document.body.append(section);
@@ -198,8 +198,8 @@ test('donate navigates after the exit delay instead of scrolling, even with repe
     await advance(299);
     assert.deepEqual(destinations, []);
     await advance(1);
-    assert.deepEqual(destinations, ['/donate']);
-    assert.equal(scrolls, 0);
+    assert.deepEqual(destinations, []);
+    assert.equal(scrolls, 1);
     assert.equal(widget(), null);
     assert.equal(timers.size, 0);
   } finally {
