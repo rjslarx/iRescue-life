@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { X, MapPin, Heart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -20,8 +20,10 @@ interface RecentDonationsWidgetProps {
 export function RecentDonationsWidget({ tenantSubdomain, className }: RecentDonationsWidgetProps) {
   const [isVisible, setIsVisible] = useState(true);
   const [isDismissed, setIsDismissed] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
+  const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { data: donations = [], isLoading } = useQuery<RecentDonation[]>({
     queryKey: ['/api/compliance/public/recent-donations'],
@@ -30,56 +32,72 @@ export function RecentDonationsWidget({ tenantSubdomain, className }: RecentDona
     refetchInterval: 5 * 60 * 1000,
   });
 
-  const cycleToNext = useCallback(() => {
-    if (donations.length <= 1) return;
-    
-    setIsAnimating(true);
-    setTimeout(() => {
-      setCurrentIndex((prev) => (prev + 1) % donations.length);
-      setIsAnimating(false);
-    }, 300);
+  // Clamp state for future rotations as well as guarding the render below.
+  useEffect(() => {
+    setCurrentIndex((index) => Math.min(index, Math.max(0, donations.length - 1)));
   }, [donations.length]);
 
   useEffect(() => {
-    if (donations.length <= 1 || isDismissed) return;
-    
-    const interval = setInterval(cycleToNext, 5000);
-    return () => clearInterval(interval);
-  }, [donations.length, isDismissed, cycleToNext]);
+    setIsAnimating(false);
+    if (donations.length <= 1 || isClosing || isDismissed) return;
+
+    let rotationTimer: ReturnType<typeof setTimeout> | undefined;
+    const interval = setInterval(() => {
+      setIsAnimating(true);
+      rotationTimer = setTimeout(() => {
+        setCurrentIndex((prev) => (prev + 1) % donations.length);
+        setIsAnimating(false);
+      }, 300);
+    }, 5000);
+    return () => {
+      clearInterval(interval);
+      clearTimeout(rotationTimer);
+    };
+  }, [donations.length, isClosing, isDismissed]);
 
   useEffect(() => {
-    if (isDismissed) return;
+    if (isClosing || isDismissed) return;
     
     const showTimer = setTimeout(() => {
       setIsVisible(true);
     }, 2000);
     
     return () => clearTimeout(showTimer);
-  }, [isDismissed]);
+  }, [isClosing, isDismissed]);
 
-  const handleDismiss = () => {
+  useEffect(() => () => {
+    if (dismissTimer.current !== null) clearTimeout(dismissTimer.current);
+  }, []);
+
+  const dismiss = (onDismiss?: () => void) => {
+    if (dismissTimer.current !== null) return;
+    setIsClosing(true);
     setIsVisible(false);
-    setTimeout(() => setIsDismissed(true), 300);
+    dismissTimer.current = setTimeout(() => {
+      setIsDismissed(true);
+      onDismiss?.();
+    }, 300);
   };
 
+  const handleDismiss = () => dismiss();
+
   const handleDonateClick = () => {
-    setIsVisible(false);
-    setTimeout(() => {
-      setIsDismissed(true);
+    dismiss(() => {
       const donationSection = document.getElementById('donation-section');
       if (donationSection) {
         donationSection.scrollIntoView({ behavior: 'smooth' });
       } else {
         window.location.href = '/donate';
       }
-    }, 300);
+    });
   };
 
-  if (isDismissed || isLoading || donations.length === 0) {
+  const safeIndex = Math.min(currentIndex, Math.max(0, donations.length - 1));
+  const currentDonation = donations[safeIndex];
+  if (isDismissed || isLoading || !currentDonation) {
     return null;
   }
 
-  const currentDonation = donations[currentIndex];
   const amountFormatted = new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
@@ -159,7 +177,7 @@ export function RecentDonationsWidget({ tenantSubdomain, className }: RecentDona
                 onClick={() => setCurrentIndex(index)}
                 className={cn(
                   'w-1.5 h-1.5 rounded-full transition-colors',
-                  index === currentIndex ? 'bg-primary' : 'bg-muted-foreground/30'
+                  index === safeIndex ? 'bg-primary' : 'bg-muted-foreground/30'
                 )}
                 aria-label={`Go to donation ${index + 1}`}
               />
