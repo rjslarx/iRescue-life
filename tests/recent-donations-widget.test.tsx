@@ -171,7 +171,7 @@ for (const phase of ['initial', 'rotation', 'dismissal', 'donate'] as const) {
   });
 }
 
-test('donate scrolls once after the existing exit delay, even with repeated clicks', async () => {
+test('donate navigates after the exit delay instead of scrolling, even with repeated clicks', async () => {
   await mount();
   let scrolls = 0;
   const section = document.createElement('div');
@@ -181,12 +181,28 @@ test('donate scrolls once after the existing exit delay, even with repeated clic
     scrolls++;
   };
   document.body.append(section);
-  await click('[data-testid="button-donate-widget"]');
-  await click('[data-testid="button-donate-widget"]');
-  await advance(299);
-  assert.equal(scrolls, 0);
-  await advance(1);
-  assert.equal(scrolls, 1);
-  assert.equal(widget(), null);
-  assert.equal(timers.size, 0);
+  const destinations: string[] = [];
+  const location = {
+    hostname: 'haseyas.org', pathname: '/',
+    set href(value: string) { destinations.push(value); },
+  };
+  const originalWindow = globalThis.window;
+  const originalStorage = globalThis.localStorage;
+  Object.assign(globalThis, {
+    window: new Proxy(dom.window, { get: (target, key) => key === 'location' ? location : Reflect.get(target, key) }),
+    localStorage: dom.window.localStorage,
+  });
+  try {
+    await click('[data-testid="button-donate-widget"]');
+    await click('[data-testid="button-donate-widget"]');
+    await advance(299);
+    assert.deepEqual(destinations, []);
+    await advance(1);
+    assert.deepEqual(destinations, ['/donate']);
+    assert.equal(scrolls, 0);
+    assert.equal(widget(), null);
+    assert.equal(timers.size, 0);
+  } finally {
+    Object.assign(globalThis, { window: originalWindow, localStorage: originalStorage });
+  }
 });

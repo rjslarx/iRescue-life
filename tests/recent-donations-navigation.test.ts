@@ -67,6 +67,7 @@ function harness(url: string, hasSection: boolean) {
           useState: (value: unknown) => [value, (next: unknown) => stateChanges.push(next)],
           useEffect: () => {},
           useCallback: (callback: unknown) => callback,
+          useRef: (value: unknown) => ({ current: value }),
         };
         case 'react/jsx-runtime': return { jsx, jsxs: jsx };
         case '@tanstack/react-query': return {
@@ -92,12 +93,12 @@ function harness(url: string, hasSection: boolean) {
   const button = findButton(tree);
   assert.ok(button, 'the Donate button is wired to the tested handler');
   button.props.onClick();
-  assert.deepEqual(stateChanges, [false], 'hide immediately');
+   assert.deepEqual(stateChanges, [true, false], 'close and hide immediately');
   assert.equal(location.href, url, 'do not navigate before the animation finishes');
   assert.equal(timers.length, 1);
   assert.equal(timers[0].delay, 300, 'preserve dismissal timing');
   timers[0].callback();
-  assert.deepEqual(stateChanges, [false, true], 'dismiss after the animation');
+   assert.deepEqual(stateChanges, [true, false, true], 'dismiss after the animation');
   return { location, scrolls };
 }
 
@@ -118,9 +119,9 @@ for (const [url, destination] of [
     assert.deepEqual(scrolls, []);
   });
 
-  test(`existing donation section scrolls without navigation: ${url}`, () => {
+  test(`existing donation section still navigates to Donate: ${url}`, () => {
     const { location, scrolls } = harness(url, true);
-    assert.equal(location.href, url);
-    assert.deepEqual(scrolls, ['smooth']);
+    assert.equal(location.href, destination);
+    assert.deepEqual(scrolls, []);
   });
 }

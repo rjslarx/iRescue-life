@@ -84,12 +84,7 @@ export function RecentDonationsWidget({ tenantSubdomain, className }: RecentDona
 
   const handleDonateClick = () => {
     dismiss(() => {
-      const donationSection = document.getElementById('donation-section');
-      if (donationSection) {
-        donationSection.scrollIntoView({ behavior: 'smooth' });
-      } else {
-        window.location.href = buildTenantUrl('/donate');
-      }
+      window.location.href = buildTenantUrl('/donate');
     });
   };
 
