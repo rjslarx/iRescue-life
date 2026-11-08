@@ -47,12 +47,13 @@ function getTenantConfig(): TenantApiConfig {
   const tenantId = localStorage.getItem(TENANT_STORAGE_KEY);
   const hostname = window.location.hostname;
   
-  // CRITICAL: For custom domains (not irescue.life, not localhost, not replit.dev),
+  // CRITICAL: For custom domains (not irescue.life, localhost, or Replit hosts),
   // we should NEVER use path-based routing. The backend resolves tenant from hostname.
   const PLATFORM_DOMAIN = 'irescue.life';
   const isCustomDomain = hostname !== 'localhost' && 
                          hostname !== '127.0.0.1' && 
                          !hostname.includes('replit.dev') && 
+                         !hostname.endsWith('.replit.app') &&
                          !hostname.endsWith(PLATFORM_DOMAIN);
   
   // Custom domains don't use path-based routing
@@ -91,7 +92,8 @@ export function buildTenantUrl(url: string): string {
   }
 
   // If URL already includes the basePath, don't double-prepend
-  if (url.startsWith(basePath)) {
+  if (url === basePath || url.startsWith(`${basePath}/`) ||
+      url.startsWith(`${basePath}?`) || url.startsWith(`${basePath}#`)) {
     return url;
   }
 

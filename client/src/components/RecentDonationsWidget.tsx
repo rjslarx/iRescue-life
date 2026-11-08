@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { X, MapPin, Heart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { buildTenantUrl } from '@/lib/tenantApi';
 
 interface RecentDonation {
   id: string;
@@ -87,7 +88,7 @@ export function RecentDonationsWidget({ tenantSubdomain, className }: RecentDona
       if (donationSection) {
         donationSection.scrollIntoView({ behavior: 'smooth' });
       } else {
-        window.location.href = '/donate';
+        window.location.href = buildTenantUrl('/donate');
       }
     });
   };
