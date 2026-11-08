@@ -5,6 +5,8 @@ import { apiRequest } from "@/lib/queryClient";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { expenseCampaignCharge, expenseCampaignCheckoutSchema } from "@shared/expense-campaign-fees";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Heart } from "lucide-react";
@@ -60,6 +62,7 @@ export default function PublicExpenseCampaignPage() {
   const { slug } = useParams<{ slug: string }>();
   const { toast } = useToast();
   const [amountDollars, setAmountDollars] = useState<string>("50");
+  const [coverFees, setCoverFees] = useState(false);
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -83,9 +86,10 @@ export default function PublicExpenseCampaignPage() {
   const checkoutMutation = useMutation({
     mutationFn: async () => {
       const cents = Math.round(parseFloat(amountDollars || "0") * 100);
-      if (!Number.isSafeInteger(cents) || cents < 100 || cents > 2_000_000_000) throw new Error("Enter a donation from $1 to $20,000,000.");
+      if (!expenseCampaignCheckoutSchema.safeParse({ amountCents: cents, coverFees }).success) throw new Error("Enter at least $1 and keep the total below $1,000,000.");
       const res = await apiRequest("POST", `/api/public/expense-campaigns/${data!.campaign.id}/checkout`, {
         amountCents: cents,
+        coverFees,
       });
       const body = await res.json();
       if (body.url) window.location.href = body.url;
@@ -126,6 +130,10 @@ export default function PublicExpenseCampaignPage() {
     : "active";
   const tiered = !!matchPool?.tiers?.length;
   const giftCents = Math.round(Number(amountDollars || "0") * 100);
+  const validGift = expenseCampaignCheckoutSchema.safeParse({ amountCents: giftCents, coverFees }).success;
+  const { totalCents, feeContributionCents } = validGift
+    ? expenseCampaignCharge(giftCents, coverFees)
+    : { totalCents: 0, feeContributionCents: 0 };
 
   const previewMatch = (() => {
     if (!matchPool || matchingStatus !== "active" || campaign.status !== "active") return 0;
@@ -193,7 +201,7 @@ export default function PublicExpenseCampaignPage() {
               <Input
                 type="number"
                 min="1"
-                max="20000000"
+                max="999999.99"
                 step="0.01"
                 value={amountDollars}
                 onChange={(e) => setAmountDollars(e.target.value)}
@@ -202,11 +210,31 @@ export default function PublicExpenseCampaignPage() {
               />
               <Button
                 onClick={() => checkoutMutation.mutate()}
-                disabled={checkoutMutation.isPending || !Number.isSafeInteger(giftCents) || giftCents < 100 || giftCents > 2_000_000_000}
+                disabled={checkoutMutation.isPending || !validGift}
                 data-testid="button-donate"
               >
                 {checkoutMutation.isPending ? "Redirecting…" : "Donate"}
               </Button>
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-start gap-2">
+                <Checkbox id="expense-cover-fees" checked={coverFees}
+                  onCheckedChange={(checked) => setCoverFees(checked === true)}
+                  disabled={checkoutMutation.isPending}
+                  data-testid="checkbox-cover-fees" />
+                <label htmlFor="expense-cover-fees" className="text-sm leading-tight cursor-pointer">
+                  Add a contribution to cover estimated processing fees
+                </label>
+              </div>
+              {validGift && <p className="text-sm" aria-live="polite" data-testid="text-checkout-total">
+                Donation: {usd(giftCents)}{coverFees && <> + fees: {usd(feeContributionCents)}</>}
+                {" · "}Total: <strong>{usd(totalCents)}</strong>
+              </p>}
+              <p className="text-xs text-muted-foreground">
+                {coverFees
+                  ? "Estimated using 2.9% + $0.30 card processing. Actual Stripe fees may vary; any difference affects the rescue’s proceeds. Fee contributions are not matched."
+                  : "Processing fees will be deducted from the rescue’s proceeds, not added to your donation."}
+              </p>
             </div>
             {previewMatch > 0 && (
               <div className="text-sm text-primary" aria-live="polite" data-testid="text-match-preview">

@@ -15,6 +15,7 @@ import { requireAuth, requireRole } from "../middleware/auth";
 import multer from "multer";
 import { prepareCampaignImage, CAMPAIGN_IMAGE_MAX_BYTES } from "../lib/expense-campaign-image";
 import { ObjectStorageService } from "../objectStorage";
+import { expenseCampaignCharge, expenseCampaignCheckoutSchema } from "@shared/expense-campaign-fees";
 
 const router = Router();
 
@@ -777,10 +778,8 @@ publicRouter.post("/:id/checkout", async (req: Request, res: Response, next: Nex
   try {
     const tenantId = req.tenant!.id;
     const { id } = req.params;
-    const schema = z.object({
-      amountCents: z.number().int().min(100),
-    });
-    const { amountCents } = schema.parse(req.body);
+    const { amountCents, coverFees } = expenseCampaignCheckoutSchema.parse(req.body);
+    const { totalCents, feeContributionCents } = expenseCampaignCharge(amountCents, coverFees);
 
     const campaign = await db
       .select()
@@ -833,6 +832,14 @@ publicRouter.post("/:id/checkout", async (req: Request, res: Response, next: Nex
             },
             quantity: 1,
           },
+          ...(feeContributionCents > 0 ? [{
+            price_data: {
+              currency: "usd",
+              unit_amount: feeContributionCents,
+              product_data: { name: "Optional processing-fee contribution" },
+            },
+            quantity: 1,
+          }] : []),
         ],
         success_url: `${origin}${slugPath}?thanks=1`,
         cancel_url: `${origin}${slugPath}`,
@@ -840,6 +847,10 @@ publicRouter.post("/:id/checkout", async (req: Request, res: Response, next: Nex
           expenseCampaignId: campaign.id,
           expenseCampaignTitle: campaign.title.slice(0, 200),
           baseAmount: String(amountCents),
+          donorCoveredFees: String(coverFees),
+          feesCovered: String(feeContributionCents),
+          totalAmount: String(totalCents),
+          feeEstimateModel: "us-card-2.9pct-30c-v1",
         },
       },
       { stripeAccount: tenant.stripeConnectedAccountId },
