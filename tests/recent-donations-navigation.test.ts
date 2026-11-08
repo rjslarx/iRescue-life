@@ -56,7 +56,7 @@ function harness(url: string, hasSection: boolean) {
     module: widgetModule, exports: widgetModule.exports, window,
     document: {
       getElementById: (id: string) => {
-        assert.equal(id, 'donation-section');
+        assert.equal(id, 'donation-form');
         return hasSection ? { scrollIntoView: (options: any) => scrolls.push(options.behavior) } : null;
       },
     },

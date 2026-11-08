@@ -157,7 +157,7 @@ for (const phase of ['initial', 'rotation', 'dismissal', 'donate'] as const) {
     await mount();
     let scrolls = 0;
     const section = document.createElement('div');
-    section.id = 'donation-section';
+    section.id = 'donation-form';
     section.scrollIntoView = () => { scrolls++; };
     document.body.append(section);
     if (phase === 'rotation') await advance(5000);
@@ -171,16 +171,20 @@ for (const phase of ['initial', 'rotation', 'dismissal', 'donate'] as const) {
   });
 }
 
-test('donate scrolls to the donation section after the exit delay, even with repeated clicks', async () => {
+test('donate scrolls to the hero donation form, not the introduction, even with repeated clicks', async () => {
   await mount();
   let scrolls = 0;
   const section = document.createElement('div');
-  section.id = 'donation-section';
+  section.id = 'donation-form';
   section.scrollIntoView = (options) => {
     assert.deepEqual(options, { behavior: 'smooth', block: 'start' });
     scrolls++;
   };
   document.body.append(section);
+  const introduction = document.createElement('div');
+  introduction.id = 'donation-section';
+  introduction.scrollIntoView = () => { assert.fail('Must skip the Support Our Mission introduction'); };
+  document.body.prepend(introduction);
   const destinations: string[] = [];
   const location = {
     hostname: 'haseyas.org', pathname: '/',

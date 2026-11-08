@@ -748,7 +748,7 @@ export default function Home() {
             </div>
             
             {/* Right column: Donation form */}
-            <div className="md:pl-4">
+            <div id="donation-form" className="md:pl-4 scroll-mt-24">
               <DonationForm 
                 tenant={tenant}
               />
