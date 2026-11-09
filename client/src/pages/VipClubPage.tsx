@@ -19,6 +19,7 @@ import { useSEO } from "@/hooks/useSEO";
 import { getTierIcon } from "@/pages/VipTiersSettingsPage";
 import { DonationHistoryRow } from "@/components/DonationHistoryRow";
 import { MemorialPhotoEditor } from "@/components/vip/MemorialPhotoEditor";
+import { VipGamePerk } from "@/components/vip/VipGamePerk";
 
 interface PublicTier {
   id: string;
@@ -903,6 +904,7 @@ export default function VipClubPage() {
 
           {historyToken && historyData && (
             <div className="max-w-3xl mx-auto space-y-6" data-testid="section-history-loaded">
+              <VipGamePerk token={historyToken} />
               <Card className="p-6">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>

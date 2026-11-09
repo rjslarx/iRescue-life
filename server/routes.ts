@@ -47853,6 +47853,9 @@ The user asking is a tenant administrator or staff member.`;
   // Register VIP donor portal routes (token-authenticated giving history + receipts)
   const vipPortalRoutes = await import('./routes/vipPortal');
   app.use('/api/vip-portal', requireTenant, vipPortalRoutes.default);
+  const vipGameRoutes = await import('./routes/vipGamePilot');
+  app.use('/api/platform/vip-game-pilot', vipGameRoutes.adminGameRouter);
+  app.use('/api/vip-portal/game', requireTenant, vipGameRoutes.memberGameRouter);
 
   // Register foster portal routes (foster animal detail, bio, photos, weight, notes, supplies)
   const fosterPortalRoutes = await import('./routes/fosterPortal');

@@ -1,0 +1,380 @@
+:root {
+  --bg-dark: #090510;
+  --cabinet-body: #181128;
+  --cabinet-trim: #ff2a85;
+  --cabinet-gold: #ffd43b;
+  --cabinet-cyan: #00f5d4;
+  --crt-border: #231c35;
+  --retro-green: #22c55e;
+  --retro-green-bright: #4ade80;
+  --pixel-font: 'Press Start 2P', 'Courier New', monospace;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: var(--bg-dark);
+  background-image:
+    radial-gradient(circle at 50% 15%, rgba(255, 42, 133, 0.16) 0%, transparent 55%),
+    radial-gradient(circle at 50% 85%, rgba(0, 245, 212, 0.12) 0%, transparent 55%),
+    linear-gradient(180deg, #0d0718 0%, #05020a 100%);
+  font-family: var(--pixel-font);
+  color: #ffffff;
+  touch-action: none;
+}
+
+.arcade-room {
+  width: 100%;
+  height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+}
+
+/* 1980s Arcade Cabinet Outer Shell */
+.arcade-cabinet {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 560px;
+  height: 100%;
+  max-height: 980px;
+  background: linear-gradient(180deg, #211638 0%, #120b20 100%);
+  border: 4px solid var(--cabinet-trim);
+  border-radius: 18px;
+  box-shadow:
+    0 0 24px rgba(255, 42, 133, 0.45),
+    inset 0 0 18px rgba(0, 245, 212, 0.18),
+    0 18px 48px rgba(0, 0, 0, 0.85);
+  overflow: hidden;
+  position: relative;
+}
+
+/* Top Lighted Arcade Marquee */
+.arcade-marquee {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: linear-gradient(90deg, #ff2a85 0%, #ff7b00 50%, #ff2a85 100%);
+  border-bottom: 4px solid var(--cabinet-gold);
+  box-shadow: inset 0 2px 10px rgba(255, 255, 255, 0.4), 0 4px 12px rgba(0, 0, 0, 0.6);
+  flex-shrink: 0;
+}
+
+.marquee-glow {
+  text-align: center;
+  flex: 1;
+}
+
+.marquee-sub {
+  display: block;
+  font-size: 8px;
+  letter-spacing: 1.5px;
+  color: #fff6cc;
+  text-shadow: 1px 1px 0 #000;
+  margin-bottom: 4px;
+}
+
+.marquee-title {
+  font-size: clamp(13px, 3.6vw, 18px);
+  letter-spacing: 2px;
+  color: #ffffff;
+  text-shadow:
+    2px 2px 0 #180828,
+    -1px -1px 0 #180828,
+    0 0 12px #ffee55;
+}
+
+.marquee-bolts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bolt {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #2b1d3d;
+  border: 1px solid #ffd43b;
+  box-shadow: inset 1px 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+/* CRT Bezel & Screen Frame */
+.crt-bezel {
+  flex: 1;
+  min-height: 0;
+  padding: 8px;
+  background:
+    radial-gradient(circle at center, #2d2344 0%, #161124 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.crt-screen-frame {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: #070b14;
+  border: 4px solid #352950;
+  border-radius: 14px;
+  box-shadow:
+    inset 0 0 28px rgba(0, 0, 0, 0.9),
+    0 0 14px rgba(0, 245, 212, 0.2);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#game-container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#game-container canvas {
+  display: block;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  border-radius: 8px;
+}
+
+/* Authentic 80s CRT Scanline & Vignette Overlays */
+.crt-scanlines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0) 0px,
+    rgba(0, 0, 0, 0) 2px,
+    rgba(0, 0, 0, 0.22) 3px,
+    rgba(0, 0, 0, 0.22) 4px
+  );
+  z-index: 5;
+}
+
+.crt-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    circle at center,
+    transparent 68%,
+    rgba(5, 2, 12, 0.55) 100%
+  );
+  box-shadow: inset 0 0 18px rgba(0, 245, 212, 0.12);
+  z-index: 6;
+}
+
+.crt-glare {
+  position: absolute;
+  top: -15%;
+  left: -15%;
+  width: 55%;
+  height: 35%;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(255, 255, 255, 0.06) 0%,
+    transparent 70%
+  );
+  transform: rotate(-18deg);
+  z-index: 7;
+}
+
+/* Bottom Arcade Control Deck */
+.arcade-deck {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 12px;
+  background: #130c22;
+  border-top: 3px solid #352852;
+  flex-shrink: 0;
+}
+
+.coin-slot-badge {
+  font-size: 8px;
+  color: #ff9e00;
+  background: #221208;
+  border: 2px solid #ff9e00;
+  padding: 4px 6px;
+  border-radius: 4px;
+  text-shadow: 0 0 6px rgba(255, 158, 0, 0.7);
+  white-space: nowrap;
+}
+
+.deck-instructions {
+  font-size: 7px;
+  color: #b7a9d4;
+  text-align: center;
+  line-height: 1.4;
+  flex: 1;
+}
+
+.arcade-mini-btn {
+  font-family: var(--pixel-font);
+  font-size: 8px;
+  color: var(--cabinet-cyan);
+  background: #1a2436;
+  border: 2px solid var(--cabinet-cyan);
+  padding: 4px 7px;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: transform 0.1s ease, background 0.15s ease;
+}
+
+.arcade-mini-btn:hover,
+.arcade-mini-btn:active {
+  background: var(--cabinet-cyan);
+  color: #09101d;
+}
+
+/* Rescue Checkout Simulator Modal */
+.checkout-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 4, 16, 0.85);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 100;
+}
+
+.checkout-modal.hidden {
+  display: none;
+}
+
+.checkout-card {
+  width: 100%;
+  max-width: 420px;
+  background: #161026;
+  border: 4px solid var(--retro-green-bright);
+  border-radius: 12px;
+  padding: 20px 16px;
+  text-align: center;
+  box-shadow:
+    0 0 28px rgba(74, 222, 128, 0.45),
+    0 16px 40px rgba(0, 0, 0, 0.9);
+}
+
+.checkout-header {
+  font-size: 10px;
+  color: var(--cabinet-gold);
+  margin-bottom: 10px;
+  letter-spacing: 1px;
+}
+
+.checkout-pet-title {
+  font-size: 14px;
+  color: #ffffff;
+  margin-bottom: 12px;
+  line-height: 1.5;
+}
+
+.checkout-desc {
+  font-size: 9px;
+  color: #cbd5e1;
+  line-height: 1.6;
+  margin-bottom: 10px;
+}
+
+.checkout-desc code {
+  color: var(--cabinet-cyan);
+}
+
+.checkout-json {
+  background: #0b0714;
+  border: 2px solid #33274f;
+  border-radius: 6px;
+  padding: 10px;
+  font-family: var(--pixel-font);
+  font-size: 9px;
+  color: #4ade80;
+  margin-bottom: 16px;
+  overflow-x: auto;
+}
+
+.checkout-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.retro-btn {
+  font-family: var(--pixel-font);
+  font-size: 10px;
+  line-height: 1.5;
+  padding: 12px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 3px solid #ffffff;
+  text-transform: uppercase;
+  transition: transform 0.08s ease, filter 0.12s ease;
+}
+
+.retro-btn:active {
+  transform: translateY(2px);
+}
+
+.retro-btn-green {
+  background: #16a34a;
+  border-color: #86efac;
+  color: #ffffff;
+  box-shadow: 0 4px 0 #064e3b, 0 0 14px rgba(74, 222, 128, 0.5);
+}
+
+.retro-btn-green:hover {
+  background: #22c55e;
+}
+
+.retro-btn-cancel {
+  background: #33294a;
+  border-color: #94a3b8;
+  color: #e2e8f0;
+  box-shadow: 0 4px 0 #191326;
+}
+
+/* Compact adjustments for ultra-small mobile viewports */
+@media (max-height: 680px) {
+  .arcade-room {
+    padding: 0;
+  }
+  .arcade-cabinet {
+    border-radius: 0;
+    border-width: 2px;
+  }
+  .arcade-marquee {
+    padding: 5px 8px;
+  }
+  .marquee-sub {
+    display: none;
+  }
+  .crt-bezel {
+    padding: 4px;
+  }
+  .deck-instructions {
+    display: none;
+  }
+}

@@ -30,13 +30,13 @@ function getSecret(): string {
 
 import { getAppBaseUrl } from '../lib/app-base-url';
 
-function buildVipPortalUrl(tenant: { subdomain: string | null; customDomain: string | null }, token: string): string {
+export function buildVipPortalUrl(tenant: { subdomain: string | null; customDomain: string | null }, token: string): string {
   const tenantPath = tenant.customDomain ? '' : (tenant.subdomain ? `/${tenant.subdomain}` : '');
   const base = tenant.customDomain ? `https://${tenant.customDomain}` : getAppBaseUrl();
   return `${base}${tenantPath}/vip-club?vipToken=${encodeURIComponent(token)}`;
 }
 
-function signVipToken(donorId: string, tenantId: string): string {
+export function signVipToken(donorId: string, tenantId: string): string {
   const exp = Date.now() + TOKEN_EXPIRY_HOURS * 60 * 60 * 1000;
   const payload = `${donorId}.${tenantId}.${exp}`;
   const sig = crypto.createHmac('sha256', getSecret()).update(payload).digest('hex');
@@ -72,7 +72,7 @@ function extractToken(req: Request): string | null {
   return null;
 }
 
-async function authVipDonor(req: Request, res: Response): Promise<{ donorId: string; tenantId: string } | null> {
+export async function authVipDonor(req: Request, res: Response): Promise<{ donorId: string; tenantId: string } | null> {
   const tenantId = req.tenant?.id;
   if (!tenantId) {
     res.status(400).json({ error: 'Tenant context required' });

@@ -157,6 +157,7 @@ import TenantsPage from "@/pages/platform/TenantsPage";
 import UsersPage from "@/pages/platform/UsersPage";
 import MfaSetup from "@/pages/platform/MfaSetup";
 import FeatureFlagsPage from "@/pages/platform/FeatureFlagsPage";
+import VipGamePilotPage from "@/pages/platform/VipGamePilotPage";
 import AuditLogsPage from "@/pages/platform/AuditLogsPage";
 import AnnouncementsPage from "@/pages/platform/AnnouncementsPage";
 import SystemHealthPage from "@/pages/platform/SystemHealthPage";
@@ -235,6 +236,7 @@ function RouterSwitch() {
       <Route path="/platform/tenants" component={TenantsPage} />
       <Route path="/platform/users" component={UsersPage} />
       <Route path="/platform/feature-flags" component={FeatureFlagsPage} />
+      <Route path="/platform/vip-game-pilot" component={VipGamePilotPage} />
       <Route path="/platform/audit-logs" component={AuditLogsPage} />
       <Route path="/platform/announcements" component={AnnouncementsPage} />
       <Route path="/platform/health" component={SystemHealthPage} />

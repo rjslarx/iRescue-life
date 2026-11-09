@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0814" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>PASTURE RUN — 1980s Retro Arcade Mini-Game</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <!-- Phaser 3 CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js" integrity="sha384-Fi7F0CYQBHYa+s2vvYJeiqvOQf3tuZ28vafRGXvMt7ijxNTVf3+eXPkNRIUi9JD2" crossorigin="anonymous"></script>
+</head>
+<body>
+  <div class="arcade-room">
+    <!-- 1980s Arcade Cabinet Bezel -->
+    <div class="arcade-cabinet">
+      <!-- Top Marquee -->
+      <header class="arcade-marquee">
+        <div class="marquee-bolts">
+          <span class="bolt"></span>
+          <span class="bolt"></span>
+        </div>
+        <div class="marquee-glow">
+          <span class="marquee-sub">RESCUE VIP CLUB</span>
+          <h1 class="marquee-title">PASTURE RUN</h1>
+        </div>
+        <div class="marquee-bolts">
+          <span class="bolt"></span>
+          <span class="bolt"></span>
+        </div>
+      </header>
+
+      <!-- CRT Monitor Bezel -->
+      <main class="crt-bezel">
+        <div class="crt-screen-frame">
+          <!-- Phaser Canvas Container -->
+          <div id="game-container" aria-label="Pasture Run Arcade Game"></div>
+
+          <!-- CRT Scanlines & Vignette Overlay -->
+          <div class="crt-scanlines" aria-hidden="true"></div>
+          <div class="crt-vignette" aria-hidden="true"></div>
+          <div class="crt-glare" aria-hidden="true"></div>
+        </div>
+      </main>
+
+      <!-- Bottom Control Deck Accent -->
+      <footer class="arcade-deck">
+        <div class="coin-slot-badge">VIP MEMBER PERK</div>
+        <div class="deck-instructions">HOLD SCREEN OR SPACE TO GALLOP UP • RELEASE TO DESCEND</div>
+        <button id="mute-toggle-btn" class="arcade-mini-btn" type="button" title="Toggle 8-Bit Audio">
+          SFX: ON
+        </button>
+      </footer>
+    </div>
+  </div>
+
+  <script src="js/sound.js"></script>
+  <script src="js/textures.js"></script>
+  <script src="js/game.js"></script>
+</body>
+</html>
