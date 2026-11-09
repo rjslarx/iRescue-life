@@ -10,6 +10,7 @@ import { authVipDonor, signVipToken, buildVipPortalUrl } from './vipPortal';
 import { hasGameMembership, canPlayVipGame } from '../lib/vip-game-policy';
 import { vipGameDocument } from '../services/vip-game-document';
 import { EmailService } from '../lib/email-service';
+import { createTeamGameRouter } from '../lib/team-game-router';
 
 const prefix = 'vip_game_pilot:';
 const configKey = (tenantId: string) => `${prefix}${tenantId}:config`;
@@ -157,6 +158,11 @@ adminGameRouter.delete('/:tenantId/invitations/:donorId', wrap(async (req, res) 
 }));
 
 export const memberGameRouter = Router();
+export const teamGameRouter = createTeamGameRouter({
+  requireAuth,
+  enabled: async tenantId => (await setting(configKey(tenantId)))?.enabled === true,
+  document: vipGameDocument,
+});
 memberGameRouter.use(rateLimit({ windowMs: 60_000, limit: 90, standardHeaders: 'draft-7', legacyHeaders: false }));
 memberGameRouter.get('/access', wrap(async (req, res) => {
   const auth = await authVipDonor(req, res);

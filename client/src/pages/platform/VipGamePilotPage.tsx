@@ -75,7 +75,7 @@ export default function VipGamePilotPage() {
                     <Badge variant="secondary">Invitation-only test</Badge>
                     <h2 className="text-xl font-semibold">Private games, kept small on purpose</h2>
                     <p className="max-w-3xl text-sm text-muted-foreground">{VIP_GAMES.map((game) => `${game.name}: ${game.description}`).join(" ")}</p>
-                    <p className="max-w-3xl text-sm text-muted-foreground">You control which rescues participate and which donors are invited. Donors need an active VIP membership, an invitation, and an enabled rescue to play. There is no public arcade or public game menu.</p>
+                    <p className="max-w-3xl text-sm text-muted-foreground">You control which rescues participate and which donors are invited. At enabled rescues, staff and volunteers can play from their dashboard without a VIP membership or invitation. Donors still need an active VIP membership and an invitation. There is no public arcade or public game menu.</p>
                     <p className="text-xs text-muted-foreground">Owner previews work even when a rescue is disabled and never record play starts. Rescue Shuffle 15 uses the selected rescue’s animal photos; choose a rescue to preview it. Pasture Run can be previewed without a rescue.</p>
                   </div>
                 </CardContent>
@@ -121,10 +121,10 @@ export default function VipGamePilotPage() {
                         <CardContent className="flex items-center justify-between gap-5 p-5 sm:p-6">
                           <div className="space-y-1">
                             <h2 className="font-semibold">{details.data.enabled ? "Pilot enabled" : "Pilot paused"}</h2>
-                            <p className="max-w-2xl text-sm text-muted-foreground">Turning this off blocks donor play without removing invitations. Open games stop at their next access check, within about a minute.</p>
+                            <p className="max-w-2xl text-sm text-muted-foreground">Turning this off blocks team and invited VIP play without removing invitations. Open games stop at their next access check, within about a minute. Team play is not included in donor activity.</p>
                             {busy && update.variables?.action === "toggle" && <p className="text-xs text-muted-foreground" role="status">Saving access setting…</p>}
                           </div>
-                          <Switch aria-label={`Enable VIP games for ${selectedTenant?.name || "this rescue"}`} checked={details.data.enabled} disabled={busy || details.isFetching} onCheckedChange={(enabled) => update.mutate({ tenantId: selectedId, action: "toggle", enabled }, feedback)} data-testid="switch-pilot-enabled" />
+                          <Switch aria-label={`Enable games for the team and invited VIPs at ${selectedTenant?.name || "this rescue"}`} checked={details.data.enabled} disabled={busy || details.isFetching} onCheckedChange={(enabled) => update.mutate({ tenantId: selectedId, action: "toggle", enabled }, feedback)} data-testid="switch-pilot-enabled" />
                         </CardContent>
                       </Card>
                       <Card>
@@ -139,7 +139,7 @@ export default function VipGamePilotPage() {
                             <div className="flex-1 space-y-2"><Label htmlFor="pilot-invite-email">Donor email</Label><Input id="pilot-invite-email" type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="supporter@example.org" disabled={busy} data-testid="input-pilot-invitation-email" /></div>
                             <Button type="submit" disabled={busy || !email.trim()}><Mail className="mr-2 h-4 w-4" />{busy && update.variables?.action === "invite" ? "Sending invitation…" : "Grant access & send invitation"}</Button>
                           </form>
-                          {!details.data.enabled && <p className="mt-3 text-xs text-muted-foreground">The pilot is paused. Invited donors cannot play until you enable it.</p>}
+                          {!details.data.enabled && <p className="mt-3 text-xs text-muted-foreground">The pilot is paused. Staff, volunteers, and invited VIPs cannot play until you enable it.</p>}
                           {update.isError && <p className="mt-3 text-sm text-destructive" role="alert">{update.error.message}</p>}
                         </CardContent>
                       </Card>

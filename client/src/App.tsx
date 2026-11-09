@@ -12,6 +12,7 @@ import NotFound from "@/pages/not-found";
 import Home from "@/pages/Home";
 import AvailableAnimalsPage from "@/pages/AvailableAnimalsPage";
 import Dashboard from "@/pages/Dashboard";
+import TeamGamesPage from "@/pages/TeamGamesPage";
 import AnimalsPage from "@/pages/AnimalsPage";
 import ProfileContributionsPage from "@/pages/ProfileContributionsPage";
 import AnimalLookupPage from "@/pages/AnimalLookupPage";
@@ -313,6 +314,8 @@ function RouterSwitch() {
       {/* Protected dashboard routes */}
       {/* This page enforces its explicit active-role and stable tenant-ID allowlist. */}
       <Route path="/dashboard/free-squares" component={FreeSquaresPage} />
+      {/* Team games use session + server eligibility, not dashboard page grants. */}
+      <Route path="/dashboard/games" component={TeamGamesPage} />
       <ProtectedRoute path="/dashboard" pageId="dashboard" component={Dashboard} />
       <ProtectedRoute path="/dashboard/animals" pageId="animals" component={AnimalsPage} />
       <ProtectedRoute path="/dashboard/profile-contributions" pageId="profile-contributions" component={ProfileContributionsPage} />

@@ -12,6 +12,7 @@ import {
   SidebarMenuItem,
   SidebarHeader,
   SidebarFooter,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -27,6 +28,7 @@ import {
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { LitterPawsIcon } from "@/components/icons/LitterPawsIcon";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTeamGameAccess } from "@/hooks/use-vip-game";
 import { canManageFreeSquares } from "@/pages/free-squares/use-free-squares";
 import { useToast } from "@/hooks/use-toast";
 import { usePagePermissions } from "@/hooks/usePagePermissions";
@@ -34,7 +36,7 @@ import { useQuickActions } from "@/hooks/useQuickActions";
 import { RecordOfflineDonationDialog } from "@/components/RecordOfflineDonationDialog";
 import { AddMedicalOrderDialog } from "@/components/AddMedicalOrderDialog";
 import { SendHoldHarmlessDialog } from "@/components/SendHoldHarmlessDialog";
-import { Zap, FileUp, ScanLine, Grid3X3 } from "lucide-react";
+import { Zap, FileUp, ScanLine, Grid3X3, Gamepad2 } from "lucide-react";
 import {
   LayoutDashboard,
   Heart,
@@ -161,6 +163,8 @@ const iconMap: Record<string, any> = {
 export default function AppSidebar({ rescueName, userName, userRole }: AppSidebarProps) {
   const [location, navigate] = useLocation();
   const { user, switchRole, logout } = useAuth();
+  const teamGameAccess = useTeamGameAccess();
+  const { isMobile, setOpenMobile } = useSidebar();
   const { toast } = useToast();
   const [isSwitching, setIsSwitching] = useState(false);
   const [showDonationDialog, setShowDonationDialog] = useState(false);
@@ -842,6 +846,22 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
             </SidebarGroup>
           </Collapsible>
         ))}
+        {teamGameAccess.data?.eligible === true && !teamGameAccess.isError && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Team downtime</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={location === "/dashboard/games"}>
+                    <Link href="/dashboard/games" onClick={() => { if (isMobile) setOpenMobile(false); }} data-testid="link-team-games">
+                      <Gamepad2 className="h-4 w-4" aria-hidden="true" /><span>Games</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
       <SidebarFooter className="border-t p-4">
         <div className="flex items-center gap-3">

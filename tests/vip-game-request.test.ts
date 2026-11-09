@@ -28,6 +28,8 @@ test('preview and revoke send JSON bodies accepted by the same-site request guar
     vm.runInNewContext(code, { module, exports: module.exports, fetch, AbortSignal,
       require: (name: string) => {
         if (name === '@tanstack/react-query') return {};
+        if (name === '@/contexts/AuthContext') return {};
+        if (name === '@/contexts/TenantContext') return {};
         if (name === '@/lib/tenantApi') return { getTenantHeaders: () => ({ 'x-tenant-id': 'platform' }) };
         throw new Error(`Unexpected module ${name}`);
       },

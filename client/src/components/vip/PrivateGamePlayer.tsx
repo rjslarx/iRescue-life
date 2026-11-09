@@ -4,7 +4,9 @@ import { ArrowLeft, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { donorGameRequest, pilotPath, pilotRequest } from "@/hooks/use-vip-game";
+import { donorGameRequest, teamGameRequest, pilotPath, pilotRequest } from "@/hooks/use-vip-game";
+import { useAuth } from "@/contexts/AuthContext";
+import { useTenant } from "@/contexts/TenantContext";
 import { withPrivateGamePresentation } from "./private-game-presentation";
 import "./private-game-player.css";
 
@@ -13,10 +15,15 @@ interface PrivateGamePlayerProps {
   preview?: boolean;
   gameId?: VipGameId;
   previewTenantId?: string;
+  team?: boolean;
   onClose: () => void;
 }
 
-export function PrivateGamePlayer({ token, preview = false, gameId = "pasture-run", previewTenantId, onClose }: PrivateGamePlayerProps) {
+export function PrivateGamePlayer({ token, preview = false, team = false, gameId = "pasture-run", previewTenantId, onClose }: PrivateGamePlayerProps) {
+  const { user } = useAuth();
+  const { tenantId } = useTenant();
+  const isTeam = team && !preview;
+  const teamIdentity = isTeam ? JSON.stringify([tenantId, user?.tenantId, user?.id, user?.activeRole, user?.roles]) : "";
   const game = VIP_GAMES.find((entry) => entry.id === gameId)!;
   const iframe = useRef<HTMLIFrameElement>(null);
   const returnButton = useRef<HTMLButtonElement>(null);
@@ -32,6 +39,7 @@ export function PrivateGamePlayer({ token, preview = false, gameId = "pasture-ru
   useEffect(() => {
     let active = true;
     let readyReceived = false;
+    let sessionEnded = false;
     setHtml(null);
     setReady(false);
     setError(null);
@@ -39,14 +47,17 @@ export function PrivateGamePlayer({ token, preview = false, gameId = "pasture-ru
     const controllers = new Set<AbortController>();
     const failAccess = () => {
       if (!active) return;
+      sessionEnded = true;
       setAccessLost(true);
       setHtml(null);
-      setError("Your private play session is no longer available. Return to your giving history to check access.");
+      setError(isTeam
+        ? "Team play is no longer available. Return to Games to check your rescue’s access."
+        : "Your private play session is no longer available. Return to your giving history to check access.");
       returnButton.current?.focus();
     };
     // Keep the promise across StrictMode's effect replay; launch is never called during render.
     const launchKey = JSON.stringify([token, preview, gameId, previewTenantId]);
-    if (!launch.current || launch.current.key !== launchKey) {
+    if (!isTeam && (!launch.current || launch.current.key !== launchKey)) {
       const promise = preview
         ? gameId === "rescue-shuffle" && !previewTenantId
           ? Promise.reject(new Error("Choose a rescue to preview Rescue Shuffle 15 with its animal photos."))
@@ -56,50 +67,64 @@ export function PrivateGamePlayer({ token, preview = false, gameId = "pasture-ru
           : Promise.reject(new Error("Please return to your giving history and open a new secure link."));
       launch.current = { key: launchKey, promise };
     }
-    launch.current.promise.then((result) => {
-      if (!active) return;
+    const launchController = new AbortController();
+    controllers.add(launchController);
+    const launchPromise = isTeam
+      ? teamGameRequest<{ html: string }>("launch", launchController.signal, gameId)
+      : launch.current!.promise;
+    launchPromise.then((result) => {
+      if (!active || sessionEnded) return;
       if (!result.html) throw new Error("The game could not be loaded. Please try again.");
       setHtml(gameId === "pasture-run" ? withPrivateGamePresentation(result.html) : result.html);
     }).catch((reason: Error) => {
-      if (active) { setError(reason.message); setHtml(null); }
+      if (active) {
+        if (isTeam && [401, 403].includes((reason as Error & { status?: number }).status ?? 0)) failAccess();
+        else { setError(reason.message); setHtml(null); }
+      }
     });
 
     const onMessage = (event: MessageEvent) => {
-      if (!iframe.current || event.source !== iframe.current.contentWindow || !event.data || typeof event.data !== "object") return;
+      if (sessionEnded || !iframe.current || event.source !== iframe.current.contentWindow || !event.data || typeof event.data !== "object") return;
       const messagePrefix = gameId === "pasture-run" ? "pasture" : "rescue-shuffle";
       if (event.data.type === `${messagePrefix}-ready`) {
         readyReceived = true;
         setReady(true);
       }
-      if (event.data.type === `${messagePrefix}-start` && !preview && token) {
+      if (event.data.type === `${messagePrefix}-start` && readyReceived && !preview && (isTeam || token)) {
         const controller = new AbortController();
         controllers.add(controller);
-        void donorGameRequest<void>(token, "start", controller.signal, gameId)
+        void (isTeam
+          ? teamGameRequest<void>("start", controller.signal, gameId)
+          : donorGameRequest<void>(token!, "start", controller.signal, gameId))
           .catch(() => { if (!controller.signal.aborted) failAccess(); })
           .finally(() => controllers.delete(controller));
       }
     };
     window.addEventListener("message", onMessage);
     const timeout = window.setTimeout(() => {
-      if (!active || readyReceived) return;
+      if (!active || sessionEnded || readyReceived) return;
       setHtml(null);
       setError(`${game.name} did not finish loading. Please try again.`);
       returnButton.current?.focus();
     }, 25000);
     const checkAccess = async () => {
-      if (preview || !token) return;
+      if (!active || sessionEnded || preview || (!isTeam && !token)) return;
       const controller = new AbortController();
       controllers.add(controller);
       const deadline = window.setTimeout(() => controller.abort(), 10000);
       try {
-        const access = await donorGameRequest<{ eligible: boolean }>(token, "access", controller.signal);
+        const access = isTeam
+          ? await teamGameRequest<{ eligible: boolean }>("access", controller.signal)
+          : await donorGameRequest<{ eligible: boolean }>(token!, "access", controller.signal);
         if (!access.eligible) failAccess();
       } catch { failAccess(); }
       finally { window.clearTimeout(deadline); controllers.delete(controller); }
     };
     const interval = preview ? undefined : window.setInterval(() => { void checkAccess(); }, 60000);
     const onVisibility = () => { if (document.visibilityState === "visible") void checkAccess(); };
+    const onFocus = () => { void checkAccess(); };
     document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("focus", onFocus);
     return () => {
       active = false;
       controllers.forEach((controller) => controller.abort());
@@ -107,8 +132,9 @@ export function PrivateGamePlayer({ token, preview = false, gameId = "pasture-ru
       if (interval !== undefined) window.clearInterval(interval);
       window.removeEventListener("message", onMessage);
       document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("focus", onFocus);
     };
-  }, [attempt, token, preview, gameId, previewTenantId, game.name]);
+  }, [attempt, token, preview, isTeam, teamIdentity, gameId, previewTenantId, game.name]);
 
   const retry = () => {
     launch.current = null;
@@ -126,14 +152,14 @@ export function PrivateGamePlayer({ token, preview = false, gameId = "pasture-ru
       >
         <div className="private-game-player__toolbar">
           <Button ref={returnButton} variant="ghost" onClick={() => closeRef.current()}
-            aria-label={preview ? "Return to pilot" : "Return to giving history"}
-            title={preview ? "Return to pilot" : "Return to giving history"}>
+            aria-label={preview ? "Return to pilot" : isTeam ? "Return to Games" : "Return to giving history"}
+            title={preview ? "Return to pilot" : isTeam ? "Return to Games" : "Return to giving history"}>
             <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />Return
           </Button>
-          <DialogTitle className="private-game-player__title">{game.name} {preview ? "· Owner preview" : ""}</DialogTitle>
+          <DialogTitle className="private-game-player__title">{game.name} {preview ? "· Owner preview" : isTeam ? "· Team play" : ""}</DialogTitle>
           {ready && !error && <Button variant="ghost" onClick={() => iframe.current?.focus()}>Focus game</Button>}
         </div>
-        <DialogDescription className="sr-only">{preview ? "Private sandbox. Preview runs are not recorded." : "A little playtime, with thanks for your VIP support."}</DialogDescription>
+        <DialogDescription className="sr-only">{preview ? "Private sandbox. Preview runs are not recorded." : isTeam ? "A little downtime for your rescue team. No VIP membership or invitation needed." : "A little playtime, with thanks for your VIP support."}</DialogDescription>
         <div className="private-game-player__stage">
           {!ready && !error && (
             <div className="absolute inset-0 space-y-4 p-6" role="status" aria-label={`Loading ${game.name}`}>
@@ -143,7 +169,7 @@ export function PrivateGamePlayer({ token, preview = false, gameId = "pasture-ru
           )}
           {html && !error && (
             <iframe ref={iframe} srcDoc={html} sandbox="allow-scripts" referrerPolicy="no-referrer"
-              title={`${game.name} ${preview ? "private owner preview" : "VIP game"}`}
+              title={`${game.name} ${preview ? "private owner preview" : isTeam ? "team game" : "VIP game"}`}
               className={`h-full w-full border-0 ${ready ? "" : "invisible"}`}
               tabIndex={ready ? 0 : -1}
                onError={() => { setHtml(null); setError(`${game.name} could not be loaded. Please try again.`); }}

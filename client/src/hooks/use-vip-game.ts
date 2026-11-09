@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { VipGameId } from "@shared/vip-games";
 import { buildTenantUrl, getTenantHeaders } from "@/lib/tenantApi";
+import { useAuth } from "@/contexts/AuthContext";
+import { useTenant } from "@/contexts/TenantContext";
 
 export const pilotPath = "/api/platform/vip-game-pilot";
 
@@ -19,7 +21,7 @@ export async function pilotRequest<T>(path: string, method = "GET", body?: unkno
 async function readResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
-    throw new Error(data.error || data.message || `Request failed (${response.status}). Please try again.`);
+    throw Object.assign(new Error(data.error || data.message || `Request failed (${response.status}). Please try again.`), { status: response.status });
   }
   if (response.status === 204) return undefined as T;
   return response.json();
@@ -33,6 +35,34 @@ export async function donorGameRequest<T>(token: string, action: "access" | "lau
     headers: { ...getTenantHeaders(), Authorization: `Bearer ${token}` },
   });
   return readResponse<T>(response);
+}
+
+// Team sessions never send donor tokens or use donor activity endpoints.
+export async function teamGameRequest<T>(action: "access" | "launch" | "start", signal?: AbortSignal, gameId?: VipGameId): Promise<T> {
+  const isGet = action === "access";
+  const query = !isGet && gameId ? `?gameId=${encodeURIComponent(gameId)}` : "";
+  const response = await fetch(buildTenantUrl(`/api/team-games/${action}${query}`), {
+    method: isGet ? "GET" : "POST",
+    credentials: "same-origin",
+    signal,
+    headers: { ...getTenantHeaders(), ...(!isGet ? { "Content-Type": "application/json" } : {}) },
+    body: isGet ? undefined : JSON.stringify({}),
+  });
+  return readResponse<T>(response);
+}
+
+export function useTeamGameAccess() {
+  const { user, isAuthenticated, isLoading } = useAuth();
+  const { tenantId } = useTenant();
+  return useQuery<{ eligible: boolean }, Error & { status?: number }>({
+    queryKey: ["/api/team-games/access", tenantId, user?.tenantId, user?.id, user?.activeRole, user?.roles],
+    queryFn: ({ signal }) => teamGameRequest("access", signal),
+    enabled: !isLoading && isAuthenticated && !!user,
+    refetchOnWindowFocus: "always",
+    refetchInterval: 60000,
+    staleTime: 0,
+    retry: false,
+  });
 }
 
 export interface PilotTenant {
@@ -75,7 +105,7 @@ export function usePilotUpdate() {
       const path = `${pilotPath}/${encodeURIComponent(update.tenantId)}`;
       if (update.action === "toggle") {
         await pilotRequest(path, "PUT", { enabled: update.enabled });
-        return { message: update.enabled ? "Pilot enabled for this rescue." : "Pilot disabled. Donor access is paused." };
+        return { message: update.enabled ? "Pilot enabled. Rescue staff, volunteers, and invited VIPs can play." : "Pilot disabled. Team and invited VIP access is paused." };
       }
       if (update.action === "invite") {
         const result = await pilotRequest<{ sent: boolean; message: string }>(`${path}/invitations`, "POST", { email: update.email });

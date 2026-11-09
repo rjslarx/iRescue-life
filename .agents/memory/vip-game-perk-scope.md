@@ -12,6 +12,12 @@ The animal-photo sliding puzzle should use random available animals belonging to
 
 **Why:** The owner specifically requested rotating rescue-animal photos to keep the puzzle fresh.
 
+Staff and volunteers at game-enabled rescues also receive dashboard game access without VIP membership or a donor invitation. This does not expand public donor access.
+
+**Why:** The owner explicitly expanded the private pilot to rescue teams as a perk, while keeping rescue-level enablement.
+
+**How to apply:** Keep team play separate from donor participation metrics and preserve existing invited-VIP eligibility.
+
 ## Production sandbox verification
 Validate embedded games under the parent page's production Content Security Policy, not only an isolated iframe or development page.
 
