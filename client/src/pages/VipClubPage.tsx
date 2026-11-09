@@ -713,6 +713,12 @@ export default function VipClubPage() {
     <div className="min-h-screen bg-background">
       <PublicHeader rescueName={rescueName} logoUrl={tenant?.logoUrl || undefined} />
 
+      {historyToken && (
+        <div className="container max-w-4xl mx-auto px-4 sm:px-6">
+          <VipGamePerk token={historyToken} />
+        </div>
+      )}
+
       {/* Hero */}
       <div className="relative overflow-hidden bg-gradient-to-br from-primary/15 via-background to-background border-b">
         <div className="container max-w-4xl mx-auto py-12 sm:py-16 px-4 sm:px-6 text-center">
@@ -904,7 +910,6 @@ export default function VipClubPage() {
 
           {historyToken && historyData && (
             <div className="max-w-3xl mx-auto space-y-6" data-testid="section-history-loaded">
-              <VipGamePerk token={historyToken} />
               <Card className="p-6">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
