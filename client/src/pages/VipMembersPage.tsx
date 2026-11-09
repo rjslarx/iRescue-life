@@ -334,7 +334,7 @@ export default function VipMembersPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `vip-members-${new Date().toISOString().split("T")[0]}.csv`;
+    a.download = `rescue-pack-members-${new Date().toISOString().split("T")[0]}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -352,8 +352,8 @@ export default function VipMembersPage() {
 
   return (
     <DashboardLayout
-      title="VIP Donor Club Members"
-      description="Sustaining monthly donors who joined via your VIP Club page"
+      title="Rescue Pack Members"
+      description="Sustaining monthly donors who joined via your Rescue Pack page"
     >
       <div className="p-6 space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -414,13 +414,13 @@ export default function VipMembersPage() {
               <Card>
                 <div className="p-12 text-center">
                   <Sparkles className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
-                  <h3 className="font-semibold mb-1">No VIP members yet</h3>
+                  <h3 className="font-semibold mb-1">No Rescue Pack members yet</h3>
                   <p className="text-sm text-muted-foreground">
-                    Once donors join via your VIP Club page, they'll appear here.
+                    Once donors join via your Rescue Pack page, they'll appear here.
                   </p>
                   <Button className="mt-4" variant="outline" onClick={() => window.open("/vip-club", "_blank")} data-testid="button-preview-vip-page">
                     <ExternalLink className="h-4 w-4 mr-2" />
-                    Preview VIP Club Page
+                    Preview Rescue Pack Page
                   </Button>
                 </div>
               </Card>
@@ -434,7 +434,7 @@ export default function VipMembersPage() {
                         {untaggedCount} monthly donor{untaggedCount === 1 ? "" : "s"} need a tier assigned
                       </div>
                       <div className="text-amber-800/80 dark:text-amber-200/80 mt-0.5">
-                        These donors completed monthly checkout but their VIP tier wasn't auto-tagged. Click "Assign tier" on each row below to fix.
+                        These donors completed monthly checkout but their Rescue Pack tier wasn't auto-tagged. Click "Assign tier" on each row below to fix.
                       </div>
                     </div>
                   </div>
@@ -496,7 +496,7 @@ export default function VipMembersPage() {
                                             No tiers set up
                                           </Badge>
                                         </TooltipTrigger>
-                                        <TooltipContent>This tenant has no active VIP tiers. Create tiers in Website Builder &rarr; VIP Donor Tiers.</TooltipContent>
+                                        <TooltipContent>This tenant has no active Rescue Pack tiers. Create tiers in Website Builder &rarr; Rescue Pack Donor Tiers.</TooltipContent>
                                       </Tooltip>
                                     ) : null}
                                     {m.tagState === 'tier_deleted' ? (
@@ -649,7 +649,7 @@ export default function VipMembersPage() {
                   <Card className="p-4">
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <DollarSign className="h-4 w-4" />
-                      Lifetime VIP Revenue
+                      Lifetime Rescue Pack Revenue
                     </div>
                     <div className="text-2xl font-bold mt-1" data-testid="stat-lifetime-revenue">
                       {fmtMoney(totals?.lifetimeRevenueCents || 0)}
@@ -658,7 +658,7 @@ export default function VipMembersPage() {
                   <Card className="p-4">
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <Users className="h-4 w-4" />
-                      Active VIP Donors
+                      Active Rescue Pack Donors
                     </div>
                     <div className="text-2xl font-bold mt-1" data-testid="stat-active-donors">
                       {totals?.activeMembers || 0}
@@ -879,7 +879,7 @@ export default function VipMembersPage() {
       <Dialog open={!!cancelTarget} onOpenChange={(open) => !open && setCancelTarget(null)}>
         <DialogContent data-testid="dialog-cancel-vip">
           <DialogHeader>
-            <DialogTitle>Cancel VIP subscription</DialogTitle>
+            <DialogTitle>Cancel Rescue Pack subscription</DialogTitle>
             <DialogDescription>
               {cancelTarget ? (
                 <>
@@ -951,20 +951,20 @@ export default function VipMembersPage() {
       <Dialog open={!!assignTierTarget} onOpenChange={(open) => { if (!open) { setAssignTierTarget(null); setAssignTierId(""); } }}>
         <DialogContent data-testid="dialog-assign-tier">
           <DialogHeader>
-            <DialogTitle>Assign VIP tier</DialogTitle>
+            <DialogTitle>Assign Rescue Pack tier</DialogTitle>
             <DialogDescription>
               {assignTierTarget ? (
                 <>
-                  Tag <strong>{assignTierTarget.donorName}</strong>'s {fmtMoney(assignTierTarget.amount)}/mo gift with a VIP tier so they appear in the proper group and on the Wall of Heroes (if they opted in).
+                  Tag <strong>{assignTierTarget.donorName}</strong>'s {fmtMoney(assignTierTarget.amount)}/mo gift with a Rescue Pack tier so they appear in the proper group and on the Wall of Heroes (if they opted in).
                 </>
               ) : null}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
-            <Label htmlFor="assign-tier-select">VIP tier</Label>
+            <Label htmlFor="assign-tier-select">Rescue Pack tier</Label>
             {adminTiers.length === 0 ? (
               <div className="text-sm text-muted-foreground">
-                You haven't created any VIP tiers yet.{" "}
+                You haven't created any Rescue Pack tiers yet.{" "}
                 <Link href="/dashboard/website-builder?tab=vip-tiers" className="underline" data-testid="link-create-tiers">
                   Create one first
                 </Link>

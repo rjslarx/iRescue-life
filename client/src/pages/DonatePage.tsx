@@ -349,7 +349,7 @@ export default function DonatePage() {
               <span className="text-lg" aria-hidden>★</span>
             </div>
             <div className="flex-1 min-w-0">
-              <div className="font-semibold text-sm">Become a VIP Monthly Donor</div>
+              <div className="font-semibold text-sm">Become a Rescue Pack Monthly Donor</div>
               <div className="text-xs text-muted-foreground">Sustaining gifts unlock long-term impact. See our giving tiers →</div>
             </div>
           </div>

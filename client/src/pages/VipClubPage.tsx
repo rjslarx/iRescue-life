@@ -340,8 +340,8 @@ export default function VipClubPage() {
   const heroes = heroesData?.heroes || [];
 
   useSEO({
-    title: `VIP Donor Club | ${rescueName}`,
-    description: `Join ${rescueName}'s VIP Monthly Donor Club. Sustaining monthly gifts power our mission to rescue, rehabilitate, and rehome animals in need.`,
+    title: `Rescue Pack | ${rescueName}`,
+    description: `Join ${rescueName}'s Rescue Pack. Sustaining monthly gifts power our mission to rescue, rehabilitate, and rehome animals in need.`,
     siteName: rescueName,
   });
 
@@ -424,7 +424,7 @@ export default function VipClubPage() {
     try {
       await apiRequest('POST', '/api/vip-portal/request-link', { email: historyEmail.trim() });
       setLinkRequestSent(true);
-      toast({ title: "Check your email", description: "If a VIP donor account exists for this email, a secure link is on its way." });
+      toast({ title: "Check your email", description: "If a Rescue Pack donor account exists for this email, a secure link is on its way." });
     } catch (err: any) {
       toast({ title: "Request failed", description: err?.message, variant: "destructive" });
     } finally {
@@ -724,7 +724,7 @@ export default function VipClubPage() {
         <div className="container max-w-4xl mx-auto py-12 sm:py-16 px-4 sm:px-6 text-center">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-semibold mb-4">
             <Sparkles className="h-3.5 w-3.5" />
-            VIP MONTHLY DONOR CLUB
+            RESCUE PACK
           </div>
           <h1 className="font-display text-3xl sm:text-5xl font-bold mb-4" data-testid="text-vip-hero-title">
             Be the steady heartbeat of {rescueName}
@@ -744,7 +744,7 @@ export default function VipClubPage() {
         ) : tiers.length === 0 ? (
           <Card className="p-10 text-center">
             <Sparkles className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
-            <h3 className="font-semibold mb-1">VIP Club is being prepared</h3>
+            <h3 className="font-semibold mb-1">Rescue Pack is being prepared</h3>
             <p className="text-sm text-muted-foreground">
               Our monthly giving tiers will be available soon. In the meantime, you can support us with a one-time gift.
             </p>
@@ -842,7 +842,7 @@ export default function VipClubPage() {
               My Giving History
             </h2>
             <p className="text-sm text-muted-foreground max-w-xl mx-auto">
-              Already a VIP donor? Re-download past tax receipts or your year-end giving summary anytime.
+              Already a Rescue Pack donor? Re-download past tax receipts or your year-end giving summary anytime.
             </p>
           </div>
 
@@ -853,7 +853,7 @@ export default function VipClubPage() {
                   <CheckCircle2 className="h-10 w-10 mx-auto text-primary" />
                   <h3 className="font-semibold">Check your inbox</h3>
                   <p className="text-sm text-muted-foreground">
-                    If a VIP donor account exists for <span className="font-medium">{historyEmail}</span>, we just sent a secure link that lets you view and download your giving history.
+                    If a Rescue Pack donor account exists for <span className="font-medium">{historyEmail}</span>, we just sent a secure link that lets you view and download your giving history.
                   </p>
                 </div>
               ) : (
@@ -1650,7 +1650,7 @@ export default function VipClubPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <CheckCircle2 className="h-5 w-5 text-primary" />
-              Welcome to the VIP Club!
+              Welcome to the Rescue Pack!
             </DialogTitle>
             <DialogDescription>
               Thank you for becoming a sustaining monthly donor. A confirmation email and tax receipt will arrive shortly. Your generosity changes lives every single month.

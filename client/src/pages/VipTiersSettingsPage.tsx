@@ -197,7 +197,7 @@ export default function VipTiersSettingsPage() {
             Monthly Giving Tiers
           </h2>
           <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
-            Configure the recurring monthly giving levels shown on your VIP Donor Club page at <code className="bg-muted px-1 rounded">/vip-club</code>. Donors choose a tier and start a recurring monthly contribution via Stripe.
+            Configure the recurring monthly giving levels shown on your Rescue Pack page at <code className="bg-muted px-1 rounded">/vip-club</code>. Donors choose a tier and start a recurring monthly contribution via Stripe.
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
@@ -209,7 +209,7 @@ export default function VipTiersSettingsPage() {
           )}
           <Button variant="outline" onClick={() => setWizardOpen(true)} data-testid="button-open-vip-wizard">
             <Wand2 className="h-4 w-4 mr-2" />
-            {tiers.length === 0 ? "Configure VIP Club" : "Customize VIP Club"}
+            {tiers.length === 0 ? "Configure Rescue Pack" : "Customize Rescue Pack"}
           </Button>
           <Button onClick={openCreate} data-testid="button-create-tier">
             <Plus className="h-4 w-4 mr-2" />
@@ -249,7 +249,7 @@ export default function VipTiersSettingsPage() {
             <h3 className="font-semibold">Social share preview</h3>
             <p className="text-sm text-muted-foreground mt-0.5">
               This is the image Facebook, LinkedIn, and other platforms display when
-              someone shares your VIP Club page. The sponsor count updates automatically
+              someone shares your Rescue Pack page. The sponsor count updates automatically
               as monthly donors join.
             </p>
           </div>
@@ -266,7 +266,7 @@ export default function VipTiersSettingsPage() {
         <div className="rounded-md overflow-hidden border bg-muted/20">
           <img
             src={previewSrc}
-            alt="VIP Club social share preview"
+            alt="Rescue Pack social share preview"
             width={1200}
             height={630}
             className="w-full h-auto block"
@@ -295,7 +295,7 @@ export default function VipTiersSettingsPage() {
         <div className="grid gap-3">
           <p className="text-xs text-muted-foreground flex items-center gap-1">
             <GripVertical className="h-3 w-3" />
-            Use the up/down arrows to reorder tiers as they appear on your VIP Club page.
+            Use the up/down arrows to reorder tiers as they appear on your Rescue Pack page.
           </p>
           {tiers.map((tier, index) => {
             const Icon = getTierIcon(tier.iconName);

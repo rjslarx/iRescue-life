@@ -134,7 +134,7 @@ const CATEGORY_META: Record<
   urgent_emotional: {
     label: "Urgent / Emotional",
     icon: AlertTriangle,
-    description: "Driving monthly giving via the VIP Club",
+    description: "Driving monthly giving via the Rescue Pack",
   },
   overwhelmed_shelter: {
     label: "Overwhelmed Shelter",
@@ -503,7 +503,7 @@ export default function PostOptimizerPage() {
                     <div className="text-sm text-muted-foreground space-y-2">
                       <p>We'll classify the emotional tone of your post into one of five categories and pick the matching link:</p>
                       <ul className="list-disc pl-5 space-y-1">
-                        <li><span className="font-medium text-foreground">Urgent / Emotional</span> &rarr; VIP Club (monthly giving)</li>
+                        <li><span className="font-medium text-foreground">Urgent / Emotional</span> &rarr; Rescue Pack (monthly giving)</li>
                         <li><span className="font-medium text-foreground">Overwhelmed Shelter</span> &rarr; Foster application</li>
                         <li><span className="font-medium text-foreground">Happy / Adoption</span> &rarr; Adoption application</li>
                         <li><span className="font-medium text-foreground">Volunteer Recruitment</span> &rarr; Volunteer sign-up</li>

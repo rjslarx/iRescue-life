@@ -53,8 +53,8 @@ export default function VipGamePilotPage() {
           <header className="flex flex-wrap items-center gap-4 border-b p-4">
             <SidebarTrigger />
             <div className="flex-1">
-              <h1 className="text-2xl font-semibold" data-testid="heading-vip-game-pilot">VIP game pilot</h1>
-              <p className="text-sm text-muted-foreground">Private access. A small thank-you for existing VIP giving.</p>
+              <h1 className="text-2xl font-semibold" data-testid="heading-vip-game-pilot">Rescue Pack game pilot</h1>
+              <p className="text-sm text-muted-foreground">Private access. A small thank-you for existing Rescue Pack giving.</p>
             </div>
             <div className="flex flex-wrap gap-2">
               {VIP_GAMES.map((game) => (
@@ -75,7 +75,7 @@ export default function VipGamePilotPage() {
                     <Badge variant="secondary">Invitation-only test</Badge>
                     <h2 className="text-xl font-semibold">Private games, kept small on purpose</h2>
                     <p className="max-w-3xl text-sm text-muted-foreground">{VIP_GAMES.map((game) => `${game.name}: ${game.description}`).join(" ")}</p>
-                    <p className="max-w-3xl text-sm text-muted-foreground">You control which rescues participate and which donors are invited. At enabled rescues, staff and volunteers can play from their dashboard without a VIP membership or invitation. Donors still need an active VIP membership and an invitation. There is no public arcade or public game menu.</p>
+                    <p className="max-w-3xl text-sm text-muted-foreground">You control which rescues participate and which donors are invited. At enabled rescues, staff and volunteers can play from their dashboard without a Rescue Pack membership or invitation. Donors still need an active Rescue Pack membership and an invitation. There is no public arcade or public game menu.</p>
                     <p className="text-xs text-muted-foreground">Owner previews work even when a rescue is disabled and never record play starts. Photo puzzles use the selected rescue’s animal photos; choose a rescue to preview them. Pasture Run can be previewed without a rescue.</p>
                   </div>
                 </CardContent>
@@ -121,14 +121,14 @@ export default function VipGamePilotPage() {
                         <CardContent className="flex items-center justify-between gap-5 p-5 sm:p-6">
                           <div className="space-y-1">
                             <h2 className="font-semibold">{details.data.enabled ? "Pilot enabled" : "Pilot paused"}</h2>
-                            <p className="max-w-2xl text-sm text-muted-foreground">Turning this off blocks team and invited VIP play without removing invitations. Open games stop at their next access check, within about a minute. Team play is not included in donor activity.</p>
+                            <p className="max-w-2xl text-sm text-muted-foreground">Turning this off blocks team and invited Rescue Pack play without removing invitations. Open games stop at their next access check, within about a minute. Team play is not included in donor activity.</p>
                             {busy && update.variables?.action === "toggle" && <p className="text-xs text-muted-foreground" role="status">Saving access setting…</p>}
                           </div>
-                          <Switch aria-label={`Enable games for the team and invited VIPs at ${selectedTenant?.name || "this rescue"}`} checked={details.data.enabled} disabled={busy || details.isFetching} onCheckedChange={(enabled) => update.mutate({ tenantId: selectedId, action: "toggle", enabled }, feedback)} data-testid="switch-pilot-enabled" />
+                          <Switch aria-label={`Enable games for the team and invited Rescue Pack members at ${selectedTenant?.name || "this rescue"}`} checked={details.data.enabled} disabled={busy || details.isFetching} onCheckedChange={(enabled) => update.mutate({ tenantId: selectedId, action: "toggle", enabled }, feedback)} data-testid="switch-pilot-enabled" />
                         </CardContent>
                       </Card>
                       <Card>
-                        <CardHeader><CardTitle className="text-lg">Invite a VIP supporter</CardTitle><CardDescription>Use the email on their donor account. Invitations grant access to the private games as a thank-you for existing support; active VIP membership is still required to play.</CardDescription></CardHeader>
+                        <CardHeader><CardTitle className="text-lg">Invite a Rescue Pack supporter</CardTitle><CardDescription>Use the email on their donor account. Invitations grant access to the private games as a thank-you for existing support; active Rescue Pack membership is still required to play.</CardDescription></CardHeader>
                         <CardContent>
                           <form className="flex flex-col gap-3 sm:flex-row sm:items-end" onSubmit={(event) => {
                             event.preventDefault();
@@ -139,7 +139,7 @@ export default function VipGamePilotPage() {
                             <div className="flex-1 space-y-2"><Label htmlFor="pilot-invite-email">Donor email</Label><Input id="pilot-invite-email" type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="supporter@example.org" disabled={busy} data-testid="input-pilot-invitation-email" /></div>
                             <Button type="submit" disabled={busy || !email.trim()}><Mail className="mr-2 h-4 w-4" />{busy && update.variables?.action === "invite" ? "Sending invitation…" : "Grant access & send invitation"}</Button>
                           </form>
-                          {!details.data.enabled && <p className="mt-3 text-xs text-muted-foreground">The pilot is paused. Staff, volunteers, and invited VIPs cannot play until you enable it.</p>}
+                          {!details.data.enabled && <p className="mt-3 text-xs text-muted-foreground">The pilot is paused. Staff, volunteers, and invited Rescue Pack members cannot play until you enable it.</p>}
                           {update.isError && <p className="mt-3 text-sm text-destructive" role="alert">{update.error.message}</p>}
                         </CardContent>
                       </Card>
@@ -147,10 +147,10 @@ export default function VipGamePilotPage() {
                         <CardHeader><CardTitle className="text-lg">Private invitations <span className="text-muted-foreground">({details.data.invitations.length})</span></CardTitle><CardDescription>Revoke an invitation to end that donor’s pilot access.</CardDescription></CardHeader>
                         <CardContent>
                           {!details.data.invitations.length ? (
-                            <div className="rounded-md border border-dashed bg-muted/20 p-7 text-center"><Mail className="mx-auto mb-3 h-7 w-7 text-muted-foreground" /><p className="font-medium">A small pilot starts with an invitation</p><p className="mt-1 text-sm text-muted-foreground">No donors have been invited for this rescue yet. Add an existing VIP supporter above.</p></div>
+                            <div className="rounded-md border border-dashed bg-muted/20 p-7 text-center"><Mail className="mx-auto mb-3 h-7 w-7 text-muted-foreground" /><p className="font-medium">A small pilot starts with an invitation</p><p className="mt-1 text-sm text-muted-foreground">No donors have been invited for this rescue yet. Add an existing Rescue Pack supporter above.</p></div>
                           ) : <ul className="divide-y">{details.data.invitations.map((invitation) => (
                             <li key={invitation.donorId} className="flex flex-col justify-between gap-3 py-4 first:pt-0 sm:flex-row sm:items-center">
-                              <div className="min-w-0 space-y-1"><p className="break-words font-medium">{invitation.name || "VIP supporter"}</p><p className="break-all text-sm text-muted-foreground">{invitation.email}</p><Badge variant={invitation.eligible ? "default" : "secondary"}>{invitation.eligible ? "Eligible to play" : "Not currently eligible"}</Badge></div>
+                              <div className="min-w-0 space-y-1"><p className="break-words font-medium">{invitation.name || "Rescue Pack supporter"}</p><p className="break-all text-sm text-muted-foreground">{invitation.email}</p><Badge variant={invitation.eligible ? "default" : "secondary"}>{invitation.eligible ? "Eligible to play" : "Not currently eligible"}</Badge></div>
                               <Button variant="outline" size="sm" className="self-start sm:self-auto" disabled={busy} onClick={() => setRevoking(invitation)} aria-label={`Revoke invitation for ${invitation.name || invitation.email}`}><Trash2 className="mr-2 h-4 w-4" />Revoke</Button>
                             </li>
                           ))}</ul>}
@@ -166,7 +166,7 @@ export default function VipGamePilotPage() {
       </div>
       <Dialog open={!!revoking} onOpenChange={(open) => { if (!open && !busy) setRevoking(null); }}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Revoke private access?</DialogTitle><DialogDescription>{revoking?.email} will no longer be invited to this pilot. This does not change their VIP membership or giving.</DialogDescription></DialogHeader>
+          <DialogHeader><DialogTitle>Revoke private access?</DialogTitle><DialogDescription>{revoking?.email} will no longer be invited to this pilot. This does not change their Rescue Pack membership or giving.</DialogDescription></DialogHeader>
           {update.isError && <p className="text-sm text-destructive" role="alert">{update.error.message}</p>}
           <DialogFooter><Button variant="outline" disabled={busy} onClick={() => setRevoking(null)}>Keep invitation</Button><Button variant="destructive" disabled={busy || !revoking} onClick={() => {
             if (!revoking) return;

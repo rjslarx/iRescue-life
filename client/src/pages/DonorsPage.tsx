@@ -68,11 +68,11 @@ export default function DonorsPage() {
   }, [vipData]);
 
   const handleExportCSV = () => {
-    const headers = ['Email', 'Name', 'Phone', 'VIP Tier', 'Total Donated', 'Last Donation Date'];
+    const headers = ['Email', 'Name', 'Phone', 'Rescue Pack Tier', 'Total Donated', 'Last Donation Date'];
     const rows = donors.map(d => {
       const vipList = vipByDonor.get(d.id) || [];
       const vipText = vipList
-        .map(v => `${v.tierName || 'VIP'} ($${(v.amount / 100).toFixed(0)}/mo, ${v.status})`)
+        .map(v => `${v.tierName || 'Rescue Pack'} ($${(v.amount / 100).toFixed(0)}/mo, ${v.status})`)
         .join(' + ');
       return [
         d.email,
@@ -162,7 +162,7 @@ export default function DonorsPage() {
                           <TableHead>Name</TableHead>
                           <TableHead>Email</TableHead>
                           <TableHead>Phone</TableHead>
-                          <TableHead>VIP Tier</TableHead>
+                          <TableHead>Rescue Pack Tier</TableHead>
                           <TableHead className="text-right">Total Donated</TableHead>
                           <TableHead className="text-right">Last Donation</TableHead>
                         </TableRow>
@@ -192,7 +192,7 @@ export default function DonorsPage() {
                                           className="self-start"
                                         >
                                           <Sparkles className="h-3 w-3 mr-1" />
-                                          {vip.tierName || 'VIP'}
+                                          {vip.tierName || 'Rescue Pack'}
                                           <span className="ml-1 opacity-80">${(vip.amount / 100).toFixed(0)}/mo</span>
                                           {vip.status !== 'active' && <span className="ml-1 opacity-70">({vip.status})</span>}
                                         </Badge>

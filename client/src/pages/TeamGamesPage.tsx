@@ -48,7 +48,7 @@ function SignedInGames() {
             <CardContent className="flex flex-col items-start gap-3 p-6 sm:p-8">
               <PauseCircle className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
               <h2 className="text-xl font-semibold">Team games aren’t available right now</h2>
-              <p className="max-w-xl text-sm text-muted-foreground">Your rescue’s game pilot may be paused. Team play is available to staff and volunteers when the pilot is enabled—no VIP membership or invitation needed.</p>
+              <p className="max-w-xl text-sm text-muted-foreground">Your rescue’s game pilot may be paused. Team play is available to staff and volunteers when the pilot is enabled—no Rescue Pack membership or invitation needed.</p>
               <Button variant="outline" onClick={() => void access.refetch()} disabled={access.isFetching}>Check availability</Button>
             </CardContent>
           </Card>
@@ -60,7 +60,7 @@ function SignedInGames() {
                 <Badge variant="secondary">Team play</Badge>
               </div>
               <h2 id="team-games-welcome" className="text-2xl font-semibold tracking-tight sm:text-3xl">Take a well-earned breather.</h2>
-              <p className="mt-3 max-w-2xl text-muted-foreground">A quick run, a quiet puzzle, then back to the animals. These games are a thank-you for your rescue’s staff and volunteers. No VIP membership or invitation required.</p>
+              <p className="mt-3 max-w-2xl text-muted-foreground">A quick run, a quiet puzzle, then back to the animals. These games are a thank-you for your rescue’s staff and volunteers. No Rescue Pack membership or invitation required.</p>
             </section>
             <section className="grid grid-cols-1 gap-5 md:grid-cols-2" aria-label="Choose a game">
               {VIP_GAMES.map((game) => {

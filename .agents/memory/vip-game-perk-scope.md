@@ -4,6 +4,12 @@ description: Rescue games are existing VIP perks, with a private pilot before pu
 ---
 Rescue-themed games should be a bonus of the existing VIP club, not a separate paid game product. Start simple and private; do not roll out publicly without the owner's decision.
 
+The membership's public name is **Rescue Pack** for all tenants. Treat this as branding only; retain `/vip-club` and existing technical identifiers, membership, billing, and invitation rules.
+
+**Why:** The owner chose Rescue Pack and explicitly requested a wording-only change rather than complicating the existing setup.
+
+**How to apply:** Use Rescue Pack in new UI and communication copy. Do not migrate memberships, change access, or rename routes just to match the branding.
+
 **Why:** The owner confirmed this approach while evaluating whether games could generate revenue for rescue tenants, rather than committing to a public gaming offering.
 
 **How to apply:** The owner expanded the private pilot to four games total, supplying the game ZIPs individually. Avoid new subscriptions, paid continues, public rollout, and a full arcade in this scope.

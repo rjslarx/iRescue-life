@@ -74,12 +74,12 @@ Facebook's algorithm penalizes posts that contain outbound links OR third-party 
 
 PAYMENT INTERCEPTION OVERRIDE:
 - If the draft contains ANY payment handle (Venmo, CashApp, PayPal), category MUST be "urgent_emotional" regardless of other tone signals — these handles only appear on emergency asks. This override beats every other category, including volunteer_recruitment.
-- When this override applies, the first comment MUST use the Emergency Donate URL (NOT the VIP Club URL).
+- When this override applies, the first comment MUST use the Emergency Donate URL (NOT the Rescue Pack URL).
 - The first comment MUST mention that Apple Pay and Google Pay are accepted at checkout, so donors who were about to use Venmo know it's just as fast.
 - Open the first comment by acknowledging the urgency, briefly explain the on-site option is faster and gives them a tax receipt, then ask for the gift.
 
 Categories and rules (when no payment handles were detected):
-- "urgent_emotional" — the post describes a medical emergency, a critical/urgent need for funds, a heartbreaking situation, or a life-or-death case. The first comment should drive recurring monthly giving via the VIP Club URL. Open with empathy, then ask people to become monthly donors.
+- "urgent_emotional" — the post describes a medical emergency, a critical/urgent need for funds, a heartbreaking situation, or a life-or-death case. The first comment should drive recurring monthly giving via the Rescue Pack URL. Open with empathy, then ask people to become monthly donors.
 - "overwhelmed_shelter" — the post describes the rescue being full, overwhelmed, needing fosters, kennel space, or temporary homes. The first comment should drive foster sign-ups via the Foster URL. Open by acknowledging the strain, then ask people to apply to foster.
 - "happy_adoption" — the post is a happy update, a new adoptable pet, a success story, or a celebratory adoption announcement. The first comment should drive adoption applications via the Adoption URL. Open warmly, then invite people to apply to adopt or meet other available pets.
 - "volunteer_recruitment" — the post is asking people to donate their TIME, not money or a home. Examples: recruiting volunteers, asking for help at adoption events, dog walkers, kennel cleaners, transport drivers, fundraising volunteers, event helpers, calls to "join our volunteer team", or general "we need more hands" posts that aren't specifically about fostering or adopting. The first comment should drive volunteer sign-ups via the Volunteer URL. Open warmly by thanking the community for caring, then invite people to sign up to volunteer. Do NOT pick this category if the post is primarily about fostering (use overwhelmed_shelter) or about a money emergency (use urgent_emotional).
@@ -241,7 +241,7 @@ export async function optimizeFacebookPost(
   const keepLinkInPost = Boolean(options.keepLinkInPost);
 
   const userPrompt = `Tenant URLs to use when injecting links into the first comment:
-- VIP Club URL (for urgent_emotional, ONLY when no payment handles were in the draft): ${urls.vipClubUrl}
+- Rescue Pack URL (for urgent_emotional, ONLY when no payment handles were in the draft): ${urls.vipClubUrl}
 - Foster URL (for overwhelmed_shelter): ${urls.fosterUrl}
 - Adoption URL (for happy_adoption): ${urls.adoptionUrl}
 - Volunteer URL (for volunteer_recruitment): ${urls.volunteerUrl}
@@ -539,7 +539,7 @@ export function pickDestinationForResult(
   }
   switch (result.category) {
     case 'urgent_emotional':
-      return { ...resolved.vipClubUrl, label: 'VIP Club page', kind: 'vipClub' };
+      return { ...resolved.vipClubUrl, label: 'Rescue Pack page', kind: 'vipClub' };
     case 'overwhelmed_shelter':
       return { ...resolved.fosterUrl, label: 'Foster application', kind: 'foster' };
     case 'happy_adoption':

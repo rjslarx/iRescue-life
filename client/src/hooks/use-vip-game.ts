@@ -105,7 +105,7 @@ export function usePilotUpdate() {
       const path = `${pilotPath}/${encodeURIComponent(update.tenantId)}`;
       if (update.action === "toggle") {
         await pilotRequest(path, "PUT", { enabled: update.enabled });
-        return { message: update.enabled ? "Pilot enabled. Rescue staff, volunteers, and invited VIPs can play." : "Pilot disabled. Team and invited VIP access is paused." };
+        return { message: update.enabled ? "Pilot enabled. Rescue staff, volunteers, and invited Rescue Pack members can play." : "Pilot disabled. Team and invited Rescue Pack access is paused." };
       }
       if (update.action === "invite") {
         const result = await pilotRequest<{ sent: boolean; message: string }>(`${path}/invitations`, "POST", { email: update.email });

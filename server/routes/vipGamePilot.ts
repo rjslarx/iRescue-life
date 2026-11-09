@@ -37,7 +37,7 @@ async function setting(key: string) {
 async function save(key: string, value: unknown, userId: string) {
   await db.insert(platformSettings).values({
     key, value, category: 'features', isPublic: false, updatedBy: userId,
-    description: 'Private VIP game pilot',
+    description: 'Private Rescue Pack game pilot',
   }).onConflictDoUpdate({ target: platformSettings.key,
     set: { value, isPublic: false, updatedBy: userId, updatedAt: new Date() } });
 }
@@ -123,7 +123,7 @@ adminGameRouter.post('/:tenantId/invitations', wrap(async (req, res) => {
   const [donor] = await db.select().from(donors).where(and(eq(donors.tenantId, tenantId),
     sql`lower(${donors.email}) = ${email.toLowerCase()}`)).limit(1);
   if (!donor || !hasGameMembership(await donorSubs(tenantId, donor.id))) {
-    return res.status(400).json({ error: 'Use an existing VIP donor email with an active, current paid membership at this rescue.' });
+    return res.status(400).json({ error: 'Use an existing Rescue Pack donor email with an active, current paid membership at this rescue.' });
   }
   const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId));
   if (!tenant) return res.status(404).json({ error: 'Rescue not found' });
@@ -139,15 +139,15 @@ adminGameRouter.post('/:tenantId/invitations', wrap(async (req, res) => {
       const safeLink = link.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
       const result = await service.send({
         to: donor.email,
-        subject: 'Your private VIP game invitation',
-        html: `<p>You’re invited to try Pasture Run, Rescue Shuffle 15, Rescue Triple Match, and Rescue Merge, private VIP club games included with your existing membership.</p><p><a href="${safeLink}">Open your VIP club and play</a></p><p>This secure link expires in 24 hours. You can request a new access link from your rescue’s VIP club page. No additional payment is needed.</p>`,
+        subject: 'Your private Rescue Pack game invitation',
+        html: `<p>You’re invited to try Pasture Run, Rescue Shuffle 15, Rescue Triple Match, and Rescue Merge, private Rescue Pack games included with your existing membership.</p><p><a href="${safeLink}">Open your Rescue Pack and play</a></p><p>This secure link expires in 24 hours. You can request a new access link from your rescue’s Rescue Pack page. No additional payment is needed.</p>`,
       });
       sent = result.success;
     }
   } catch {
     // Preserve the invitation and explicitly report delivery failure for retry.
   }
-  res.json({ sent, message: sent ? 'Invitation sent.' : 'Access granted, but the invitation email could not be sent. Retry to resend, or ask the member to request their existing VIP access link.' });
+  res.json({ sent, message: sent ? 'Invitation sent.' : 'Access granted, but the invitation email could not be sent. Retry to resend, or ask the member to request their existing Rescue Pack access link.' });
 }));
 
 adminGameRouter.delete('/:tenantId/invitations/:donorId', wrap(async (req, res) => {

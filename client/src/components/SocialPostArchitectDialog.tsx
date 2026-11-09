@@ -907,9 +907,9 @@ export default function SocialPostArchitectDialog({
                         let path = "/dashboard/settings/branding";
                         let advice = "Set a custom donate URL in Branding settings so supporters land on the right page.";
                         if (isVip) {
-                          label = "VIP Club / Monthly Donor URL";
+                          label = "Rescue Pack / Monthly Donor URL";
                           path = "/dashboard/settings/branding";
-                          advice = "Configure a Monthly Donor / VIP Club page so Transformation Tuesday and Monthly Donor posts deep-link to it.";
+                          advice = "Configure a Monthly Donor / Rescue Pack page so Transformation Tuesday and Monthly Donor posts deep-link to it.";
                         } else if (isVolunteer) {
                           label = "Volunteer signup URL";
                           path = "/dashboard/settings/branding";

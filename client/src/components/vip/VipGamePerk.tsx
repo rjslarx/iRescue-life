@@ -25,9 +25,9 @@ export function VipGamePerk({ token }: { token: string }) {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
         <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-background text-primary"><Gamepad2 className="h-6 w-6" /></div>
         <div className="flex-1 space-y-2">
-          <Badge variant="secondary">Your private VIP bonus</Badge>
+          <Badge variant="secondary">Your private Rescue Pack bonus</Badge>
           <h3 className="font-display text-xl font-semibold">A little playtime, with our thanks</h3>
-          <p className="text-sm text-muted-foreground">Choose a private game as a thank-you for the VIP support you already give. No extra donation needed.</p>
+          <p className="text-sm text-muted-foreground">Choose a private game as a thank-you for the Rescue Pack support you already give. No extra donation needed.</p>
         </div>
       </div>
       <ul className="mt-5 divide-y divide-primary/10 border-t border-primary/10">

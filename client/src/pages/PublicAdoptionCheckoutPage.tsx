@@ -497,7 +497,7 @@ function VipUpsellSection({ animalName }: { animalName: string }) {
     } catch (e: any) {
       toast({
         title: "Couldn't start monthly giving",
-        description: e.message || "Please try again from the VIP Donor Club page.",
+        description: e.message || "Please try again from the Rescue Pack page.",
         variant: "destructive",
       });
       setSubmitting(false);
@@ -513,7 +513,7 @@ function VipUpsellSection({ animalName }: { animalName: string }) {
             <CardTitle className="text-xl">Want to keep helping animals like {animalName}?</CardTitle>
           </div>
           <CardDescription>
-            Become a monthly VIP donor and provide steady care for the next animal who needs us. Cancel anytime.
+            Become a monthly Rescue Pack donor and provide steady care for the next animal who needs us. Cancel anytime.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">

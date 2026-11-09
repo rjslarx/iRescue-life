@@ -39,7 +39,7 @@ const navigationItems = [
     icon: Flag,
   },
   {
-    title: "VIP Game Pilot",
+    title: "Rescue Pack Game Pilot",
     url: "/platform/vip-game-pilot",
     icon: Gamepad2,
   },

@@ -159,7 +159,7 @@ export function PrivateGamePlayer({ token, preview = false, team = false, gameId
           <DialogTitle className="private-game-player__title">{game.name} {preview ? "· Owner preview" : isTeam ? "· Team play" : ""}</DialogTitle>
           {ready && !error && <Button variant="ghost" onClick={() => iframe.current?.focus()}>Focus game</Button>}
         </div>
-        <DialogDescription className="sr-only">{preview ? "Private sandbox. Preview runs are not recorded." : isTeam ? "A little downtime for your rescue team. No VIP membership or invitation needed." : "A little playtime, with thanks for your VIP support."}</DialogDescription>
+        <DialogDescription className="sr-only">{preview ? "Private sandbox. Preview runs are not recorded." : isTeam ? "A little downtime for your rescue team. No Rescue Pack membership or invitation needed." : "A little playtime, with thanks for your Rescue Pack support."}</DialogDescription>
         <div className="private-game-player__stage">
           {!ready && !error && (
             <div className="absolute inset-0 space-y-4 p-6" role="status" aria-label={`Loading ${game.name}`}>
@@ -169,7 +169,7 @@ export function PrivateGamePlayer({ token, preview = false, team = false, gameId
           )}
           {html && !error && (
             <iframe ref={iframe} srcDoc={html} sandbox="allow-scripts" referrerPolicy="no-referrer"
-              title={`${game.name} ${preview ? "private owner preview" : isTeam ? "team game" : "VIP game"}`}
+              title={`${game.name} ${preview ? "private owner preview" : isTeam ? "team game" : "Rescue Pack game"}`}
               className={`h-full w-full border-0 ${ready ? "" : "invisible"}`}
               tabIndex={ready ? 0 : -1}
                onError={() => { setHtml(null); setError(`${game.name} could not be loaded. Please try again.`); }}

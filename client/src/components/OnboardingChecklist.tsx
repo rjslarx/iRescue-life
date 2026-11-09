@@ -73,7 +73,7 @@ export function OnboardingChecklist({ tenant, animalCount = 0, hasPlatformEmailK
     },
     {
       id: "vip-tiers",
-      title: "Customize Your VIP Donor Club",
+      title: "Customize Your Rescue Pack",
       description: "Rename the seeded monthly giving tiers and set impact statements that fit your rescue",
       completed: vipCustomized,
       icon: <Sparkles className="h-4 w-4" />,

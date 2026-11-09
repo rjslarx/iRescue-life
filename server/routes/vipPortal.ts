@@ -111,7 +111,7 @@ router.post('/request-link', async (req: Request, res: Response) => {
     const normalizedEmail = email.trim().toLowerCase();
 
     // Always respond success to avoid leaking which emails exist
-    res.json({ message: 'If a VIP donor account exists for this email, a secure link has been sent.' });
+    res.json({ message: 'If a Rescue Pack donor account exists for this email, a secure link has been sent.' });
 
     const [donor] = await db
       .select()
@@ -160,7 +160,7 @@ router.post('/request-link', async (req: Request, res: Response) => {
       subject: `Your Giving History - ${tenant.name}`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #2563eb;">Your VIP Giving History</h2>
+          <h2 style="color: #2563eb;">Your Rescue Pack Giving History</h2>
           <p>Hi ${donor.name},</p>
           <p>Click the button below to view and download your past donation receipts and your annual giving summary.</p>
           <div style="text-align: center; margin: 30px 0;">

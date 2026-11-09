@@ -83,7 +83,7 @@ export async function sendVipWelcomeEmail(params: VipWelcomeEmailParams): Promis
 
   const safeDonor = escapeHtml(donorName || 'Friend');
   const safeTenant = escapeHtml(tenant.name);
-  const safeTier = escapeHtml(params.tierName || 'VIP Donor');
+  const safeTier = escapeHtml(params.tierName || 'Rescue Pack Donor');
   const amountFormatted = formatCurrencyCents(params.monthlyAmountCents, params.currency);
   const ein = getTenantEin(tenant);
   const safeEin = escapeHtml(ein);
@@ -108,7 +108,7 @@ export async function sendVipWelcomeEmail(params: VipWelcomeEmailParams): Promis
 
   const html = `
 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #111827;">
-  <h2 style="color: #2563eb; margin-bottom: 8px;">Welcome to the VIP Monthly Donor Club, ${safeDonor}!</h2>
+  <h2 style="color: #2563eb; margin-bottom: 8px;">Welcome to the Rescue Pack, ${safeDonor}!</h2>
   <p style="margin-top: 0;">Thank you for becoming a <strong>${safeTier}</strong> at ${safeTenant}. Your generosity means the world to the animals in our care.</p>
 
   <div style="background: #f3f4f6; padding: 16px; border-radius: 8px; margin: 20px 0;">
@@ -119,7 +119,7 @@ export async function sendVipWelcomeEmail(params: VipWelcomeEmailParams): Promis
 
   ${impactBlock}
 
-  <p>You can update your payment method, change tiers, or cancel anytime from your VIP Club page:</p>
+  <p>You can update your payment method, change tiers, or cancel anytime from your Rescue Pack page:</p>
   <p style="text-align: center; margin: 20px 0;">
     <a href="${safeManageUrl}" style="display: inline-block; background: #2563eb; color: #ffffff; padding: 12px 22px; border-radius: 6px; text-decoration: none; font-weight: 600;">Manage your subscription</a>
   </p>
@@ -189,7 +189,7 @@ export async function sendVipBackfillWelcomeEmail(
 
   const safeDonor = escapeHtml(donorName || 'Friend');
   const safeTenant = escapeHtml(tenant.name);
-  const safeTier = escapeHtml(params.tierName || 'VIP Donor');
+  const safeTier = escapeHtml(params.tierName || 'Rescue Pack Donor');
   const amountFormatted = formatCurrencyCents(params.monthlyAmountCents, params.currency);
   const memberSinceFormatted = params.memberSince.toLocaleDateString('en-US', {
     year: 'numeric',
@@ -210,7 +210,7 @@ export async function sendVipBackfillWelcomeEmail(
   const html = `
 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #111827;">
   <h2 style="color: #2563eb; margin-bottom: 8px;">You're officially a ${safeTier}, ${safeDonor}.</h2>
-  <p style="margin-top: 0;">You've been quietly powering ${safeTenant} as a sustaining monthly donor since <strong>${escapeHtml(memberSinceFormatted)}</strong> &mdash; long before we launched our VIP Donor Club. We just rolled out donor tiers, and because of your existing monthly gift, we've grandfathered you in as one of our founding <strong>${safeTier}</strong> members. No action needed on your part; we just wanted to say thank you, properly.</p>
+  <p style="margin-top: 0;">You've been quietly powering ${safeTenant} as a sustaining monthly donor since <strong>${escapeHtml(memberSinceFormatted)}</strong> &mdash; long before we launched our Rescue Pack. We just rolled out donor tiers, and because of your existing monthly gift, we've grandfathered you in as one of our founding <strong>${safeTier}</strong> members. No action needed on your part; we just wanted to say thank you, properly.</p>
 
   <div style="background: #f3f4f6; padding: 16px; border-radius: 8px; margin: 20px 0;">
     <p style="margin: 4px 0;"><strong>Tier:</strong> ${safeTier}</p>
@@ -220,7 +220,7 @@ export async function sendVipBackfillWelcomeEmail(
 
   ${impactBlock}
 
-  <p>You can now see your tier badge, full giving history, and download annual tax summaries from your VIP Club page:</p>
+  <p>You can now see your tier badge, full giving history, and download annual tax summaries from your Rescue Pack page:</p>
   <p style="text-align: center; margin: 20px 0;">
     <a href="${safeGivingHistoryUrl}" style="display: inline-block; background: #2563eb; color: #ffffff; padding: 12px 22px; border-radius: 6px; text-decoration: none; font-weight: 600;">View your giving history</a>
   </p>
@@ -237,7 +237,7 @@ export async function sendVipBackfillWelcomeEmail(
 </div>
 `.trim();
 
-  const subject = `You've been a sustaining donor since ${memberSinceFormatted} — welcome to the VIP Club, ${safeDonor}`;
+  const subject = `You've been a sustaining donor since ${memberSinceFormatted} — welcome to the Rescue Pack, ${safeDonor}`;
   try {
     const result = await emailService.send({ to: donorEmail, subject, html });
     if (result.success) {
@@ -286,7 +286,7 @@ export async function sendVipRecognitionNameRequestEmail(
 
   const safeDonor = escapeHtml(donorName || 'Friend');
   const safeTenant = escapeHtml(tenant.name);
-  const safeTier = escapeHtml(params.tierName || 'VIP Donor');
+  const safeTier = escapeHtml(params.tierName || 'Rescue Pack Donor');
   const safeFallback = escapeHtml(params.fallbackWallName || 'Anonymous');
   const baseUrl = buildBaseUrl(tenant, params.fallbackOrigin);
   const givingHistoryUrl = `${baseUrl}/vip-club#giving-history`;
@@ -305,7 +305,7 @@ export async function sendVipRecognitionNameRequestEmail(
     <a href="${safeGivingHistoryUrl}" style="display: inline-block; background: #2563eb; color: #ffffff; padding: 12px 22px; border-radius: 6px; text-decoration: none; font-weight: 600;">Set my recognition name</a>
   </p>
 
-  <p style="font-size: 13px; color: #6b7280; margin-top: 24px;">No pressure &mdash; this is optional. If you don't update anything, we'll keep showing <strong>${safeFallback}</strong> (only if you've opted in to the Wall). You can change it anytime from your VIP Club page.</p>
+  <p style="font-size: 13px; color: #6b7280; margin-top: 24px;">No pressure &mdash; this is optional. If you don't update anything, we'll keep showing <strong>${safeFallback}</strong> (only if you've opted in to the Wall). You can change it anytime from your Rescue Pack page.</p>
 </div>
 `.trim();
 
@@ -344,7 +344,7 @@ export async function renderVipMonthlyReceiptEmail(params: VipMonthlyReceiptPara
   const { tenant, donorName } = params;
   const safeDonor = escapeHtml(donorName || 'Friend');
   const safeTenant = escapeHtml(tenant.name);
-  const safeTier = escapeHtml(params.tierName || 'VIP Donor');
+  const safeTier = escapeHtml(params.tierName || 'Rescue Pack Donor');
   const amountFormatted = formatCurrencyCents(params.amountCents, params.currency);
   const ein = getTenantEin(tenant);
   const safeEin = escapeHtml(ein);
@@ -389,7 +389,7 @@ export async function renderVipMonthlyReceiptEmail(params: VipMonthlyReceiptPara
     No goods or services were provided in exchange for this contribution. Please retain this email for your tax records.
   </p>
 
-  <p style="margin-top: 20px;">You can manage or update your VIP subscription at any time:</p>
+  <p style="margin-top: 20px;">You can manage or update your Rescue Pack subscription at any time:</p>
   <p style="text-align: center; margin: 16px 0;">
     <a href="${safeManageUrl}" style="display: inline-block; background: #2563eb; color: #ffffff; padding: 12px 22px; border-radius: 6px; text-decoration: none; font-weight: 600;">Manage subscription</a>
   </p>
@@ -461,7 +461,7 @@ export async function sendImpactLoopPreviewEmail(
     donor: null,
     donorEmail: recipientEmail,
     donorName: 'Sample Donor',
-    tierName: 'VIP Donor',
+    tierName: 'Rescue Pack Donor',
     amountCents: 2500,
     currency: 'usd',
     paidAt: new Date(),
@@ -524,7 +524,7 @@ export async function sendVipPaymentFailedEmail(params: VipPaymentFailedEmailPar
 
   const safeDonor = escapeHtml(donorName || 'Friend');
   const safeTenant = escapeHtml(tenant.name);
-  const safeTier = escapeHtml(params.tierName || 'VIP Donor');
+  const safeTier = escapeHtml(params.tierName || 'Rescue Pack Donor');
   const amountFormatted = formatCurrencyCents(params.amountCents, params.currency);
   const safeManageUrl = escapeHtml(params.manageUrl);
   const safeInvoiceUrl = params.hostedInvoiceUrl ? escapeHtml(params.hostedInvoiceUrl) : null;
@@ -537,7 +537,7 @@ export async function sendVipPaymentFailedEmail(params: VipPaymentFailedEmailPar
 
   let retryNote: string;
   if (isFinal) {
-    retryNote = `<p style="margin: 8px 0 0 0; font-size: 14px; color: #7f1d1d;"><strong>This was our last automatic retry.</strong> If we don't have a working card on file soon, your monthly subscription will be canceled and you'll drop off our VIP roster. Please update your payment method today to keep your support flowing.</p>`;
+    retryNote = `<p style="margin: 8px 0 0 0; font-size: 14px; color: #7f1d1d;"><strong>This was our last automatic retry.</strong> If we don't have a working card on file soon, your monthly subscription will be canceled and you'll drop off our Rescue Pack roster. Please update your payment method today to keep your support flowing.</p>`;
   } else if (params.nextRetryAt) {
     retryNote = `<p style="margin: 8px 0 0 0; font-size: 14px; color: #92400e;">We'll automatically try again on <strong>${escapeHtml(params.nextRetryAt.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }))}</strong>. To avoid any interruption to your monthly support, please update your card now.</p>`;
   } else {

@@ -314,7 +314,7 @@ export default function WallOfHeroesPage() {
             <Link href="/vip-club">
               <Button variant="ghost" size="sm" className="mb-4 -ml-2" data-testid="link-back-vip-club">
                 <ArrowLeft className="h-4 w-4" />
-                Back to VIP Club
+                Back to Rescue Pack
               </Button>
             </Link>
             <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
@@ -475,11 +475,11 @@ export default function WallOfHeroesPage() {
           <div className="container max-w-3xl mx-auto px-4 sm:px-6 py-12 text-center">
             <h2 className="font-display text-2xl sm:text-3xl font-bold mb-3">Want to see your name here?</h2>
             <p className="text-muted-foreground mb-6">
-              Join our VIP Club and become a sustaining monthly donor. Every level of support saves lives — and earns you a permanent spot on the Wall.
+              Join our Rescue Pack and become a sustaining monthly donor. Every level of support saves lives — and earns you a permanent spot on the Wall.
             </p>
             <Link href="/vip-club">
               <Button size="lg" data-testid="button-join-vip-cta">
-                Join the VIP Club
+                Join the Rescue Pack
               </Button>
             </Link>
           </div>

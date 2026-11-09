@@ -53,7 +53,7 @@ export default function WebsiteBuilderPage() {
                   <TabsTrigger value="pages" data-testid="tab-pages">Custom Pages</TabsTrigger>
                   <TabsTrigger value="give" data-testid="tab-give">Give Page</TabsTrigger>
                   <TabsTrigger value="donate" data-testid="tab-donate">Donate Page</TabsTrigger>
-                  <TabsTrigger value="vip-tiers" data-testid="tab-vip-tiers">VIP Donor Tiers</TabsTrigger>
+                  <TabsTrigger value="vip-tiers" data-testid="tab-vip-tiers">Rescue Pack Donor Tiers</TabsTrigger>
                   <TabsTrigger value="adoption" data-testid="tab-adoption">Adoption Form</TabsTrigger>
                   <TabsTrigger value="volunteer" data-testid="tab-volunteer">Volunteer Form</TabsTrigger>
                   <TabsTrigger value="foster" data-testid="tab-foster">Foster Form</TabsTrigger>

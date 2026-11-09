@@ -6834,7 +6834,7 @@ export const NOTIFICATION_EVENT_LABELS: Record<NotificationEventKey, { label: st
   adopter_compliance_overdue: { label: "Adopter compliance item overdue", category: "Foster & Compliance" },
   donation_received: { label: "New donation received", category: "Financial" },
   donation_payment_failed: { label: "Donation payment failed (e.g. ACH bounced)", category: "Financial" },
-  vip_subscription_payment_churn: { label: "VIP monthly subscription canceled after card kept failing", category: "Financial" },
+  vip_subscription_payment_churn: { label: "Rescue Pack monthly subscription canceled after card kept failing", category: "Financial" },
   expense_recorded: { label: "New expense recorded", category: "Financial" },
   volunteer_shift_signup: { label: "New volunteer shift signup", category: "Operations" },
   volunteer_activated: { label: "Volunteer moved to active pool", category: "Operations" },

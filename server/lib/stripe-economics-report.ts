@@ -58,8 +58,8 @@ const SAFE_SURFACES: Record<string, string> = {
   reclaim_fee: 'Reclaim fee',
   voting_contest: 'Voting contest',
   subscription: 'Subscription',
-  vip: 'VIP membership',
-  vip_club: 'VIP membership',
+  vip: 'Rescue Pack membership',
+  vip_club: 'Rescue Pack membership',
   peer_campaign: 'Peer campaign',
   fundraiser_event: 'Fundraiser event',
 };
@@ -306,7 +306,7 @@ function safeSurface(metadata: Record<string, string> | null): string {
     metadata?.source === 'vip_club'
     || metadata?.vipTierId
     || metadata?.vipTierName
-  ) return 'VIP membership';
+  ) return 'Rescue Pack membership';
   if (
     metadata?.adoptionApplicationId
     || metadata?.adoptionCheckoutSessionId

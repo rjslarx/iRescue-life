@@ -8641,7 +8641,7 @@ Crawl-delay: 1
           // field today, so this is intentionally NOT marked as a fallback.
           // (If/when a per-tenant monthly-donor URL setting is added, the
           // resolver itself should surface isFallback for that case.)
-          destination = { ...resolved.vipClubUrl, label: 'VIP Club / monthly giving page', kind: 'vipClub' };
+          destination = { ...resolved.vipClubUrl, label: 'Rescue Pack / monthly giving page', kind: 'vipClub' };
           break;
         case 'happy_tail':
           destination = { ...resolved.adoptionUrl, label: 'Adoption application', kind: 'adoption' };
@@ -33937,7 +33937,7 @@ Submitted: ${new Date().toLocaleString()}
                     : null;
 
                   const safeTenantName = escapeHtml(tenant.name);
-                  const tierLabel = escapeHtml(dbSub.vipTierNameSnapshot || 'VIP Donor');
+                  const tierLabel = escapeHtml(dbSub.vipTierNameSnapshot || 'Rescue Pack Donor');
                   const donorName = churnedDonor?.name || 'Unknown donor';
                   const donorEmail = churnedDonor?.email || 'unknown@example.com';
                   const safeDonor = escapeHtml(`${donorName} <${donorEmail}>`);
@@ -33959,11 +33959,11 @@ Submitted: ${new Date().toLocaleString()}
                   await dispatchEventNotification({
                     tenantId: tenant.id,
                     eventKey: 'vip_subscription_payment_churn',
-                    subject: `[VIP churn] ${donorName}'s ${monthlyAmount}/mo subscription canceled — card kept failing`,
+                    subject: `[Rescue Pack churn] ${donorName}'s ${monthlyAmount}/mo subscription canceled — card kept failing`,
                     htmlBody: `
 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-  <h2 style="color: #b91c1c; margin-top: 0;">VIP subscription canceled after card kept failing</h2>
-  <p>Stripe exhausted its automatic retry schedule and canceled this VIP donor's monthly subscription to ${safeTenantName}. They received the standard donor recovery emails along the way, but a quick personal note from your team often saves these.</p>
+  <h2 style="color: #b91c1c; margin-top: 0;">Rescue Pack subscription canceled after card kept failing</h2>
+  <p>Stripe exhausted its automatic retry schedule and canceled this Rescue Pack donor's monthly subscription to ${safeTenantName}. They received the standard donor recovery emails along the way, but a quick personal note from your team often saves these.</p>
   <div style="background: #fef2f2; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #dc2626;">
     <p style="margin: 5px 0;"><strong>Donor:</strong> ${safeDonor}</p>
     <p style="margin: 5px 0;"><strong>Tier:</strong> ${tierLabel}</p>
@@ -33974,8 +33974,8 @@ Submitted: ${new Date().toLocaleString()}
   <p>The donor has already been emailed an "update your card" link. If they haven't acted, a personal outreach in the next day or two has the best chance of recovering this gift.</p>
 </div>
                     `.trim(),
-                    textBody: `VIP subscription canceled after card kept failing for ${tenant.name}. Donor: ${donorName} <${donorEmail}>. Tier: ${dbSub.vipTierNameSnapshot || 'VIP Donor'}. Monthly amount: ${monthlyAmount}. Stripe subscription: ${subscription.id}. Donor record: ${donorRecordUrl}.`,
-                    smsBody: `[${tenant.name}] VIP churn: ${donorName} (${monthlyAmount}/mo) canceled after card kept failing. ${donorRecordUrl}`,
+                    textBody: `Rescue Pack subscription canceled after card kept failing for ${tenant.name}. Donor: ${donorName} <${donorEmail}>. Tier: ${dbSub.vipTierNameSnapshot || 'Rescue Pack Donor'}. Monthly amount: ${monthlyAmount}. Stripe subscription: ${subscription.id}. Donor record: ${donorRecordUrl}.`,
+                    smsBody: `[${tenant.name}] Rescue Pack churn: ${donorName} (${monthlyAmount}/mo) canceled after card kept failing. ${donorRecordUrl}`,
                   });
                 }
               }

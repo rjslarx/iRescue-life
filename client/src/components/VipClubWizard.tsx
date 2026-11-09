@@ -192,7 +192,7 @@ export function VipClubWizard({ open, onOpenChange, existingTiers }: VipClubWiza
         tiers: payload,
         force: !isSeedState,
       });
-      toast({ title: "VIP Donor Club configured" });
+      toast({ title: "Rescue Pack configured" });
       queryClient.invalidateQueries({ queryKey: ['/api/monthly-tiers'] });
       queryClient.invalidateQueries({ queryKey: ['/api/monthly-tiers/public'] });
       onOpenChange(false);
@@ -209,7 +209,7 @@ export function VipClubWizard({ open, onOpenChange, existingTiers }: VipClubWiza
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />
-            Customize Your VIP Donor Club
+            Customize Your Rescue Pack
           </DialogTitle>
           <DialogDescription>
             Pick tier names, monthly amounts, and tangible impact statements that fit
@@ -334,7 +334,7 @@ export function VipClubWizard({ open, onOpenChange, existingTiers }: VipClubWiza
           </Button>
           <Button onClick={handleSave} disabled={busy} data-testid="button-wizard-save">
             {busy && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            Save VIP Club
+            Save Rescue Pack
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -191,7 +191,7 @@ function buildPlatformPageNoscript(pathname: string): string | undefined {
 <li><strong>Animal Records</strong> &mdash; Medical history, vaccinations, microchip data, photos, and documents in one place.</li>
 <li><strong>Foster Portal</strong> &mdash; Mobile-first portal for fosters to log medications, weight checks, and updates.</li>
 <li><strong>Volunteer Coordination</strong> &mdash; Shift scheduling, calendar sync, volunteer applications, and SMS notifications.</li>
-<li><strong>Donation &amp; Fundraising</strong> &mdash; Stripe-powered donations, P2P campaigns, event ticket sales, and VIP monthly giving clubs.</li>
+<li><strong>Donation &amp; Fundraising</strong> &mdash; Stripe-powered donations, P2P campaigns, event ticket sales, and Rescue Pack monthly giving.</li>
 <li><strong>Custom Website Builder</strong> &mdash; Public-facing pages with your branding for animals, events, and fundraising campaigns.</li>
 <li><strong>Medical Records &amp; CPOE</strong> &mdash; Smart medical ordering, preventative care automation, and complete audit trails.</li>
 <li><strong>TNR Management</strong> &mdash; Trap-Neuter-Return colony tracking with Google Maps integration.</li>
@@ -223,7 +223,7 @@ function buildPlatformPageNoscript(pathname: string): string | undefined {
 <li>Everything in Community, plus:</li>
 <li>Zero platform fees on adoptions and fees</li>
 <li>Custom domain support (yourrescue.org)</li>
-<li>VIP monthly donor club with tiered membership levels</li>
+<li>Rescue Pack monthly giving with tiered membership levels</li>
 <li>Priority support and advanced analytics</li>
 </ul>`);
   }
@@ -267,7 +267,7 @@ function buildPlatformPageNoscript(pathname: string): string | undefined {
 <p>iRescue.life connects with the tools your rescue already uses.</p>
 <ul>
 <li><strong>Google Workspace for Nonprofits</strong> &mdash; Free Gmail, Drive, and Calendar for eligible 501(c)(3) organizations. Gmail API for unlimited email; Calendar API for two-way volunteer shift sync.</li>
-<li><strong>Stripe</strong> &mdash; Secure donation processing, adoption fee collection, event ticket sales, and VIP monthly subscriptions.</li>
+<li><strong>Stripe</strong> &mdash; Secure donation processing, adoption fee collection, event ticket sales, and Rescue Pack monthly subscriptions.</li>
 <li><strong>Twilio</strong> &mdash; Optional SMS notifications for adopters, fosters, and volunteers.</li>
 <li><strong>Google Maps</strong> &mdash; Colony map view for TNR (Trap-Neuter-Return) programs.</li>
 <li><strong>Google Drive</strong> &mdash; Automated daily backup of all tenant documents and uploaded files.</li>
