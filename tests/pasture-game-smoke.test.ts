@@ -4,6 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import puppeteer from 'puppeteer';
 import { pastureGameDocument } from '../server/lib/pasture-game-document';
+import { withPrivateGamePresentation } from '../client/src/components/vip/private-game-presentation';
 
 // Isolated game smoke test, not a substitute for signed-in portal verification.
 test('Pasture Run boots and replays in an opaque sandbox on mobile', { timeout: 60000 }, async () => {
@@ -27,7 +28,7 @@ test('Pasture Run boots and replays in an opaque sandbox on mobile', { timeout: 
       (window as any).messages = [];
       window.addEventListener('message', event => (window as any).messages.push(event.data?.type));
       document.querySelector('iframe')!.srcdoc = html;
-    }, await pastureGameDocument());
+    }, withPrivateGamePresentation(await pastureGameDocument()));
     await page.waitForFunction(() => (window as any).messages.includes('pasture-ready'), { timeout: 30000 });
     const frame = page.frames().find(f => f.parentFrame());
     assert.ok(frame);
@@ -45,6 +46,18 @@ test('Pasture Run boots and replays in an opaque sandbox on mobile', { timeout: 
     await frame.click('#mute-toggle-btn');
     assert.match(await frame.$eval('#mute-toggle-btn', el => el.textContent || ''), /OFF/);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+    assert.equal(await frame.$eval('.arcade-marquee', el => getComputedStyle(el).display), 'none');
+    assert.equal(await frame.$eval('.arcade-cabinet', el => getComputedStyle(el).borderTopWidth), '0px');
+    for (const viewport of [{ width: 1024, height: 1366 }, { width: 1440, height: 900 }]) {
+      // Preserve device flags: changing isMobile reloads setContent and detaches
+      // the frame rather than exercising a normal responsive resize.
+      await page.setViewport({ ...viewport, isMobile: true, hasTouch: true });
+      await page.waitForFunction(() => document.documentElement.scrollWidth <= window.innerWidth);
+      assert.equal(await frame.evaluate(() => {
+        const bounds = document.querySelector('canvas')!.getBoundingClientRect();
+        return bounds.width > 0 && bounds.height > 0 && Math.abs(bounds.width / bounds.height - 540 / 960) < 0.01;
+      }), true);
+    }
     assert.deepEqual(errors, []);
   } finally {
     await browser.close();

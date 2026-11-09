@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { donorGameRequest, pilotPath, pilotRequest } from "@/hooks/use-vip-game";
+import { withPrivateGamePresentation } from "./private-game-presentation";
+import "./private-game-player.css";
 
 interface PrivateGamePlayerProps {
   token?: string;
@@ -45,7 +47,7 @@ export function PrivateGamePlayer({ token, preview = false, onClose }: PrivateGa
     launch.current.then((result) => {
       if (!active) return;
       if (!result.html) throw new Error("The game could not be loaded. Please try again.");
-      setHtml(result.html);
+      setHtml(withPrivateGamePresentation(result.html));
     }).catch((reason: Error) => {
       if (active) { setError(reason.message); setHtml(null); }
     });
@@ -106,14 +108,20 @@ export function PrivateGamePlayer({ token, preview = false, onClose }: PrivateGa
   return (
     <Dialog open onOpenChange={(open) => { if (!open) closeRef.current(); }}>
       <DialogContent
-        className="flex max-h-[calc(100dvh-1rem)] w-[calc(100%-1rem)] max-w-5xl flex-col gap-3 overflow-hidden p-3 sm:p-5"
+        className="private-game-player"
         onOpenAutoFocus={(event) => { event.preventDefault(); returnButton.current?.focus(); }}
       >
-        <DialogHeader className="pr-8 text-left">
-          <DialogTitle>Pasture Run {preview ? "· Owner preview" : ""}</DialogTitle>
-          <DialogDescription>{preview ? "Private sandbox. Preview runs are not recorded." : "A little playtime, with thanks for your VIP support."}</DialogDescription>
-        </DialogHeader>
-        <div className="relative min-h-0 flex-1 overflow-hidden rounded-md border bg-muted/30" style={{ height: "min(68dvh, 680px)", flexBasis: "min(68dvh, 680px)" }}>
+        <div className="private-game-player__toolbar">
+          <Button ref={returnButton} variant="ghost" onClick={() => closeRef.current()}
+            aria-label={preview ? "Return to pilot" : "Return to giving history"}
+            title={preview ? "Return to pilot" : "Return to giving history"}>
+            <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />Return
+          </Button>
+          <DialogTitle className="private-game-player__title">Pasture Run {preview ? "· Owner preview" : ""}</DialogTitle>
+          {ready && !error && <Button variant="ghost" onClick={() => iframe.current?.focus()}>Focus game</Button>}
+        </div>
+        <DialogDescription className="sr-only">{preview ? "Private sandbox. Preview runs are not recorded." : "A little playtime, with thanks for your VIP support."}</DialogDescription>
+        <div className="private-game-player__stage">
           {!ready && !error && (
             <div className="absolute inset-0 space-y-4 p-6" role="status" aria-label="Loading Pasture Run">
               <Skeleton className="h-8 w-2/3" /><Skeleton className="h-3/4 w-full" />
@@ -136,10 +144,6 @@ export function PrivateGamePlayer({ token, preview = false, onClose }: PrivateGa
               {!accessLost && <Button variant="outline" onClick={retry}>Try again</Button>}
             </div>
           )}
-        </div>
-        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
-          <Button ref={returnButton} variant="outline" onClick={() => closeRef.current()}><ArrowLeft className="mr-2 h-4 w-4" />{preview ? "Return to pilot" : "Return to giving history"}</Button>
-          {ready && !error && <Button variant="ghost" onClick={() => iframe.current?.focus()}>Focus game</Button>}
         </div>
       </DialogContent>
     </Dialog>
