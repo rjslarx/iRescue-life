@@ -334,11 +334,11 @@
         if (hasLoadedRaw) {
           const sourceImage = this.textures.get(rawKey).getSourceImage();
           if (sourceImage && sourceImage.width > 0 && sourceImage.height > 0) {
-            const scale = Math.max(diameter / sourceImage.width, diameter / sourceImage.height);
+            const scale = Math.max(diameter / sourceImage.width, diameter / sourceImage.height) * 1.4;
             const drawW = sourceImage.width * scale;
             const drawH = sourceImage.height * scale;
-            const drawX = (diameter - drawW) / 2;
-            const drawY = (diameter - drawH) / 2;
+            const drawX = Math.max(diameter - drawW, Math.min(0, center - drawW * 0.5));
+            const drawY = Math.max(diameter - drawH, Math.min(0, center - drawH * 0.38));
             ctx.drawImage(sourceImage, drawX, drawY, drawW, drawH);
           } else {
             this.drawProceduralAnimalFallback(ctx, tier, diameter);

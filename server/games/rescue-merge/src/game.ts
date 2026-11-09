@@ -209,12 +209,13 @@ export class RescueMergeScene extends Phaser.Scene {
       if (hasLoadedRaw) {
         const sourceImage = this.textures.get(rawKey).getSourceImage() as HTMLImageElement | HTMLCanvasElement;
         if (sourceImage && sourceImage.width > 0 && sourceImage.height > 0) {
-          // Center-crop ("object-fit: cover") inside the circle
-          const scale = Math.max(diameter / sourceImage.width, diameter / sourceImage.height);
+          // Heuristic only, not face detection: zoom cover 1.4x and favor the
+          // upper-center of the photo where heads often sit. Clamp to avoid empty edges.
+          const scale = Math.max(diameter / sourceImage.width, diameter / sourceImage.height) * 1.4;
           const drawW = sourceImage.width * scale;
           const drawH = sourceImage.height * scale;
-          const drawX = (diameter - drawW) / 2;
-          const drawY = (diameter - drawH) / 2;
+          const drawX = Math.max(diameter - drawW, Math.min(0, center - drawW * 0.5));
+          const drawY = Math.max(diameter - drawH, Math.min(0, center - drawH * 0.38));
           ctx.drawImage(sourceImage, drawX, drawY, drawW, drawH);
         } else {
           this.drawProceduralAnimalFallback(ctx, tier, diameter);
