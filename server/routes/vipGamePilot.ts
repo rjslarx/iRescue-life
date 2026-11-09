@@ -11,6 +11,7 @@ import { hasGameMembership, canPlayVipGame } from '../lib/vip-game-policy';
 import { vipGameDocument } from '../services/vip-game-document';
 import { EmailService } from '../lib/email-service';
 import { createTeamGameRouter } from '../lib/team-game-router';
+import { rescuePackInvitation } from '../lib/rescue-pack-invitation';
 
 const prefix = 'vip_game_pilot:';
 const configKey = (tenantId: string) => `${prefix}${tenantId}:config`;
@@ -136,11 +137,9 @@ adminGameRouter.post('/:tenantId/invitations', wrap(async (req, res) => {
     const service = await EmailService.forTenant(tenantId);
     if (service) {
       const link = buildVipPortalUrl(tenant, signVipToken(donor.id, tenantId));
-      const safeLink = link.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
       const result = await service.send({
         to: donor.email,
-        subject: 'Your private Rescue Pack game invitation',
-        html: `<p>You’re invited to try Pasture Run, Rescue Shuffle 15, Rescue Triple Match, and Rescue Merge, private Rescue Pack games included with your existing membership.</p><p><a href="${safeLink}">Open your Rescue Pack and play</a></p><p>This secure link expires in 24 hours. You can request a new access link from your rescue’s Rescue Pack page. No additional payment is needed.</p>`,
+        ...rescuePackInvitation(tenant.name, link),
       });
       sent = result.success;
     }

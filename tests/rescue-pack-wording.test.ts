@@ -26,7 +26,7 @@ test('future member emails and private game invitations use Rescue Pack', () => 
   assert.match(emails, /\/vip-club/);
   assert.doesNotMatch(emails, /VIP (?:Monthly Donor Club|Donor Club|Club) page/);
   const games = source('server/routes/vipGamePilot.ts');
-  assert.match(games, /subject: 'Your private Rescue Pack game invitation'/);
+  assert.match(games, /rescuePackInvitation\(tenant.name, link\)/);
   assert.match(games, /active, current paid membership/);
   assert.match(games, /canPlayVipGame\(config\?\.enabled === true, invite\?\.invited === true, subs\)/);
 });
