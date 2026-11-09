@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import puppeteer from 'puppeteer';
 import { pastureGameDocument } from '../server/lib/pasture-game-document';
 
@@ -15,7 +16,13 @@ test('Pasture Run boots and replays in an opaque sandbox on mobile', { timeout: 
     await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
     const errors: string[] = [];
     page.on('pageerror', error => errors.push(String(error)));
-    await page.setContent('<meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0}iframe{border:0;width:100%;height:740px}</style><iframe sandbox="allow-scripts"></iframe>');
+    // Exercise the production parent's script policy: srcdoc inherits it, even
+    // when the document inside the sandbox has its own, more permissive CSP.
+    const securitySource = readFileSync('server/config/security.ts', 'utf8');
+    const scriptDirective = securitySource.match(/scriptSrc:\s*\[([^\]]+)\]/)?.[1];
+    assert.ok(scriptDirective);
+    const scriptSources = [...scriptDirective.matchAll(/"([^"]+)"/g)].map(match => match[1]).join(' ');
+    await page.setContent(`<meta http-equiv="Content-Security-Policy" content="script-src ${scriptSources}"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0}iframe{border:0;width:100%;height:740px}</style><iframe sandbox="allow-scripts"></iframe>`);
     await page.evaluate(html => {
       (window as any).messages = [];
       window.addEventListener('message', event => (window as any).messages.push(event.data?.type));

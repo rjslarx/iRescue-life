@@ -165,7 +165,9 @@ export const helmetConfig = helmet({
   contentSecurityPolicy: process.env.NODE_ENV === 'production' ? {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "https://js.stripe.com", "https://connect-js.stripe.com", "https://www.googletagmanager.com", "https://apis.google.com", "https://maps.googleapis.com", "https://maps.gstatic.com", "https://googleads.g.doubleclick.net", "https://www.google.com", "'unsafe-inline'", "'unsafe-eval'"],
+      // srcdoc game frames inherit this policy; their own CSP cannot relax it.
+      // Allow only the pinned, SRI-verified game engine, not the entire CDN.
+      scriptSrc: ["'self'", "https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js", "https://js.stripe.com", "https://connect-js.stripe.com", "https://www.googletagmanager.com", "https://apis.google.com", "https://maps.googleapis.com", "https://maps.gstatic.com", "https://googleads.g.doubleclick.net", "https://www.google.com", "'unsafe-inline'", "'unsafe-eval'"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       imgSrc: ["'self'", "data:", "https:", "blob:", "https://www.google.com", "https://googleads.g.doubleclick.net", "https://maps.googleapis.com", "https://maps.gstatic.com", "https://*.googleapis.com", "https://*.gstatic.com", "https://*.ggpht.com"],
       connectSrc: ["'self'", "https://api.resend.com", "https://*.stripe.com", "https://connect-js.stripe.com", "https://www.google-analytics.com", "https://analytics.google.com", "https://storage.googleapis.com", "https://www.googleapis.com", "https://maps.googleapis.com", "https://accounts.google.com", "https://www.google.com", "https://googleads.g.doubleclick.net", "https://*.googleapis.com", "https://*.gstatic.com"],
