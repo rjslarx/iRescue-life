@@ -300,9 +300,7 @@
       this.syncTilePositions();
     }
     computeLayoutMetrics() {
-      const scale = Math.min(1, Math.max(0.35, (this.logicalWidth - 24) / 380));
-      this.tileWidth = Math.round(_RescueTripleMatchGame.BASE_TILE_WIDTH * scale);
-      this.tileHeight = Math.round(_RescueTripleMatchGame.BASE_TILE_HEIGHT * scale);
+      const preferredScale = 1.1 * Math.min(1, (this.logicalWidth - 24) / 380);
       const padX = 10;
       const dockMarginBottom = 10;
       const dockWidth = this.logicalWidth - padX * 2;
@@ -311,7 +309,7 @@
       const maxSlotW = Math.floor(
         (dockWidth - innerPad * 2 - gap * (_RescueTripleMatchGame.MAX_DOCK_SLOTS - 1)) / _RescueTripleMatchGame.MAX_DOCK_SLOTS
       );
-      this.dockSlotW = Math.min(_RescueTripleMatchGame.BASE_TILE_WIDTH, maxSlotW);
+      this.dockSlotW = Math.min(_RescueTripleMatchGame.BASE_TILE_WIDTH * 1.1, maxSlotW);
       this.dockSlotH = Math.round(this.dockSlotW * (70 / 56));
       const dockHeight = this.dockSlotH + 26;
       const dockY = this.logicalHeight - dockHeight - dockMarginBottom;
@@ -330,7 +328,14 @@
       this.dockSlotsY = dockY + Math.floor((dockHeight - this.dockSlotH) / 2) + 4;
       const playfieldTop = 12;
       const playfieldBottom = dockY - 12;
-      const playfieldH = Math.max(220, playfieldBottom - playfieldTop);
+      const playfieldH = Math.max(1, playfieldBottom - playfieldTop);
+      const scale = Math.max(0, Math.min(
+        preferredScale,
+        (this.logicalWidth - 26) / (6.34 * _RescueTripleMatchGame.BASE_TILE_WIDTH),
+        (playfieldH - 2) / (3.7 * _RescueTripleMatchGame.BASE_TILE_HEIGHT)
+      ));
+      this.tileWidth = _RescueTripleMatchGame.BASE_TILE_WIDTH * scale;
+      this.tileHeight = _RescueTripleMatchGame.BASE_TILE_HEIGHT * scale;
       this.boardCenterX = Math.floor(this.logicalWidth / 2);
       this.boardCenterY = Math.floor(playfieldTop + playfieldH * 0.5);
     }

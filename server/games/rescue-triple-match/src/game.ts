@@ -212,10 +212,8 @@ export class RescueTripleMatchGame {
   }
 
   private computeLayoutMetrics(): void {
-    // Standard card ratio: width 56px, height 70px (scaled down gently only on very narrow screens)
-    const scale = Math.min(1, Math.max(0.35, (this.logicalWidth - 24) / 380));
-    this.tileWidth = Math.round(RescueTripleMatchGame.BASE_TILE_WIDTH * scale);
-    this.tileHeight = Math.round(RescueTripleMatchGame.BASE_TILE_HEIGHT * scale);
+    // Aim for 10% larger cards; final board sizing also respects both playfield bounds.
+    const preferredScale = 1.1 * Math.min(1, (this.logicalWidth - 24) / 380);
 
     // Bottom Dock: fixed tray with 7 visible empty card slots
     const padX = 10;
@@ -227,7 +225,7 @@ export class RescueTripleMatchGame {
       (dockWidth - innerPad * 2 - gap * (RescueTripleMatchGame.MAX_DOCK_SLOTS - 1)) /
         RescueTripleMatchGame.MAX_DOCK_SLOTS
     );
-    this.dockSlotW = Math.min(RescueTripleMatchGame.BASE_TILE_WIDTH, maxSlotW);
+    this.dockSlotW = Math.min(RescueTripleMatchGame.BASE_TILE_WIDTH * 1.1, maxSlotW);
     this.dockSlotH = Math.round(this.dockSlotW * (70 / 56));
 
     const dockHeight = this.dockSlotH + 26;
@@ -254,7 +252,18 @@ export class RescueTripleMatchGame {
     // Playfield bounds above the dock
     const playfieldTop = 12;
     const playfieldBottom = dockY - 12;
-    const playfieldH = Math.max(220, playfieldBottom - playfieldTop);
+    const playfieldH = Math.max(1, playfieldBottom - playfieldTop);
+
+    // Six columns reach +/-2.6, plus +/-0.07 jitter and half a card: 6.34 widths.
+    // Reserve 3.7 heights for the continue tiles at -1.35 (base rows reach +/-1.22).
+    // Leave one extra pixel per edge for rounded tile positions and board centers.
+    const scale = Math.max(0, Math.min(
+      preferredScale,
+      (this.logicalWidth - 26) / (6.34 * RescueTripleMatchGame.BASE_TILE_WIDTH),
+      (playfieldH - 2) / (3.7 * RescueTripleMatchGame.BASE_TILE_HEIGHT)
+    ));
+    this.tileWidth = RescueTripleMatchGame.BASE_TILE_WIDTH * scale;
+    this.tileHeight = RescueTripleMatchGame.BASE_TILE_HEIGHT * scale;
 
     this.boardCenterX = Math.floor(this.logicalWidth / 2);
     this.boardCenterY = Math.floor(playfieldTop + playfieldH * 0.5);
