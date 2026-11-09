@@ -427,7 +427,7 @@ class RescueShuffleGame {
     ctx.fillStyle = '#0f172a';
     ctx.fillRect(0, 0, size, size);
 
-    const gap = 6;
+    const gap = 2;
     const tileSize = (size - gap * (GRID_SIZE + 1)) / GRID_SIZE;
 
     for (let i = 0; i < TOTAL_TILES; i++) {
@@ -458,7 +458,7 @@ class RescueShuffleGame {
   }
 
   drawTile(ctx, x, y, tileSize, srcRow, srcCol, value) {
-    const radius = 10;
+    const radius = 3;
 
     ctx.save();
     this.roundRectPath(ctx, x, y, tileSize, tileSize, radius);
@@ -493,9 +493,9 @@ class RescueShuffleGame {
     }
 
     // Subtle inner border for crisp separation
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
-    ctx.lineWidth = 2;
-    this.roundRectPath(ctx, x + 1, y + 1, tileSize - 2, tileSize - 2, radius - 1);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.14)';
+    ctx.lineWidth = 1;
+    this.roundRectPath(ctx, x + 0.5, y + 0.5, tileSize - 1, tileSize - 1, radius - 0.5);
     ctx.stroke();
 
     // Optional number badge in top-left corner
