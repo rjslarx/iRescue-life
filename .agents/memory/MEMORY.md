@@ -46,3 +46,4 @@
 - [Medical date integrity](medical-date-integrity.md) — malformed dates must remain correctable; successful API reads do not prove medical-page rendering works.
 - [Expense campaign fee policy](expense-campaign-fee-policy.md) — donor fee coverage is optional; otherwise fees come from rescue proceeds, not the platform.
 - [Donation notification navigation](donation-widget-navigation.md) — scroll to the home page donation section, with tenant-aware Donate navigation as fallback.
+- [VIP game perk scope](vip-game-perk-scope.md) — existing VIP bonus only; start with a private pilot before deciding on public rollout.
