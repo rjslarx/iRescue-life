@@ -42,7 +42,13 @@ export function resolveAnimalTiers(): ShelterAnimalTier[] {
     if (!key || seen.has(key) || typeof pet.name !== 'string' || !pet.name.trim()) return false;
     seen.add(key);
     return true;
-  }).slice(0, 6);
+  });
+  // Shuffle the full rescue roster before selecting the six bubble identities.
+  for (let i = unique.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [unique[i], unique[j]] = [unique[j], unique[i]];
+  }
+  unique.splice(6);
   return DEFAULT_TIERS.map((tier, index) => {
     const pet = unique[index];
     if (!pet) return { ...tier };

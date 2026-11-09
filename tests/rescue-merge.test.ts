@@ -56,16 +56,39 @@ test('merge loads cross-origin bubble photos, drops, merges, resets and fits mob
     });
     await page.waitForFunction(() => (window as any).messages.includes('rescue-merge-start'));
     // Spawn overlapping equal bubbles: actual Matter collision must merge them.
-    await frame.evaluate(() => {
+    await frame.evaluate(async () => {
       const s = (window as any).rescueMergeGame.scene.scenes[0];
-      s.startNewRound();
+      // A larger roster must be sampled anew, rather than retaining the
+      // six tiers chosen at launch. Fixed randomness keeps this deterministic.
+      (window as any).INITIAL_PETS = Array.from({ length: 12 }, (_, i) => ({
+        id: `pet-${i}`, name: `Pet ${i}`, imageUrl: 'https://example.com/pet.svg',
+      }));
+      const originalRandom = Math.random;
+      Math.random = () => 0;
+      await s.startNewRound();
+      Math.random = originalRandom;
+      (window as any).firstRoster = s.tiers.map((t: any) => t.name);
       s.spawnPetBody(210, 500, 1, false);
       s.spawnPetBody(212, 500, 1, false);
     });
     await frame.waitForFunction(() => (window as any).rescueMergeGame.scene.scenes[0].score > 0);
     await frame.evaluate(() => (window as any).rescueMergeGame.scene.scenes[0].triggerGameOver());
     assert.equal(await frame.evaluate(() => (window as any).rescueMergeGame.scene.scenes[0].getState().isGameOver), true);
+    await frame.evaluate(() => {
+      (window as any).originalRandom = Math.random;
+      Math.random = () => 0.999;
+    });
     await frame.click('#restart-btn');
+    await frame.waitForFunction(() => (window as any).rescueMergeGame.scene.scenes[0].getState().playable);
+    const rosters = await frame.evaluate(() => {
+      Math.random = (window as any).originalRandom;
+      return {
+        before: (window as any).firstRoster,
+        after: (window as any).rescueMergeGame.scene.scenes[0].tiers.map((t: any) => t.name),
+      };
+    });
+    assert.notDeepEqual(rosters.after, rosters.before);
+    assert.equal(new Set(rosters.after).size, 6);
     assert.equal(await frame.evaluate(() => (window as any).rescueMergeGame.scene.scenes[0].score), 0);
     assert.equal(await frame.evaluate(() => (window as any).rescueMergeGame.scene.scenes[0].getState().isGameOver), false);
     await frame.click('#mute-btn');

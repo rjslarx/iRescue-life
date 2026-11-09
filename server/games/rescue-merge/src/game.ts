@@ -58,6 +58,7 @@ export class RescueMergeScene extends Phaser.Scene {
   private playable = false;
   private roundStarted = false;
   private roundNumber = 0;
+  private resettingRound = false;
 
   // Spawner & controls state
   private currentDropTier = 1;
@@ -125,7 +126,7 @@ export class RescueMergeScene extends Phaser.Scene {
     this.setupCollisionHandling();
     this.setupExternalEvents();
 
-    this.startNewRound();
+    await this.startNewRound();
     this.playable = true;
     const restart = document.getElementById('restart-btn') as HTMLButtonElement | null;
     if (restart) restart.disabled = false;
@@ -1285,7 +1286,12 @@ export class RescueMergeScene extends Phaser.Scene {
   /**
    * Resets score, clears all Matter physics pet bodies, and starts a fresh round.
    */
-  public startNewRound(): void {
+  public async startNewRound(): Promise<void> {
+    if (this.resettingRound) return;
+    this.resettingRound = true;
+    this.playable = false;
+    const restart = document.getElementById('restart-btn') as HTMLButtonElement | null;
+    if (restart) restart.disabled = true;
     this.roundNumber++;
     this.roundStarted = false;
     // Clear existing pet physics bodies & sprites
@@ -1302,6 +1308,25 @@ export class RescueMergeScene extends Phaser.Scene {
     if (this.gameOverContainer) {
       this.gameOverContainer.destroy(true);
       this.gameOverContainer = null;
+    }
+
+    if (this.roundNumber > 1) {
+      // Detach previews before replacing textures; no old animal may remain
+      // attached to a newly assigned tier while its replacement photo loads.
+      this.dropperPreviewSprite?.setTexture('__DEFAULT').setVisible(false);
+      this.nextPetPreviewSprite?.setTexture('__DEFAULT').setVisible(false);
+      if (this.nextPetNameText) this.nextPetNameText.setText('Loading animals…');
+      for (const tier of this.tiers) {
+        const rawKey = `raw_pet_tier_${tier.tier}`;
+        if (this.textures.exists(rawKey)) this.textures.remove(rawKey);
+      }
+      this.tiers = resolveAnimalTiers();
+      await this.loadPetPhotos();
+      if (!this.sys.isActive()) {
+        this.resettingRound = false;
+        return;
+      }
+      this.generateCircularAnimalTextures();
     }
 
     this.score = 0;
@@ -1335,6 +1360,11 @@ export class RescueMergeScene extends Phaser.Scene {
 
     this.drawDashedDangerLine(0.55, 2);
     this.updateSpawnerVisuals();
+    this.dropperPreviewSprite?.setVisible(true);
+    this.nextPetPreviewSprite?.setVisible(true);
+    this.playable = true;
+    this.resettingRound = false;
+    if (restart) restart.disabled = false;
   }
 
   private getTierData(tierNumber: number): ShelterAnimalTier {

@@ -12,6 +12,12 @@ The animal-photo sliding puzzle should use random available animals belonging to
 
 **Why:** The owner specifically requested rotating rescue-animal photos to keep the puzzle fresh.
 
+Rescue Merge should reshuffle animal identities on each restarted round, not only when opening the game.
+
+**Why:** The owner explicitly requested fresh animal selections when replaying.
+
+**How to apply:** Keep selection rescue-specific and preserve the zoomed bubble crop; random selections may repeat animals.
+
 Staff and volunteers at game-enabled rescues also receive dashboard game access without VIP membership or a donor invitation. This does not expand public donor access.
 
 **Why:** The owner explicitly expanded the private pilot to rescue teams as a perk, while keeping rescue-level enablement.

@@ -22,7 +22,12 @@
       if (!key || seen.has(key) || typeof pet.name !== "string" || !pet.name.trim()) return false;
       seen.add(key);
       return true;
-    }).slice(0, 6);
+    });
+    for (let i = unique.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [unique[i], unique[j]] = [unique[j], unique[i]];
+    }
+    unique.splice(6);
     return DEFAULT_TIERS.map((tier, index) => {
       const pet = unique[index];
       if (!pet) return { ...tier };
@@ -211,6 +216,7 @@
       __publicField(this, "playable", false);
       __publicField(this, "roundStarted", false);
       __publicField(this, "roundNumber", 0);
+      __publicField(this, "resettingRound", false);
       // Spawner & controls state
       __publicField(this, "currentDropTier", 1);
       __publicField(this, "nextDropTier", 2);
@@ -263,7 +269,7 @@
       this.setupDropControls();
       this.setupCollisionHandling();
       this.setupExternalEvents();
-      this.startNewRound();
+      await this.startNewRound();
       this.playable = true;
       const restart = document.getElementById("restart-btn");
       if (restart) restart.disabled = false;
@@ -1129,7 +1135,12 @@
     /**
      * Resets score, clears all Matter physics pet bodies, and starts a fresh round.
      */
-    startNewRound() {
+    async startNewRound() {
+      if (this.resettingRound) return;
+      this.resettingRound = true;
+      this.playable = false;
+      const restart = document.getElementById("restart-btn");
+      if (restart) restart.disabled = true;
       this.roundNumber++;
       this.roundStarted = false;
       for (const pet of [...this.activePets]) {
@@ -1144,6 +1155,22 @@
       if (this.gameOverContainer) {
         this.gameOverContainer.destroy(true);
         this.gameOverContainer = null;
+      }
+      if (this.roundNumber > 1) {
+        this.dropperPreviewSprite?.setTexture("__DEFAULT").setVisible(false);
+        this.nextPetPreviewSprite?.setTexture("__DEFAULT").setVisible(false);
+        if (this.nextPetNameText) this.nextPetNameText.setText("Loading animals\u2026");
+        for (const tier of this.tiers) {
+          const rawKey = `raw_pet_tier_${tier.tier}`;
+          if (this.textures.exists(rawKey)) this.textures.remove(rawKey);
+        }
+        this.tiers = resolveAnimalTiers();
+        await this.loadPetPhotos();
+        if (!this.sys.isActive()) {
+          this.resettingRound = false;
+          return;
+        }
+        this.generateCircularAnimalTextures();
       }
       this.score = 0;
       this.maxTierReached = 1;
@@ -1173,6 +1200,11 @@
       }
       this.drawDashedDangerLine(0.55, 2);
       this.updateSpawnerVisuals();
+      this.dropperPreviewSprite?.setVisible(true);
+      this.nextPetPreviewSprite?.setVisible(true);
+      this.playable = true;
+      this.resettingRound = false;
+      if (restart) restart.disabled = false;
     }
     getTierData(tierNumber) {
       return this.tiers.find((t) => t.tier === tierNumber) || this.tiers[0] || DEFAULT_TIERS[0];
