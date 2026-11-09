@@ -4,7 +4,7 @@ import rateLimit from 'express-rate-limit';
 import type { VipGameId } from '@shared/vip-games';
 
 const teamRoles = new Set(['owner', 'admin', 'board_member', 'staff', 'volunteer']);
-const gameId = z.enum(['pasture-run', 'rescue-shuffle']).default('pasture-run');
+const gameId = z.enum(['pasture-run', 'rescue-shuffle', 'rescue-triple-match', 'rescue-merge']).default('pasture-run');
 
 /** Session authentication loads only active users; never trust a requested tenant or role. */
 export function createTeamGameRouter(deps: {

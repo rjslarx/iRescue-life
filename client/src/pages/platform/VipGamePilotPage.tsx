@@ -27,7 +27,7 @@ export default function VipGamePilotPage() {
   const [preview, setPreview] = useState<VipGameId | null>(null);
   const [revoking, setRevoking] = useState<PilotInvitation | null>(null);
   const tenants = usePilotTenants(isPlatformAdmin && !checkingAccess);
-  const selectedId = tenantId || tenants.data?.tenants[0]?.id || "";
+  const selectedId = tenantId;
   const selectedTenant = tenants.data?.tenants.find((tenant) => tenant.id === selectedId);
   const details = usePilotDetails(selectedId, isPlatformAdmin && !checkingAccess);
   const update = usePilotUpdate();
@@ -58,8 +58,8 @@ export default function VipGamePilotPage() {
             </div>
             <div className="flex flex-wrap gap-2">
               {VIP_GAMES.map((game) => (
-                <Button key={game.id} variant="outline" disabled={game.id === "rescue-shuffle" && !selectedTenant}
-                  title={game.id === "rescue-shuffle" ? selectedTenant ? `Preview with photos from ${selectedTenant.name}` : "Choose a rescue to preview its animal photos" : "Owner preview"}
+                <Button key={game.id} variant="outline" disabled={game.id !== "pasture-run" && !selectedTenant}
+                  title={game.id !== "pasture-run" ? selectedTenant ? `Preview with photos from ${selectedTenant.name}` : "Choose a rescue to preview its animal photos" : "Owner preview"}
                   onClick={() => setPreview(game.id)} data-testid={`button-preview-${game.id}`}>
                   <Gamepad2 className="mr-2 h-4 w-4" />Preview {game.name}
                 </Button>
@@ -76,7 +76,7 @@ export default function VipGamePilotPage() {
                     <h2 className="text-xl font-semibold">Private games, kept small on purpose</h2>
                     <p className="max-w-3xl text-sm text-muted-foreground">{VIP_GAMES.map((game) => `${game.name}: ${game.description}`).join(" ")}</p>
                     <p className="max-w-3xl text-sm text-muted-foreground">You control which rescues participate and which donors are invited. At enabled rescues, staff and volunteers can play from their dashboard without a VIP membership or invitation. Donors still need an active VIP membership and an invitation. There is no public arcade or public game menu.</p>
-                    <p className="text-xs text-muted-foreground">Owner previews work even when a rescue is disabled and never record play starts. Rescue Shuffle 15 uses the selected rescue’s animal photos; choose a rescue to preview it. Pasture Run can be previewed without a rescue.</p>
+                    <p className="text-xs text-muted-foreground">Owner previews work even when a rescue is disabled and never record play starts. Photo puzzles use the selected rescue’s animal photos; choose a rescue to preview them. Pasture Run can be previewed without a rescue.</p>
                   </div>
                 </CardContent>
               </Card>
@@ -86,7 +86,7 @@ export default function VipGamePilotPage() {
               ) : tenants.isError ? (
                 <Card><CardContent className="space-y-3 p-6" role="alert"><h2 className="font-semibold">Could not load the private pilot</h2><p className="text-sm text-muted-foreground">{tenants.error.message}</p><Button variant="outline" onClick={() => void tenants.refetch()}>Try again</Button></CardContent></Card>
               ) : !tenants.data?.tenants.length ? (
-                <Card><CardContent className="space-y-3 p-8"><ShieldCheck className="h-8 w-8 text-muted-foreground" /><h2 className="font-semibold">No rescues available yet</h2><p className="text-sm text-muted-foreground">Once a rescue is available, select it here to manage its private games. You can still preview Pasture Run; Rescue Shuffle 15 needs a rescue’s animal photos.</p><Button variant="outline" onClick={() => void tenants.refetch()}>Refresh rescues</Button></CardContent></Card>
+                <Card><CardContent className="space-y-3 p-8"><ShieldCheck className="h-8 w-8 text-muted-foreground" /><h2 className="font-semibold">No rescues available yet</h2><p className="text-sm text-muted-foreground">Once a rescue is available, select it here to manage its private games. You can still preview Pasture Run; photo puzzles need a rescue’s animal photos.</p><Button variant="outline" onClick={() => void tenants.refetch()}>Refresh rescues</Button></CardContent></Card>
               ) : (
                 <>
                   <div className="max-w-md space-y-2">
@@ -108,7 +108,7 @@ export default function VipGamePilotPage() {
                             ["Returning players", selectedTenant.returningPlayers],
                           ] as const).map(([label, value]) => <div key={label}><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 text-2xl font-semibold tabular-nums">{value.toLocaleString()}</dd></div>)}
                         </dl>
-                        <p className="mt-5 border-t pt-4 text-xs leading-relaxed text-muted-foreground">Play starts count actual play across both games, not opening a game. Returning players are donors who play again on a later UTC day. These figures describe play activity, not revenue attribution or proof that the games increased giving.</p>
+                        <p className="mt-5 border-t pt-4 text-xs leading-relaxed text-muted-foreground">Play starts count actual play across the private games, not opening a game. Returning players are donors who play again on a later UTC day. These figures describe play activity, not revenue attribution or proof that the games increased giving.</p>
                         <Button className="mt-3" variant="ghost" size="sm" disabled={tenants.isFetching} onClick={() => void tenants.refetch()}>{tenants.isFetching ? "Refreshing…" : "Refresh activity"}</Button>
                       </CardContent>
                     </Card>
@@ -128,7 +128,7 @@ export default function VipGamePilotPage() {
                         </CardContent>
                       </Card>
                       <Card>
-                        <CardHeader><CardTitle className="text-lg">Invite a VIP supporter</CardTitle><CardDescription>Use the email on their donor account. Invitations grant private access to both games as a thank-you for existing support; active VIP membership is still required to play.</CardDescription></CardHeader>
+                        <CardHeader><CardTitle className="text-lg">Invite a VIP supporter</CardTitle><CardDescription>Use the email on their donor account. Invitations grant access to the private games as a thank-you for existing support; active VIP membership is still required to play.</CardDescription></CardHeader>
                         <CardContent>
                           <form className="flex flex-col gap-3 sm:flex-row sm:items-end" onSubmit={(event) => {
                             event.preventDefault();

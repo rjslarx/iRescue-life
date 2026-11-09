@@ -17,7 +17,7 @@ const configKey = (tenantId: string) => `${prefix}${tenantId}:config`;
 const inviteKey = (tenantId: string, donorId: string) => `${prefix}${tenantId}:invite:${donorId}`;
 const statsKey = (tenantId: string, donorId: string) => `${prefix}${tenantId}:stats:${donorId}`;
 const uuid = z.string().uuid();
-const gameIdSchema = z.enum(['pasture-run', 'rescue-shuffle']).default('pasture-run');
+const gameIdSchema = z.enum(['pasture-run', 'rescue-shuffle', 'rescue-triple-match', 'rescue-merge']).default('pasture-run');
 const wrap = (fn: (req: Request, res: Response) => Promise<any>) =>
   (req: Request, res: Response, next: NextFunction) => {
     res.set('Cache-Control', 'no-store');
@@ -86,7 +86,7 @@ adminGameRouter.get('/', wrap(async (_req, res) => {
 
 adminGameRouter.post('/preview', wrap(async (req, res) => {
   const { gameId, tenantId } = z.object({ gameId: gameIdSchema, tenantId: uuid.optional() }).parse(req.body);
-  if (gameId === 'rescue-shuffle' && !tenantId) return res.status(400).json({ error: 'Select a rescue to preview its animal puzzle.' });
+  if (gameId !== 'pasture-run' && !tenantId) return res.status(400).json({ error: 'Select a rescue to preview its animal game.' });
   res.json({ html: await vipGameDocument(gameId, tenantId) });
 }));
 
@@ -140,7 +140,7 @@ adminGameRouter.post('/:tenantId/invitations', wrap(async (req, res) => {
       const result = await service.send({
         to: donor.email,
         subject: 'Your private VIP game invitation',
-        html: `<p>You’re invited to try Pasture Run and Rescue Shuffle 15, private VIP club games included with your existing membership.</p><p><a href="${safeLink}">Open your VIP club and play</a></p><p>This secure link expires in 24 hours. You can request a new access link from your rescue’s VIP club page. No additional payment is needed.</p>`,
+        html: `<p>You’re invited to try Pasture Run, Rescue Shuffle 15, Rescue Triple Match, and Rescue Merge, private VIP club games included with your existing membership.</p><p><a href="${safeLink}">Open your VIP club and play</a></p><p>This secure link expires in 24 hours. You can request a new access link from your rescue’s VIP club page. No additional payment is needed.</p>`,
       });
       sent = result.success;
     }

@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Rescue Triple Match</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="mobile-viewport">
+    <!-- 1. Header: Level Indicator, Matches Left Counter, and Shuffle Button (1 per game) -->
+    <header class="game-header">
+      <div class="brand-row">
+        <div class="title-group">
+          <h1>Rescue Triple Match</h1>
+          <span id="level-indicator" class="level-pill" aria-live="polite">Level 1</span>
+        </div>
+        <button id="shuffle-btn" class="shuffle-btn" type="button" aria-label="Shuffle remaining cards (1 per game)">
+          <span>Shuffle</span>
+          <span id="shuffle-count" class="shuffle-badge">1</span>
+        </button>
+      </div>
+
+      <div class="hud-bar">
+        <div class="stat-card">
+          <span class="stat-label">Matches Left</span>
+          <strong id="matches-left" class="stat-value">12</strong>
+        </div>
+        <div class="hud-tip">
+          Match <strong>3 identical pets</strong> in the 7-slot dock to rescue them!
+        </div>
+      </div>
+      <p id="pet-notice" class="pet-notice" role="status" hidden></p>
+    </header>
+
+    <!-- 2. Main Playfield & 3. Bottom 7-Slot Dock rendered on High-DPI Canvas -->
+    <section class="canvas-container" aria-label="Playfield and 7-slot rescue dock">
+      <canvas id="game-canvas" tabindex="0" aria-label="Match three identical pets. Choose uncovered tiles to move them into the seven-slot dock."></canvas>
+
+      <!-- Win / Loss Modal Overlay -->
+      <div id="status-overlay" class="status-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="overlay-title" aria-describedby="overlay-message" aria-live="assertive">
+        <div class="status-modal">
+          <span id="overlay-badge" class="status-badge win">Stage Cleared!</span>
+          <h2 id="overlay-title">All 6 Pets Rescued!</h2>
+          <p id="overlay-message">Every shelter pet found their triple match!</p>
+          <div class="modal-actions">
+            <button id="overlay-continue-btn" class="secondary-action-btn hidden" type="button">
+              Continue (-2 Dock Tiles)
+            </button>
+            <button id="overlay-action-btn" class="primary-action-btn" type="button">
+              Next Level
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="./app.js"></script>
+</body>
+</html>

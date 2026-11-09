@@ -59,8 +59,8 @@ export function PrivateGamePlayer({ token, preview = false, team = false, gameId
     const launchKey = JSON.stringify([token, preview, gameId, previewTenantId]);
     if (!isTeam && (!launch.current || launch.current.key !== launchKey)) {
       const promise = preview
-        ? gameId === "rescue-shuffle" && !previewTenantId
-          ? Promise.reject(new Error("Choose a rescue to preview Rescue Shuffle 15 with its animal photos."))
+        ? gameId !== "pasture-run" && !previewTenantId
+          ? Promise.reject(new Error(`Choose a rescue to preview ${game.name} with its animal photos.`))
           : pilotRequest<{ html: string }>(`${pilotPath}/preview`, "POST", { gameId, ...(previewTenantId ? { tenantId: previewTenantId } : {}) })
         : token
           ? donorGameRequest<{ html: string }>(token, "launch", undefined, gameId)
@@ -85,7 +85,7 @@ export function PrivateGamePlayer({ token, preview = false, team = false, gameId
 
     const onMessage = (event: MessageEvent) => {
       if (sessionEnded || !iframe.current || event.source !== iframe.current.contentWindow || !event.data || typeof event.data !== "object") return;
-      const messagePrefix = gameId === "pasture-run" ? "pasture" : "rescue-shuffle";
+      const messagePrefix = gameId === "pasture-run" ? "pasture" : gameId === "rescue-merge" ? "rescue-merge" : gameId;
       if (event.data.type === `${messagePrefix}-ready`) {
         readyReceived = true;
         setReady(true);

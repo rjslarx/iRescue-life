@@ -5,6 +5,8 @@ import { db } from '../db';
 import { publicAnimalFilter } from './animals';
 import { pastureGameDocument } from '../lib/pasture-game-document';
 import { rescueShuffleDocument, shufflePhotoUrl } from '../lib/rescue-shuffle-document';
+import { rescueTripleMatchDocument } from '../lib/rescue-triple-match-document';
+import { rescueMergeDocument } from '../lib/rescue-merge-document';
 import { getAppBaseUrl } from '../lib/app-base-url';
 
 export async function vipGameDocument(gameId: VipGameId, tenantId?: string) {
@@ -23,5 +25,6 @@ export async function vipGameDocument(gameId: VipGameId, tenantId?: string) {
     const imageUrl = (row.photoUrls || []).map(url => shufflePhotoUrl(url, base)).find(Boolean);
     return imageUrl ? [{ id: row.id, name: row.name, breed: row.breed || '', imageUrl }] : [];
   });
-  return rescueShuffleDocument(pets);
+  if (gameId === 'rescue-merge') return rescueMergeDocument(pets);
+  return gameId === 'rescue-triple-match' ? rescueTripleMatchDocument(pets) : rescueShuffleDocument(pets);
 }

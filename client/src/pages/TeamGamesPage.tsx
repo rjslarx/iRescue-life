@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "wouter";
-import { AlertCircle, Gamepad2, PauseCircle, Play, PawPrint, Grid3X3 } from "lucide-react";
+import { AlertCircle, Gamepad2, PauseCircle, Play, PawPrint, Grid3X3, Layers3, CircleDot } from "lucide-react";
 import { VIP_GAMES, type VipGameId } from "@shared/vip-games";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTenant } from "@/contexts/TenantContext";
@@ -64,14 +64,14 @@ function SignedInGames() {
             </section>
             <section className="grid grid-cols-1 gap-5 md:grid-cols-2" aria-label="Choose a game">
               {VIP_GAMES.map((game) => {
-                const Icon = game.id === "pasture-run" ? PawPrint : Grid3X3;
+                const Icon = game.id === "pasture-run" ? PawPrint : game.id === "rescue-shuffle" ? Grid3X3 : game.id === "rescue-merge" ? CircleDot : Layers3;
                 return (
                   <Card key={game.id} className="flex flex-col overflow-hidden">
                     <div className="flex h-28 items-center justify-center border-b bg-muted/40" aria-hidden="true">
                       <Icon className="h-12 w-12 text-primary/70" strokeWidth={1.3} />
                     </div>
                     <CardHeader>
-                      <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{game.id === "pasture-run" ? "A change of pace" : "One tile at a time"}</p>
+                      <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{game.id === "pasture-run" ? "A change of pace" : game.id === "rescue-shuffle" ? "One tile at a time" : game.id === "rescue-merge" ? "Drop, match, make room" : "Match three, clear the dock"}</p>
                       <CardTitle className="text-xl">{game.name}</CardTitle>
                       <CardDescription>{game.description}</CardDescription>
                     </CardHeader>
