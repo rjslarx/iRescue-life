@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { VIP_GAMES, type VipGameId } from "@shared/vip-games";
 import { Gamepad2, LockKeyhole, Mail, ShieldCheck, Trash2 } from "lucide-react";
 import { PlatformAdminSidebar } from "@/components/PlatformAdminSidebar";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
@@ -23,7 +24,7 @@ export default function VipGamePilotPage() {
   const { toast } = useToast();
   const [tenantId, setTenantId] = useState("");
   const [email, setEmail] = useState("");
-  const [preview, setPreview] = useState(false);
+  const [preview, setPreview] = useState<VipGameId | null>(null);
   const [revoking, setRevoking] = useState<PilotInvitation | null>(null);
   const tenants = usePilotTenants(isPlatformAdmin && !checkingAccess);
   const selectedId = tenantId || tenants.data?.tenants[0]?.id || "";
@@ -55,7 +56,15 @@ export default function VipGamePilotPage() {
               <h1 className="text-2xl font-semibold" data-testid="heading-vip-game-pilot">VIP game pilot</h1>
               <p className="text-sm text-muted-foreground">Private access. A small thank-you for existing VIP giving.</p>
             </div>
-            <Button variant="outline" onClick={() => setPreview(true)} data-testid="button-preview-pasture-run"><Gamepad2 className="mr-2 h-4 w-4" />Owner preview</Button>
+            <div className="flex flex-wrap gap-2">
+              {VIP_GAMES.map((game) => (
+                <Button key={game.id} variant="outline" disabled={game.id === "rescue-shuffle" && !selectedTenant}
+                  title={game.id === "rescue-shuffle" ? selectedTenant ? `Preview with photos from ${selectedTenant.name}` : "Choose a rescue to preview its animal photos" : "Owner preview"}
+                  onClick={() => setPreview(game.id)} data-testid={`button-preview-${game.id}`}>
+                  <Gamepad2 className="mr-2 h-4 w-4" />Preview {game.name}
+                </Button>
+              ))}
+            </div>
           </header>
           <main className="space-y-6 p-4 md:p-6">
             <div className="max-w-6xl space-y-6">
@@ -64,9 +73,10 @@ export default function VipGamePilotPage() {
                   <LockKeyhole className="mt-1 h-6 w-6 shrink-0 text-primary" />
                   <div className="space-y-2">
                     <Badge variant="secondary">Invitation-only test</Badge>
-                    <h2 className="text-xl font-semibold">Pasture Run, kept small on purpose</h2>
+                    <h2 className="text-xl font-semibold">Private games, kept small on purpose</h2>
+                    <p className="max-w-3xl text-sm text-muted-foreground">{VIP_GAMES.map((game) => `${game.name}: ${game.description}`).join(" ")}</p>
                     <p className="max-w-3xl text-sm text-muted-foreground">You control which rescues participate and which donors are invited. Donors need an active VIP membership, an invitation, and an enabled rescue to play. There is no public arcade or public game menu.</p>
-                    <p className="text-xs text-muted-foreground">Owner preview works even when a rescue is disabled and never records play starts.</p>
+                    <p className="text-xs text-muted-foreground">Owner previews work even when a rescue is disabled and never record play starts. Rescue Shuffle 15 uses the selected rescue’s animal photos; choose a rescue to preview it. Pasture Run can be previewed without a rescue.</p>
                   </div>
                 </CardContent>
               </Card>
@@ -76,7 +86,7 @@ export default function VipGamePilotPage() {
               ) : tenants.isError ? (
                 <Card><CardContent className="space-y-3 p-6" role="alert"><h2 className="font-semibold">Could not load the private pilot</h2><p className="text-sm text-muted-foreground">{tenants.error.message}</p><Button variant="outline" onClick={() => void tenants.refetch()}>Try again</Button></CardContent></Card>
               ) : !tenants.data?.tenants.length ? (
-                <Card><CardContent className="space-y-3 p-8"><ShieldCheck className="h-8 w-8 text-muted-foreground" /><h2 className="font-semibold">No rescues available yet</h2><p className="text-sm text-muted-foreground">Once a rescue is available, select it here to manage its private pilot. You can still try the owner preview.</p><Button variant="outline" onClick={() => void tenants.refetch()}>Refresh rescues</Button></CardContent></Card>
+                <Card><CardContent className="space-y-3 p-8"><ShieldCheck className="h-8 w-8 text-muted-foreground" /><h2 className="font-semibold">No rescues available yet</h2><p className="text-sm text-muted-foreground">Once a rescue is available, select it here to manage its private games. You can still preview Pasture Run; Rescue Shuffle 15 needs a rescue’s animal photos.</p><Button variant="outline" onClick={() => void tenants.refetch()}>Refresh rescues</Button></CardContent></Card>
               ) : (
                 <>
                   <div className="max-w-md space-y-2">
@@ -98,7 +108,7 @@ export default function VipGamePilotPage() {
                             ["Returning players", selectedTenant.returningPlayers],
                           ] as const).map(([label, value]) => <div key={label}><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 text-2xl font-semibold tabular-nums">{value.toLocaleString()}</dd></div>)}
                         </dl>
-                        <p className="mt-5 border-t pt-4 text-xs leading-relaxed text-muted-foreground">Play starts count actual runs, not opening the game. Returning players are donors who play again on a later UTC day. These figures describe play activity, not revenue attribution or proof that the game increased giving.</p>
+                        <p className="mt-5 border-t pt-4 text-xs leading-relaxed text-muted-foreground">Play starts count actual play across both games, not opening a game. Returning players are donors who play again on a later UTC day. These figures describe play activity, not revenue attribution or proof that the games increased giving.</p>
                         <Button className="mt-3" variant="ghost" size="sm" disabled={tenants.isFetching} onClick={() => void tenants.refetch()}>{tenants.isFetching ? "Refreshing…" : "Refresh activity"}</Button>
                       </CardContent>
                     </Card>
@@ -114,11 +124,11 @@ export default function VipGamePilotPage() {
                             <p className="max-w-2xl text-sm text-muted-foreground">Turning this off blocks donor play without removing invitations. Open games stop at their next access check, within about a minute.</p>
                             {busy && update.variables?.action === "toggle" && <p className="text-xs text-muted-foreground" role="status">Saving access setting…</p>}
                           </div>
-                          <Switch aria-label={`Enable Pasture Run for ${selectedTenant?.name || "this rescue"}`} checked={details.data.enabled} disabled={busy || details.isFetching} onCheckedChange={(enabled) => update.mutate({ tenantId: selectedId, action: "toggle", enabled }, feedback)} data-testid="switch-pilot-enabled" />
+                          <Switch aria-label={`Enable VIP games for ${selectedTenant?.name || "this rescue"}`} checked={details.data.enabled} disabled={busy || details.isFetching} onCheckedChange={(enabled) => update.mutate({ tenantId: selectedId, action: "toggle", enabled }, feedback)} data-testid="switch-pilot-enabled" />
                         </CardContent>
                       </Card>
                       <Card>
-                        <CardHeader><CardTitle className="text-lg">Invite a VIP supporter</CardTitle><CardDescription>Use the email on their donor account. Invitations grant private access; active membership is still required to play.</CardDescription></CardHeader>
+                        <CardHeader><CardTitle className="text-lg">Invite a VIP supporter</CardTitle><CardDescription>Use the email on their donor account. Invitations grant private access to both games as a thank-you for existing support; active VIP membership is still required to play.</CardDescription></CardHeader>
                         <CardContent>
                           <form className="flex flex-col gap-3 sm:flex-row sm:items-end" onSubmit={(event) => {
                             event.preventDefault();
@@ -166,7 +176,7 @@ export default function VipGamePilotPage() {
           }}>{busy ? "Revoking…" : "Revoke access"}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
-      {preview && <PrivateGamePlayer preview onClose={() => setPreview(false)} />}
+      {preview && <PrivateGamePlayer key={`${preview}:${selectedId}`} preview gameId={preview} previewTenantId={selectedId || undefined} onClose={() => setPreview(null)} />}
     </SidebarProvider>
   );
 }

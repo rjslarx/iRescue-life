@@ -10769,6 +10769,9 @@ Crawl-delay: 1
           sql`${animals.photoUrls} @> ARRAY[${req.path}]::text[]`,
         )).limit(1);
         if (publishedPhoto) {
+          // Already verified as a public animal photo; allow opaque game frames
+          // to display it without exposing credentials or private objects.
+          res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
           await objectStorageService.downloadObject(objectFile, res);
           return;
         }

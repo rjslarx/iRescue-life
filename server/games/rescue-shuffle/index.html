@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rescue Shuffle 15</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="app-container">
+    <header class="game-header">
+      <div class="title-row">
+        <div>
+          <h1>Rescue Shuffle 15</h1>
+          <p id="pet-subtitle" class="pet-subtitle">Loading shelter friend...</p>
+        </div>
+        <button id="toggle-numbers-btn" class="icon-btn" type="button" aria-label="Toggle tile numbers" title="Toggle tile numbers">
+          #15
+        </button>
+      </div>
+
+      <div class="stats-bar">
+        <div class="stat-pill">
+          <span class="stat-label">Moves</span>
+          <span id="move-count" class="stat-value">0</span>
+        </div>
+        <div class="stat-pill">
+          <span class="stat-label">Time</span>
+          <span id="timer-display" class="stat-value">00:00</span>
+        </div>
+        <button id="next-pet-btn" class="primary-btn" type="button">
+          Reset / Next Pet
+        </button>
+      </div>
+    </header>
+
+    <section class="board-section">
+      <div class="canvas-wrapper">
+        <canvas id="puzzle-canvas" width="600" height="600" tabindex="0" aria-label="15-puzzle sliding tile board. Use arrow keys or tap an adjacent tile to slide it into the empty space."></canvas>
+        <div id="win-overlay" class="win-overlay hidden" role="dialog" aria-live="polite">
+          <div class="win-card">
+            <span class="win-badge">Completed!</span>
+            <h2 id="win-title">Puzzle complete!</h2>
+            <p id="win-stats">Solved in 0 moves (00:00)</p>
+            <button id="play-again-btn" class="primary-btn full-width" type="button">
+              Next Shelter Pet
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <footer class="game-footer">
+      <div class="reference-card">
+        <img id="pet-preview" class="pet-preview-img" alt="Target pet reference" />
+        <div class="reference-info">
+          <strong id="pet-name"></strong>
+          <span id="pet-breed"></span>
+          <small class="hint-text">Tap or swipe adjacent tiles into the empty space.</small>
+        </div>
+      </div>
+      <p id="image-status" class="hint-text" role="status"></p>
+    </footer>
+  </main>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

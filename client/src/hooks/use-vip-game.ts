@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { VipGameId } from "@shared/vip-games";
 import { buildTenantUrl, getTenantHeaders } from "@/lib/tenantApi";
 
 export const pilotPath = "/api/platform/vip-game-pilot";
@@ -24,8 +25,9 @@ async function readResponse<T>(response: Response): Promise<T> {
   return response.json();
 }
 
-export async function donorGameRequest<T>(token: string, action: "access" | "launch" | "start", signal?: AbortSignal): Promise<T> {
-  const response = await fetch(buildTenantUrl(`/api/vip-portal/game/${action}`), {
+export async function donorGameRequest<T>(token: string, action: "access" | "launch" | "start", signal?: AbortSignal, gameId?: VipGameId): Promise<T> {
+  const query = action !== "access" && gameId ? `?gameId=${encodeURIComponent(gameId)}` : "";
+  const response = await fetch(buildTenantUrl(`/api/vip-portal/game/${action}${query}`), {
     method: action === "access" ? "GET" : "POST",
     credentials: "same-origin", signal,
     headers: { ...getTenantHeaders(), Authorization: `Bearer ${token}` },

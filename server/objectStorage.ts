@@ -110,6 +110,11 @@ export class ObjectStorageService {
         }
       }
       
+      // Public raster images can be embedded in opaque sandboxed VIP games.
+      // Private files retain Helmet's same-origin protection.
+      if (isPublic && /^image\/(jpeg|png|webp|gif|avif)$/.test(contentType || '')) {
+        res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      }
       res.set({
         "Content-Type": contentType,
         "Content-Length": metadata.size,

@@ -6,7 +6,11 @@ Rescue-themed games should be a bonus of the existing VIP club, not a separate p
 
 **Why:** The owner confirmed this approach while evaluating whether games could generate revenue for rescue tenants, rather than committing to a public gaming offering.
 
-**How to apply:** Plan one supplied Antigravity game first. Avoid new subscriptions, paid continues, and a full arcade in the initial scope.
+**How to apply:** The owner wants to test three games total in this private pilot, supplying the game ZIPs individually. Avoid new subscriptions, paid continues, public rollout, and a full arcade in this scope.
+
+The animal-photo sliding puzzle should use random available animals belonging to the player's rescue, not generic sample pets or another rescue's animals.
+
+**Why:** The owner specifically requested rotating rescue-animal photos to keep the puzzle fresh.
 
 ## Production sandbox verification
 Validate embedded games under the parent page's production Content Security Policy, not only an isolated iframe or development page.
