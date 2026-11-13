@@ -57,7 +57,11 @@ for (const scenario of [
         try {
           if (scenario.transitions
             ? sql.includes("FOR UPDATE OF i")
-            : sql.includes("INSERT INTO rescue_resale_messages") && params?.includes(sid)) await gate.wait();
+            : scenario.receipt === "tracked"
+              // Both must arrive before the admission lock, never at the
+              // serialized INSERT where the first request holds that lock.
+              ? sql.includes("SELECT pg_advisory_xact_lock")
+              : sql.includes("INSERT INTO rescue_resale_messages") && params?.includes(sid)) await gate.wait();
           return await target.query(sql, params);
         } catch (error) { errors.push(error); throw error; }
       }

@@ -57,9 +57,51 @@ function harness(deliveryStatus: Outcome | Partial<Record<"buyer" | "donor", Out
   const messages: Message[] = [], sent: any[] = [];
   const deliveries: Delivery[] = [];
   const writes: any[][] = [], queries: { sql: string; params: any[] }[] = [];
+  const locks = new Map<string, Promise<void>>();
+  let activeClients = 0;
   const fixture = {
     pool: {
-      async query(raw: string, params: any[]) {
+      async connect() {
+        activeClients++;
+        let unlock: (() => void) | undefined;
+        let active = false;
+        const pending: Message[] = [];
+        return {
+          async query(sql: string, params: any[] = []) {
+            if (sql === "BEGIN ISOLATION LEVEL READ COMMITTED") {
+              active = true;
+              return { rows: [] };
+            }
+            assert.ok(active, "transaction required");
+            if (sql.startsWith("SELECT pg_advisory_xact_lock")) {
+              assert.match(sql, /hashtextextended\(\$1, 0\)/);
+              const key = params[0];
+              const scope = JSON.parse(key);
+              assert.deepEqual(scope.slice(0, 3), ["resale-message-admission", tenantId, conversationId]);
+              assert.ok(["buyer", "donor"].includes(scope[3]));
+              const previous = locks.get(key) || Promise.resolve();
+              const held = new Promise<void>(resolve => { unlock = resolve; });
+              locks.set(key, previous.then(() => held));
+              await previous;
+              return { rows: [] };
+            }
+            if (sql === "COMMIT" || sql === "ROLLBACK") {
+              if (sql === "COMMIT") messages.push(...pending);
+              pending.length = 0;
+              active = false;
+              unlock?.();
+              return { rows: [] };
+            }
+            if (sql.startsWith("SELECT count")) assert.ok(unlock, "count must follow lock acquisition");
+            return fixture.pool.query(sql, params, pending);
+          },
+          release() {
+            assert.equal(active, false, "transaction must finish before release");
+            activeClients--;
+          },
+        };
+      },
+      async query(raw: string, params: any[], pending?: Message[]) {
         const sql = raw.replace(/\s+/g, " ").trim();
         queries.push({ sql, params });
         if (sql.startsWith("INSERT INTO rescue_resale_deliveries")) {
@@ -90,7 +132,8 @@ function harness(deliveryStatus: Outcome | Partial<Record<"buyer" | "donor", Out
           assert.match(sql, /VALUES\(\$1,\$2,\$3,\$4,\$5,\$6\)/);
           writes.push(Array.from(params));
           const [id, conversation, sender, body, status, sid] = params;
-          messages.push({ id, conversation, sender, body, status, sid, createdAt: now });
+          if (sid && messages.some(m => m.sid === sid)) return { rows: [] };
+          (pending || messages).push({ id, conversation, sender, body, status, sid, createdAt: now });
           return { rows: [{ id }] };
         }
         if (sql === "UPDATE rescue_resale_messages SET status=$2 WHERE id=$1") {
@@ -104,13 +147,15 @@ function harness(deliveryStatus: Outcome | Partial<Record<"buyer" | "donor", Out
       },
     },
     captureSend(input: any) {
-      assert.equal(messages.at(-1)?.status, "sending", "persist before delivery");
+      assert.equal(messages.find(m => m.id === input.messageId)?.status, "sending", "commit before delivery");
       sent.push(input);
     },
     async transport(tid: string, number: string, body: string, type: string, context: any) {
-      const input = sent.at(-1);
-      const delivery = deliveries.at(-1)!;
+      const deliveryId = new URL(context.statusCallbackUrl).searchParams.get("resaleDelivery");
+      const delivery = deliveries.find(d => d.id === deliveryId)!;
       assert.ok(delivery, "persist recipient audit before transport");
+      const input = sent.find(s => s.messageId === delivery.messageId && s.recipient === delivery.recipient);
+      assert.ok(input);
       assert.equal(delivery.messageId, input.messageId);
       assert.equal(delivery.tenantId, tid);
       assert.equal(delivery.recipient, input.recipient);
@@ -143,10 +188,68 @@ function harness(deliveryStatus: Outcome | Partial<Record<"buyer" | "donor", Out
   }
   return {
     messages, sent, writes, queries, seed, deliveries,
-    send: (sender: string, body: string, replyTo?: string) =>
-      module.exports.sendResaleMessage(tenantId, conversationId, sender, body, sender === "system" ? undefined : "SM-test", replyTo),
+    get activeClients() { return activeClients; },
+    send: (sender: string, body: string, sid = sender === "system" ? undefined : "SM-test", replyTo?: string) =>
+      module.exports.sendResaleMessage(tenantId, conversationId, sender, body, sid, replyTo),
   };
 }
+
+for (const sender of ["buyer", "donor"]) {
+  test(`${sender}: concurrent distinct messages compete for exactly one remaining slot`, async () => {
+    const h = harness();
+    h.seed(29, sender);
+    const results = await Promise.allSettled(Array.from({ length: 8 }, (_, i) =>
+      h.send(sender, "Still available?", `SM-${sender}-${i}`)));
+    assert.equal(results.filter(r => r.status === "fulfilled").length, 1);
+    for (const result of results) {
+      if (result.status === "rejected") assert.match(result.reason.message, /Too many messages/);
+    }
+    assert.equal(h.messages.length, 30);
+    assert.equal(h.sent.length, 1);
+    assert.equal(h.activeClients, 0);
+  });
+}
+
+test("buyer and donor each retain their own last slot during concurrent admission", async () => {
+  const h = harness();
+  h.seed(29, "buyer");
+  h.seed(29, "donor");
+  const results = await Promise.all(["buyer", "donor"].map(async sender => {
+    const attempts = await Promise.allSettled(Array.from({ length: 4 }, (_, i) =>
+      h.send(sender, "Still available?", `SM-${sender}-${i}`)));
+    assert.equal(attempts.filter(r => r.status === "fulfilled").length, 1);
+    assert.equal(h.messages.filter(m => m.sender === sender).length, 30);
+    return attempts;
+  }));
+  assert.equal(results.length, 2);
+  assert.equal(h.sent.length, 2);
+  assert.equal(h.activeClients, 0);
+  const keys = new Set(h.queries.filter(q => q.sql.startsWith("SELECT count")).map(q => q.params[1]));
+  assert.deepEqual([...keys].sort(), ["buyer", "donor"]);
+});
+
+test("blocked messages consume the last slot without sending private content", async () => {
+  const h = harness();
+  h.seed(29, "buyer");
+  const results = await Promise.allSettled(Array.from({ length: 4 }, (_, i) =>
+    h.send("buyer", "private@example.com", `SM-blocked-${i}`)));
+  const errors = results.map(r => r.status === "rejected" ? r.reason.message : "");
+  assert.equal(errors.filter(e => /Please remove contact details/.test(e)).length, 1);
+  assert.equal(errors.filter(e => /Too many messages/.test(e)).length, 3);
+  assert.equal(h.messages.length, 30);
+  assert.equal(h.messages.at(-1)?.body, redacted);
+  assert.equal(h.sent.length, 0);
+  assert.equal(h.activeClients, 0);
+});
+
+test("system messages remain exempt from the hourly limit", async () => {
+  const h = harness();
+  h.seed(30, "system");
+  await h.send("system", "Offer accepted");
+  assert.equal(h.messages.length, 31);
+  assert.equal(h.sent.length, 2);
+  assert.equal(h.activeClients, 0);
+});
 
 const checkoutNotice = "Offer accepted at $17.00. Review My activity: https://resale.example.test/rescue-resale . Acceptance is not payment or a reservation. Choose pickup and pay through checkout within two hours, subject to availability.";
 
@@ -188,7 +291,7 @@ for (const recipient of ["buyer", "donor"] as const) {
   test(`direct system response targets only ${recipient} and bypasses quiet hours`, async () => {
     const h = harness();
     const number = recipient === "buyer" ? buyer : donor;
-    await h.send("system", checkoutNotice, number);
+    await h.send("system", checkoutNotice, undefined, number);
     assertSystemNotice(h, [number], true);
     assert.deepEqual(h.deliveries.map(d => [d.recipient, d.status]), [[recipient, "accepted"]]);
   });

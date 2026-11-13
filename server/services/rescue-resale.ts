@@ -43,15 +43,33 @@ export async function resaleConversation(id: string, tenantId: string) {
 export async function sendResaleMessage(tenantId: string, conversationId: string, sender: string, body: string, inboundSid?: string, replyTo?: string) {
   const c = await resaleConversation(conversationId, tenantId);
   if (!c) throw new Error("Conversation not found");
-  const recent = (await pool.query("SELECT count(*)::int n FROM rescue_resale_messages WHERE conversation_id=$1 AND sender=$2 AND created_at>now()-interval '1 hour'", [c.id, sender])).rows[0].n;
-  if (sender !== "system" && recent >= 30) throw new Error("Too many messages in this conversation. Please try again later.");
   const blocked = sender !== "system" && !resaleMessageAllowed(body);
   const id = randomUUID();
-  const { rows } = await pool.query(`INSERT INTO rescue_resale_messages(id,conversation_id,sender,body,status,inbound_sid)
-    VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(inbound_sid) DO NOTHING RETURNING id`,
-  [id, c.id, sender, blocked ? "[Blocked: contact details, external payment request, or message length]" : body,
-    blocked ? "blocked" : "sending", inboundSid || null]);
-  if (!rows.length) return;
+  const client = await pool.connect();
+  let admitted = false;
+  try {
+    await client.query("BEGIN ISOLATION LEVEL READ COMMITTED");
+    if (sender !== "system") {
+      // Cross-process serialization for this sender only. Count in a separate
+      // statement after the lock so it sees the previous admission's commit.
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+        [JSON.stringify(["resale-message-admission", tenantId, c.id, sender])]);
+      const recent = (await client.query("SELECT count(*)::int n FROM rescue_resale_messages WHERE conversation_id=$1 AND sender=$2 AND created_at>now()-interval '1 hour'", [c.id, sender])).rows[0].n;
+      if (recent >= 30) throw new Error("Too many messages in this conversation. Please try again later.");
+    }
+    const { rows } = await client.query(`INSERT INTO rescue_resale_messages(id,conversation_id,sender,body,status,inbound_sid)
+      VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(inbound_sid) DO NOTHING RETURNING id`,
+    [id, c.id, sender, blocked ? "[Blocked: contact details, external payment request, or message length]" : body,
+      blocked ? "blocked" : "sending", inboundSid || null]);
+    admitted = rows.length > 0;
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+  if (!admitted) return;
   if (blocked) throw new Error("Please remove contact details, links, addresses, and outside payment instructions. Use up to 1,000 characters.");
   const recipients = replyTo ? [replyTo] : sender === "system" ? [c.buyer_phone, c.donor_phone] :
     [sender === "buyer" ? c.donor_phone : c.buyer_phone];

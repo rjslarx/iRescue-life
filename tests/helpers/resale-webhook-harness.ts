@@ -106,7 +106,9 @@ export function fixture(code: string, persistence: PersistenceOptions = {}) {
     const sql = raw.replace(/\s+/g, " ").trim();
     queries.push({ sql, p });
     const rows = (values: any[]) => ({ rows: values });
-    if (["BEGIN", "COMMIT", "ROLLBACK"].includes(sql)) return rows([]);
+    if (["BEGIN", "BEGIN ISOLATION LEVEL READ COMMITTED", "COMMIT", "ROLLBACK"].includes(sql)) return rows([]);
+    // Admission concurrency is exercised with real PostgreSQL in the race suite.
+    if (sql.startsWith("SELECT pg_advisory_xact_lock")) return rows([]);
     if (sql.startsWith("SELECT c.") || sql.startsWith("SELECT i.id")) {
       let c;
       if (sql.includes("c.code=$2")) {
