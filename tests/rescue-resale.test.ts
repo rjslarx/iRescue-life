@@ -1,17 +1,19 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { resalePhone, resaleMessageAllowed, resaleItemSchema, resaleSettingsSchema, resaleCsvCell } from "../shared/rescue-resale";
+import { allowedResaleMessages, blockedResaleMessages } from "./helpers/resale-message-cases";
 
 test("resale phone verification normalizes US numbers and rejects ambiguous inputs", () => {
   assert.equal(resalePhone("(202) 555-0147"), "+12025550147");
   assert.equal(resalePhone("+1 202-555-0147"), "+12025550147");
   assert.throws(() => resalePhone("123"));
 });
-test("resale relay blocks common contact and external-payment patterns", () => {
-  for (const body of ["Email x@example.com", "call +1 (202) 555-0147", "go to https://example.com", "Pay Venmo",
-    "Meet at 123 Main Street", "x".repeat(1001), ""]) assert.equal(resaleMessageAllowed(body), false, body);
-  assert.equal(resaleMessageAllowed("Is the chair still available? I can offer $25."), true);
-});
+for (const [label, body] of blockedResaleMessages) {
+  test(`resale policy rejects ${label}`, () => assert.equal(resaleMessageAllowed(body), false));
+}
+for (const [label, body] of allowedResaleMessages) {
+  test(`resale policy allows ${label}`, () => assert.equal(resaleMessageAllowed(body), true));
+}
 test("resale schema rejects invalid prices, no ownership consent, and invalid pickup windows", () => {
   const item = { donorName: "Test donor", donorEmail: "test@example.com", zip: "70501", title: "Wooden chair",
     description: "A sturdy used wooden chair.", category: "Furniture", askingCents: 2500, minCents: 2000,
