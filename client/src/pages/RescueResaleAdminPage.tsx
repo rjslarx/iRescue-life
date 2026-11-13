@@ -5,7 +5,7 @@ import type { ResalePickup } from "@shared/rescue-resale";
 import { resaleSettingsSchema } from "@shared/rescue-resale";
 import DashboardLayout from "@/components/DashboardLayout";
 import { useTenant } from "@/contexts/TenantContext";
-import { useRescueResale, resaleMoney, type ResaleClient, type ResaleItem } from "@/hooks/use-rescue-resale";
+import { useRescueResale, useResaleAuditMessages, resaleMoney, type ResaleConversation, type ResaleClient, type ResaleItem } from "@/hooks/use-rescue-resale";
 import { ResaleError } from "@/components/resale/ResaleForms";
 import "@/components/resale/resale.css";
 
@@ -89,10 +89,31 @@ function SalesLedger({ api }: { api: ResaleClient }) {
       </tr>)}</tbody></table></div>}
   </section>;
 }
+function MessageAudit({ conversation: c }: { conversation: ResaleConversation }) {
+  const [offset, setOffset] = useState(0);
+  const query = useResaleAuditMessages(c.id, offset);
+  const messages = offset === 0 ? c.messages : query.data?.messages;
+  const hasMore = offset === 0 ? c.messagesHasMore : query.data?.hasMore;
+  return <details className="resale-details"><summary>Filtered message audit</summary>
+    {offset > 0 && query.isLoading ? <p role="status">Loading messages…</p> :
+      offset > 0 && query.isError ? <><ResaleError error={query.error} /><button className="resale-btn secondary" onClick={() => void query.refetch()}>Retry messages</button></> :
+      <><p className="resale-muted" role="status">{messages?.length ? `Messages ${offset + 1}–${offset + messages.length}` : "No messages on this page."}</p>
+        {messages?.map((message, index) => <div className="resale-message" key={`${offset}-${index}`}><p className="resale-muted">{message.sender} · {new Date(message.createdAt).toLocaleString()} · <ResaleDeliveryStatus message={message} /></p><p>{message.body}</p></div>)}</>}
+    <div className="resale-row mt-3">
+      <button className="resale-btn secondary" disabled={offset === 0 || query.isFetching} onClick={() => setOffset(n => Math.max(0, n - 300))}>Previous messages</button>
+      <button className="resale-btn secondary" disabled={!hasMore || query.isFetching} onClick={() => setOffset(n => n + 300)}>Next messages</button>
+    </div>
+  </details>;
+}
 export default function RescueResaleAdminPage() {
+  const { tenantId, basePath } = useTenant();
+  return <ResaleAdminWorkspace key={`${tenantId}:${basePath}`} />;
+}
+function ResaleAdminWorkspace() {
   const { basePath } = useTenant();
   const [deliveryStatus, setDeliveryStatus] = useState("all");
-  const api = useRescueResale({ admin: true, deliveryStatus });
+  const [conversationOffset, setConversationOffset] = useState(0);
+  const api = useRescueResale({ admin: true, deliveryStatus, conversationOffset });
   const [tab, setTab] = useState<"listings" | "pickups" | "conversations" | "sales">("listings");
   const [pendingOnly, setPendingOnly] = useState(true);
   const data = api.adminData.data;
@@ -114,10 +135,14 @@ export default function RescueResaleAdminPage() {
           {!listings.length ? <div className="resale-empty"><PackageOpen size={32} /><h3>{pendingOnly ? "The review queue is clear." : "No listings yet."}</h3><p className="resale-muted">{pendingOnly ? "New donor submissions will appear here for your review." : "Share the storefront with your community to invite the first donated items."}</p></div> : listings.map(item => <ReviewListing key={item.id} item={item} api={api} />)}
         </>}
         {tab === "conversations" && <section className="resale-panel"><h2>Masked conversation logs</h2><p className="resale-muted mb-5">Audit the filtered message bodies, delivery statuses, and offers relayed between masked participants. Blocked attempts appear as a generic marker. Contact-pattern filtering is not a guarantee of privacy; participants should never share personal contact details in messages.</p>
-          <div className="resale-row mb-4"><label htmlFor="resale-delivery-filter">Recipient delivery status</label><select id="resale-delivery-filter" value={deliveryStatus} onChange={e => setDeliveryStatus(e.target.value)}>
+          <div className="resale-row mb-4"><label htmlFor="resale-delivery-filter">Recipient delivery status</label><select id="resale-delivery-filter" value={deliveryStatus} onChange={e => { setDeliveryStatus(e.target.value); setConversationOffset(0); }}>
             <option value="all">All conversations</option><option value="attention">Needs attention</option><option value="undelivered">Undelivered</option><option value="failed">Failed</option><option value="not_sent">Not sent</option><option value="unknown">Unknown outcome</option>
           </select><button className="resale-btn secondary" disabled={api.adminData.isFetching} onClick={() => void api.adminData.refetch()}>Refresh</button></div>
-          <p className="resale-muted mb-4" role="status">Showing up to 100 most recently updated matching conversations. Filters and summaries cover the entire message history, including messages outside the first 300 audit entries. Needs attention includes undelivered, failed, not-sent, and unknown outcomes. Unknown recipients are legacy records without recipient tracking. Historical failures may have been accepted by the provider. Review outcomes manually; this view never resends texts.</p>
+          <p className="resale-muted mb-4" role="status">Showing {data.conversations.length ? `${conversationOffset + 1}–${conversationOffset + data.conversations.length}` : "0"} matching conversations, most recently updated first. Filters and summaries cover the entire message history. Use Previous and Next to browse conversations and message entries. Results may shift as new activity arrives. Needs attention includes undelivered, failed, not-sent, and unknown outcomes. Unknown recipients are legacy records without recipient tracking. Historical failures may have been accepted by the provider. Review outcomes manually; this view never resends texts.</p>
+          <div className="resale-row mb-4">
+            <button className="resale-btn secondary" disabled={conversationOffset === 0 || api.adminData.isFetching} onClick={() => setConversationOffset(n => Math.max(0, n - 100))}>Previous conversations</button>
+            <button className="resale-btn secondary" disabled={!data.conversationsHasMore || api.adminData.isFetching} onClick={() => setConversationOffset(n => n + 100)}>Next conversations</button>
+          </div>
           {deliveryStatus !== "all" && !data.conversations.length && <p role="status">No conversations match this delivery status.</p>}
           {!data.conversations.length && deliveryStatus === "all" && <div className="resale-empty"><MessageSquare size={30} /><h3>No conversations yet.</h3><p className="resale-muted">Filtered messages, delivery metadata, and offer states will appear here.</p></div>}
           {data.conversations.map(c => <article className="resale-note mb-4" key={c.id}>
@@ -127,9 +152,7 @@ export default function RescueResaleAdminPage() {
               <li key={`${d.recipient}-${d.status}`}>To {d.recipient}: {deliveryLabel(d.status)} · {d.count} recipient outcome{d.count === 1 ? "" : "s"}</li>
             ) : <li>No attention outcomes recorded.</li>}</ul>
             {c.offerCents != null && <p className="mt-2">Offer: {resaleMoney(c.offerCents)}{c.expiresAt && ` · deadline ${new Date(c.expiresAt).toLocaleString()}`}</p>}
-            <details className="resale-details"><summary>Filtered message audit ({c.messages.length})</summary>{c.messages.map((message, index) =>
-              <div className="resale-message" key={`${message.createdAt}-${index}`}><p className="resale-muted">{message.sender} · {new Date(message.createdAt).toLocaleString()} · <ResaleDeliveryStatus message={message} /></p><p>{message.body}</p></div>
-            )}</details>
+            <MessageAudit conversation={c} key={`${deliveryStatus}:${conversationOffset}:${c.id}`} />
           </article>)}
         </section>}
       </>}

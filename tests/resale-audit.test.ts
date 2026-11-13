@@ -1,6 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { resaleAuditFilter, resaleAuditQuery } from "../server/services/resale-audit";
+import { resaleAuditFilter, resaleAuditQuery, resaleAuditOffset, resaleMessageAuditQuery } from "../server/services/resale-audit";
+
+test("audit offsets reject malformed, negative, fractional, array and oversized input", () => {
+  for (const value of ["0", "100", "300"]) assert.equal(resaleAuditOffset.parse(value), Number(value));
+  for (const value of ["-1", "1.5", "1e2", "", "01", "2147483648", ["100"], {}, "0; DROP TABLE x"]) {
+    assert.equal(resaleAuditOffset.safeParse(value).success, false);
+  }
+});
 
 test("audit filter accepts only supported scalar values", () => {
   for (const status of ["all", "attention", "undelivered", "failed", "not_sent", "unknown"]) {
@@ -31,8 +38,14 @@ test("audit searches complete histories before limits, isolates tenants and summ
         ('m301','a','buyer','undelivered'),('m301','a','donor','delivered'),
         ('m300','a','donor','not_sent'),('m299','a','buyer','unknown'),
         ('m298','a','buyer','failed'),('m297','b','buyer','failed');`);
-    const read = async (status: string, tenant = "a") => (await client.query(resaleAuditQuery, [tenant, status])).rows;
-    assert.equal((await read("all")).length, 100);
+    const read = async (status: string, tenant = "a", offset = 0) => (await client.query(resaleAuditQuery, [tenant, status, offset])).rows;
+    assert.equal((await read("all")).length, 101); // Includes one lookahead row.
+    const first = (await read("all")).slice(0, 100);
+    const second = await read("all", "a", 100);
+    assert.equal(second.length, 2);
+    assert.equal(new Set([...first, ...second].map(r => r.id)).size, 102);
+    assert.equal(second[1].id, "old");
+    assert.equal((await read("all", "a", 200)).length, 0);
     for (const filter of ["attention", "undelivered", "failed", "not_sent", "unknown"]) {
       const rows = await read(filter);
       assert.deepEqual(rows.map(r => r.id), ["old"]);
@@ -42,6 +55,28 @@ test("audit searches complete histories before limits, isolates tenants and summ
     }
     assert.equal((await read("undelivered", "b")).length, 0);
     assert.equal((await read("unknown", "b"))[0].id, "foreign");
+    await client.query(`
+      INSERT INTO rescue_resale_messages SELECT 'fail'||n,'c'||n,'failed' FROM generate_series(1,101) n;
+      ALTER TABLE rescue_resale_messages ADD COLUMN body text DEFAULT 'Filtered text';
+      ALTER TABLE rescue_resale_messages ADD COLUMN sender text DEFAULT 'buyer';
+      ALTER TABLE rescue_resale_messages ADD COLUMN created_at timestamp DEFAULT '2026-01-01';
+      ALTER TABLE rescue_resale_deliveries ADD COLUMN id text DEFAULT 'delivery';
+      ALTER TABLE rescue_resale_deliveries ADD COLUMN error_code text;
+      ALTER TABLE rescue_resale_deliveries ADD COLUMN updated_at timestamp DEFAULT now();
+      ALTER TABLE rescue_resale_deliveries ADD COLUMN created_at timestamp DEFAULT now();`);
+    assert.equal((await read("failed")).length, 101);
+    assert.deepEqual((await read("failed", "a", 100)).map(r => r.id), second.map(r => r.id));
+    const messages = async (tenant: string, offset: number) =>
+      (await client.query(resaleMessageAuditQuery, ["old", tenant, offset])).rows;
+    const pageOne = await messages("a", 0);
+    const pageTwo = await messages("a", 300);
+    assert.equal(pageOne.length, 301);
+    assert.equal(pageTwo.length, 2);
+    assert.deepEqual(pageOne[300], pageTwo[0]);
+    assert.equal((await messages("a", 600)).length, 0);
+    assert.equal((await messages("b", 0)).length, 0);
+    assert.equal((await messages("b", 300)).length, 0);
+    assert.deepEqual(Object.keys(pageTwo[0]).sort(), ["body", "createdAt", "deliveries", "sender", "status"]);
     await client.query("UPDATE rescue_resale_deliveries SET status='delivered' WHERE tenant_id='a' AND status='undelivered'");
     assert.equal((await read("undelivered")).length, 0);
   } finally {

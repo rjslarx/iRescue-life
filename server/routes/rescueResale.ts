@@ -12,7 +12,7 @@ import { calculatePlatformFee, calculateDestinationChargeEconomics, getDestinati
 import { resaleItemSchema, resaleSettingsSchema, resalePhone, resaleMessageAllowed, resaleCsvCell } from "@shared/rescue-resale";
 import { hashResale, resaleTenant, resaleBase, resaleSettings, resalePublicItem, resaleOrder, resaleConversation, sendResaleMessage, syncResaleOrder } from "../services/rescue-resale";
 import { applyResaleOffer, resaleOfferAction } from "../services/resale-offers";
-import { resaleAuditFilter, resaleAuditQuery } from "../services/resale-audit";
+import { resaleAuditFilter, resaleAuditQuery, resaleAuditOffset, resaleMessageAuditQuery } from "../services/resale-audit";
 
 const router = Router();
 const uuid = z.string().uuid();
@@ -90,16 +90,13 @@ router.get("/items/:id", route(async (req: any, res: any) => {
   res.json(resalePublicItem(r));
 }));
 async function conversationView(c: any, phone?: string) {
-  const messages = (await pool.query(`SELECT m.body,m.sender,m.status,m.created_at AS "createdAt",
-    COALESCE((SELECT jsonb_agg(jsonb_build_object('recipient',d.recipient,'status',d.status,
-      'errorCode',d.error_code,'updatedAt',d.updated_at) ORDER BY d.created_at)
-      FROM rescue_resale_deliveries d WHERE d.message_id=m.id AND d.tenant_id=$2),'[]'::jsonb) AS deliveries
-    FROM rescue_resale_messages m WHERE m.conversation_id=$1 ORDER BY m.created_at LIMIT 300`, [c.id, c.tenant_id])).rows;
+  const rows = (await pool.query(resaleMessageAuditQuery, [c.id, c.tenant_id, 0])).rows;
+  const messages = rows.slice(0, 300);
   const expired = c.expires_at && new Date(c.expires_at).getTime() <= Date.now() && ["accepted", "countered", "pending"].includes(c.offer_status);
   return { id: c.id, code: c.code, itemId: c.item_id, itemTitle: c.item_title,
     role: c.buyer_phone === phone ? "buyer" : "donor", offerCents: c.offer_cents,
     offerStatus: expired ? "expired" : c.offer_status, expiresAt: c.expires_at, updatedAt: c.updated_at, messages,
-    ...(c.delivery_summary ? { deliverySummary: c.delivery_summary } : {}) };
+    ...(c.delivery_summary ? { deliverySummary: c.delivery_summary, messagesHasMore: rows.length > 300 } : {}) };
 }
 router.get("/me", route(async (req: any, res: any) => {
   const phone = await verified(req);
@@ -284,14 +281,24 @@ router.use("/admin", requireAuth, requireRoleOrPageAccess("finance", "owner", "a
 });
 router.get("/admin", route(async (req: any, res: any) => {
   const deliveryStatus = resaleAuditFilter.parse(req.query.deliveryStatus ?? "all");
+  const offset = resaleAuditOffset.parse(req.query.offset ?? "0");
   const [items, cs, orders, settings] = await Promise.all([
     pool.query("SELECT * FROM rescue_resale_items WHERE tenant_id=$1 ORDER BY created_at DESC LIMIT 500", [req.tenant.id]),
-    pool.query(resaleAuditQuery, [req.tenant.id, deliveryStatus]),
+    pool.query(resaleAuditQuery, [req.tenant.id, deliveryStatus, offset]),
     pool.query("SELECT * FROM rescue_resale_orders WHERE tenant_id=$1 ORDER BY created_at DESC LIMIT 500", [req.tenant.id]),
     resaleSettings(req.tenant.id),
   ]);
   res.json({ settings, items: items.rows.map(i => ({ ...resalePublicItem(i), donorName: i.data.donorName, donorEmail: i.data.donorEmail, donorPhone: i.phone, reviewNote: i.review_note })),
-    conversations: await Promise.all(cs.rows.map(c => conversationView(c))), orders: orders.rows.map(r => resaleOrder(r, true)) });
+    conversations: await Promise.all(cs.rows.slice(0, 100).map(c => conversationView(c))),
+    conversationsHasMore: cs.rows.length > 100, orders: orders.rows.map(r => resaleOrder(r, true)) });
+}));
+router.get("/admin/conversations/:id/messages", route(async (req: any, res: any) => {
+  const id = uuid.parse(req.params.id);
+  const offset = resaleAuditOffset.parse(req.query.offset ?? "0");
+  const found = await pool.query("SELECT id FROM rescue_resale_conversations WHERE id=$1 AND tenant_id=$2", [id, req.tenant.id]);
+  if (!found.rows.length) fail("Conversation not found", 404);
+  const { rows } = await pool.query(resaleMessageAuditQuery, [id, req.tenant.id, offset]);
+  res.json({ messages: rows.slice(0, 300), hasMore: rows.length > 300 });
 }));
 router.put("/admin/settings", route(async (req: any, res: any) => {
   const data = resaleSettingsSchema.parse(req.body);

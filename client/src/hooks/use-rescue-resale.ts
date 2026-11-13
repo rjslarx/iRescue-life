@@ -10,6 +10,7 @@ export type ResaleItem = {
   reviewNote?: string | null; donorName?: string; donorEmail?: string; donorPhone?: string;
 };
 export type ResaleConversation = {
+  messagesHasMore?: boolean;
   deliverySummary?: { recipient: string; status: string; count: number }[];
   id: string; code: string; itemId: string; itemTitle: string; role: "buyer" | "donor";
   offerCents: number | null; offerStatus: "none" | "pending" | "accepted" | "declined" | "countered" | "expired" | "paid";
@@ -27,7 +28,7 @@ export type ResaleOrder = {
 };
 export type ResaleConfig = { enabled: boolean; checkoutEnabled: boolean; rescueName: string; pickupOptions: ResalePickup[] };
 export type ResaleActivity = { items: ResaleItem[]; conversations: ResaleConversation[]; orders: ResaleOrder[] };
-export type ResaleAdmin = { settings: { pickupOptions: ResalePickup[] }; items: ResaleItem[]; conversations: ResaleConversation[]; orders: ResaleOrder[] };
+export type ResaleAdmin = { settings: { pickupOptions: ResalePickup[] }; items: ResaleItem[]; conversations: ResaleConversation[]; conversationsHasMore: boolean; orders: ResaleOrder[] };
 const prefix = "/api/rescue-resale";
 export const resaleMoney = (value: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value / 100);
 export function resaleCents(value: string): number {
@@ -57,7 +58,7 @@ export function useResaleConfig() {
     enabled: !!tenantId, retry: 1,
   });
 }
-export function useRescueResale({ admin = false, orderId = null, activityOpen = false, deliveryStatus = "all" }: { admin?: boolean; orderId?: string | null; activityOpen?: boolean; deliveryStatus?: string } = {}) {
+export function useRescueResale({ admin = false, orderId = null, activityOpen = false, deliveryStatus = "all", conversationOffset = 0 }: { admin?: boolean; orderId?: string | null; activityOpen?: boolean; deliveryStatus?: string; conversationOffset?: number } = {}) {
   const { tenantId, basePath } = useTenant();
   const cache = useQueryClient();
   const scope = `${window.location.host}:${tenantId || ""}:${basePath}`;
@@ -98,7 +99,7 @@ export function useRescueResale({ admin = false, orderId = null, activityOpen = 
     refetchInterval: activityOpen && !!token ? 12000 : false,
   });
   const adminData = useQuery<ResaleAdmin>({
-    queryKey: [...key, "admin", deliveryStatus], queryFn: () => request("GET", `/admin?deliveryStatus=${encodeURIComponent(deliveryStatus)}`),
+    queryKey: [...key, "admin", deliveryStatus, conversationOffset], queryFn: () => request("GET", `/admin?deliveryStatus=${encodeURIComponent(deliveryStatus)}&offset=${conversationOffset}`),
     enabled: !!tenantId && admin, retry: 1,
   });
   const order = useQuery<ResaleOrder>({
@@ -171,3 +172,12 @@ export function useRescueResale({ admin = false, orderId = null, activityOpen = 
   return { config, items, me, adminData, order, token, signOut: () => saveToken(""), requestCode, verifyCode, upload, createItem, withdraw, startMessage, reply, offer, checkout, cancelOrder, settings, review, complete, sync, ledger };
 }
 export type ResaleClient = ReturnType<typeof useRescueResale>;
+
+export function useResaleAuditMessages(id: string, offset: number) {
+  const { tenantId, basePath } = useTenant();
+  return useQuery<{ messages: ResaleConversation["messages"]; hasMore: boolean }>({
+    queryKey: ["rescue-resale", tenantId, basePath, "audit-messages", id, offset],
+    queryFn: async () => (await tenantApiRequest("GET", `${prefix}/admin/conversations/${encodeURIComponent(id)}/messages?offset=${offset}`)).json(),
+    enabled: !!tenantId && offset > 0, retry: 1,
+  });
+}
