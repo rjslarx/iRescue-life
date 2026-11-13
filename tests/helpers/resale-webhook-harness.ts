@@ -42,7 +42,7 @@ export async function compileWebhook() {
     "../db": "export const db=globalThis.fixture.db; export const pool=globalThis.fixture.pool;",
     "@shared/schema": "export const tenants={id:'id',twilioPhoneNumber:'twilioPhoneNumber',twilioAuthTokenEncrypted:'twilioAuthTokenEncrypted'};",
     "drizzle-orm": "export const eq=(column,value)=>({column,value});",
-    "./lib/twilio-service": "export const sendSms=(...a)=>globalThis.fixture.sendSms(...a); export const isTwilioEnabled=(id)=>globalThis.fixture.enabled; export const handleIncomingSms=(...a)=>globalThis.fixture.incoming(...a);",
+    "./lib/twilio-service": "export const sendSms=(...a)=>globalThis.fixture.sendSms(...a); export const isTwilioEnabled=(id)=>globalThis.fixture.enabled; export const handleIncomingSms=(...a)=>globalThis.fixture.incoming(...a); export const getTwilioConfigForTenant=()=>{throw Error('Unexpected status lookup')};",
     "./lib/encryption": "export const decrypt=(v)=>globalThis.fixture.decrypt(v);",
     "../lib/stripe-service": "export const stripeService=new Proxy({}, {get(){throw Error('Stripe forbidden in SMS tests')}});",
     "../lib/app-base-url": "export const getAppBaseUrl=()=> 'https://rescue.example';",

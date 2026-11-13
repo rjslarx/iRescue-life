@@ -309,6 +309,8 @@ app.use((req, res, next) => {
       resaleSweepRunning = true;
       try { await (await import("./services/rescue-resale")).reconcileResaleOrders(); }
       catch { console.warn("[Resale] Reconciliation unavailable; will retry"); }
+      try { await (await import("./services/resale-delivery")).reconcilePendingResaleDeliveries(); }
+      catch { console.warn("[Resale] Delivery reconciliation unavailable; will retry"); }
       finally { resaleSweepRunning = false; }
     }, 15 * 60 * 1000);
     resaleTimer.unref();

@@ -17,7 +17,8 @@ before(async () => {
     "../db": "export const pool=globalThis.fixture.pool; export const db={};",
     "@shared/schema": "export const tenants={};",
     "drizzle-orm": "export const eq=()=>{throw Error('Unexpected ORM use')};",
-    "../lib/twilio-service": "export const isTwilioEnabled=()=>false; export const sendSms=(...args)=>globalThis.fixture.transport(...args);",
+    "../lib/twilio-service": "export const isTwilioEnabled=()=>false; export const sendSms=(...args)=>globalThis.fixture.transport(...args); export const getTwilioConfigForTenant=()=>{throw Error('Unexpected status lookup')};",
+    "twilio": "export default ()=>{throw Error('Twilio network access forbidden in message tests')};",
     "./resale-delivery": `import { sendResaleSms as send } from ${JSON.stringify(`${process.cwd()}/server/services/resale-delivery.ts`)};
       export const sendResaleSms=(input)=>{globalThis.fixture.captureSend(input); return send(input);};`,
     "../lib/stripe-service": "export const stripeService={};",

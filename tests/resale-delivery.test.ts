@@ -8,11 +8,89 @@ import { eq } from "drizzle-orm";
 import { encrypt } from "../server/lib/encryption";
 import { getAppBaseUrl } from "../server/lib/app-base-url";
 import { rescueResaleSchemaSql } from "../server/lib/rescue-resale-schema";
-import { recordResaleDelivery, sendResaleSms } from "../server/services/resale-delivery";
+import { recordResaleDelivery, sendResaleSms, reconcileResaleDeliveries } from "../server/services/resale-delivery";
 import { twilioDeliveryCallback } from "../server/services/twilio-delivery-callback";
 import { handleResaleSms } from "../server/services/rescue-resale";
 
 after(async () => { await pool.end(); });
+
+test("read-only resale reconciliation isolates tenants, throttles failures, and tolerates delayed callbacks",
+  { skip: process.env.RUN_RESALE_DB_TEST !== "1" }, async () => {
+  const tid = randomUUID(), other = randomUUID();
+  const account = "AC" + "7".repeat(32);
+  const ids: Record<string, string> = {};
+  try {
+    await pool.query(rescueResaleSchemaSql);
+    for (const id of [tid, other]) await db.insert(tenants).values({
+      id, name: "Delivery reconciliation test", subdomain: `reconcile-${id}`,
+      twilioEnabled: true, twilioPhoneNumber: "+12025550120",
+      twilioAccountSidEncrypted: encrypt(account),
+      twilioAuthTokenEncrypted: encrypt("test-only-not-a-real-token"),
+    });
+    for (const [name, status, tenant, hasSid, old] of [
+      ["accepted", "accepted", tid, true, true],
+      ["timeout", "sent", tid, true, true],
+      ["late", "unknown", tid, true, true],
+      ["noSid", "unknown", tid, false, true],
+      ["other", "accepted", other, true, true],
+      ["fresh", "accepted", tid, true, false],
+      ["terminal", "delivered", tid, true, true],
+      ["mismatch", "accepted", tid, true, true],
+    ] as const) {
+      ids[name] = randomUUID();
+      await pool.query(`INSERT INTO rescue_resale_deliveries(id,tenant_id,recipient,provider_sid,status,updated_at)
+        VALUES($1,$2,'buyer',$3,$4,now()-($5::int * interval '1 minute'))`,
+      [ids[name], tenant, hasSid ? `SM${ids[name].replaceAll("-", "")}` : null, status, old ? 20 : 0]);
+    }
+    const sidFor = (name: string) => `SM${ids[name].replaceAll("-", "")}`;
+    const read = async (name: string) => (await pool.query(
+      "SELECT * FROM rescue_resale_deliveries WHERE id=$1", [ids[name]])).rows[0];
+    const lookups: string[] = [];
+    const lookup = async (config: any, sid: string) => {
+      assert.equal(config.accountSid, account);
+      lookups.push(sid);
+      if (sid === sidFor("timeout")) throw Object.assign(new Error("provider timeout"), { code: "ETIMEDOUT" });
+      if (sid === sidFor("late")) {
+        // Callback commits while a slower provider GET still reports sent.
+        await recordResaleDelivery(tid, ids.late, sid, "delivered");
+        return { sid, accountSid: account, status: "sent", errorCode: null };
+      }
+      return { sid, accountSid: sid === sidFor("mismatch") ? "AC-wrong" : account,
+        status: "undelivered", errorCode: 30003 };
+    };
+    await reconcileResaleDeliveries(tid, lookup);
+    assert.deepEqual(lookups.sort(), ["accepted", "timeout", "late", "mismatch"].map(sidFor).sort());
+    assert.equal((await read("accepted")).status, "undelivered");
+    assert.equal((await read("accepted")).error_code, "30003");
+    assert.equal((await read("timeout")).status, "sent");
+    assert.equal((await read("late")).status, "delivered");
+    assert.equal((await read("mismatch")).status, "accepted");
+    for (const name of ["noSid", "other", "fresh", "terminal"]) assert.equal((await read(name)).status_checked_at, null);
+    await reconcileResaleDeliveries(tid, lookup);
+    assert.equal(lookups.length, 4, "failed checks must also be throttled");
+    // Later callbacks still repair timed-out reads and unknown sends lacking a SID.
+    await recordResaleDelivery(tid, ids.timeout, sidFor("timeout"), "delivered");
+    await recordResaleDelivery(tid, ids.noSid, sidFor("noSid"), "sent");
+    await recordResaleDelivery(tid, ids.accepted, sidFor("accepted"), "queued");
+    assert.equal((await read("timeout")).status, "delivered");
+    assert.equal((await read("noSid")).provider_sid, sidFor("noSid"));
+    assert.equal((await read("accepted")).status, "undelivered");
+    assert.equal((await pool.query("SELECT count(*)::int n FROM rescue_resale_deliveries WHERE tenant_id IN ($1,$2)", [tid, other])).rows[0].n, 8,
+      "reconciliation must not create sends");
+    // Overlapping workers must not read the same batch from Twilio.
+    await pool.query(`UPDATE rescue_resale_deliveries SET updated_at=now()-interval '20 minutes',
+      status_checked_at=NULL WHERE id=$1`, [ids.mismatch]);
+    let concurrentReads = 0;
+    const concurrentLookup = async (_config: any, sid: string) => {
+      concurrentReads++;
+      return { sid, accountSid: account, status: "sent", errorCode: null };
+    };
+    await Promise.all([reconcileResaleDeliveries(tid, concurrentLookup), reconcileResaleDeliveries(tid, concurrentLookup)]);
+    assert.equal(concurrentReads, 1);
+  } finally {
+    for (const id of [tid, other]) await db.delete(tenants).where(eq(tenants.id, id));
+  }
+});
 
 test("resale delivery callbacks, send uncertainty and command receipts", { skip: process.env.RUN_RESALE_DB_TEST !== "1" }, async () => {
   const tid = randomUUID(), iid = randomUUID(), cid = randomUUID(), mid = randomUUID();
@@ -85,6 +163,12 @@ test("resale delivery callbacks, send uncertainty and command receipts", { skip:
     await pool.query(`INSERT INTO rescue_resale_deliveries(id,tenant_id,order_id,recipient) VALUES($1,$2,$3,'buyer')`, [orderDelivery, tid, orderId]);
     deliveryId = orderDelivery;
     sid = "SM" + "3".repeat(32);
+    await recordResaleDelivery(tid, orderDelivery, sid, "sent");
+    await pool.query("UPDATE rescue_resale_deliveries SET updated_at=now()-interval '20 minutes' WHERE id=$1", [orderDelivery]);
+    await reconcileResaleDeliveries(tid, async (_config, fetchedSid) =>
+      ({ sid: fetchedSid, accountSid: account, status: "undelivered", errorCode: 30003 }));
+    assert.equal((await pool.query("SELECT status FROM rescue_resale_orders WHERE id=$1", [orderId])).rows[0].status, "checkout");
+    assert.equal((await pool.query("SELECT offer_status FROM rescue_resale_conversations WHERE id=$1", [cid])).rows[0].offer_status, "pending");
     assert.equal(await callback("undelivered"), 200);
     await callback("sent");
     assert.equal((await read()).status, "undelivered");

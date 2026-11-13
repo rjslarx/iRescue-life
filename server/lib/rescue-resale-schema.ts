@@ -54,4 +54,8 @@ CREATE TABLE IF NOT EXISTS rescue_resale_deliveries (
  created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS resale_deliveries_message ON rescue_resale_deliveries(message_id);
+ALTER TABLE rescue_resale_deliveries ADD COLUMN IF NOT EXISTS status_checked_at timestamptz;
+CREATE INDEX IF NOT EXISTS resale_deliveries_reconciliation
+ ON rescue_resale_deliveries(tenant_id,status_checked_at,updated_at)
+ WHERE provider_sid IS NOT NULL AND status IN ('unknown','accepted','scheduled','queued','sending','sent');
 `;

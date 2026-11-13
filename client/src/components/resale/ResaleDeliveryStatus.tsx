@@ -7,7 +7,7 @@ export function deliveryLabel(status: string) {
     queued: "Queued — delivery not confirmed",
     scheduled: "Scheduled — delivery not confirmed",
     sending: "Sending — outcome not confirmed; do not resend",
-    unknown: "Unknown outcome — do not resend",
+    unknown: "Unknown outcome — needs staff review; do not resend",
     delivered: "Delivered", read: "Read", failed: "Failed", not_sent: "Not sent — blocked or rejected before acceptance",
     undelivered: "Undelivered", canceled: "Canceled",
     tracked: "See recipient statuses", command: "Command recorded",
