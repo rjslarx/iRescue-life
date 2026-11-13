@@ -2,6 +2,7 @@ import Stripe from 'stripe';
 import { db } from '../db';
 import { tenants } from '@shared/schema';
 import { getPlatformStripeSecretKey } from '../config/platform';
+import { createVendingResults, isTenantVendingCharge } from '@shared/rescue-vend-report';
 
 export type StripeEconomicsRow = {
   created: string;
@@ -48,6 +49,7 @@ type NumericTotals = Omit<StripeEconomicsRow,
 
 const SAFE_SURFACES: Record<string, string> = {
   donation: 'Donation',
+  rescue_vend: 'Virtual vending',
   adoption_fee: 'Adoption fee',
   shop_order: 'Shop order',
   event_ticket: 'Event ticket',
@@ -365,7 +367,7 @@ function addRow(total: NumericTotals, row: StripeEconomicsRow) {
   }
 }
 
-export async function buildStripeEconomicsReport(days: number, limit: number) {
+export async function buildStripeEconomicsReport(days: number, limit: number, vendingTenantId?: string) {
   const key = getPlatformStripeSecretKey();
   if (!key) throw new Error('Platform Stripe reporting is not configured');
 
@@ -376,6 +378,16 @@ export async function buildStripeEconomicsReport(days: number, limit: number) {
     subdomain: tenants.subdomain,
     accountId: tenants.stripeConnectedAccountId,
   }).from(tenants);
+  return collectStripeEconomicsReport(stripe, tenantRecords, days, limit, vendingTenantId);
+}
+
+export async function collectStripeEconomicsReport(
+  stripe: Stripe,
+  tenantRecords: { id: string; name: string; subdomain: string; accountId: string | null }[],
+  days: number,
+  limit: number,
+  vendingTenantId?: string,
+) {
   const byId = new Map(tenantRecords.map(tenant => [tenant.id, tenant]));
   const byAccount = new Map(
     tenantRecords.filter(tenant => tenant.accountId).map(tenant => [tenant.accountId!, tenant]),
@@ -389,6 +401,7 @@ export async function buildStripeEconomicsReport(days: number, limit: number) {
   ];
   const cutoff = Math.floor(Date.now() / 1000) - days * 24 * 60 * 60;
   const rows: StripeEconomicsRow[] = [];
+  const vending = createVendingResults(days);
   const totals = emptyTotals();
   const categoryMap = new Map<string, NumericTotals>();
   let resultCount = 0;
@@ -425,7 +438,9 @@ export async function buildStripeEconomicsReport(days: number, limit: number) {
 
     for (const stripeCharge of page.data) {
       const charge: any = stripeCharge;
-      if (!charge.transfer) continue;
+      if (!charge.paid || charge.status !== 'succeeded') continue;
+      if (vendingTenantId && !isTenantVendingCharge(charge, vendingTenantId)) continue;
+      if (!charge.transfer && !vendingTenantId) continue;
       let transfer = asObject(charge.transfer);
       let applicationFee = asObject(charge.application_fee);
 
@@ -453,7 +468,9 @@ export async function buildStripeEconomicsReport(days: number, limit: number) {
         });
       }
 
-      const chargeContext = await resolveChargeEconomicsContext(stripe, charge);
+      const chargeContext = vendingTenantId
+        ? { metadata: charge.metadata as Record<string, string>, recurring: false }
+        : await resolveChargeEconomicsContext(stripe, charge);
       const metadata = chargeContext.metadata;
       const destinationId =
         (typeof transfer?.destination === 'string'
@@ -467,6 +484,7 @@ export async function buildStripeEconomicsReport(days: number, limit: number) {
           : applicationFee?.account?.id);
       const tenant = (destinationId && byAccount.get(destinationId)) ||
         (metadata?.tenantId && byId.get(metadata.tenantId));
+      if (vendingTenantId && tenant?.id !== vendingTenantId) continue;
       const surface = safeSurface(metadata);
       const classification = metadataClassification(metadata);
       const refunds = await listAllChargeRefunds(stripe, charge);
@@ -571,6 +589,14 @@ export async function buildStripeEconomicsReport(days: number, limit: number) {
         platformNetCents,
       };
       resultCount += 1;
+      if (vendingTenantId) {
+        vending.add(charge.id, metadata, {
+          grossCents, refundCents, netGiftCents: grossCents - refundCents,
+          platformRevenueCents: row.iRescueRevenueCents,
+          processingRecoveryCents: row.processingRecoveryCents,
+          rescueProceedsCents: transfer ? row.rescueProceedsCents : null,
+        });
+      }
       addRow(totals, row);
       const category = categoryMap.get(row.surface) || emptyTotals();
       addRow(category, row);
@@ -593,5 +619,6 @@ export async function buildStripeEconomicsReport(days: number, limit: number) {
       .map(([category, categoryTotals]) => ({ category, ...categoryTotals }))
       .sort((a, b) => b.grossCents - a.grossCents),
     rows,
+    vendingResults: vendingTenantId ? vending.finish() : undefined,
   };
 }

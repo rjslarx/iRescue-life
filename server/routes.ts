@@ -18601,6 +18601,19 @@ ${renderedHtml}
    * GET /api/finance
    * Get financial data (staff only)
    */
+  app.get('/api/finance/vending-results', requireTenant, requireAuth, requireRoleOrPageAccess('finance', 'admin', 'board_member', 'staff'), async (req, res, next) => {
+    res.setHeader('Cache-Control', 'private, no-store');
+    const days = req.query.days === undefined ? 30 : Number(req.query.days);
+    if (![30, 90, 365].includes(days)) return res.status(400).json({ error: 'Choose 30, 90, or 365 days' });
+    try {
+      const { buildStripeEconomicsReport } = await import('./lib/stripe-economics-report');
+      const report = await buildStripeEconomicsReport(days, 0, req.tenant!.id);
+      res.json(report.vendingResults);
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.get('/api/finance', requireTenant, requireAuth, requireRoleOrPageAccess('finance', 'admin', 'board_member', 'staff'), async (req, res, next) => {
     try {
       const { getDonationsByTenant, getExpendituresByTenant, getFinancialSummary } = await import('./services/donations');

@@ -8,3 +8,9 @@ The virtual vending machine is a public, shareable tenant fundraiser, not a Resc
 **Why:** The user explicitly requested these boundaries when supplying the Antigravity vending machine on 2026-11-12.
 
 **How to apply:** Reuse existing donation accounting and destination-charge economics. Treat supply descriptions as illustrative, not guaranteed earmarking or delivery. Only server-verified paid Stripe sessions may trigger the success experience; the uploaded demo events are not payment proof. Keep historical menu versions resolvable when changing item amounts.
+
+Vending supply rankings use refund-adjusted gift value. Mixed-cart refunds and proceeds are proportional allocations, not item-specific refund instructions or restricted-fund accounting. Original assessed platform revenue and processing recovery remain distinct from current actual rescue proceeds.
+
+**Why:** Stripe refunds and transfer reversals apply to the payment rather than individual symbolic supplies; pretending they establish supply-specific cashflows would mislead finance staff.
+
+**How to apply:** Preserve every cent when splitting mixed carts, label allocations and original fees clearly, and retain unknown catalog metadata as unattributed rather than dropping verified gifts.

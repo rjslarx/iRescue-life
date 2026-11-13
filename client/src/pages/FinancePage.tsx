@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import FinanceTable from "@/components/FinanceTable";
 import TreasurerReport from "@/components/TreasurerReport";
+import VendingResults from "@/components/VendingResults";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePagePermissions } from "@/hooks/usePagePermissions";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -587,6 +588,8 @@ export default function FinancePage() {
         )}
 
         <ExpenseCampaignsRollup />
+
+        {hasFinanceAccess && <VendingResults />}
 
         <Tabs defaultValue="records" className="w-full">
           <TabsList data-testid="tabs-finance">
