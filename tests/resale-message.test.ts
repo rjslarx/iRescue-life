@@ -8,6 +8,7 @@ import { runInNewContext } from "node:vm";
 import { randomUUID, createHash } from "node:crypto";
 import { build } from "esbuild";
 import { z } from "zod";
+import { resaleMessageAllowed } from "../shared/rescue-resale";
 import { allowedResaleMessages, blockedResaleMessages } from "./helpers/resale-message-cases";
 
 let code: string;
@@ -16,10 +17,11 @@ before(async () => {
     "../db": "export const pool=globalThis.fixture.pool; export const db={};",
     "@shared/schema": "export const tenants={};",
     "drizzle-orm": "export const eq=()=>{throw Error('Unexpected ORM use')};",
-    "../lib/twilio-service": "export const isTwilioEnabled=()=>false;",
-    "./resale-delivery": "export const sendResaleSms=(input)=>globalThis.fixture.sendResaleSms(input);",
+    "../lib/twilio-service": "export const isTwilioEnabled=()=>false; export const sendSms=(...args)=>globalThis.fixture.transport(...args);",
+    "./resale-delivery": `import { sendResaleSms as send } from ${JSON.stringify(`${process.cwd()}/server/services/resale-delivery.ts`)};
+      export const sendResaleSms=(input)=>{globalThis.fixture.captureSend(input); return send(input);};`,
     "../lib/stripe-service": "export const stripeService={};",
-    "../lib/app-base-url": "export const getAppBaseUrl=()=>{throw Error('Unexpected URL lookup')};",
+    "../lib/app-base-url": "export const getAppBaseUrl=()=> 'https://resale.example.test';",
     "./resale-offers": "export const applyResaleOffer=()=>{throw Error('Unexpected offer')}; export const parseResaleCommand=()=>null;",
   };
   const result = await build({
@@ -31,7 +33,9 @@ before(async () => {
         b.onResolve({ filter: /.*/ }, args => {
           if (args.path in mocks) return { path: args.path, namespace: "mock" };
         });
-        b.onLoad({ filter: /.*/, namespace: "mock" }, args => ({ contents: mocks[args.path], loader: "js" }));
+        b.onLoad({ filter: /.*/, namespace: "mock" }, args => ({
+          contents: mocks[args.path], loader: "js", resolveDir: process.cwd(),
+        }));
       },
     }],
   });
@@ -44,16 +48,32 @@ const buyer = "+12025550101", donor = "+12025550102";
 const redacted = "[Blocked: contact details, external payment request, or message length]";
 const hour = 60 * 60 * 1000;
 type Message = { id: string; conversation: string; sender: string; body: string; status: string; sid: string | null; createdAt: number };
+type Delivery = { id: string; tenantId: string; messageId: string; recipient: string; status: string; sid: string | null };
+type Outcome = "accepted" | "failed" | "unknown" | "throw";
 
-function harness(deliveryStatus = "accepted") {
+function harness(deliveryStatus: Outcome | Partial<Record<"buyer" | "donor", Outcome>> = "accepted") {
   const now = Date.parse("2026-11-13T12:00:00Z");
   const messages: Message[] = [], sent: any[] = [];
+  const deliveries: Delivery[] = [];
   const writes: any[][] = [], queries: { sql: string; params: any[] }[] = [];
   const fixture = {
     pool: {
       async query(raw: string, params: any[]) {
         const sql = raw.replace(/\s+/g, " ").trim();
         queries.push({ sql, params });
+        if (sql.startsWith("INSERT INTO rescue_resale_deliveries")) {
+          const [id, tenantId, messageId, orderId, recipient] = params;
+          assert.equal(orderId, null);
+          deliveries.push({ id, tenantId, messageId, recipient, status: "unknown", sid: null });
+          return { rows: [] };
+        }
+        if (sql.startsWith("UPDATE rescue_resale_deliveries SET provider_sid=")) {
+          const delivery = deliveries.find(d => d.id === params[0]);
+          assert.ok(delivery);
+          delivery.sid = params[1];
+          delivery.status = params[2];
+          return { rows: [] };
+        }
         if (sql.startsWith("SELECT c.")) {
           assert.match(sql, /WHERE c.id=\$1 AND c.tenant_id=\$2/);
           assert.deepEqual(Array.from(params), [conversationId, tenantId]);
@@ -82,15 +102,32 @@ function harness(deliveryStatus = "accepted") {
         throw new Error(`Unexpected persistence operation: ${sql}`);
       },
     },
-    async sendResaleSms(input: any) {
+    captureSend(input: any) {
       assert.equal(messages.at(-1)?.status, "sending", "persist before delivery");
       sent.push(input);
-      return deliveryStatus;
+    },
+    async transport(tid: string, number: string, body: string, type: string, context: any) {
+      const input = sent.at(-1);
+      const delivery = deliveries.at(-1)!;
+      assert.ok(delivery, "persist recipient audit before transport");
+      assert.equal(delivery.messageId, input.messageId);
+      assert.equal(delivery.tenantId, tid);
+      assert.equal(delivery.recipient, input.recipient);
+      assert.equal(number, input.number);
+      assert.equal(body, input.body);
+      assert.equal(type, "proxy_message");
+      assert.equal(context.bypassQuietHours, input.bypassQuietHours);
+      assert.equal(new URL(context.statusCallbackUrl).searchParams.get("resaleDelivery"), delivery.id);
+      const status = typeof deliveryStatus === "string" ? deliveryStatus :
+        deliveryStatus[input.recipient as "buyer" | "donor"] ?? "accepted";
+      if (status === "throw") throw new Error("Simulated lost transport response");
+      return status === "accepted" ? { number, status: "sent", sid: `SM-${delivery.id}` } :
+        { number, status: "failed", uncertain: status === "unknown" };
     },
   };
   const module = { exports: {} as any };
   runInNewContext(code, {
-    module, exports: module.exports, fixture,
+    module, exports: module.exports, fixture, URL,
     require(name: string) {
       if (name === "node:crypto") return { randomUUID, createHash };
       if (name === "zod") return { z };
@@ -104,9 +141,71 @@ function harness(deliveryStatus = "accepted") {
     });
   }
   return {
-    messages, sent, writes, queries, seed,
-    send: (sender: string, body: string) => module.exports.sendResaleMessage(tenantId, conversationId, sender, body, "SM-test"),
+    messages, sent, writes, queries, seed, deliveries,
+    send: (sender: string, body: string, replyTo?: string) =>
+      module.exports.sendResaleMessage(tenantId, conversationId, sender, body, sender === "system" ? undefined : "SM-test", replyTo),
   };
+}
+
+const checkoutNotice = "Offer accepted at $17.00. Review My activity: https://resale.example.test/rescue-resale . Acceptance is not payment or a reservation. Choose pickup and pay through checkout within two hours, subject to availability.";
+
+function assertSystemNotice(h: ReturnType<typeof harness>, recipients = [buyer, donor], bypassQuietHours = false) {
+  assert.deepEqual(h.sent.map(s => s.number), recipients);
+  for (const delivery of h.sent) {
+    assert.equal(delivery.tenantId, tenantId);
+    assert.equal(delivery.messageId, h.messages.at(-1)!.id);
+    assert.equal(delivery.recipient, delivery.number === buyer ? "buyer" : "donor");
+    assert.equal(delivery.body, `Resale R123456: ${checkoutNotice}\nReply R123456 followed by your message. Do not share contact details. Reply STOP to unsubscribe.`);
+    assert.equal(delivery.bypassQuietHours, bypassQuietHours);
+  }
+  const message = h.messages.at(-1)!;
+  assert.equal(message.sender, "system");
+  assert.equal(message.body, checkoutNotice);
+  assert.equal(message.sid, null);
+  // Delivery outcomes now live on each recipient audit; tracked is not success.
+  assert.equal(message.status, "tracked");
+  assert.deepEqual(h.writes.map(w => w.length === 6 ? w[4] : w[1]), ["sending", "tracked"]);
+}
+
+test("system checkout notice bypasses participant link filtering and notifies both participants within quiet-hour policy", async () => {
+  assert.equal(resaleMessageAllowed(checkoutNotice), false, "same link must remain forbidden to participants");
+  const h = harness();
+  await h.send("system", checkoutNotice);
+  assertSystemNotice(h);
+  assert.deepEqual(h.deliveries.map(d => d.status), ["accepted", "accepted"]);
+  assert.ok(h.deliveries.every(d => d.sid));
+});
+
+test("system notifications are not suppressed by the participant hourly cap", async () => {
+  const h = harness();
+  h.seed(31, "system");
+  await h.send("system", checkoutNotice);
+  assertSystemNotice(h);
+});
+
+for (const recipient of ["buyer", "donor"] as const) {
+  test(`direct system response targets only ${recipient} and bypasses quiet hours`, async () => {
+    const h = harness();
+    const number = recipient === "buyer" ? buyer : donor;
+    await h.send("system", checkoutNotice, number);
+    assertSystemNotice(h, [number], true);
+    assert.deepEqual(h.deliveries.map(d => [d.recipient, d.status]), [[recipient, "accepted"]]);
+  });
+  for (const outcome of ["failed", "unknown", "throw"] as const) {
+    test(`system notice reports ${recipient} ${outcome} without hiding partial failure or skipping the other participant`, async () => {
+      const h = harness({ [recipient]: outcome });
+      await assert.rejects(h.send("system", checkoutNotice),
+        /one or more texts failed or have an unknown outcome\. Do not resend/);
+      assertSystemNotice(h);
+      assert.equal(h.deliveries.length, 2);
+      for (const delivery of h.deliveries) {
+        const failed = delivery.recipient === recipient;
+        assert.equal(delivery.status, failed ? outcome === "failed" ? "not_sent" : "unknown" : "accepted");
+        assert.equal(delivery.sid === null, failed);
+      }
+      assert.equal(new Set(h.deliveries.map(d => d.id)).size, 2, "independent recipient audits");
+    });
+  }
 }
 
 for (const sender of ["buyer", "donor"]) {
