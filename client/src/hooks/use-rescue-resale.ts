@@ -13,7 +13,8 @@ export type ResaleConversation = {
   id: string; code: string; itemId: string; itemTitle: string; role: "buyer" | "donor";
   offerCents: number | null; offerStatus: "none" | "pending" | "accepted" | "declined" | "countered" | "expired" | "paid";
   expiresAt: string | null; updatedAt: string;
-  messages: { body: string; sender: string; createdAt: string; status: string }[];
+  messages: { body: string; sender: string; createdAt: string; status: string;
+    deliveries?: { recipient: string; status: string; errorCode: string | null; updatedAt: string }[] }[];
 };
 export type ResaleOrder = {
   id: string; itemTitle: string; amountCents: number; status: string;
@@ -21,7 +22,7 @@ export type ResaleOrder = {
   stripeSessionId?: string | null; stripePaymentIntentId?: string | null;
   stripeFeeCents?: number | null; platformFeeCents?: number | null;
   rescueProceedsCents?: number | null; refundedCents?: number;
-  notificationStatus?: { buyer: "pending" | "sending" | "sent" | "failed"; donor: "pending" | "sending" | "sent" | "failed" };
+  notificationStatus?: { buyer: string; donor: string };
 };
 export type ResaleConfig = { enabled: boolean; checkoutEnabled: boolean; rescueName: string; pickupOptions: ResalePickup[] };
 export type ResaleActivity = { items: ResaleItem[]; conversations: ResaleConversation[]; orders: ResaleOrder[] };

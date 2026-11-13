@@ -20,3 +20,9 @@ SMS offer negotiation is approved, but acceptance must not charge the buyer or p
 **Why:** The user approved adapting the uploaded service's SMS commands, not replacing the tenant-integrated checkout or expanding the first-version scope.
 
 **How to apply:** Keep phone/tenant ownership checks, explicit conversation codes, and replay-safe offer transitions. Direct accepted buyers to the existing pickup selection and secure checkout.
+
+Treat old resale `failed` send outcomes as uncertain, not as proof that Twilio rejected a text.
+
+**Why:** The previous shared sender could report failure when the provider accepted the SMS but saving its audit log failed. Retrying these historical outcomes can duplicate messages.
+
+**How to apply:** Automatically retry pickup notifications only when non-acceptance is explicitly established. Missing delivery callbacks or old failure labels require reconciliation or staff review, never an automatic resend.

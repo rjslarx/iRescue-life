@@ -19,6 +19,8 @@ interface SendResult {
   status: 'sent' | 'failed';
   sid?: string;
   error?: string;
+  /** A request may have reached Twilio even when its response was lost. */
+  uncertain?: boolean;
 }
 
 export async function getTwilioConfigForTenant(tenantId: string): Promise<TwilioConfig | null> {
@@ -73,8 +75,8 @@ function getStatusCallbackUrl(): string | undefined {
   return `${origin}/api/webhooks/twilio/status`;
 }
 
-function buildMessageOptions(config: TwilioConfig, to: string, body: string, useDirectNumber = false) {
-  const statusCallback = getStatusCallbackUrl();
+function buildMessageOptions(config: TwilioConfig, to: string, body: string, useDirectNumber = false, callbackUrl?: string) {
+  const statusCallback = callbackUrl || getStatusCallbackUrl();
   if (config.messagingServiceSid && !useDirectNumber) {
     return {
       body,
@@ -95,15 +97,16 @@ async function sendWithFallback(
   client: ReturnType<typeof createTwilioClient>,
   config: TwilioConfig,
   to: string,
-  body: string
+  body: string,
+  callbackUrl?: string
 ) {
   try {
-    return await client.messages.create(buildMessageOptions(config, to, body));
+    return await client.messages.create(buildMessageOptions(config, to, body, false, callbackUrl));
   } catch (error: any) {
     const code = error?.code ?? error?.status;
     if (config.messagingServiceSid && (code === 21704 || code === 21703 || code === 21711)) {
       console.warn(`[TWILIO FALLBACK] Messaging Service failed (${code}), retrying with direct phone number ${config.phoneNumber}`);
-      return await client.messages.create(buildMessageOptions(config, to, body, true));
+      return await client.messages.create(buildMessageOptions(config, to, body, true, callbackUrl));
     }
     throw error;
   }
@@ -195,6 +198,7 @@ export async function sendSms(
     relatedAnimalId?: string;
     skipOrgPrefix?: boolean;
     bypassQuietHours?: boolean;
+    statusCallbackUrl?: string;
     /** Medication-task UUIDs grouped into this digest send (for DONE-reply routing). */
     relatedTaskIds?: string[];
     /** Optional FK back to the unified message_queue audit row (Communications Switchboard). */
@@ -256,8 +260,10 @@ export async function sendSms(
   const client = createTwilioClient(config);
   const prefixedMessage = applyOrgPrefix(message, config.tenantName, context?.skipOrgPrefix);
 
+  let acceptedSid: string | undefined;
   try {
-    const twilioMessage = await sendWithFallback(client, config, toNumber, prefixedMessage);
+    const twilioMessage = await sendWithFallback(client, config, toNumber, prefixedMessage, context?.statusCallbackUrl);
+    acceptedSid = twilioMessage.sid;
 
     await db.insert(smsMessageLogs).values({
       tenantId,
@@ -279,6 +285,8 @@ export async function sendSms(
 
     return { number: toNumber, status: 'sent', sid: twilioMessage.sid };
   } catch (error: any) {
+    // Logging failure after provider acceptance must never become a retryable send failure.
+    if (acceptedSid) return { number: toNumber, status: 'sent', sid: acceptedSid };
     await db.insert(smsMessageLogs).values({
       tenantId,
       direction: 'outbound',
@@ -297,7 +305,8 @@ export async function sendSms(
       relatedTaskIds: context?.relatedTaskIds,
     });
 
-    return { number: toNumber, status: 'failed', error: error.message };
+    return { number: toNumber, status: 'failed', error: error.message,
+      uncertain: !(Number(error.status) >= 400 && Number(error.status) < 500) };
   }
 }
 

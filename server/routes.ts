@@ -29340,28 +29340,8 @@ Submitted: ${new Date().toLocaleString()}
    * No auth required — public webhook. Responds with TwiML <Response/> as required by Twilio.
    */
   app.post('/api/webhooks/twilio/status', async (req, res) => {
-    try {
-      const messageSid = req.body?.MessageSid as string | undefined;
-      const twilioStatus = req.body?.MessageStatus as string | undefined;
-
-      if (messageSid && twilioStatus) {
-        let newStatus: 'sent' | 'delivered' | 'failed' | 'received' | null = null;
-        if (twilioStatus === 'delivered') newStatus = 'delivered';
-        else if (twilioStatus === 'undelivered' || twilioStatus === 'failed') newStatus = 'failed';
-
-        if (newStatus) {
-          await db
-            .update(smsMessageLogs)
-            .set({ status: newStatus })
-            .where(eq(smsMessageLogs.twilioMessageSid, messageSid));
-          console.log(`[TWILIO STATUS] ${messageSid} → ${newStatus}`);
-        }
-      }
-    } catch (err) {
-      console.error('[TWILIO STATUS WEBHOOK] Error:', err);
-    }
-    res.set('Content-Type', 'text/xml');
-    res.send('<?xml version="1.0" encoding="UTF-8"?><Response></Response>');
+    const { twilioDeliveryCallback } = await import("./services/twilio-delivery-callback");
+    return twilioDeliveryCallback(req, res);
   });
 
   /**

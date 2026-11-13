@@ -3,11 +3,12 @@ import { pool } from "../db";
 import { db } from "../db";
 import { tenants } from "@shared/schema";
 import { eq } from "drizzle-orm";
-import { isTwilioEnabled, sendSms } from "../lib/twilio-service";
+import { isTwilioEnabled } from "../lib/twilio-service";
 import { stripeService } from "../lib/stripe-service";
 import { getAppBaseUrl } from "../lib/app-base-url";
 import { resaleMessageAllowed } from "@shared/rescue-resale";
 import { applyResaleOffer, parseResaleCommand } from "./resale-offers";
+import { sendResaleSms } from "./resale-delivery";
 
 export const hashResale = (s: string) => createHash("sha256").update(s).digest("hex");
 export async function resaleTenant(id: string) {
@@ -39,11 +40,11 @@ export async function resaleConversation(id: string, tenantId: string) {
     FROM rescue_resale_conversations c JOIN rescue_resale_items i ON i.id=c.item_id
     WHERE c.id=$1 AND c.tenant_id=$2`, [id, tenantId])).rows[0];
 }
-export async function sendResaleMessage(tenantId: string, conversationId: string, sender: string, body: string, inboundSid?: string) {
+export async function sendResaleMessage(tenantId: string, conversationId: string, sender: string, body: string, inboundSid?: string, replyTo?: string) {
   const c = await resaleConversation(conversationId, tenantId);
   if (!c) throw new Error("Conversation not found");
   const recent = (await pool.query("SELECT count(*)::int n FROM rescue_resale_messages WHERE conversation_id=$1 AND sender=$2 AND created_at>now()-interval '1 hour'", [c.id, sender])).rows[0].n;
-  if (recent >= 30) throw new Error("Too many messages in this conversation. Please try again later.");
+  if (sender !== "system" && recent >= 30) throw new Error("Too many messages in this conversation. Please try again later.");
   const blocked = sender !== "system" && !resaleMessageAllowed(body);
   const id = randomUUID();
   const { rows } = await pool.query(`INSERT INTO rescue_resale_messages(id,conversation_id,sender,body,status,inbound_sid)
@@ -52,17 +53,18 @@ export async function sendResaleMessage(tenantId: string, conversationId: string
     blocked ? "blocked" : "sending", inboundSid || null]);
   if (!rows.length) return;
   if (blocked) throw new Error("Please remove contact details, links, addresses, and outside payment instructions. Use up to 1,000 characters.");
-  const recipients = sender === "system" ? [c.buyer_phone, c.donor_phone] :
+  const recipients = replyTo ? [replyTo] : sender === "system" ? [c.buyer_phone, c.donor_phone] :
     [sender === "buyer" ? c.donor_phone : c.buyer_phone];
   let failed = false;
   for (const number of recipients) {
-    const result = await sendSms(tenantId, number,
-      `Resale R${c.code}: ${body}\nReply R${c.code} followed by your message. Do not share contact details. Reply STOP to unsubscribe.`,
-      "proxy_message", { bypassQuietHours: sender !== "system" });
-    if (result.status !== "sent") failed = true;
+    const status = await sendResaleSms({ tenantId, messageId: id,
+      recipient: number === c.buyer_phone ? "buyer" : "donor", number,
+      body: `Resale R${c.code}: ${body}\nReply R${c.code} followed by your message. Do not share contact details. Reply STOP to unsubscribe.`,
+      bypassQuietHours: sender !== "system" || !!replyTo });
+    if (status !== "accepted") failed = true;
   }
-  await pool.query("UPDATE rescue_resale_messages SET status=$2 WHERE id=$1", [id, failed ? "failed" : "sent"]);
-  if (failed) throw new Error("Saved, but SMS delivery failed. The message remains in My activity. Contact the rescue if this continues.");
+  await pool.query("UPDATE rescue_resale_messages SET status=$2 WHERE id=$1", [id, "tracked"]);
+  if (failed) throw new Error("Saved, but one or more texts failed or have an unknown outcome. Do not resend; check My activity or contact the rescue.");
 }
 
 /** Called only after existing Twilio signature validation; explicit R prefix avoids stealing foster replies. */
@@ -85,13 +87,13 @@ export async function handleResaleSms(from: string, to: string, body: string, si
           (id,conversation_id,sender,body,status,inbound_sid) VALUES($1,$2,$3,'Invalid SMS offer command','rejected',$4)
           ON CONFLICT(inbound_sid) DO NOTHING RETURNING id`,
         [randomUUID(), c.id, from === c.buyer_phone ? "buyer" : "donor", sid]);
-        if (inserted.rows.length) await sendSms(t.id, from, `Resale R${c.code}: ${command.error} Prefix your reply with R${c.code}. Reply STOP to unsubscribe.`, "proxy_message", { bypassQuietHours: true });
+        if (inserted.rows.length) await sendResaleMessage(t.id, c.id, "system", `${command.error} Prefix your reply with R${c.code}.`, undefined, from);
         return true;
       }
       const result = await applyResaleOffer(t.id, c.id, from, command, sid);
       if (result.duplicate) return true;
       if (result.error) {
-        await sendSms(t.id, from, `Resale R${c.code}: ${result.error} ${resaleBase(t)}/rescue-resale . Reply STOP to unsubscribe.`, "proxy_message", { bypassQuietHours: true });
+        await sendResaleMessage(t.id, c.id, "system", `${result.error} ${resaleBase(t)}/rescue-resale .`, undefined, from);
         return true;
       }
       await sendResaleMessage(t.id, c.id, "system",
@@ -184,12 +186,13 @@ export async function syncResaleOrder(id: string, tenantId: string) {
       const pickup = r.data.pickup;
       for (const [key, number] of [["buyerNotice", r.buyer_phone], ["donorNotice", donor.phone]]) {
         const claim = await pool.query(`UPDATE rescue_resale_orders SET data=jsonb_set(data,ARRAY[$2],'"sending"'::jsonb)
-          WHERE id=$1 AND COALESCE(data->>$2,'pending') IN ('pending','failed') AND status IN ('paid','completed') RETURNING id`, [id, key]);
+          WHERE id=$1 AND COALESCE(data->>$2,'pending') IN ('pending','not_sent') AND status IN ('paid','completed') RETURNING id`, [id, key]);
         if (!claim.rows.length) continue;
         try {
           const time = new Date(pickup.startsAt).toLocaleString("en-US", { timeZone: t.timezone || "America/Chicago", timeZoneName: "short" });
-          const result = await sendSms(tenantId, number, `Rescue Resale payment confirmed for ${r.data.itemTitle}. Pickup: ${pickup.label}, ${pickup.address}, ${time}. Keep the item until the scheduled handoff. Details: ${resaleBase(t)}/rescue-resale . Reply STOP to unsubscribe.`, "notification");
-          await pool.query("UPDATE rescue_resale_orders SET data=jsonb_set(data,ARRAY[$2],to_jsonb($3::text)) WHERE id=$1", [id, key, result.status === "sent" ? "sent" : "failed"]);
+          const status = await sendResaleSms({ tenantId, orderId: id, recipient: key === "buyerNotice" ? "buyer" : "donor", number,
+            body: `Rescue Resale payment confirmed for ${r.data.itemTitle}. Pickup: ${pickup.label}, ${pickup.address}, ${time}. Keep the item until the scheduled handoff. Details: ${resaleBase(t)}/rescue-resale . Reply STOP to unsubscribe.` });
+          await pool.query("UPDATE rescue_resale_orders SET data=jsonb_set(data,ARRAY[$2],to_jsonb($3::text)) WHERE id=$1 AND data->>$2='sending'", [id, key, status]);
         } catch {
           // Unknown provider outcome: leave 'sending' for staff review, not an automatic duplicate send.
           console.warn("[Resale] Pickup notification outcome needs review");

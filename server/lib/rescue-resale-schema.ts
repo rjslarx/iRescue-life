@@ -45,4 +45,13 @@ CREATE TABLE IF NOT EXISTS rescue_resale_orders (
 CREATE UNIQUE INDEX IF NOT EXISTS resale_one_sale ON rescue_resale_orders(item_id)
  WHERE status IN ('checkout','paid','completed','refunded','partially_refunded');
 ALTER TABLE rescue_resale_orders ADD COLUMN IF NOT EXISTS reconciled_at timestamptz;
+CREATE TABLE IF NOT EXISTS rescue_resale_deliveries (
+ id uuid PRIMARY KEY, tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+ message_id uuid REFERENCES rescue_resale_messages(id) ON DELETE CASCADE,
+ order_id uuid REFERENCES rescue_resale_orders(id) ON DELETE CASCADE,
+ recipient text NOT NULL, provider_sid text UNIQUE,
+ status text NOT NULL DEFAULT 'unknown', error_code text,
+ created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS resale_deliveries_message ON rescue_resale_deliveries(message_id);
 `;

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { ResaleDeliveryStatus } from "./ResaleDeliveryStatus";
 import { PackageOpen } from "lucide-react";
 import { CheckoutForm, MessageForm, PhoneVerification, ResaleError } from "@/components/resale/ResaleForms";
 import { resaleCents, resaleMoney, type ResaleClient, type ResaleConversation, type ResaleOrder } from "@/hooks/use-rescue-resale";
@@ -48,7 +49,7 @@ function Conversation({ conversation: c, api }: { conversation: ResaleConversati
     {c.role === "buyer" && c.offerStatus === "accepted" && !expired && c.offerCents != null && <CheckoutForm api={api} item={item || { id: c.itemId }} conversationId={c.id} amountCents={c.offerCents} />}
     <details className="resale-details"><summary>Messages ({c.messages.length})</summary>
       {!c.messages.length && <p className="resale-muted">No messages yet.</p>}
-      {c.messages.map((message, index) => <div className="resale-message" key={`${message.createdAt}-${index}`}><p className="resale-muted">{message.sender} · {new Date(message.createdAt).toLocaleString()} · {message.status}</p><p>{message.body}</p></div>)}
+      {c.messages.map((message, index) => <div className="resale-message" key={`${message.createdAt}-${index}`}><p className="resale-muted">{message.sender} · {new Date(message.createdAt).toLocaleString()} · <ResaleDeliveryStatus message={message} /></p><p>{message.body}</p></div>)}
     </details>
     <MessageForm api={api} conversationId={c.id} />
   </article>;

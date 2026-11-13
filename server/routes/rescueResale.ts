@@ -89,7 +89,11 @@ router.get("/items/:id", route(async (req: any, res: any) => {
   res.json(resalePublicItem(r));
 }));
 async function conversationView(c: any, phone?: string) {
-  const messages = (await pool.query("SELECT body,sender,status,created_at AS \"createdAt\" FROM rescue_resale_messages WHERE conversation_id=$1 ORDER BY created_at LIMIT 300", [c.id])).rows;
+  const messages = (await pool.query(`SELECT m.body,m.sender,m.status,m.created_at AS "createdAt",
+    COALESCE((SELECT jsonb_agg(jsonb_build_object('recipient',d.recipient,'status',d.status,
+      'errorCode',d.error_code,'updatedAt',d.updated_at) ORDER BY d.created_at)
+      FROM rescue_resale_deliveries d WHERE d.message_id=m.id AND d.tenant_id=$2),'[]'::jsonb) AS deliveries
+    FROM rescue_resale_messages m WHERE m.conversation_id=$1 ORDER BY m.created_at LIMIT 300`, [c.id, c.tenant_id])).rows;
   const expired = c.expires_at && new Date(c.expires_at).getTime() <= Date.now() && ["accepted", "countered", "pending"].includes(c.offer_status);
   return { id: c.id, code: c.code, itemId: c.item_id, itemTitle: c.item_title,
     role: c.buyer_phone === phone ? "buyer" : "donor", offerCents: c.offer_cents,
