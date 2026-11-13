@@ -119,59 +119,32 @@ export async function broadcastTransportUpdate(
   phoneNumbers: string[],
   sentBy?: { id: string; name: string }
 ): Promise<SendResult[]> {
-  const config = await getTwilioConfig(tenantId);
-  if (!config) {
-    return phoneNumbers.map(number => ({
-      number,
-      status: 'failed' as const,
-      error: 'Twilio not configured for this organization',
-    }));
-  }
-
-  const client = createTwilioClient(config);
-  const results: SendResult[] = [];
-
-  const formattedMessage = applyOrgPrefix(`Transport Update: ${message}`, config.tenantName);
-
-  const promises = phoneNumbers.map(async (number) => {
-    try {
-      const twilioMessage = await sendWithFallback(client, config, number, formattedMessage);
-
-      await db.insert(smsMessageLogs).values({
-        tenantId,
-        twilioMessageSid: twilioMessage.sid,
-        direction: 'outbound',
-        fromNumber: config.phoneNumber,
-        toNumber: number,
-        body: formattedMessage,
-        messageType: 'transport_alert',
+  // Preserve the existing all-hours policy for time-sensitive trip updates.
+  // This exception does not bypass communication pauses or recorded opt-outs.
+  // Share one send per normalized recipient within this broadcast, while
+  // preserving the caller's result order and original phone-number spelling.
+  const sends = new Map<string, Promise<SendResult>>();
+  return Promise.all(phoneNumbers.map(async (number) => {
+    const digits = number.replace(/\D/g, '');
+    const key = digits.length === 10 ? `1${digits}` : digits;
+    let send = sends.get(key);
+    if (!send) {
+      send = sendSms(tenantId, number, `Transport Update: ${message}`, 'transport_alert', {
         transportId,
-        status: 'sent',
-        sentBy: sentBy?.id,
-        sentByName: sentBy?.name,
-      });
-
-      return { number, status: 'sent' as const, sid: twilioMessage.sid };
-    } catch (error: any) {
-      await db.insert(smsMessageLogs).values({
-        tenantId,
-        direction: 'outbound',
-        fromNumber: config.phoneNumber,
-        toNumber: number,
-        body: formattedMessage,
-        messageType: 'transport_alert',
-        transportId,
+        sentBy,
+        bypassQuietHours: true,
+      }).catch((error: unknown): SendResult => ({
+        number,
         status: 'failed',
-        errorMessage: error.message,
-        sentBy: sentBy?.id,
-        sentByName: sentBy?.name,
-      });
-
-      return { number, status: 'failed' as const, error: error.message };
+        error: error instanceof Error ? error.message : String(error),
+        // A lookup or audit write may fail. Never retry an ambiguous outcome
+        // or reject the whole batch after other recipients have been sent.
+        uncertain: true,
+      }));
+      sends.set(key, send);
     }
-  });
-
-  return Promise.all(promises);
+    return { ...await send, number };
+  }));
 }
 
 function applyOrgPrefix(message: string, tenantName?: string, skipPrefix?: boolean): string {
