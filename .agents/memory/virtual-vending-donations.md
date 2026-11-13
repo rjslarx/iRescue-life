@@ -20,3 +20,9 @@ Bind checkout to the menu version actually displayed by the embedded machine, no
 **Why:** The embedded machine initializes separately from React Query. A background refresh can otherwise send a new version while the donor still sees old prices.
 
 **How to apply:** Reject stale selections for review rather than silently repricing them. Saved menu versions must remain immutable so both in-flight and paid Stripe sessions resolve against their original prices and descriptions.
+
+Treat cabinet designs as interchangeable presentations of the same fundraiser, not separate catalogs or payment flows. Preserve the existing style until a rescue chooses another.
+
+**Why:** The user requested an additional Antigravity design as a per-rescue choice, with a one- or two-word rescue name followed by “Rescue Vend,” rather than a replacement fundraiser.
+
+**How to apply:** Keep donation totals, fee policy, receipts, and historical menus identical across styles. Short cabinet branding must not change the rescue’s full identity elsewhere.

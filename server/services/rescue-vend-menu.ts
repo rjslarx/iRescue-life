@@ -13,7 +13,7 @@ export async function getVendingMenu(tenantId: string, version?: string): Promis
     if (version) throw new Error("Unknown vending menu version");
     return DEFAULT_VENDING_MENU;
   }
-  return vendingMenuSchema.parse({ version: row.version, items: row.items });
+  return vendingMenuSchema.parse({ version: row.version, items: row.items, machineStyle: row.machineStyle, shortName: row.shortName });
 }
 
 /** Historical reporting: missing/invalid versions are unattributed; database failures must surface. */
@@ -22,7 +22,7 @@ export async function findVendingMenuVersion(tenantId: string, version: string):
   const [row] = await db.select().from(rescueVendMenus)
     .where(and(eq(rescueVendMenus.tenantId, tenantId), eq(rescueVendMenus.version, version))).limit(1);
   if (!row) return null;
-  const parsed = vendingMenuSchema.safeParse({ version: row.version, items: row.items });
+  const parsed = vendingMenuSchema.safeParse({ version: row.version, items: row.items, machineStyle: row.machineStyle, shortName: row.shortName });
   return parsed.success ? parsed.data : null;
 }
 
@@ -34,7 +34,7 @@ export async function saveVendingMenu(tenantId: string, menu: VendingMenu): Prom
     const [latest] = await tx.select().from(rescueVendMenus).where(eq(rescueVendMenus.tenantId, tenantId))
       .orderBy(desc(rescueVendMenus.id)).limit(1);
     if (menu.version !== (latest?.version ?? "1")) return null;
-    const saved = { version: randomUUID(), items: menu.items };
+    const saved = vendingMenuSchema.parse({ ...menu, version: randomUUID() });
     await tx.insert(rescueVendMenus).values({ tenantId, ...saved });
     return saved;
   });

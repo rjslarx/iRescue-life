@@ -251,6 +251,8 @@ body {
 }
 
 .marquee-title {
+  overflow-wrap: anywhere;
+  text-wrap: balance;
   margin: 0;
   font-size: 1.04rem;
   font-weight: 900;

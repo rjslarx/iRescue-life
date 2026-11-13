@@ -18,7 +18,7 @@ export interface VendSession {
 }
 export function useRescueVend(sessionId: string | null) {
   const { tenantId } = useTenant();
-  const catalog = useQuery<{ rescueName: string; items: VendItem[]; available: boolean; version: string }>({
+  const catalog = useQuery<{ rescueName: string; machineStyle: "classic" | "photorealistic"; machineTitle: string; items: VendItem[]; available: boolean; version: string }>({
     queryKey: ["rescue-vend", tenantId],
     queryFn: async () => (await tenantApiRequest("GET", "/api/public/rescue-vend")).json(),
     enabled: !!tenantId,

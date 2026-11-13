@@ -12,6 +12,8 @@ export const rescueVendMenus = pgTable("rescue_vend_menus", {
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   version: text("version").notNull(),
   items: jsonb("items").notNull().$type<import("./rescue-vend").VendingMenu["items"]>(),
+  machineStyle: text("machine_style").notNull().default("classic"),
+  shortName: text("short_name").notNull().default(""),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, table => [
   uniqueIndex("rescue_vend_menus_tenant_version").on(table.tenantId, table.version),

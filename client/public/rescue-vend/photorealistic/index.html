@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rescue Supply Vendor — Interactive Shelter Care Machine</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <!-- Top Utility Bar (Clean Studio Header on White Background) -->
+    <header class="top-utility-bar">
+      <div class="brand-pill">
+        <span class="brand-text" id="machine-utility-title">Rescue Vend</span>
+      </div>
+      <div class="utility-actions">
+        <button
+          id="mute-toggle-btn"
+          type="button"
+          class="mute-toggle-btn"
+          aria-label="Toggle mechanical sound effects"
+          aria-pressed="false"
+          title="Toggle Sound Effects"
+        >
+          <span id="mute-icon" aria-hidden="true">Sound on</span>
+          <span id="mute-label" class="sr-only">Sound On</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Studio Appliance Stage -->
+    <div class="machine-studio-stage">
+      <!-- Main 2.5D Photorealistic Brushed-Charcoal Steel Vending Machine -->
+      <main class="vending-cabinet" id="vending-cabinet" aria-label="Rescue Supply Vending Machine">
+        <!-- Outer Steel Cabinet Top Cap -->
+        <div class="cabinet-top-bevel" aria-hidden="true"></div>
+
+        <!-- Inner Service Door Frame with Rubber Gasket Seam -->
+        <div class="cabinet-door-chassis">
+          <!-- Top Illuminated Backlit Acrylic Header Sign -->
+          <div class="cabinet-crown">
+            <div class="crown-screw left" aria-hidden="true"></div>
+            <div class="crown-marquee">
+              <div class="marquee-tube-glow" aria-hidden="true"></div>
+              <span class="marquee-kicker">SYMBOLIC SUPPLIES. REAL RESCUE SUPPORT.</span>
+              <h1 class="marquee-title">Rescue Vend</h1>
+            </div>
+            <div class="crown-screw right" aria-hidden="true"></div>
+          </div>
+
+          <!-- Upper Cabinet Core: Recessed Display Window + Side Control Escutcheon -->
+          <div class="cabinet-core">
+            <!-- Left: Double-Glazed Tempered Glass Display Bay -->
+            <section class="display-window-frame" aria-label="Shelter Supply Shelves">
+              <!-- Outer Rubber Glazing Gasket -->
+              <div class="window-rubber-gasket">
+                <!-- Overhead Warm LED Diffuser Hood -->
+                <div class="led-hood-assembly" aria-hidden="true">
+                  <div class="led-top-strip"></div>
+                </div>
+                <!-- Volumetric Warm Interior Lighting & Side Wall Louvers -->
+                <div class="interior-ambient-light" aria-hidden="true"></div>
+                <div class="interior-wall-left" aria-hidden="true"></div>
+                <div class="interior-wall-right" aria-hidden="true"></div>
+
+                <!-- Recessed Dark Interior Shelves (Populated via TypeScript) -->
+                <div class="shelves-chamber" id="shelves-chamber">
+                  <!-- Rows A, B, C injected by app.ts -->
+                </div>
+
+                <!-- Physics Drop Chamber Layer (Behind Glass, Above Shelves) -->
+                <div class="drop-chamber-layer" id="drop-chamber-layer" aria-hidden="true"></div>
+
+                <!-- Glossy Tempered-Glass Front Pane with Diagonal Studio Reflection Overlay -->
+                <div class="tempered-glass-overlay" aria-hidden="true">
+                  <div class="glass-reflection-primary"></div>
+                  <div class="glass-reflection-secondary"></div>
+                  <div class="glass-edge-refraction"></div>
+                  <span class="glass-etch-badge">VIRTUAL SUPPLIES • REAL SUPPORT</span>
+                </div>
+              </div>
+            </section>
+
+            <!-- Right: Recessed Side Control Module -->
+            <aside class="side-control-module" aria-label="Vending Keypad and Display">
+              <div class="control-bezel">
+                <!-- Corner Hex Mounting Screws -->
+                <div class="bezel-screws-top" aria-hidden="true">
+                  <span class="hex-screw"></span>
+                  <span class="hex-screw"></span>
+                </div>
+
+                <!-- Recessed Acrylic Dot-Matrix LED Display -->
+                <div class="led-display-housing" role="status" aria-live="polite">
+                  <div class="led-lens-glare" aria-hidden="true"></div>
+                  <div class="led-scanline-overlay" aria-hidden="true"></div>
+                  <div class="led-status-row">
+                    <span class="led-indicator-dot" id="led-indicator-dot"></span>
+                    <span class="led-code-badge" id="led-code-badge">READY</span>
+                  </div>
+                  <div class="led-matrix-text" id="led-matrix-text">SELECT ITEM...</div>
+                  <div class="led-impact-subtext" id="led-impact-subtext">
+                    Tap product or enter slot code
+                  </div>
+                </div>
+
+                <!-- CNC-Machined Tactile Metallic Keypad (A-C, 1-2, CLR) -->
+                <div class="keypad-section">
+                  <div class="keypad-label">SELECTION KEYPAD</div>
+                  <div class="keypad-well">
+                    <div class="keypad-grid" role="group" aria-label="Item Selection Keypad">
+                      <button type="button" class="keypad-btn letter-key" data-key="A"><span>A</span></button>
+                      <button type="button" class="keypad-btn number-key" data-key="1"><span>1</span></button>
+                      <button type="button" class="keypad-btn letter-key" data-key="B"><span>B</span></button>
+                      <button type="button" class="keypad-btn number-key" data-key="2"><span>2</span></button>
+                      <button type="button" class="keypad-btn letter-key" data-key="C"><span>C</span></button>
+                      <button type="button" class="keypad-btn letter-key" data-key="D"><span>D</span></button>
+                      <button type="button" class="keypad-btn clear-key" data-key="CLR" title="Clear selection"><span>CLR</span></button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Glowing Contactless Tap-to-Pay Reader Indicator -->
+                <div class="contactless-reader" id="contactless-reader" aria-label="Secure checkout opens through Stripe">
+                  <div class="reader-top-trim" aria-hidden="true">
+                    <div class="reader-led-bar">
+                      <span class="reader-led active"></span>
+                      <span class="reader-led"></span>
+                      <span class="reader-led"></span>
+                      <span class="reader-led"></span>
+                    </div>
+                  </div>
+                  <div class="reader-screen-zone" aria-hidden="true">
+                    <div class="reader-waves-icon">
+                      <svg viewBox="0 0 36 28" width="26" height="20" fill="none">
+                        <path d="M9 19C7.5 16.2 7.5 11.8 9 9" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"/>
+                        <path d="M14 21.5C11.5 17 11.5 11 14 6.5" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"/>
+                        <path d="M19 24C15.5 17.8 15.5 10.2 19 4" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"/>
+                        <path d="M24 26.5C19.5 18.6 19.5 9.4 24 1.5" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"/>
+                      </svg>
+                    </div>
+                    <div class="reader-caption">STRIPE CHECKOUT</div>
+                  </div>
+                </div>
+
+                <!-- Chrome Tubular Lock Cylinder & Serial Plate -->
+                <div class="hardware-lock-row" aria-hidden="true">
+                  <div class="chrome-lock-cylinder">
+                    <div class="lock-keyhole"></div>
+                  </div>
+                  <div class="metal-spec-plate">
+                    <span>SER #RV-250D</span>
+                    <span>SYMBOLIC GIFTS</span>
+                  </div>
+                </div>
+
+                <div class="bezel-screws-bottom" aria-hidden="true">
+                  <span class="hex-screw"></span>
+                  <span class="hex-screw"></span>
+                </div>
+              </div>
+            </aside>
+          </div>
+
+          <!-- Bottom Recessed Delivery Chute -->
+          <section class="delivery-chute-bay" aria-label="Item Delivery Chute">
+            <div class="chute-outer-surround">
+              <div class="chute-rubber-bumper" aria-hidden="true"></div>
+              <div
+                class="chute-recess-well"
+                id="delivery-chute-target"
+                role="button"
+                tabindex="0"
+                aria-label="Delivery chute. Tap to collect Shelter Impact Receipt after dispensing."
+              >
+                <!-- Deep interior shadow & hinged brushed-aluminum PUSH flap -->
+                <div class="chute-interior-shadow" aria-hidden="true"></div>
+                <div class="chute-side-baffle left" aria-hidden="true"></div>
+                <div class="chute-side-baffle right" aria-hidden="true"></div>
+
+                <div class="chute-flap" id="chute-flap">
+                  <div class="chute-hinge-bar" aria-hidden="true">
+                    <span class="hinge-knuckle"></span>
+                    <span class="hinge-knuckle"></span>
+                    <span class="hinge-knuckle"></span>
+                    <span class="hinge-knuckle"></span>
+                  </div>
+                  <div class="chute-flap-face">
+                    <div class="chute-push-plate">
+                      <span class="chute-push-emboss">PUSH</span>
+                    </div>
+                  </div>
+                  <div class="chute-bottom-handle-lip" aria-hidden="true"></div>
+                </div>
+
+                <!-- Glowing Collect Receipt Prompt -->
+                <div class="chute-receipt-prompt" id="chute-receipt-prompt" hidden>
+                  <span class="prompt-pulse-dot" aria-hidden="true"></span>
+                  <span class="prompt-text">TAP CHUTE TO COLLECT RECEIPT</span>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </main>
+
+      <!-- Heavy-Duty Rubber Leveling Feet & Studio Floor Shadow -->
+      <div class="cabinet-feet" aria-hidden="true">
+        <div class="cabinet-foot left">
+          <div class="foot-thread"></div>
+          <div class="foot-pad"></div>
+        </div>
+        <div class="cabinet-foot right">
+          <div class="foot-thread"></div>
+          <div class="foot-pad"></div>
+        </div>
+      </div>
+      <div class="studio-floor-shadow" aria-hidden="true"></div>
+    </div>
+
+    <!-- Sticky Bottom Donation Tray -->
+    <section class="donation-tray" id="donation-tray" aria-label="Selected Shelter Supplies Tray">
+      <div class="tray-inner">
+        <div class="tray-header-row">
+          <div class="tray-title-group">
+            <span class="tray-badge-count" id="tray-badge-count">0</span>
+            <h2 class="tray-heading">Donation Tray</h2>
+          </div>
+          <div class="tray-impact-preview" id="tray-impact-preview">
+            Tap a product on the shelf to sponsor shelter care
+          </div>
+        </div>
+
+        <!-- Scrollable Multi-Item List with + / - Adjusters -->
+        <div class="tray-items-list" id="tray-items-list" role="list">
+          <!-- Populated dynamically by app.ts -->
+        </div>
+
+        <!-- Primary Action Button -->
+        <div class="tray-footer-actions">
+          <button
+            type="button"
+            id="quick-pay-btn"
+            class="quick-pay-btn"
+            disabled
+          >
+            <span class="btn-shine" aria-hidden="true"></span>
+            <span id="quick-pay-btn-text">SELECT ITEMS TO SPONSOR ($0)</span>
+          </button>
+          <p class="symbolic-note">Symbolic donations, not physical goods. Gifts support the rescue’s work and aren’t earmarked for a particular supply. Processing and platform fees are deducted. Up to 10 of each supply, 20 items total.</p>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Shelter Impact Receipt Modal -->
+  <div
+    class="receipt-modal-backdrop"
+    id="receipt-modal-backdrop"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="receipt-modal-title"
+    hidden
+  >
+    <div class="receipt-modal-card">
+      <div class="receipt-serrated-top" aria-hidden="true"></div>
+      <div class="receipt-body">
+        <p class="receipt-kicker">PAYMENT CONFIRMED</p>
+        <h2 class="receipt-title" id="receipt-modal-title">Shelter Impact Receipt</h2>
+        <p class="receipt-meta" id="receipt-meta">DISPENSED JUST NOW • DIRECT CARE FUND</p>
+
+        <div class="receipt-divider" aria-hidden="true"></div>
+
+        <ul class="receipt-items-list" id="receipt-items-list">
+          <!-- Populated dynamically -->
+        </ul>
+
+        <div class="receipt-divider" aria-hidden="true"></div>
+
+        <div class="receipt-total-row">
+          <span class="receipt-total-label">TOTAL SPONSORED CARE</span>
+          <span class="receipt-total-amount" id="receipt-total-amount">$0</span>
+        </div>
+
+        <div class="receipt-note-box">
+          These supplies represent a symbolic donation, not physical goods. Processing and platform fees are deducted from proceeds.
+        </div>
+
+        <div class="receipt-actions">
+          <button type="button" id="share-gift-btn" class="share-gift-btn">
+            <span id="share-gift-btn-text">Share My Gift</span>
+          </button>
+          <button type="button" id="close-receipt-btn" class="close-receipt-btn">
+            Close receipt
+          </button>
+        </div>
+      </div>
+      <div class="receipt-serrated-bottom" aria-hidden="true"></div>
+    </div>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

@@ -22,6 +22,8 @@ export const vendingMenuItemSchema = z.object({
 }).strict();
 export const vendingMenuSchema = z.object({
   version: z.string().min(1).max(80),
+  machineStyle: z.enum(["classic", "photorealistic"]).default("classic"),
+  shortName: z.string().trim().max(60).refine(value => !value || value.split(/\s+/).length <= 2, "Use one or two words").default(""),
   items: z.array(vendingMenuItemSchema).length(VENDING_ITEMS.length),
 }).strict().refine(({ items }) =>
   new Set(items.map(i => i.id)).size === VENDING_ITEMS.length &&
@@ -30,11 +32,20 @@ export const vendingMenuSchema = z.object({
 export type VendingMenu = z.infer<typeof vendingMenuSchema>;
 export const DEFAULT_VENDING_MENU: VendingMenu = {
   version: VENDING_CATALOG_VERSION,
+  machineStyle: "classic",
+  shortName: "",
   items: VENDING_ITEMS.map(item => ({
     id: item.id, name: item.name, impactNote: item.impactNote,
     priceCents: item.priceCents, enabled: true,
   })),
 };
+/** Short display branding only; legal rescue identity stays unchanged elsewhere. */
+export function vendingMachineTitle(rescueName: string, shortName = "") {
+  const name = shortName.trim() || rescueName.trim()
+    .split(/\s+(?:animal|rescue|shelter|sanctuary|humane|foundation)\b/i)[0]
+    .split(/\s+/).slice(0, /['’]s$/i.test(rescueName.trim().split(/\s+/)[0]) ? 1 : 2).join(" ");
+  return name ? `${name} Rescue Vend` : "Rescue Vend";
+}
 export function vendingMenuItems(menu: VendingMenu) {
   return VENDING_ITEMS.map(base => ({ ...base, ...menu.items.find(i => i.id === base.id)! }));
 }

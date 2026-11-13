@@ -24,6 +24,8 @@ test("tenant menu persistence, concurrency, route guards and historical receipts
     const menu = structuredClone(DEFAULT_VENDING_MENU);
     menu.items[0].name = "Custom rescue supply";
     menu.items[0].priceCents = 1234;
+    menu.machineStyle = "photorealistic";
+    menu.shortName = "Test Rescue";
     const results = await Promise.all([saveVendingMenu(id, menu), saveVendingMenu(id, menu)]);
     assert.equal(results.filter(Boolean).length, 1, "concurrent stale save rejected");
     const saved = results.find(Boolean)!;
@@ -32,6 +34,7 @@ test("tenant menu persistence, concurrency, route guards and historical receipts
     await assert.rejects(() => getVendingMenu(other, saved.version));
     const next = structuredClone(saved);
     next.items[0].enabled = false;
+    next.machineStyle = "classic";
     next.items[0].priceCents = 9999;
     assert.ok(await saveVendingMenu(id, next));
     const old = await getVendingMenu(id, saved.version);

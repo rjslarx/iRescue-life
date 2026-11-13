@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { vendingCart, verifiedVendingSession, VENDING_ITEMS, DEFAULT_VENDING_MENU, vendingMenuSchema } from "../shared/rescue-vend";
+import { vendingCart, verifiedVendingSession, VENDING_ITEMS, DEFAULT_VENDING_MENU, vendingMenuSchema, vendingMachineTitle } from "../shared/rescue-vend";
 import { StripeService } from "../server/lib/stripe-service";
 import { calculateDestinationChargeEconomics } from "../server/config/platform";
 
@@ -9,6 +9,18 @@ const session = {
   metadata: { tenantId: "rescue-a", type: "rescue_vend", vendingCatalogVersion: "1", vendingItems: JSON.stringify(selection) },
   mode: "payment", currency: "usd", amount_total: 1800, payment_status: "paid",
 };
+
+test("machine styles preserve legacy menus and use short rescue branding", () => {
+  const { machineStyle, shortName, ...legacy } = DEFAULT_VENDING_MENU;
+  assert.equal(vendingMenuSchema.parse(legacy).machineStyle, "classic");
+  assert.equal(vendingMenuSchema.parse({ ...legacy, machineStyle: "photorealistic" }).machineStyle, "photorealistic");
+  assert.equal(vendingMenuSchema.safeParse({ ...legacy, machineStyle: "unknown" }).success, false);
+  assert.equal(vendingMenuSchema.safeParse({ ...legacy, shortName: "Three Word Name" }).success, false);
+  assert.equal(vendingMachineTitle("Haseya's New Beginning Animal Rescue"), "Haseya's Rescue Vend");
+  assert.equal(vendingMachineTitle("Southern Pets Animal Rescue"), "Southern Pets Rescue Vend");
+  assert.equal(vendingMachineTitle("Long formal rescue name", "Our Pets"), "Our Pets Rescue Vend");
+  assert.equal(vendingMachineTitle(""), "Rescue Vend");
+});
 
 test("custom menu validates fixed slots, cent amounts and descriptions", () => {
   assert.ok(vendingMenuSchema.safeParse(DEFAULT_VENDING_MENU).success);

@@ -4,7 +4,7 @@ import rateLimit from "express-rate-limit";
 import { eq } from "drizzle-orm";
 import { db } from "../db";
 import { tenants } from "@shared/schema";
-import { vendingMenuItems, vendingMenuSchema, vendingCheckoutSchema, vendingCart, verifiedVendingSession } from "@shared/rescue-vend";
+import { vendingMenuItems, vendingMenuSchema, vendingCheckoutSchema, vendingCart, verifiedVendingSession, vendingMachineTitle } from "@shared/rescue-vend";
 import { getVendingMenu, saveVendingMenu } from "../services/rescue-vend-menu";
 import { requireAuth, requireRole } from "../middleware/auth";
 import { stripeService } from "../lib/stripe-service";
@@ -26,7 +26,7 @@ router.get("/settings", async (req, res, next) => {
 });
 router.put("/settings", async (req, res, next) => {
   const parsed = vendingMenuSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: "Provide all eight supplies with names, descriptions, and whole-cent amounts from $1 to $1,000." });
+  if (!parsed.success) return res.status(400).json({ error: "Check the machine style, one- or two-word rescue name, and all eight supplies with whole-cent amounts from $1 to $1,000." });
   try {
     const menu = await saveVendingMenu(req.tenant!.id, parsed.data);
     if (!menu) return res.status(409).json({ error: "The menu changed since you opened it. Reload the latest menu before saving." });
@@ -47,6 +47,8 @@ router.get("/", async (req, res, next) => {
     res.setHeader("Cache-Control", "no-store");
     res.json({
       rescueName: tenant.name,
+      machineStyle: menu.machineStyle,
+      machineTitle: vendingMachineTitle(tenant.name, menu.shortName),
       items,
       version: menu.version,
       available: Boolean(items.length && tenant.stripeEnabled && tenant.stripeConnectedAccountId && stripeService.getPlatformStripeClient()),

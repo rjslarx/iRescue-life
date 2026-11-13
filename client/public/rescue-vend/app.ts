@@ -163,7 +163,8 @@ class RescueVendApp {
       const slotEl = document.createElement('div');
       slotEl.className = `vending-slot${isSelected ? ' selected-slot' : ''}`;
       slotEl.dataset.code = product.code;
-      slotEl.setAttribute('role', 'listitem');
+      slotEl.setAttribute('role', 'button');
+      slotEl.tabIndex = 0;
       slotEl.setAttribute(
         'aria-label',
         `Slot ${product.code}: ${product.name}, ${this.formatDollars(product.priceCents)}. ${product.impactNote}`
@@ -202,6 +203,12 @@ class RescueVendApp {
       slotEl.addEventListener('click', () => {
         if (this.isDispensing) return;
         this.handleProductSelect(product.code, true);
+      });
+      slotEl.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          this.handleProductSelect(product.code, true);
+        }
       });
 
       this.shelvesGrid.appendChild(slotEl);
@@ -705,8 +712,9 @@ class RescueVendApp {
 
     for (const item of payload) {
       const illustrated = this.inventory.find((p) => p.id === item.id) || DEFAULT_INVENTORY.find((p) => p.id === item.id);
-      if (!illustrated) continue;
-      const product = { ...illustrated, ...item, impactNote: item.impactNote ?? illustrated.impactNote };
+      // A paid receipt may refer to a supply that is now hidden or renamed.
+      const illustration = illustrated || { id: item.id, code: item.code, name: item.name, priceCents: item.priceCents, impactNote: '', badgeColor: '#45a896', imageUrl: '' };
+      const product = { ...illustration, ...item, impactNote: item.impactNote ?? illustration.impactNote };
 
       dispensedSnapshot.push({
         product,
@@ -1014,6 +1022,8 @@ window.addEventListener('message', (event) => {
   if (event.origin !== window.location.origin || event.source !== window.parent || window.parent === window) return;
   const data = event.data;
   if (data?.type === 'RESCUE_VEND_INIT' && !machine && Array.isArray(data.items)) {
+    const title = document.querySelector<HTMLElement>('.marquee-title');
+    if (title) title.textContent = typeof data.machineTitle === 'string' ? data.machineTitle.slice(0, 80) : 'Rescue Vend';
     window.VENDING_INVENTORY = data.items.filter((p: VendingProduct) => /^[A-D][12]$/.test(p.code) && /^[a-z0-9-]+$/.test(p.id)).map((p: VendingProduct) => ({
       ...p, name: escapeText(p.name), impactNote: escapeText(p.impactNote),
       badgeColor: /^#[0-9a-f]{6}$/i.test(p.badgeColor) ? p.badgeColor : '#45a896',

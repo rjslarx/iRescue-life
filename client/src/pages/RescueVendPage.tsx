@@ -18,6 +18,7 @@ export default function RescueVendPage() {
   const [cancelled, setCancelled] = useState(() => new URLSearchParams(window.location.search).get("cancelled") === "1");
   const { catalog, session, checkout } = useRescueVend(sessionId);
   const [frameReady, setFrameReady] = useState(false);
+  const [loadedStyle, setLoadedStyle] = useState<"classic" | "photorealistic" | null>(null);
   const [frameHeight, setFrameHeight] = useState(1000);
   const [message, setMessage] = useState("");
   const [checkoutError, setCheckoutError] = useState("");
@@ -30,6 +31,11 @@ export default function RescueVendPage() {
   const canonical = `${window.location.origin}${basePath}/rescue-vend`;
   const storageKey = `rescue-vend-cart:${canonical}`;
   const rescueName = catalog.data?.rescueName || "our rescue";
+  // Never replace a live machine on a background settings refresh. The next
+  // page visit uses the new style; the current tray and receipt stay intact.
+  useEffect(() => {
+    if (catalog.data) setLoadedStyle(current => current ?? (catalog.data.machineStyle === "photorealistic" ? "photorealistic" : "classic"));
+  }, [catalog.data]);
   useSEO({
     title: `Rescue Vend | ${rescueName}`,
     description: `Pick symbolic shelter supplies and make a real donation to ${rescueName}. No physical goods are supplied.`,
@@ -55,7 +61,7 @@ export default function RescueVendPage() {
       const saved = JSON.parse(sessionStorage.getItem(storageKey) || "[]");
       if (Array.isArray(saved)) cart = saved;
     } catch { /* Storage is optional; never used as payment proof. */ }
-    send({ type: "RESCUE_VEND_INIT", items: catalog.data?.items || [], cart });
+    send({ type: "RESCUE_VEND_INIT", items: catalog.data?.items || [], machineTitle: catalog.data?.machineTitle || "Rescue Vend", cart });
   }, [catalog.data, send, storageKey]);
   const retryCheckout = () => {
     checkoutLock.current = false;
@@ -155,8 +161,8 @@ export default function RescueVendPage() {
         {catalog.isLoading ? <div className="vend-stage" aria-label="Loading the supply machine"><div className="vend-skeleton" /></div> :
           catalog.isError ? <section className="vend-status vend-error" role="alert"><h2>The machine couldn’t connect.</h2><p>We couldn’t load this rescue’s supplies. Nothing has been charged by this page.</p><button onClick={() => void catalog.refetch()}>Try loading again</button></section> :
             unavailable && !paid ? <section className="vend-status"><h2>The machine is resting.</h2><p>This rescue isn’t accepting vending donations right now. Please check back soon.</p><button onClick={() => void catalog.refetch()}>Check availability</button></section> :
-              catalog.data ? <section className="vend-stage" aria-label="Interactive rescue supply vending machine">
-                <iframe ref={frame} className="vend-machine" style={{ height: frameHeight }} title="Rescue Vend — choose symbolic shelter supplies" src="/rescue-vend/index.html" onLoad={initialize} />
+              catalog.data && loadedStyle ? <section className="vend-stage" aria-label="Interactive rescue supply vending machine">
+                <iframe ref={frame} className="vend-machine" style={{ height: frameHeight }} title={`${catalog.data.machineTitle || "Rescue Vend"} — choose symbolic shelter supplies`} src={loadedStyle === "photorealistic" ? "/rescue-vend/photorealistic/index.html" : "/rescue-vend/index.html"} onLoad={() => { setFrameReady(false); confirmedSession.current = null; initialize(); }} />
               </section> : null}
         <section className="vend-notes">
           <div><h2>Virtual items. Real generosity.</h2><p>Every item is a symbolic donation to {rescueName}, not an order for physical goods. Descriptions show examples of what rescue support can make possible; gifts aren’t guaranteed to buy or be earmarked for a particular item.</p></div>

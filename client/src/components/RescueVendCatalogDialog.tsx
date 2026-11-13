@@ -18,6 +18,8 @@ type Draft = Omit<VendingMenu, "items"> & {
 function toDraft(menu: VendingMenu): Draft {
   return {
     version: menu.version,
+    machineStyle: menu.machineStyle ?? "classic",
+    shortName: menu.shortName ?? "",
     items: VENDING_ITEMS.map(slot => {
       const item = menu.items.find(entry => entry.id === slot.id)!;
       return { ...item, dollars: (item.priceCents / 100).toFixed(2) };
@@ -75,11 +77,14 @@ export default function RescueVendCatalogDialog({ onClose }: { onClose: () => vo
   const dirty = !!draft && JSON.stringify(draft) !== baseline.current;
   const parsed = draft ? vendingMenuSchema.safeParse({
     version: draft.version,
+    machineStyle: draft.machineStyle,
+    shortName: draft.shortName,
     items: draft.items.map(({ dollars, ...item }) => ({ ...item, priceCents: cents(dollars) })),
   }) : null;
   const errors: Record<string, string> = {};
   if (parsed && !parsed.success) {
     for (const issue of parsed.error.issues) {
+      if (issue.path[0] === "shortName") errors.shortName = "Use one or two words, up to 60 characters.";
       const [, index, field] = issue.path;
       if (typeof index === "number" && typeof field === "string") {
         errors[`${index}.${field}`] = field === "priceCents"
@@ -141,6 +146,24 @@ export default function RescueVendCatalogDialog({ onClose }: { onClose: () => vo
             <Button type="button" variant="outline" disabled={settings.isFetching} onClick={() => void reload()}>{settings.isFetching ? "Loading…" : "Try again"}</Button>
           </div>}
           {draft && <fieldset disabled={save.isPending || settings.isFetching} className="min-w-0 space-y-4">
+            <fieldset className="min-w-0 rounded-lg border bg-card p-4">
+              <legend className="px-2 text-xs font-semibold tracking-wide text-teal-700 dark:text-teal-300">YOUR MACHINE</legend>
+              <p id="vend-style-help" className="mb-3 text-sm text-muted-foreground">Same supplies and secure Stripe checkout. Choose the cabinet your donors will see.</p>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2" aria-describedby="vend-style-help">
+                {([
+                  { value: "classic", title: "Classic", detail: "Bright illustrated cabinet with playful arcade details." },
+                  { value: "photorealistic", title: "Photorealistic", detail: "Brushed-charcoal steel, warm shelf lights, and tactile metal keys." },
+                ] as const).map(style => <label key={style.value} className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors ${draft.machineStyle === style.value ? "border-teal-600 bg-teal-50/70 dark:bg-teal-950/30" : "border-border hover:bg-muted/50"}`}>
+                  <input type="radio" name="vend-machine-style" value={style.value} checked={draft.machineStyle === style.value} className="mt-1 accent-teal-700" onChange={() => { setDraft(current => current && ({ ...current, machineStyle: style.value })); setNotice(""); }} />
+                  <span><span className="block text-sm font-semibold">{style.title}</span><span className="mt-1 block text-xs leading-relaxed text-muted-foreground">{style.detail}</span></span>
+                </label>)}
+              </div>
+              <div className="mt-4 space-y-1.5">
+                <Label htmlFor="vend-short-name">Short rescue name <span className="font-normal text-muted-foreground">(optional)</span></Label>
+                <Input id="vend-short-name" value={draft.shortName} maxLength={60} placeholder="Automatic — from your rescue’s name" aria-invalid={submitted && !!errors.shortName} aria-describedby="vend-short-name-help" onChange={event => { setDraft(current => current && ({ ...current, shortName: event.target.value })); setNotice(""); }} />
+                <p id="vend-short-name-help" className={submitted && errors.shortName ? "text-xs leading-relaxed text-destructive" : "text-xs leading-relaxed text-muted-foreground"}>{submitted && errors.shortName ? errors.shortName : draft.shortName.trim() ? `Machine title: ${draft.shortName.trim()} Rescue Vend. Use one or two words, up to 60 characters.` : "Automatic: we shorten your rescue’s name and add “Rescue Vend”, for example Haseya’s Rescue Vend. Or enter a one- or two-word rescue name for either machine."}</p>
+              </div>
+            </fieldset>
             <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
               <span>{draft.items.filter(item => item.enabled).length} of 8 slots enabled</span>
               <span>Changes go live when you save</span>
