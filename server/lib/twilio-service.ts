@@ -217,6 +217,26 @@ export async function sendSms(
     };
   }
 
+  // A quiet-hour exception is not consent to contact an unsubscribed recipient.
+  // smsOptIn defaults to false, so only an explicit opt-out timestamp suppresses
+  // transactional messages. Keep suppression scoped to this organization.
+  const optedOutUsers = await db
+    .select({ phone: users.phone })
+    .from(users)
+    .where(and(eq(users.tenantId, tenantId), isNotNull(users.smsOptOutAt)));
+  const phoneKey = (phone: string) => {
+    const digits = phone.replace(/\D/g, '');
+    return digits.length === 10 ? `1${digits}` : digits;
+  };
+  const recipientKey = phoneKey(toNumber);
+  if (recipientKey && optedOutUsers.some(user => user.phone && phoneKey(user.phone) === recipientKey)) {
+    return {
+      number: toNumber,
+      status: 'failed',
+      error: 'Recipient has opted out of SMS for this organization',
+    };
+  }
+
   if (!context?.bypassQuietHours) {
     const nowUtc = new Date();
     // Default = legacy CST math (used when tenant has no timezone configured

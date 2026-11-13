@@ -26,3 +26,9 @@ Treat old resale `failed` send outcomes as uncertain, not as proof that Twilio r
 **Why:** The previous shared sender could report failure when the provider accepted the SMS but saving its audit log failed. Retrying these historical outcomes can duplicate messages.
 
 **How to apply:** Automatically retry pickup notifications only when non-acceptance is explicitly established. Missing delivery callbacks or old failure labels require reconciliation or staff review, never an automatic resend.
+
+Direct SMS replies may bypass quiet hours, but not explicit organization-scoped unsubscribe records or communication pauses.
+
+**Why:** The user authorized expanding a tests-only investigation to add the missing local unsubscribe safeguard. A default false marketing opt-in is not an explicit transactional SMS unsubscribe.
+
+**How to apply:** Preserve explicit-opt-out semantics rather than blocking all transactional recipients lacking marketing opt-in. Do not claim provider-managed STOP suppression is a local pre-send check; synchronizing STOP/START for recipients without user accounts requires separate work.
