@@ -627,3 +627,4 @@ SQL
 # Additive donation attribution, sharing the same SQL as application startup.
 npx tsx scripts/ensure-donation-audit.ts
 npx tsx scripts/ensure-cat-vaccine-guard.ts
+npx tsx scripts/ensure-rescue-vend-menus.ts

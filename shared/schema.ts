@@ -6,6 +6,17 @@ import { medicalDateSchema } from "./medical-dates";
 import { supplyItemUnitPriceSchema } from "./supply-item-validation";
 export * from "./free-squares-tables";
 
+// Append-only menus: Stripe sessions retain their original tenant/version.
+export const rescueVendMenus = pgTable("rescue_vend_menus", {
+  id: serial("id").primaryKey(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  version: text("version").notNull(),
+  items: jsonb("items").notNull().$type<import("./rescue-vend").VendingMenu["items"]>(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, table => [
+  uniqueIndex("rescue_vend_menus_tenant_version").on(table.tenantId, table.version),
+]);
+
 // --- $5 Friday recurring-day helpers (shared between client and server) ---
 // The $5 campaign runs all day on one weekday each week. Day numbering matches
 // JS Date.getDay(): 0=Sunday .. 6=Saturday. When a tenant has no value set, the

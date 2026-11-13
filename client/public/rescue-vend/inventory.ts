@@ -44,8 +44,7 @@ export function sanitizeImageUrl(rawUrl: string): string {
 export function getActiveInventory(): VendingProduct[] {
   const source =
     typeof window !== 'undefined' &&
-    Array.isArray(window.VENDING_INVENTORY) &&
-    window.VENDING_INVENTORY.length > 0
+    Array.isArray(window.VENDING_INVENTORY)
       ? window.VENDING_INVENTORY
       : DEFAULT_INVENTORY;
 

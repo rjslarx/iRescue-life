@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { vendingCart, verifiedVendingSession, VENDING_ITEMS } from "../shared/rescue-vend";
+import { vendingCart, verifiedVendingSession, VENDING_ITEMS, DEFAULT_VENDING_MENU, vendingMenuSchema } from "../shared/rescue-vend";
 import { StripeService } from "../server/lib/stripe-service";
 import { calculateDestinationChargeEconomics } from "../server/config/platform";
 
@@ -9,6 +9,48 @@ const session = {
   metadata: { tenantId: "rescue-a", type: "rescue_vend", vendingCatalogVersion: "1", vendingItems: JSON.stringify(selection) },
   mode: "payment", currency: "usd", amount_total: 1800, payment_status: "paid",
 };
+
+test("custom menu validates fixed slots, cent amounts and descriptions", () => {
+  assert.ok(vendingMenuSchema.safeParse(DEFAULT_VENDING_MENU).success);
+  for (const patch of [{ priceCents: 0 }, { priceCents: 100001 }, { priceCents: 100.5 },
+    { name: " " }, { impactNote: "" }, { enabled: "yes" }, { id: "unknown" }]) {
+    assert.equal(vendingMenuSchema.safeParse({
+      ...DEFAULT_VENDING_MENU, items: DEFAULT_VENDING_MENU.items.map((item, i) => i ? item : { ...item, ...patch }),
+    }).success, false);
+  }
+  assert.equal(vendingMenuSchema.safeParse({ ...DEFAULT_VENDING_MENU, items: Array(8).fill(DEFAULT_VENDING_MENU.items[0]) }).success, false);
+});
+
+test("custom menu pricing is authoritative and disabled supplies cannot be selected", () => {
+  const menu = structuredClone(DEFAULT_VENDING_MENU);
+  menu.version = "custom-v2";
+  menu.items[0].priceCents = 1234;
+  menu.items[0].name = "Rescue snacks";
+  assert.equal(vendingCart({ items: selection }, menu).totalCents, 3268);
+  menu.items[0].enabled = false;
+  assert.throws(() => vendingCart({ items: selection }, menu));
+  menu.items.forEach(item => { item.enabled = false; });
+  assert.throws(() => vendingCart({ items: [{ id: "toy", quantity: 1 }] }, menu));
+});
+
+test("old sessions retain original names, descriptions and prices after edits", () => {
+  const historical = structuredClone(DEFAULT_VENDING_MENU);
+  historical.version = "historical-version";
+  historical.items[0].name = "Original supply";
+  historical.items[0].impactNote = "Original symbolic purpose";
+  const paidSession = { ...session, metadata: { ...session.metadata, vendingCatalogVersion: historical.version } };
+  const current = structuredClone(historical);
+  current.version = "new-version";
+  current.items[0].priceCents = 9999;
+  current.items[0].enabled = false;
+  assert.throws(() => verifiedVendingSession(paidSession, "rescue-a", current));
+  assert.throws(() => verifiedVendingSession(paidSession, "rescue-b", historical));
+  const receipt = verifiedVendingSession(paidSession, "rescue-a", historical);
+  assert.equal(receipt.totalCents, 1800);
+  assert.equal(receipt.items[0].name, "Original supply");
+  assert.equal(receipt.items[0].impactNote, "Original symbolic purpose");
+  assert.equal(verifiedVendingSession(session, "rescue-a").totalCents, 1800);
+});
 
 test("vending totals use the server catalog and integer cents", () => {
   assert.equal(vendingCart({ items: selection }).totalCents, 1800);

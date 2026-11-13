@@ -12,6 +12,7 @@ export interface CartItemPayload {
   name: string;
   priceCents: number;
   quantity: number;
+  impactNote?: string;
 }
 
 interface DispensedRecord {
@@ -705,7 +706,7 @@ class RescueVendApp {
     for (const item of payload) {
       const illustrated = this.inventory.find((p) => p.id === item.id) || DEFAULT_INVENTORY.find((p) => p.id === item.id);
       if (!illustrated) continue;
-      const product = { ...illustrated, ...item };
+      const product = { ...illustrated, ...item, impactNote: item.impactNote ?? illustrated.impactNote };
 
       dispensedSnapshot.push({
         product,
@@ -1028,7 +1029,7 @@ window.addEventListener('message', (event) => {
   if (data?.type === 'RESCUE_VEND_RESET') machine?.resetCheckout();
   if (data?.type === 'RESCUE_VEND_PAID' && !dispensed && machine && Array.isArray(data.items) && data.items.length) {
     dispensed = true;
-    const items = data.items.map((p: CartItemPayload) => ({ ...p, name: escapeText(p.name) }));
+    const items = data.items.map((p: CartItemPayload) => ({ ...p, name: escapeText(p.name), impactNote: p.impactNote === undefined ? undefined : escapeText(p.impactNote) }));
     void machine.runDispenseSequence(items);
   }
 });

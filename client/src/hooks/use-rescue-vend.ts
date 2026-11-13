@@ -18,7 +18,7 @@ export interface VendSession {
 }
 export function useRescueVend(sessionId: string | null) {
   const { tenantId } = useTenant();
-  const catalog = useQuery<{ rescueName: string; items: VendItem[]; available: boolean }>({
+  const catalog = useQuery<{ rescueName: string; items: VendItem[]; available: boolean; version: string }>({
     queryKey: ["rescue-vend", tenantId],
     queryFn: async () => (await tenantApiRequest("GET", "/api/public/rescue-vend")).json(),
     enabled: !!tenantId,
@@ -32,7 +32,7 @@ export function useRescueVend(sessionId: string | null) {
     refetchInterval: (query) => query.state.data?.status === "pending" ? 4000 : false,
   });
   const checkout = useMutation({
-    mutationFn: async (selection: { items: Array<{ id: string; quantity: number }>; checkoutKey: string }): Promise<{ url: string }> =>
+    mutationFn: async (selection: { items: Array<{ id: string; quantity: number }>; checkoutKey: string; catalogVersion: string }): Promise<{ url: string }> =>
       (await tenantApiRequest("POST", "/api/public/rescue-vend/checkout", selection)).json(),
   });
   return { catalog, session, checkout };

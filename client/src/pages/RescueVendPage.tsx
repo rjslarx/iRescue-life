@@ -23,6 +23,7 @@ export default function RescueVendPage() {
   const [checkoutError, setCheckoutError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const frame = useRef<HTMLIFrameElement>(null);
+  const displayedVersion = useRef<string | null>(null);
   const checkoutLock = useRef(false);
   const checkoutAttempt = useRef<{ signature: string; key: string } | null>(null);
   const confirmedSession = useRef<string | null>(null);
@@ -46,6 +47,9 @@ export default function RescueVendPage() {
     }
   }, [canonical]);
   const initialize = useCallback(() => {
+    // Background query refreshes must not silently change the price version
+    // behind the already-rendered machine. Stale checkout is rejected instead.
+    displayedVersion.current = catalog.data?.version ?? null;
     let cart: CartLine[] = [];
     try {
       const saved = JSON.parse(sessionStorage.getItem(storageKey) || "[]");
@@ -90,14 +94,17 @@ export default function RescueVendPage() {
       try {
         const signature = JSON.stringify([...items].sort((a, b) => a.id.localeCompare(b.id)));
         if (checkoutAttempt.current?.signature !== signature) checkoutAttempt.current = { signature, key: crypto.randomUUID() };
-        const result = await checkout.mutateAsync({ items, checkoutKey: checkoutAttempt.current.key });
+        if (!displayedVersion.current) throw new Error("The machine is not ready");
+        const result = await checkout.mutateAsync({ items, checkoutKey: checkoutAttempt.current.key, catalogVersion: displayedVersion.current });
         const url = new URL(result.url);
         if (url.protocol !== "https:" || url.hostname !== "checkout.stripe.com") throw new Error("Invalid checkout URL");
         window.location.assign(url.href);
-      } catch {
+      } catch (error) {
         checkoutLock.current = false;
         setSubmitting(false);
-        setCheckoutError("Checkout could not be opened. Your selection is saved; please try again.");
+        setCheckoutError(error instanceof Error && error.message.includes("409")
+          ? "The supplies or donation amounts changed. Refresh this page and review your selection before donating."
+          : "Checkout could not be opened. Your selection is saved; please try again.");
         send({ type: "RESCUE_VEND_RESET" });
       }
     };

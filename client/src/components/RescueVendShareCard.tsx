@@ -1,11 +1,16 @@
 import { useState } from "react";
-import { ExternalLink, Copy, PackageOpen } from "lucide-react";
+import { ExternalLink, Copy, PackageOpen, Pencil } from "lucide-react";
 import { useTenant } from "@/contexts/TenantContext";
+import { useAuth } from "@/contexts/AuthContext";
+import RescueVendCatalogDialog from "@/components/RescueVendCatalogDialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
 export default function RescueVendShareCard() {
-  const { basePath } = useTenant();
+  const { basePath, tenantId } = useTenant();
+  const { user } = useAuth();
+  const canEdit = !!user && (user.roles.includes("owner") || ["owner", "admin", "platform_admin"].includes(user.activeRole));
+  const [editorOpen, setEditorOpen] = useState(false);
   const [message, setMessage] = useState("");
   const url = `${window.location.origin}${basePath}/rescue-vend`;
   const copy = async () => {
@@ -16,7 +21,9 @@ export default function RescueVendShareCard() {
     <CardHeader><CardTitle className="flex items-center gap-2"><PackageOpen className="h-5 w-5" /> Rescue Vend</CardTitle></CardHeader>
     <CardContent><p className="mb-4 text-sm text-muted-foreground">Turn symbolic shelter supplies into real donations. Share your rescue’s interactive vending machine—no extra setup.</p>
       <div className="flex flex-wrap gap-2"><Button type="button" variant="outline" onClick={() => void copy()}><Copy className="mr-2 h-4 w-4" />Copy link</Button><Button asChild><a href={url} target="_blank" rel="noopener noreferrer">Open machine<ExternalLink className="ml-2 h-4 w-4" /></a></Button></div>
+      {canEdit && <Button type="button" variant="outline" className="mt-3" onClick={() => setEditorOpen(true)} data-testid="button-edit-rescue-vend-catalog"><Pencil className="mr-2 h-4 w-4" />Edit catalog</Button>}
       {message && <p role="status" className="mt-3 break-all text-xs">{message}</p>}
+      {canEdit && editorOpen && <RescueVendCatalogDialog key={tenantId} onClose={() => setEditorOpen(false)} />}
     </CardContent>
   </Card>;
 }
