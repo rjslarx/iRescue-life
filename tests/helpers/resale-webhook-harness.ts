@@ -67,13 +67,19 @@ export async function compileWebhook() {
   return result.outputFiles[0].text;
 }
 
-export function fixture(code: string) {
-  const conversations = tenants.map(t => ({
+export interface PersistenceOptions {
+  pool?: any;
+  tenants?: typeof tenants;
+}
+
+export function fixture(code: string, persistence: PersistenceOptions = {}) {
+  const tenantRecords = persistence.tenants ?? tenants;
+  const conversations = tenantRecords.map(t => ({
     id: `conversation-${t.id}`, tenant_id: t.id, code: "123456",
     buyer_phone: buyer, donor_phone: donor, item_status: "active",
     offer_status: "pending", offer_cents: 1500, unexpired: true,
   }));
-  const messages: any[] = [], sent: any[][] = [], fallback: any[][] = [], queries: any[] = [];
+  const messages: any[] = [], deliveries: any[] = [], sent: any[][] = [], fallback: any[][] = [], queries: any[] = [];
   const unexpected: string[] = [];
   function fail(message: string): never {
     unexpected.push(message);
@@ -81,7 +87,7 @@ export function fixture(code: string) {
   }
   const state = {
     enabled: true, routedAs: "foster_update", decryptFails: false,
-    conversations, messages, sent, fallback, queries, unexpected,
+    conversations, messages, deliveries, sent, fallback, queries, unexpected,
     decrypt(value: keyof typeof tokens) {
       if (state.decryptFails) throw new Error("fake decryption failure");
       return tokens[value];
@@ -91,10 +97,10 @@ export function fixture(code: string) {
     async incoming(...args: any[]) { fallback.push(args); return { routedAs: state.routedAs }; },
     db: {
       select() { return { from() { return { where(predicate: any) {
-        return { async limit() { return tenants.filter(t => (t as any)[predicate.column] === predicate.value); } };
+        return { async limit() { return tenantRecords.filter(t => (t as any)[predicate.column] === predicate.value); } };
       } }; } }; },
     },
-    pool: { query, async connect() { return { query, release() {} }; } },
+    pool: persistence.pool ?? { query, async connect() { return { query, release() {} }; } },
   };
   async function query(raw: string, p: any[] = []) {
     const sql = raw.replace(/\s+/g, " ").trim();
@@ -116,6 +122,17 @@ export function fixture(code: string) {
       return rows(c ? [sql.startsWith("SELECT i.id") ? { id: "item", status: c.item_status } : { ...c }] : []);
     }
     if (sql.startsWith("SELECT count(*)")) return rows([{ n: 0 }]);
+    if (sql.startsWith("INSERT INTO rescue_resale_deliveries")) {
+      deliveries.push({ id: p[0], tenant: p[1], message: p[2], order: p[3], recipient: p[4], status: "unknown" });
+      return rows([]);
+    }
+    if (sql.startsWith("UPDATE rescue_resale_deliveries")) {
+      const delivery = deliveries.find(d => d.id === p[0]);
+      if (!delivery) fail("Unknown delivery");
+      delivery.sid ??= p[1];
+      if (delivery.status === "unknown") delivery.status = p[2];
+      return rows([]);
+    }
     if (sql.startsWith("INSERT INTO rescue_resale_messages")) {
       if (!sql.includes("ON CONFLICT(inbound_sid) DO NOTHING")) fail("Missing replay guard");
       const rejected = sql.includes("'rejected'");
@@ -143,7 +160,7 @@ export function fixture(code: string) {
   const module = { exports: {} as any };
   runInNewContext(code, {
     module, exports: module.exports, fixture: state,
-    process: { env: { APP_BASE_URL: "https://rescue.example" } }, console,
+    process: { env: { APP_BASE_URL: "https://rescue.example" } }, console, URL,
     require(name: string) {
       if (name === "node:crypto") return { randomUUID, createHash };
       if (name === "zod") return { z };
@@ -156,8 +173,8 @@ export function fixture(code: string) {
   return { ...state, state, app };
 }
 
-export async function withWebhook(code: string, run: (h: ReturnType<typeof fixture>, post: any) => Promise<void>) {
-  const h = fixture(code);
+export async function withWebhook(code: string, run: (h: ReturnType<typeof fixture>, post: any) => Promise<void>, persistence: PersistenceOptions = {}) {
+  const h = fixture(code, persistence);
   const server = h.app.listen(0, "127.0.0.1");
   await new Promise<void>(resolve => server.once("listening", resolve));
   const address = server.address() as { port: number };

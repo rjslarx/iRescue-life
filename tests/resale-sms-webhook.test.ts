@@ -127,7 +127,8 @@ test("ordinary messages relay only to the other participant with masked contact 
       assert.match(sent[2], /Reply R123456 followed by your message/);
       assert.equal(sent[4].bypassQuietHours, true);
       assert.equal(h.messages.at(-1).sender, role);
-      assert.equal(h.messages.at(-1).status, "sent");
+      assert.equal(h.messages.at(-1).status, "tracked");
+      assert.equal(h.deliveries.at(-1).status, "accepted");
     }
     assert.equal(h.sent.length, 2);
     assert.equal(h.conversations[0].offer_status, "pending");
@@ -141,7 +142,9 @@ test("malformed offer commands are rejected privately, not relayed or applied", 
     for (const command of commands) emptyTwiml(await post(`R123456 ${command}`));
     assert.equal(h.sent.length, commands.length);
     assert.ok(h.sent.every(s => s[1] === donor && /Use YES, NO, ACCEPT, or COUNTER/.test(s[2])));
-    assert.ok(h.messages.every(m => m.status === "rejected"));
+    assert.equal(h.messages.filter(m => m.status === "rejected").length, commands.length);
+    assert.equal(h.messages.filter(m => m.status === "tracked" && m.sender === "system").length, commands.length);
+    assert.equal(h.deliveries.length, commands.length);
     assert.equal(h.conversations[0].offer_status, "pending");
     assert.equal(h.fallback.length, 0);
   });
@@ -175,7 +178,9 @@ test("rejected role command is replay-safe even after offer eligibility changes"
     await post("R123456 ACCEPT", options);
     assert.equal(h.conversations[0].offer_status, "countered");
     assert.equal(h.sent.length, 1);
-    assert.equal(h.messages.length, 1);
+    assert.equal(h.messages.length, 2);
+    assert.equal(h.messages.filter(m => m.status === "rejected").length, 1);
+    assert.equal(h.deliveries.length, 1);
   });
 });
 
