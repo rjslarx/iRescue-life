@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rescue Vend: Virtual Shelter Supply Machine</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <!-- Top Utility Bar: Audio Mute Toggle -->
+    <header class="utility-bar" aria-label="Machine Controls">
+      <div class="utility-left">
+      </div>
+
+      <div class="utility-right">
+        <button
+          id="mute-toggle-btn"
+          class="icon-utility-btn"
+          type="button"
+          aria-label="Toggle sound effects"
+          aria-pressed="false"
+          title="Toggle Arcade Audio"
+        >
+          <span id="mute-icon" aria-hidden="true">SOUND ON</span>
+          <span id="mute-label" class="sr-only">Sound On</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Vending Machine Cabinet -->
+    <main class="vending-cabinet" aria-label="Rescue Supply Vending Machine">
+      <!-- Brushed Steel Outer Trim & Corner Rivets -->
+      <div class="cabinet-rivet tl" aria-hidden="true"></div>
+      <div class="cabinet-rivet tr" aria-hidden="true"></div>
+
+      <!-- Top Illuminated Marquee Banner -->
+      <section class="marquee-header" aria-label="Machine Marquee">
+        <div class="marquee-bulb-strip" aria-hidden="true">
+          <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+        </div>
+        <div class="marquee-inner">
+          <span class="marquee-emblem" aria-hidden="true">+</span>
+          <div class="marquee-text-wrap">
+            <h1 class="marquee-title">RESCUE SUPPLY VENDOR</h1>
+            <p class="marquee-subtitle">SYMBOLIC SUPPLIES. REAL RESCUE SUPPORT.</p>
+          </div>
+          <span class="marquee-emblem" aria-hidden="true">+</span>
+        </div>
+      </section>
+
+      <!-- Middle Section: Tempered Glass Display Window + Side Control Panel -->
+      <div class="machine-body">
+        <!-- Left: Tempered Glass Product Display Window -->
+        <section class="glass-display-housing" aria-label="Shelter Supply Shelves">
+          <!-- Warm Interior LED Strip Lighting -->
+          <div class="led-strip led-left" aria-hidden="true"></div>
+          <div class="led-strip led-right" aria-hidden="true"></div>
+          <div class="led-strip led-top" aria-hidden="true"></div>
+
+          <!-- Tempered Glass Reflection & Glare Overlay -->
+          <div class="glass-glare-overlay" aria-hidden="true"></div>
+
+          <!-- Physics Drop Layer (Behind Glass, Above Shelves) -->
+          <div id="physics-drop-stage" class="physics-drop-stage" aria-hidden="true"></div>
+
+          <!-- 4 Shelves x 2 Slots Grid (A1-D2) -->
+          <div id="shelves-grid" class="shelves-grid" role="list" aria-label="Vending Machine Products">
+            <!-- Dynamically populated by app.ts -->
+          </div>
+        </section>
+
+        <!-- Right: Side Control Panel (LCD + 3x4 Keypad + Coin/Card Bezel) -->
+        <aside class="side-control-panel" aria-label="Keypad and Readout Control Panel">
+          <!-- Glowing Digital LCD Readout -->
+          <div id="lcd-screen" class="lcd-screen" role="status" aria-live="polite">
+            <div class="lcd-scanlines" aria-hidden="true"></div>
+            <div class="lcd-top-row">
+              <span id="lcd-status-code" class="lcd-code">READY</span>
+              <span id="lcd-cart-total" class="lcd-total">$0.00</span>
+            </div>
+            <div id="lcd-main-line" class="lcd-main-line">TAP ITEM OR KEY</div>
+            <div id="lcd-sub-line" class="lcd-sub-line">SPONSOR A SHELTER PET</div>
+          </div>
+
+          <!-- Simulated Card / Contactless Tap Sensor Badge -->
+          <div class="tap-sensor-bezel" aria-hidden="true">
+            <div class="sensor-waves">)))</div>
+            <div class="sensor-text">INSTANT IMPACT</div>
+          </div>
+
+          <!-- Tactile 3x4 Keypad (A-D, 1-2, CLR + Adjusters) -->
+          <div class="keypad-housing">
+            <div class="keypad-label">KEYPAD SELECT</div>
+            <div id="keypad-grid" class="keypad-grid" role="group" aria-label="Vending Code Keypad">
+              <button type="button" class="key-btn key-letter" data-key="A">A</button>
+              <button type="button" class="key-btn key-letter" data-key="B">B</button>
+              <button type="button" class="key-btn key-num" data-key="1">1</button>
+
+              <button type="button" class="key-btn key-letter" data-key="C">C</button>
+              <button type="button" class="key-btn key-letter" data-key="D">D</button>
+              <button type="button" class="key-btn key-num" data-key="2">2</button>
+
+              <button type="button" class="key-btn key-num" data-key="3">3</button>
+              <button type="button" class="key-btn key-num" data-key="4">4</button>
+              <button type="button" class="key-btn key-clr" data-key="CLR">CLR</button>
+
+              <button type="button" class="key-btn key-adj" data-key="MINUS" aria-label="Decrease selected item">−</button>
+              <button type="button" class="key-btn key-adj" data-key="PLUS" aria-label="Increase selected item">+</button>
+              <button type="button" class="key-btn key-vend" data-key="VEND" title="Dispense Cart">GO</button>
+            </div>
+          </div>
+
+          <!-- Mini Shelter Badge -->
+          <div class="panel-footer-plate" aria-hidden="true">
+            <span class="plate-screw"></span>
+            <span class="plate-text">MODEL RV-2026</span>
+            <span class="plate-screw"></span>
+          </div>
+        </aside>
+      </div>
+
+      <!-- Bottom Hinged "PUSH" Delivery Chute Flap -->
+      <section class="delivery-chute-section" aria-label="Delivery Chute">
+        <div
+          id="delivery-chute"
+          class="delivery-chute"
+          role="button"
+          tabindex="0"
+          aria-label="Delivery chute. Tap to collect dispensed shelter supplies."
+        >
+          <div class="chute-hinge-bar" aria-hidden="true">
+            <span class="hinge-pin"></span>
+            <span class="hinge-pin"></span>
+            <span class="hinge-pin"></span>
+          </div>
+
+          <div id="chute-flap" class="chute-flap">
+            <div class="flap-metallic-sheen" aria-hidden="true"></div>
+            <span class="push-emboss">PUSH</span>
+            <span class="flap-subtext">DELIVERY BAY</span>
+          </div>
+
+          <!-- Dispensed Items Peeking Inside the Open Chute -->
+          <div id="chute-dropped-tray" class="chute-dropped-tray" aria-hidden="true"></div>
+
+          <!-- Glowing "COLLECT ITEMS" Pulse Badge (Revealed after dispensing) -->
+          <button id="collect-items-badge" class="collect-items-badge hidden" type="button">
+            <span class="collect-sparkle" aria-hidden="true">+</span>
+            <span>COLLECT ITEMS</span>
+            <span id="collect-count-pill" class="collect-count-pill">0</span>
+          </button>
+        </div>
+      </section>
+
+      <div class="cabinet-rivet bl" aria-hidden="true"></div>
+      <div class="cabinet-rivet br" aria-hidden="true"></div>
+    </main>
+
+    <!-- Sticky Bottom Donation Tray / Cart Bar -->
+    <footer class="sticky-cart-bar" aria-label="Donation Cart Tray">
+      <!-- Quick Item Detail Popover (Opens when tapping an item in the cart bar) -->
+      <div id="cart-item-popover" class="cart-item-popover hidden" role="dialog" aria-label="Selected Item Details">
+        <!-- Dynamically populated by app.ts -->
+      </div>
+
+      <div class="cart-tray-top">
+        <div class="cart-tray-header">
+          <span class="tray-title">
+            DONATION TRAY
+            <span id="cart-count-badge" class="cart-count-badge">0 items</span>
+          </span>
+          <span class="tray-hint" id="tray-hint-text">Tap item for impact info</span>
+        </div>
+
+        <!-- Horizontal Scrollable Selected Item Thumbnails with Quantity Badges & Quick +/- Adjusters -->
+        <div id="cart-items-strip" class="cart-items-strip" role="list" aria-label="Selected shelter supplies">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+
+      <div class="cart-checkout-row">
+        <div class="cart-total-block">
+          <span class="total-label">TOTAL GIFT</span>
+          <span id="sticky-total-amount" class="total-amount">$0.00</span>
+        </div>
+
+        <button id="checkout-dispense-btn" class="checkout-dispense-btn" type="button" disabled>
+          <span class="btn-led-dot" aria-hidden="true"></span>
+          <span id="checkout-btn-text">CHECKOUT &amp; DISPENSE</span>
+        </button>
+      </div>
+    </footer>
+
+    <!-- Flying Thumbnail Clone Layer (Shelf -> Cart Tray Arc Animation) -->
+    <div id="flying-clone-layer" class="flying-clone-layer" aria-hidden="true"></div>
+
+    <!-- Shelter Impact Receipt Modal -->
+    <div
+      id="receipt-modal-backdrop"
+      class="receipt-modal-backdrop hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="receipt-modal-title"
+    >
+      <div class="receipt-modal-card">
+        <div class="receipt-zig-top" aria-hidden="true"></div>
+
+        <div class="receipt-header">
+          <div class="receipt-stamp">DISPENSED &amp; SPONSORED</div>
+          <h2 id="receipt-modal-title" class="receipt-title">Shelter Impact Receipt</h2>
+          <p class="receipt-subtitle">Thank you for stocking our shelter care shelves!</p>
+          <div id="receipt-meta" class="receipt-meta">RECEIPT #RV-0000</div>
+        </div>
+
+        <div id="receipt-items-list" class="receipt-items-list" role="list">
+          <!-- Populated dynamically -->
+        </div>
+
+        <div class="receipt-total-bar">
+          <span>TOTAL CONTRIBUTION</span>
+          <strong id="receipt-total-value">$0.00</strong>
+        </div>
+
+        <div class="receipt-impact-banner">
+          <p id="receipt-impact-summary">
+            Your symbolic donation supports rescue care. No physical goods are supplied. Processing fees are deducted from proceeds. Item descriptions illustrate possible support, not guaranteed purchases or earmarked gifts.
+          </p>
+        </div>
+
+        <div class="receipt-actions">
+          <button id="share-donation-btn" class="share-donation-btn" type="button">
+            <span id="share-btn-label">Share My Donation</span>
+          </button>
+          <button id="close-receipt-btn" class="close-receipt-btn" type="button">
+            Vend More Supplies
+          </button>
+        </div>
+
+        <div class="receipt-zig-bottom" aria-hidden="true"></div>
+      </div>
+    </div>
+
+    <!-- Toast Notification Banner -->
+    <div id="toast-banner" class="toast-banner hidden" role="status" aria-live="polite"></div>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

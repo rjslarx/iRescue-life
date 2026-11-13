@@ -190,6 +190,19 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 
 // Security headers
 app.use(helmetConfig);
+// Only the public, data-free vending cabinet may be framed by this site.
+// Keep dashboard and other application pages protected by DENY.
+app.use('/rescue-vend', express.static(
+  path.resolve(process.cwd(), process.env.NODE_ENV === 'production' ? 'dist/public/rescue-vend' : 'client/public/rescue-vend'),
+  {
+    index: false,
+    redirect: false,
+    setHeaders(res) {
+      res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+      res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; frame-ancestors 'self'; object-src 'none'; base-uri 'none'");
+    },
+  },
+));
 app.use((req, res, next) => {
   if (isSensitiveVolunteerTrainingUrl(req.originalUrl || req.url)) {
     res.setHeader('Referrer-Policy', 'no-referrer');

@@ -311,6 +311,7 @@ export function isKnownPublicTenantRoute(cleanUrl: string): boolean {
     '/animals',
     '/donate',
     '/vip-club',
+    '/rescue-vend',
     '/shop',
     '/contact',
     '/volunteer',
@@ -1100,6 +1101,18 @@ export async function injectOGTags(req: Request, res: Response, next: NextFuncti
         );
         console.log(`[OG-TAGS] VIP Club match for tenant=${tenant.subdomain}, image=${vipImage}`);
       }
+    }
+
+    if (!ogData && /^\/rescue-vend\/?(?:\?.*)?$/i.test(url)) {
+      ogData = {
+        title: `Virtual Supply Machine | ${tenant.name}`,
+        description: `Pick a virtual treat, toy or care item and make a donation to ${tenant.name}. Symbolic supplies, real support for rescue animals.`,
+        image: defaultImage,
+      };
+      tenantNoscriptBody = buildTenantNoscript(
+        `<h1>Virtual Supply Machine — ${escapeHtml(tenant.name)}</h1>` +
+        `<p>Choose symbolic supplies to support rescue animals. Your selection is a donation, not a physical purchase. Processing and platform fees are deducted from your donation, not added to your total.</p>`
+      );
     }
 
     // ── Contact page ─────────────────────────────────────────────────────────

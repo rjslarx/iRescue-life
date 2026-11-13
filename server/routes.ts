@@ -32958,7 +32958,9 @@ Submitted: ${new Date().toLocaleString()}
               : '';
             const donationDescription = sessionMetadata.sponsoredAnimalName
               ? `Sponsored: ${sessionMetadata.sponsoredAnimalName}${feeNote}`
-              : feeNote || null;
+              : sessionMetadata.type === 'rescue_vend'
+                ? sessionMetadata.message || 'Virtual vending donation'
+                : feeNote || null;
 
             const donorCoveredFees = sessionMetadata.donorCoveredFees === 'true' || sessionMetadata.donorCoversFees === 'true';
             const baseAmountCents = sessionMetadata.baseAmount ? parseInt(sessionMetadata.baseAmount, 10) : (session.amount_total || 0);
@@ -47852,6 +47854,8 @@ The user asking is a tenant administrator or staff member.`;
   const expenseCampaignRoutes = await import('./routes/expenseCampaigns');
   app.use('/api/expense-campaigns', requireTenant, expenseCampaignRoutes.default);
   app.use('/api/public/expense-campaigns', requireTenant, expenseCampaignRoutes.publicRouter);
+  const rescueVendRoutes = await import('./routes/rescueVend');
+  app.use('/api/public/rescue-vend', requireTenant, rescueVendRoutes.default);
 
   // Register VIP donor portal routes (token-authenticated giving history + receipts)
   const vipPortalRoutes = await import('./routes/vipPortal');

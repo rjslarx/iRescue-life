@@ -226,6 +226,7 @@ export class StripeService {
        * etc.) even if the surface would otherwise qualify.
        */
       forceCardOnly?: boolean;
+      idempotencyKey?: string;
     }
   ): Promise<Stripe.Checkout.Session | null> {
     // Determine which Stripe client to use
@@ -407,7 +408,10 @@ export class StripeService {
       }
     }
 
-    return await stripe.checkout.sessions.create(sessionParams);
+    return await stripe.checkout.sessions.create(
+      sessionParams,
+      params.idempotencyKey ? { idempotencyKey: params.idempotencyKey } : undefined,
+    );
   }
 
   async handleWebhook(

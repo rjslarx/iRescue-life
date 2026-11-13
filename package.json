@@ -5,8 +5,9 @@
   "license": "AGPL-3.0-only",
   "scripts": {
     "build:games": "esbuild server/games/rescue-triple-match/src/main.ts --bundle --format=iife --platform=browser --target=es2020 --outfile=server/games/rescue-triple-match/app.js && esbuild server/games/rescue-merge/src/game.ts --bundle --format=iife --platform=browser --target=es2020 --outfile=server/games/rescue-merge/app.js",
-    "predev": "npm run build:games",
-    "prebuild": "npm run build:games",
+    "build:vend": "node client/public/rescue-vend/build.mjs",
+    "predev": "npm run build:games && npm run build:vend",
+    "prebuild": "npm run build:games && npm run build:vend",
     "test:contest-visual": "tsx tests/visual/contest/run.ts",
     "test:contest-visual:update": "tsx tests/visual/contest/run.ts --update",
     "dev": "NODE_ENV=development tsx server/index.ts",

@@ -1,0 +1,23 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+
+.rescue-vend-page { --vend-ink: #253d49; --vend-paper: #f3eee3; min-height: 100dvh; background: var(--vend-paper); color: var(--vend-ink); font-family: 'DM Sans', sans-serif; }
+.vend-intro { max-width: 1060px; padding: 42px 24px 25px; margin: auto; display: flex; justify-content: space-between; gap: 24px; align-items: center; }
+.vend-eyebrow { text-transform: uppercase; font-size: 11px; letter-spacing: .17em; font-weight: 700; color: #536e74; }
+.vend-intro h1 { font-family: 'Space Grotesk', sans-serif; font-size: clamp(30px, 4vw, 48px); letter-spacing: -.05em; line-height: 1.07; margin: 10px 0 14px; }
+.vend-intro p { max-width: 570px; font-size: 15px; line-height: 1.65; }
+.vend-share, .vend-status button { border: 1px solid #9caeac; border-radius: 8px; padding: 11px 16px; display: inline-flex; align-items: center; justify-content: center; gap: 9px; background: #e4e9df; color: #253d49; font-weight: 600; cursor: pointer; flex-shrink: 0; }
+.vend-share:hover, .vend-status button:hover { background: #d2dfd3; }
+.vend-share:focus-visible, .vend-status button:focus-visible { outline: 3px solid #a45e33; outline-offset: 3px; }
+.vend-stage { background: #101722; border-block: 1px solid #354350; }
+.vend-machine { width: 100%; display: block; border: none; height: 1120px; max-width: 1100px; margin: auto; }
+.vend-notes { max-width: 960px; margin: auto; padding: 30px 24px 42px; display: grid; grid-template-columns: 1fr 1fr; gap: 45px; font-size: 13px; line-height: 1.75; }
+.vend-notes h2 { font-family: 'Space Grotesk', sans-serif; font-size: 17px; margin: 0 0 8px; }
+.vend-status { max-width: 1000px; margin: 0 auto 22px; padding: 18px 24px; border: 1px solid #a4b9ac; background: #e4ecdf; border-radius: 10px; font-size: 14px; line-height: 1.6; }
+.vend-status p { margin: 4px 0 12px; }
+.vend-error { background: #f9e9dd; border-color: #bc8a66; }
+.vend-skeleton { height: 740px; max-width: 620px; margin: 20px auto; border-radius: 30px; background: #293a46; position: relative; overflow: hidden; }
+.vend-skeleton:after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, #45616b66, transparent); animation: vend-loading 1.6s infinite; }
+@keyframes vend-loading { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+.vend-copy-status { font-size: 12px; color: #536e74; }
+@media (max-width: 767px) { .vend-intro { display: block; padding: 30px 20px 24px; } .vend-share { margin-top: 8px; } .vend-notes { grid-template-columns: 1fr; gap: 20px; } .vend-status { margin-inline: 15px; } }
+@media (prefers-reduced-motion: reduce) { .vend-skeleton:after { animation: none; } }

@@ -47,3 +47,4 @@
 - [Expense campaign fee policy](expense-campaign-fee-policy.md) — donor fee coverage is optional; otherwise fees come from rescue proceeds, not the platform.
 - [Donation notification navigation](donation-widget-navigation.md) — scroll to the home page donation section, with tenant-aware Donate navigation as fallback.
 - [VIP game perk scope](vip-game-perk-scope.md) — existing VIP bonus only; start with a private pilot before deciding on public rollout.
+- [Virtual vending donations](virtual-vending-donations.md) — public symbolic donations; all fees deducted within the displayed amount, never added on top.

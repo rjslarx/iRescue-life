@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import RescueVendShareCard from "@/components/RescueVendShareCard";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import QRCode from "qrcode";
@@ -148,6 +149,7 @@ export default function FundraisingHubPage() {
 
         <TabsContent value="toolkit">
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-6">
+            <RescueVendShareCard />
             <GeneralDonationsCard donationUrl={donationUrl} tenantName={tenant?.name} isLoading={tenantLoading} />
             <FiveDollarFridayCard fridayUrl={fiveDollarFridayUrl} tenantName={tenant?.name} fridayImageUrl={tenant?.fiveDollarFridayImageUrl || ""} fridayDayOfWeek={tenant?.fiveDollarFridayDayOfWeek} isLoading={tenantLoading} />
             <AnimalCampaignsCard onNavigate={setLocation} />

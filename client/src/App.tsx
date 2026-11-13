@@ -128,6 +128,7 @@ import FundraiserEventPage from "@/pages/FundraiserEventPage";
 import FundraisersPage from "@/pages/FundraisersPage";
 import FundraiserFulfillmentPage from "@/pages/FundraiserFulfillmentPage";
 import PublicFundraisersPage from "@/pages/PublicFundraisersPage";
+import RescueVendPage from "@/pages/RescueVendPage";
 import EventTicketCheckoutPage from "@/pages/EventTicketCheckoutPage";
 import EventSuccessPage from "@/pages/EventSuccessPage";
 import GivePage from "@/pages/GivePage";
@@ -265,6 +266,7 @@ function RouterSwitch() {
       <Route path="/squares/:id" component={PublicFreeSquaresPage} />
       <Route path="/fundraise/:slug" component={PeerCampaignPage} />
       <Route path="/fundraisers" component={PublicFundraisersPage} />
+      <Route path="/rescue-vend" component={RescueVendPage} />
       <Route path="/donate/event/:eventId" component={FundraiserEventPage} />
       <Route path="/donate/:linkId" component={DonationLinkRedirectPage} />
       <Route path="/five-dollar-friday" component={FiveDollarFridayPage} />
