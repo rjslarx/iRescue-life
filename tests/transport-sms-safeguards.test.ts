@@ -11,7 +11,7 @@ let code: string;
 before(async () => {
   const tables = "tenants smsMessageLogs smsProxySessions transportEvents users fosterAnimals supplyRequests fosterUpdates medicationTasks complianceReminders animals contacts adoptionCheckoutSessions adopterHelpRequests calendars calendarEvents adoptions happyTails".split(" ");
   const mocks: Record<string, string> = {
-    "../db": "export const db=globalThis.fixture.db;",
+    "../db": "export const db=globalThis.fixture.db; export const pool=globalThis.fixture.pool;",
     "@shared/schema": tables.map(name => `export const ${name}=new Proxy({}, {get:(_,key)=>'${name}.'+key});`).join("\n"),
     "drizzle-orm": "export const eq=(...args)=>args; export const isNotNull=column=>({notNull:column}); export const and=eq,desc=eq,gte=eq,lte=eq,inArray=eq,or=eq,sql=eq;",
     "date-fns": "export const startOfDay=()=>{throw Error('Unexpected date helper')}; export const endOfDay=startOfDay,eachDayOfInterval=startOfDay,addDays=startOfDay,format=startOfDay,parseISO=startOfDay;",
@@ -44,6 +44,10 @@ function harness(options: {
 } = {}) {
   const calls: any[] = [], logs: any[] = [];
   const fixture = {
+    pool: { async query(sql: string) {
+      assert.match(sql, /^SELECT suppressed FROM sms_phone_suppressions/);
+      return { rows: [] };
+    } },
     db: {
       select() {
         return { from(table: any) { return { async where(condition: any) {

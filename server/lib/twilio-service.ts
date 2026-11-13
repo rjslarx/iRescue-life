@@ -5,6 +5,7 @@ import { eq, and, desc, gte, lte, isNotNull, inArray, or, sql } from 'drizzle-or
 import { startOfDay, endOfDay, eachDayOfInterval, addDays, format, parseISO } from 'date-fns';
 import { decrypt, encrypt } from './encryption';
 import { getAppBaseUrl } from './app-base-url';
+import { isSmsPhoneSuppressed, smsPhoneKey } from './sms-suppression';
 
 interface TwilioConfig {
   accountSid: string;
@@ -197,12 +198,10 @@ export async function sendSms(
     .select({ phone: users.phone })
     .from(users)
     .where(and(eq(users.tenantId, tenantId), isNotNull(users.smsOptOutAt)));
-  const phoneKey = (phone: string) => {
-    const digits = phone.replace(/\D/g, '');
-    return digits.length === 10 ? `1${digits}` : digits;
-  };
+  const phoneKey = smsPhoneKey;
   const recipientKey = phoneKey(toNumber);
-  if (recipientKey && optedOutUsers.some(user => user.phone && phoneKey(user.phone) === recipientKey)) {
+  if ((recipientKey && optedOutUsers.some(user => user.phone && phoneKey(user.phone) === recipientKey))
+      || await isSmsPhoneSuppressed(tenantId, toNumber)) {
     return {
       number: toNumber,
       status: 'failed',
@@ -1014,14 +1013,11 @@ export async function handleIncomingSms(
             status: 'pending',
           });
 
-          const config = await getTwilioConfig(tenant.id);
-          if (config) {
-            const client = createTwilioClient(config);
-            try {
-              await sendWithFallback(client, config, fromNumber, "We got your message! A team member will reach out shortly.");
-            } catch (replyErr) {
-              console.error('[TWILIO] Failed to send HELP auto-reply:', replyErr);
-            }
+          try {
+            await sendSms(tenant.id, fromNumber, "We got your message! A team member will reach out shortly.", "other",
+              { bypassQuietHours: true });
+          } catch (replyErr) {
+            console.error('[TWILIO] Failed to send HELP auto-reply:', replyErr);
           }
 
           console.log(`[TWILIO] Adopter HELP request from ${fromNumber}, contact ${adopter.contactId}`);
@@ -1228,11 +1224,15 @@ export async function handleIncomingSms(
   }
 
   // Not an identified foster — fall through to proxy session handling
+  const [proxyTenant] = await db.select({ id: tenants.id }).from(tenants)
+    .where(eq(tenants.twilioPhoneNumber, toNumber)).limit(1);
+  if (!proxyTenant) return { success: false, routedAs: null, message: 'Unknown destination' };
   const [activeSession] = await db
     .select()
     .from(smsProxySessions)
     .where(
       and(
+        eq(smsProxySessions.tenantId, proxyTenant.id),
         eq(smsProxySessions.isActive, true),
         eq(smsProxySessions.partyAPhone, fromNumber)
       )
@@ -1244,6 +1244,7 @@ export async function handleIncomingSms(
       .from(smsProxySessions)
       .where(
         and(
+          eq(smsProxySessions.tenantId, proxyTenant.id),
           eq(smsProxySessions.isActive, true),
           eq(smsProxySessions.partyBPhone, fromNumber)
         )
@@ -1271,30 +1272,13 @@ export async function handleIncomingSms(
       return { success: false, routedAs: null, message: 'No active session found for this number' };
     }
 
-    const config = await getTwilioConfig(sessionAsPartyB.tenantId);
-    if (!config) {
-      return { success: false, message: 'Twilio not configured' };
-    }
-
-    const client = createTwilioClient(config);
     const forwardMessage = `(From ${sessionAsPartyB.partyBAlias}): ${body}`;
 
     try {
-      const twilioMessage = await client.messages.create(
-        buildMessageOptions(config, sessionAsPartyB.partyAPhone, forwardMessage)
-      );
-
-      await db.insert(smsMessageLogs).values({
-        tenantId: sessionAsPartyB.tenantId,
-        twilioMessageSid: twilioMessage.sid,
-        direction: 'outbound',
-        fromNumber: config.messagingServiceSid || config.phoneNumber,
-        toNumber: sessionAsPartyB.partyAPhone,
-        body: forwardMessage,
-        messageType: 'proxy_message',
-        proxySessionId: sessionAsPartyB.id,
-        status: 'sent',
+      const result = await sendSms(sessionAsPartyB.tenantId, sessionAsPartyB.partyAPhone, forwardMessage, 'proxy_message', {
+        proxySessionId: sessionAsPartyB.id, bypassQuietHours: true, skipOrgPrefix: true,
       });
+      if (result.status !== 'sent') return { success: false, routedAs: null, message: result.error };
 
       await db.insert(smsMessageLogs).values({
         tenantId: sessionAsPartyB.tenantId,
@@ -1313,30 +1297,13 @@ export async function handleIncomingSms(
     }
   }
 
-  const config = await getTwilioConfig(activeSession.tenantId);
-  if (!config) {
-    return { success: false, routedAs: null, message: 'Twilio not configured' };
-  }
-
-  const client = createTwilioClient(config);
   const forwardMessage = `(From ${activeSession.partyAAlias}): ${body}`;
 
   try {
-    const twilioMessage = await client.messages.create(
-      buildMessageOptions(config, activeSession.partyBPhone, forwardMessage)
-    );
-
-    await db.insert(smsMessageLogs).values({
-      tenantId: activeSession.tenantId,
-      twilioMessageSid: twilioMessage.sid,
-      direction: 'outbound',
-      fromNumber: config.messagingServiceSid || config.phoneNumber,
-      toNumber: activeSession.partyBPhone,
-      body: forwardMessage,
-      messageType: 'proxy_message',
-      proxySessionId: activeSession.id,
-      status: 'sent',
+    const result = await sendSms(activeSession.tenantId, activeSession.partyBPhone, forwardMessage, 'proxy_message', {
+      proxySessionId: activeSession.id, bypassQuietHours: true, skipOrgPrefix: true,
     });
+    if (result.status !== 'sent') return { success: false, routedAs: null, message: result.error };
 
     await db.insert(smsMessageLogs).values({
       tenantId: activeSession.tenantId,

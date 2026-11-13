@@ -50,3 +50,4 @@
 - [Virtual vending donations](virtual-vending-donations.md) — public symbolic donations; all fees deducted within the displayed amount, never added on top.
 - [Rescue Resale scope](rescue-resale-scope.md) — Twilio-gated local resale; first version excludes seller splits, couriers, and automatic tax-receipt claims.
 - [Transport alert timing](transport-alert-timing.md) — preserve all-hours trip alerts, but never treat urgency as permission to bypass pauses or recorded opt-outs.
+- [SMS provider suppression](sms-provider-suppression.md) — START clears provider-event suppression only, never independent account opt-outs or marketing consent.

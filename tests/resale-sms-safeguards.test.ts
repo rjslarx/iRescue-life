@@ -25,7 +25,9 @@ before(async () => {
     "twilio": "export default (...args)=>globalThis.fixture.createClient(...args);",
   };
   const result = await build({
-    entryPoints: ["server/services/resale-delivery.ts"],
+    stdin: { contents: `export * from "./server/services/resale-delivery";
+      export { handleIncomingSms } from "./server/lib/twilio-service";
+      export * from "./server/lib/sms-suppression";`, resolveDir: process.cwd() },
     bundle: true, platform: "node", format: "cjs", write: false, packages: "external",
     plugins: [{
       name: "isolated-sms-boundaries",
@@ -45,6 +47,7 @@ before(async () => {
 const tenantId = "rescue-test";
 const number = "+12025550101";
 type Options = {
+  proxyDirection?: "A" | "B";
   paused?: boolean;
   timezone?: string | null;
   now?: string;
@@ -60,8 +63,10 @@ type Options = {
 
 function harness(options: Options = {}) {
   const calls: any[] = [], logs: any[] = [], audits: any[] = [], reads: any[] = [];
+  const events = new Set<string>(), suppressions = new Map<string, boolean>();
   let clients = 0;
   const tenant = {
+    id: tenantId,
     commsPaused: options.paused ?? false, timezone: options.timezone === undefined ? "America/Chicago" : options.timezone,
     twilioEnabled: options.enabled ?? true, twilioAccountSidEncrypted: "fake-account",
     twilioAuthTokenEncrypted: "fake-token", twilioPhoneNumber: "+12025550102",
@@ -74,10 +79,19 @@ function harness(options: Options = {}) {
     db: {
       select(projection: any) {
         return { from(table: any) {
-          return { async where(condition: any) {
+          return { where(condition: any) {
+            const result = (async () => {
             reads.push({ projection, condition });
             if (options.readFails) throw Error("Simulated settings read failure");
+            if (table.id === "smsProxySessions.id") {
+              assert.deepEqual(Array.from(condition[0]), ["smsProxySessions.tenantId", tenantId]);
+              const isA = condition.some((c: any) => c[0] === "smsProxySessions.partyAPhone");
+              if ((isA ? "A" : "B") !== options.proxyDirection) return [];
+              return [{ id: "proxy-session", tenantId, partyAPhone: number, partyBPhone: number,
+                partyAAlias: "Party A", partyBAlias: "Party B" }];
+            }
             if (table.id === "users.id") {
+              if (projection.id) return []; // accountless proxy participants
               if (options.optOutReadFails) throw Error("Simulated opt-out read failure");
               assert.deepEqual(Array.from(condition[0]), ["users.tenantId", tenantId]);
               assert.equal(condition[1].notNull, "users.smsOptOutAt");
@@ -85,8 +99,11 @@ function harness(options: Options = {}) {
               return user.tenantId === condition[0][1] && user.smsOptOutAt ? [user] : [];
             }
             assert.equal(table.id, "tenants.id");
+            if (condition[0] === "tenants.twilioPhoneNumber") return [tenant];
             assert.deepEqual(Array.from(condition), ["tenants.id", tenantId]);
             return [tenant];
+            })();
+            return Object.assign(result, { limit: () => result });
           } };
         } };
       },
@@ -101,7 +118,15 @@ function harness(options: Options = {}) {
     pool: {
       async query(raw: string, params: any[]) {
         const sql = raw.replace(/\s+/g, " ").trim();
-        if (sql.startsWith("INSERT INTO rescue_resale_deliveries")) {
+        if (sql.startsWith("WITH event AS")) {
+          const [tenant, sid, phone, command] = params;
+          if (!events.has(`${tenant}:${sid}`)) {
+            events.add(`${tenant}:${sid}`);
+            suppressions.set(`${tenant}:${phone}`, command === "STOP");
+          }
+        } else if (sql.startsWith("SELECT suppressed FROM sms_phone_suppressions")) {
+          return { rows: [{ suppressed: suppressions.get(`${params[0]}:${params[1]}`) ?? false }] };
+        } else if (sql.startsWith("INSERT INTO rescue_resale_deliveries")) {
           assert.equal(params[1], tenantId);
           audits.push({ id: params[0], status: "unknown", sid: null });
         } else if (sql.startsWith("UPDATE rescue_resale_deliveries SET provider_sid=")) {
@@ -118,7 +143,7 @@ function harness(options: Options = {}) {
       assert.equal(account, "fake-account");
       assert.equal(token, "fake-token");
       return { messages: { async create(input: any) {
-        assert.equal(audits.length, 1, "recipient audit must exist before provider call");
+        if (!options.proxyDirection) assert.ok(audits.length >= 1, "recipient audit must exist before provider call");
         calls.push(input);
         if (options.providerError) throw options.providerError;
         return { sid: "SM-test", from: tenant.twilioPhoneNumber };
@@ -137,17 +162,82 @@ function harness(options: Options = {}) {
     },
   });
   return {
+    relay: () => module.exports.handleIncomingSms("+12025550199", tenant.twilioPhoneNumber, "ordinary relay"),
+    event: module.exports.recordVerifiedSmsOptOut,
+    command: module.exports.smsOptOutCommand,
+    user,
     calls, logs, audits, reads, clients: () => clients,
     async send(bypassQuietHours?: boolean) {
       const status = await module.exports.sendResaleSms({
         tenantId, messageId: "message-test", recipient: "buyer", number,
         body: "Resale R123456: Still available?", bypassQuietHours,
       });
-      assert.equal(audits[0].status, status, "persist the returned outcome");
-      assert.equal(audits[0].sid, status === "accepted" ? "SM-test" : null);
+      assert.equal(audits.at(-1).status, status, "persist the returned outcome");
+      assert.equal(audits.at(-1).sid, status === "accepted" ? "SM-test" : null);
       return status;
     },
   };
+}
+
+test("accountless STOP blocks provider; START restores transactional eligibility without consent", async () => {
+  const h = harness({ userPhone: null });
+  const stop = `SM${"1".repeat(32)}`, start = `SM${"2".repeat(32)}`;
+  await h.event(tenantId, "(202) 555-0101", stop, "STOP");
+  assert.equal(await h.send(true), "not_sent");
+  assert.equal(h.calls.length, 0);
+  await h.event(tenantId, number, start, "START");
+  await h.event(tenantId, number, stop, "STOP"); // replay cannot undo START
+  assert.equal(await h.send(true), "accepted");
+  assert.equal(h.user.smsOptIn, false);
+  await h.event(tenantId, number, `SM${"3".repeat(32)}`, "STOP");
+  await h.event(tenantId, number, start, "START"); // replay cannot undo new STOP
+  assert.equal(await h.send(true), "not_sent");
+  assert.equal(h.calls.length, 1);
+});
+
+test("phone suppressions cannot cross tenants or clear independent account opt-outs", async () => {
+  const h = harness();
+  await h.event("other-rescue", number, `SM${"4".repeat(32)}`, "STOP");
+  assert.equal(await h.send(true), "accepted");
+  const optedOut = harness({ optedOut: true });
+  await optedOut.event(tenantId, number, `SM${"5".repeat(32)}`, "START");
+  assert.equal(await optedOut.send(true), "not_sent");
+  assert.equal(optedOut.user.smsOptIn, false);
+});
+
+test("only exact commands or provider opt-out metadata are consumed", () => {
+  const h = harness();
+  for (const word of [" stop ", "STOPALL", "unsubscribe", "CANCEL", "END", "QUIT", "REVOKE", "OPTOUT"]) {
+    assert.equal(h.command(word, undefined), "STOP");
+  }
+  for (const word of ["START", "UNSTOP"]) assert.equal(h.command(word, undefined), "START");
+  assert.equal(h.command("YES", undefined), null);
+  assert.equal(h.command("YES", "START"), "START");
+  for (const word of ["R123456 STOP", "stop by tomorrow", "please start", ""]) assert.equal(h.command(word, undefined), null);
+  assert.equal(h.command("custom keyword", "STOP"), "STOP");
+  assert.equal(h.command("STOP", "HELP"), "HELP");
+});
+
+for (const proxyDirection of ["A", "B"] as const) {
+  test(`proxy ${proxyDirection} forwarding honors accountless STOP and START`, async () => {
+    const h = harness({ proxyDirection, userPhone: null });
+    await h.event(tenantId, number, `SM${"6".repeat(32)}`, "STOP");
+    assert.equal((await h.relay()).success, false);
+    assert.equal(h.calls.length, 0);
+    await h.event(tenantId, number, `SM${"7".repeat(32)}`, "START");
+    assert.equal((await h.relay()).success, true);
+    assert.equal(h.calls.length, 1);
+    assert.equal(h.calls[0].to, number);
+    assert.equal(h.calls[0].body, `(From Party ${proxyDirection}): ordinary relay`);
+  });
+  test(`proxy ${proxyDirection} forwarding respects pauses and never retries uncertain outcomes`, async () => {
+    const paused = harness({ proxyDirection, paused: true });
+    assert.equal((await paused.relay()).success, false);
+    assert.equal(paused.calls.length, 0);
+    const failed = harness({ proxyDirection, providerError: { message: "Response lost" } });
+    assert.equal((await failed.relay()).success, false);
+    assert.equal(failed.calls.length, 1);
+  });
 }
 
 for (const bypass of [undefined, false, true]) {

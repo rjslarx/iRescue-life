@@ -6,6 +6,21 @@ import { medicalDateSchema } from "./medical-dates";
 import { supplyItemUnitPriceSchema } from "./supply-item-validation";
 export * from "./free-squares-tables";
 
+export const smsPhoneSuppressions = pgTable("sms_phone_suppressions", {
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  phoneKey: text("phone_key").notNull(),
+  suppressed: boolean("suppressed").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, table => [uniqueIndex("sms_phone_suppressions_key").on(table.tenantId, table.phoneKey)]);
+
+export const smsOptOutEvents = pgTable("sms_opt_out_events", {
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  messageSid: text("message_sid").notNull(),
+  phoneKey: text("phone_key").notNull(),
+  command: text("command").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, table => [uniqueIndex("sms_opt_out_events_key").on(table.tenantId, table.messageSid)]);
+
 // Append-only menus: Stripe sessions retain their original tenant/version.
 export const rescueVendMenus = pgTable("rescue_vend_menus", {
   id: serial("id").primaryKey(),

@@ -29267,9 +29267,10 @@ Submitted: ${new Date().toLocaleString()}
         return res.status(403).send('Missing Twilio signature');
       }
       let signatureValidated = false;
+      let verifiedTenantId: string | undefined;
       try {
         const [tenantRecord] = await db
-          .select({ twilioAuthTokenEncrypted: tenants.twilioAuthTokenEncrypted })
+          .select({ id: tenants.id, twilioAuthTokenEncrypted: tenants.twilioAuthTokenEncrypted })
           .from(tenants)
           .where(eq(tenants.twilioPhoneNumber, To))
           .limit(1);
@@ -29284,12 +29285,31 @@ Submitted: ${new Date().toLocaleString()}
             return res.status(403).send('Invalid Twilio signature');
           }
           signatureValidated = true;
+          verifiedTenantId = tenantRecord.id;
         }
       } catch (validationError) {
         console.error('[TWILIO] Signature validation error — rejecting request:', validationError);
         return res.status(403).send('Signature validation error');
       }
 
+      if (!signatureValidated || !verifiedTenantId) {
+        return res.status(403).send('Unable to verify Twilio sender');
+      }
+      const { smsOptOutCommand, recordVerifiedSmsOptOut } = await import('./lib/sms-suppression');
+      const optOutCommand = smsOptOutCommand(Body, req.body.OptOutType);
+      if (optOutCommand) {
+        if (optOutCommand !== "HELP") {
+          try {
+            await recordVerifiedSmsOptOut(verifiedTenantId, From, req.body.MessageSid, optOutCommand);
+          } catch (error) {
+            // Do not acknowledge a lost unsubscribe: allow Twilio to retry.
+            console.error('[TWILIO] Could not persist opt-out event');
+            return res.status(503).send('Unable to persist SMS preference');
+          }
+        }
+        // Twilio manages the confirmation. Do not relay or send a second reply.
+        return res.type("text/xml").send('<?xml version="1.0" encoding="UTF-8"?><Response/>');
+      }
       if (signatureValidated && typeof req.body.MessageSid === "string") {
         const { handleResaleSms } = await import("./services/rescue-resale");
         if (await handleResaleSms(From, To, Body || "", req.body.MessageSid)) {

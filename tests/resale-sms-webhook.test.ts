@@ -33,11 +33,10 @@ test("required fields are checked and unknown To numbers never enter resale", as
   await withWebhook(code, async (h, post) => {
     assert.equal((await post("R123456 ACCEPT", { params: { From: "" } })).status, 400);
     assert.equal((await post("R123456 ACCEPT", { params: { To: "" } })).status, 400);
-    await post("R123456 ACCEPT", { params: { To: "+12025550999" } });
+    assert.equal((await post("R123456 ACCEPT", { params: { To: "+12025550999" } })).status, 403);
     assert.equal(h.sent.length, 0);
     assert.equal(h.queries.length, 0);
-    assert.equal(h.fallback.length, 1);
-    assert.equal(h.fallback[0][4].signatureValidated, false);
+    assert.equal(h.fallback.length, 0);
   });
 });
 
@@ -195,7 +194,7 @@ test("contact-detail messages are blocked without sending or falling through", a
 
 test("unprefixed and malformed R-code messages preserve the existing SMS router", async () => {
   await withWebhook(code, async (h, post) => {
-    for (const body of ["DONE", "YES", "STOP", "SUPPLIES food", "R12345 ACCEPT", "R1234567 ACCEPT", "R123456", "R123456ACCEPT"]) {
+    for (const body of ["DONE", "YES", "SUPPLIES food", "R12345 ACCEPT", "R1234567 ACCEPT", "R123456", "R123456ACCEPT"]) {
       h.state.routedAs = body === "DONE" ? "medication_confirmed" : "foster_update";
       const response = await post(body);
       assert.equal(response.status, 200);
@@ -203,7 +202,7 @@ test("unprefixed and malformed R-code messages preserve the existing SMS router"
       assert.equal(h.fallback.at(-1)![2], body);
       assert.equal(h.fallback.at(-1)![4].signatureValidated, true);
     }
-    assert.equal(h.fallback.length, 8);
+    assert.equal(h.fallback.length, 7);
     assert.equal(h.sent.length, 0);
     assert.equal(h.queries.length, 0);
   });

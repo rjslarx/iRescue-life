@@ -90,10 +90,10 @@ function conversation(title: string, summary: ResaleConversation["deliverySummar
   };
 }
 function data(...conversations: ResaleConversation[]): ResaleAdmin {
-  return { conversations, items: [], orders: [], settings: { pickupOptions: [] } };
+  return { conversations, conversationsHasMore: false, items: [], orders: [], settings: { pickupOptions: [] } };
 }
 function key(filter: string, id = tenant.tenantId, path = tenant.basePath) {
-  return ["rescue-resale", id, path, "admin", filter];
+  return ["rescue-resale", id, path, "admin", filter, 0];
 }
 function text() { return document.body.textContent || ""; }
 async function until(check: () => boolean) {
@@ -157,7 +157,7 @@ test("selector changes request parameters and separates every filter cache", asy
   assert.match(text(), /Result for all/);
   assert.doesNotMatch(text(), /Result for unknown/);
   assert.deepEqual(calls.filter(c => c.path.includes("/admin?")).map(c => c.path),
-    options.map(([value]) => `/api/rescue-resale/admin?deliveryStatus=${value}`));
+    options.map(([value]) => `/api/rescue-resale/admin?deliveryStatus=${value}&offset=0`));
   assert.ok(calls.every(c => c.method === "GET"), "Changing filters must not send or retry texts");
 });
 
@@ -188,7 +188,7 @@ test("refresh replaces changed outcomes within the selected filter without sendi
   await until(() => text().includes("No conversations match this delivery status."));
   assert.equal(document.querySelector("select")!.value, "attention");
   assert.doesNotMatch(text(), /Needs review/);
-  assert.equal(calls.at(-1)?.path, "/api/rescue-resale/admin?deliveryStatus=attention");
+  assert.equal(calls.at(-1)?.path, "/api/rescue-resale/admin?deliveryStatus=attention&offset=0");
   assert.ok(calls.every(c => c.method === "GET"));
 });
 
@@ -213,7 +213,7 @@ test("masked recipient summaries preserve counts, warnings and legacy outcomes",
   assert.match(text(), /To Donor: Not sent — blocked or rejected before acceptance · Twilio error 21610/);
   assert.match(text(), /Accepted by Twilio — delivery not confirmed/);
   assert.match(text(), /entire message history/);
-  assert.match(text(), /outside the first 300 audit entries/);
+  assert.match(text(), /Use Previous and Next to browse conversations and message entries/);
   assert.doesNotMatch(text(), /\+1\d{10}|@example\.test/);
 });
 
@@ -231,14 +231,18 @@ test("tenant and path navigation never displays another scope's cached conversat
     await render();
     assert.doesNotMatch(text(), /alpha:\/alpha failed|beta:\/alpha failed/);
     assert.ok(document.querySelector('[aria-label="Loading resale workspace"]'));
-    await act(async () => release(data(conversation(`${next.tenantId}:${next.basePath} failed`))));
-    await until(() => text().includes(`${next.tenantId}:${next.basePath} failed`));
-    assert.equal(document.querySelector("select")!.value, "failed");
+    await act(async () => release(data(conversation(`${next.tenantId}:${next.basePath} all`))));
+    await until(() => cache.getQueryState(key("all"))?.status === "success");
+    await click("Conversation logs");
+    await until(() => text().includes(`${next.tenantId}:${next.basePath} all`));
+    assert.equal(document.querySelector("select")!.value, "all");
     assert.equal(document.querySelector("a")?.getAttribute("href"), `${next.basePath}/rescue-resale`);
   }
   assert.equal(cache.getQueryData<ResaleAdmin>(key("failed", "alpha", "/alpha"))?.conversations[0].itemTitle, "alpha:/alpha failed");
   tenant = { tenantId: "alpha", basePath: "/alpha" };
   await render();
+  await click("Conversation logs");
+  await select("failed");
   await until(() => text().includes("alpha:/alpha failed"));
   assert.doesNotMatch(text(), /beta:\/beta failed/);
 });
@@ -250,15 +254,15 @@ test("mutation refresh invalidates every filter in its scope but not other tenan
   const otherTenant = key("failed", "beta", "/alpha");
   const otherPath = key("failed", "alpha", "/other");
   for (const k of [sibling, otherTenant, otherPath]) cache.setQueryData(k, data(conversation("Cached")));
-  const before = calls.filter(c => c.path.endsWith("deliveryStatus=all")).length;
+  const before = calls.filter(c => c.path.endsWith("deliveryStatus=all&offset=0")).length;
   await act(async () => { await api.settings.mutateAsync({ pickupOptions: [] }); });
   assert.equal(cache.getQueryState(sibling)?.isInvalidated, true);
   assert.equal(cache.getQueryState(otherTenant)?.isInvalidated, false);
   assert.equal(cache.getQueryState(otherPath)?.isInvalidated, false);
-  assert.equal(calls.filter(c => c.path.endsWith("deliveryStatus=all")).length, before + 1);
+  assert.equal(calls.filter(c => c.path.endsWith("deliveryStatus=all&offset=0")).length, before + 1);
   respond = () => data(conversation("Updated after refresh"));
   await render(true, "failed");
   await until(() => api.adminData.data?.conversations[0]?.itemTitle === "Updated after refresh");
   assert.equal(cache.getQueryState(sibling)?.isInvalidated, false);
-  assert.equal(calls.at(-1)?.path, "/api/rescue-resale/admin?deliveryStatus=failed");
+  assert.equal(calls.at(-1)?.path, "/api/rescue-resale/admin?deliveryStatus=failed&offset=0");
 });
