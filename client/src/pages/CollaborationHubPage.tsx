@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { TransportBroadcastSummary } from "@/components/TransportBroadcastSummary";
+import { transportPhoneKey, type TransportBroadcastResult } from "@/lib/transport-broadcast-results";
 import { Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -1625,6 +1627,24 @@ function TransportDetailDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const { tenant } = useTenant();
+  return <TransportDetailDialogContent
+    key={`${tenant?.id}:${transport?.id}:${open}`}
+    transport={transport}
+    open={open}
+    onOpenChange={onOpenChange}
+  />;
+}
+
+function TransportDetailDialogContent({
+  transport,
+  open,
+  onOpenChange,
+}: {
+  transport: TransportEvent | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
   const { toast } = useToast();
   const { tenant } = useTenant();
   const { data: tenantTierData } = useQuery<{ tenant: { subscriptionTier: string } }>({
@@ -1777,19 +1797,19 @@ function TransportDetailDialog({
   const broadcastMutation = useMutation({
     mutationFn: async (message: string) => {
       const response = await apiRequest('POST', `/api/transports/${transport?.id}/sms-broadcast`, { message });
-      return response.json();
+      return response.json() as Promise<{ results?: TransportBroadcastResult[] }>;
     },
-    onSuccess: (data) => {
+    onSuccess: () => {
       setBroadcastMessage("");
       toast({
-        title: "SMS sent",
-        description: `Sent to ${data.sent} subscriber${data.sent !== 1 ? 's' : ''}${data.failed > 0 ? ` (${data.failed} failed)` : ''}.`,
+        title: "Broadcast results available",
+        description: "Review the recipient breakdown below before sending any further messages.",
       });
     },
-    onError: (error: any) => {
+    onError: () => {
       toast({
-        title: "Failed to send SMS",
-        description: error.message || "Please try again.",
+        title: "Broadcast could not be confirmed",
+        description: "Do not resend. Check SMS logs and provider records first; some messages may already have been accepted.",
         variant: "destructive",
       });
     },
@@ -1919,6 +1939,7 @@ function TransportDetailDialog({
   };
 
   const smsSubscribers = detailData?.transport?.smsSubscribers || [];
+  const uniqueSubscriberCount = new Set(smsSubscribers.map(transportPhoneKey)).size;
   const twilioEnabled = tenant?.twilioEnabled;
 
   if (!transport) return null;
@@ -2510,9 +2531,12 @@ function TransportDetailDialog({
                         >
                           {broadcastMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                           <Send className="h-4 w-4 mr-2" />
-                          Send to {smsSubscribers.length} subscriber{smsSubscribers.length !== 1 ? 's' : ''}
+                          Send to {uniqueSubscriberCount} unique phone {uniqueSubscriberCount !== 1 ? 'numbers' : 'number'}
                         </Button>
                       </div>
+                      {(broadcastMutation.isSuccess || broadcastMutation.isError) && (
+                        <TransportBroadcastSummary results={broadcastMutation.isSuccess ? broadcastMutation.data.results : undefined} />
+                      )}
                     </div>
                   </div>
 
