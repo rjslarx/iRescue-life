@@ -12,6 +12,7 @@ import { calculatePlatformFee, calculateDestinationChargeEconomics, getDestinati
 import { resaleItemSchema, resaleSettingsSchema, resalePhone, resaleMessageAllowed, resaleCsvCell } from "@shared/rescue-resale";
 import { hashResale, resaleTenant, resaleBase, resaleSettings, resalePublicItem, resaleOrder, resaleConversation, sendResaleMessage, syncResaleOrder } from "../services/rescue-resale";
 import { applyResaleOffer, resaleOfferAction } from "../services/resale-offers";
+import { resaleAuditFilter, resaleAuditQuery } from "../services/resale-audit";
 
 const router = Router();
 const uuid = z.string().uuid();
@@ -97,7 +98,8 @@ async function conversationView(c: any, phone?: string) {
   const expired = c.expires_at && new Date(c.expires_at).getTime() <= Date.now() && ["accepted", "countered", "pending"].includes(c.offer_status);
   return { id: c.id, code: c.code, itemId: c.item_id, itemTitle: c.item_title,
     role: c.buyer_phone === phone ? "buyer" : "donor", offerCents: c.offer_cents,
-    offerStatus: expired ? "expired" : c.offer_status, expiresAt: c.expires_at, updatedAt: c.updated_at, messages };
+    offerStatus: expired ? "expired" : c.offer_status, expiresAt: c.expires_at, updatedAt: c.updated_at, messages,
+    ...(c.delivery_summary ? { deliverySummary: c.delivery_summary } : {}) };
 }
 router.get("/me", route(async (req: any, res: any) => {
   const phone = await verified(req);
@@ -281,9 +283,10 @@ router.use("/admin", requireAuth, requireRoleOrPageAccess("finance", "owner", "a
   next();
 });
 router.get("/admin", route(async (req: any, res: any) => {
+  const deliveryStatus = resaleAuditFilter.parse(req.query.deliveryStatus ?? "all");
   const [items, cs, orders, settings] = await Promise.all([
     pool.query("SELECT * FROM rescue_resale_items WHERE tenant_id=$1 ORDER BY created_at DESC LIMIT 500", [req.tenant.id]),
-    pool.query("SELECT c.*,i.data->>'title' AS item_title FROM rescue_resale_conversations c JOIN rescue_resale_items i ON i.id=c.item_id WHERE c.tenant_id=$1 ORDER BY c.updated_at DESC LIMIT 100", [req.tenant.id]),
+    pool.query(resaleAuditQuery, [req.tenant.id, deliveryStatus]),
     pool.query("SELECT * FROM rescue_resale_orders WHERE tenant_id=$1 ORDER BY created_at DESC LIMIT 500", [req.tenant.id]),
     resaleSettings(req.tenant.id),
   ]);

@@ -91,7 +91,8 @@ function SalesLedger({ api }: { api: ResaleClient }) {
 }
 export default function RescueResaleAdminPage() {
   const { basePath } = useTenant();
-  const api = useRescueResale({ admin: true });
+  const [deliveryStatus, setDeliveryStatus] = useState("all");
+  const api = useRescueResale({ admin: true, deliveryStatus });
   const [tab, setTab] = useState<"listings" | "pickups" | "conversations" | "sales">("listings");
   const [pendingOnly, setPendingOnly] = useState(true);
   const data = api.adminData.data;
@@ -113,7 +114,23 @@ export default function RescueResaleAdminPage() {
           {!listings.length ? <div className="resale-empty"><PackageOpen size={32} /><h3>{pendingOnly ? "The review queue is clear." : "No listings yet."}</h3><p className="resale-muted">{pendingOnly ? "New donor submissions will appear here for your review." : "Share the storefront with your community to invite the first donated items."}</p></div> : listings.map(item => <ReviewListing key={item.id} item={item} api={api} />)}
         </>}
         {tab === "conversations" && <section className="resale-panel"><h2>Masked conversation logs</h2><p className="resale-muted mb-5">Audit the filtered message bodies, delivery statuses, and offers relayed between masked participants. Blocked attempts appear as a generic marker. Contact-pattern filtering is not a guarantee of privacy; participants should never share personal contact details in messages.</p>
-          {!data.conversations.length ? <div className="resale-empty"><MessageSquare size={30} /><h3>No conversations yet.</h3><p className="resale-muted">Filtered messages, delivery metadata, and offer states will appear here.</p></div> : data.conversations.map(c => <article className="resale-note mb-4" key={c.id}><div className="resale-row"><h3 className="!mb-0">{c.itemTitle}</h3><span className="resale-pill">{c.offerStatus}</span></div><p className="resale-muted mt-2">Conversation {c.code} · updated {new Date(c.updatedAt).toLocaleString()}</p>{c.offerCents != null && <p className="mt-2">Offer: {resaleMoney(c.offerCents)}{c.expiresAt && ` · deadline ${new Date(c.expiresAt).toLocaleString()}`}</p>}<details className="resale-details"><summary>Filtered message audit ({c.messages.length})</summary>{c.messages.map((message, index) => <div className="resale-message" key={`${message.createdAt}-${index}`}><p className="resale-muted">{message.sender} · {new Date(message.createdAt).toLocaleString()} · <ResaleDeliveryStatus message={message} /></p><p>{message.body}</p></div>)}</details></article>)}
+          <div className="resale-row mb-4"><label htmlFor="resale-delivery-filter">Recipient delivery status</label><select id="resale-delivery-filter" value={deliveryStatus} onChange={e => setDeliveryStatus(e.target.value)}>
+            <option value="all">All conversations</option><option value="attention">Needs attention</option><option value="undelivered">Undelivered</option><option value="failed">Failed</option><option value="not_sent">Not sent</option><option value="unknown">Unknown outcome</option>
+          </select><button className="resale-btn secondary" disabled={api.adminData.isFetching} onClick={() => void api.adminData.refetch()}>Refresh</button></div>
+          <p className="resale-muted mb-4" role="status">Showing up to 100 most recently updated matching conversations. Filters and summaries cover the entire message history, including messages outside the first 300 audit entries. Needs attention includes undelivered, failed, not-sent, and unknown outcomes. Unknown recipients are legacy records without recipient tracking. Historical failures may have been accepted by the provider. Review outcomes manually; this view never resends texts.</p>
+          {deliveryStatus !== "all" && !data.conversations.length && <p role="status">No conversations match this delivery status.</p>}
+          {!data.conversations.length && deliveryStatus === "all" && <div className="resale-empty"><MessageSquare size={30} /><h3>No conversations yet.</h3><p className="resale-muted">Filtered messages, delivery metadata, and offer states will appear here.</p></div>}
+          {data.conversations.map(c => <article className="resale-note mb-4" key={c.id}>
+            <div className="resale-row"><h3 className="!mb-0">{c.itemTitle}</h3><span className="resale-pill">{c.offerStatus}</span></div>
+            <p className="resale-muted mt-2">Conversation {c.code} · updated {new Date(c.updatedAt).toLocaleString()}</p>
+            <ul className="mt-3" aria-label="Delivery outcomes needing attention">{c.deliverySummary?.length ? c.deliverySummary.map(d =>
+              <li key={`${d.recipient}-${d.status}`}>To {d.recipient}: {deliveryLabel(d.status)} · {d.count} recipient outcome{d.count === 1 ? "" : "s"}</li>
+            ) : <li>No attention outcomes recorded.</li>}</ul>
+            {c.offerCents != null && <p className="mt-2">Offer: {resaleMoney(c.offerCents)}{c.expiresAt && ` · deadline ${new Date(c.expiresAt).toLocaleString()}`}</p>}
+            <details className="resale-details"><summary>Filtered message audit ({c.messages.length})</summary>{c.messages.map((message, index) =>
+              <div className="resale-message" key={`${message.createdAt}-${index}`}><p className="resale-muted">{message.sender} · {new Date(message.createdAt).toLocaleString()} · <ResaleDeliveryStatus message={message} /></p><p>{message.body}</p></div>
+            )}</details>
+          </article>)}
         </section>}
       </>}
     </main></div>

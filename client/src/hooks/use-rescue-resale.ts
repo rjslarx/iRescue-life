@@ -10,6 +10,7 @@ export type ResaleItem = {
   reviewNote?: string | null; donorName?: string; donorEmail?: string; donorPhone?: string;
 };
 export type ResaleConversation = {
+  deliverySummary?: { recipient: string; status: string; count: number }[];
   id: string; code: string; itemId: string; itemTitle: string; role: "buyer" | "donor";
   offerCents: number | null; offerStatus: "none" | "pending" | "accepted" | "declined" | "countered" | "expired" | "paid";
   expiresAt: string | null; updatedAt: string;
@@ -56,7 +57,7 @@ export function useResaleConfig() {
     enabled: !!tenantId, retry: 1,
   });
 }
-export function useRescueResale({ admin = false, orderId = null, activityOpen = false }: { admin?: boolean; orderId?: string | null; activityOpen?: boolean } = {}) {
+export function useRescueResale({ admin = false, orderId = null, activityOpen = false, deliveryStatus = "all" }: { admin?: boolean; orderId?: string | null; activityOpen?: boolean; deliveryStatus?: string } = {}) {
   const { tenantId, basePath } = useTenant();
   const cache = useQueryClient();
   const scope = `${window.location.host}:${tenantId || ""}:${basePath}`;
@@ -97,7 +98,7 @@ export function useRescueResale({ admin = false, orderId = null, activityOpen = 
     refetchInterval: activityOpen && !!token ? 12000 : false,
   });
   const adminData = useQuery<ResaleAdmin>({
-    queryKey: [...key, "admin"], queryFn: () => request("GET", "/admin"),
+    queryKey: [...key, "admin", deliveryStatus], queryFn: () => request("GET", `/admin?deliveryStatus=${encodeURIComponent(deliveryStatus)}`),
     enabled: !!tenantId && admin, retry: 1,
   });
   const order = useQuery<ResaleOrder>({
