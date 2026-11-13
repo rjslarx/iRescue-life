@@ -7,6 +7,7 @@ import { isTwilioEnabled, sendSms } from "../lib/twilio-service";
 import { stripeService } from "../lib/stripe-service";
 import { getAppBaseUrl } from "../lib/app-base-url";
 import { resaleMessageAllowed } from "@shared/rescue-resale";
+import { applyResaleOffer, parseResaleCommand } from "./resale-offers";
 
 export const hashResale = (s: string) => createHash("sha256").update(s).digest("hex");
 export async function resaleTenant(id: string) {
@@ -76,6 +77,27 @@ export async function handleResaleSms(from: string, to: string, body: string, si
   [t.id, match[1], from])).rows[0];
   if (!c) return true;
   try {
+    const command = parseResaleCommand(match[2]);
+    if (command) {
+      if ("error" in command) {
+        // Deduplicate malformed commands too, without relaying them to the other party.
+        const inserted = await pool.query(`INSERT INTO rescue_resale_messages
+          (id,conversation_id,sender,body,status,inbound_sid) VALUES($1,$2,$3,'Invalid SMS offer command','rejected',$4)
+          ON CONFLICT(inbound_sid) DO NOTHING RETURNING id`,
+        [randomUUID(), c.id, from === c.buyer_phone ? "buyer" : "donor", sid]);
+        if (inserted.rows.length) await sendSms(t.id, from, `Resale R${c.code}: ${command.error} Prefix your reply with R${c.code}. Reply STOP to unsubscribe.`, "proxy_message", { bypassQuietHours: true });
+        return true;
+      }
+      const result = await applyResaleOffer(t.id, c.id, from, command, sid);
+      if (result.duplicate) return true;
+      if (result.error) {
+        await sendSms(t.id, from, `Resale R${c.code}: ${result.error} ${resaleBase(t)}/rescue-resale . Reply STOP to unsubscribe.`, "proxy_message", { bypassQuietHours: true });
+        return true;
+      }
+      await sendResaleMessage(t.id, c.id, "system",
+        `Offer ${result.status} at $${(result.amountCents! / 100).toFixed(2)}. ${result.status === "countered" ? `Buyer: reply R${c.code} ACCEPT or R${c.code} NO. ` : ""}Review My activity: ${resaleBase(t)}/rescue-resale . Acceptance is not payment or a reservation. Choose pickup and pay through checkout within two hours, subject to availability.`);
+      return true;
+    }
     await sendResaleMessage(t.id, c.id, from === c.buyer_phone ? "buyer" : "donor", match[2].trim(), sid);
   } catch (error) {
     // Do not relay a blocked message. Existing audit shows failures; avoid webhook retry spam.

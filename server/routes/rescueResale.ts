@@ -11,6 +11,7 @@ import { stripeService } from "../lib/stripe-service";
 import { calculatePlatformFee, calculateDestinationChargeEconomics, getDestinationChargeEconomicsMetadata } from "../config/platform";
 import { resaleItemSchema, resaleSettingsSchema, resalePhone, resaleMessageAllowed, resaleCsvCell } from "@shared/rescue-resale";
 import { hashResale, resaleTenant, resaleBase, resaleSettings, resalePublicItem, resaleOrder, resaleConversation, sendResaleMessage, syncResaleOrder } from "../services/rescue-resale";
+import { applyResaleOffer, resaleOfferAction } from "../services/resale-offers";
 
 const router = Router();
 const uuid = z.string().uuid();
@@ -166,7 +167,7 @@ router.post("/items/:id/messages", writeLimit, route(async (req: any, res: any) 
   // User text is filtered separately; secure site link is system-generated.
   try {
     await sendResaleMessage(req.tenant.id, c.id, "buyer", text);
-    if (input.offerCents) await sendResaleMessage(req.tenant.id, c.id, "system", `Review or accept the offer in My activity: ${resaleBase(t)}/rescue-resale . Offers expire after two hours; items are not reserved until checkout.`);
+    if (input.offerCents) await sendResaleMessage(req.tenant.id, c.id, "system", `Review the offer in My activity: ${resaleBase(t)}/rescue-resale . For pending offers, the donor can reply R${c.code} YES, R${c.code} NO, or R${c.code} COUNTER $20. Offers expire after two hours; items are not reserved until checkout.`);
   } catch (e: any) { fail(e.message, 502); }
   res.json({ id: c.id });
 }));
@@ -182,19 +183,12 @@ router.post("/conversations/:id/messages", writeLimit, route(async (req: any, re
   res.json({ ok: true });
 }));
 router.post("/conversations/:id/offer", writeLimit, route(async (req: any, res: any) => {
-  const { c, role } = await ownedConversation(req);
-  const input = z.object({ action: z.enum(["accept","decline","counter"]), amountCents: z.number().int().min(100).max(500000).optional() }).parse(req.body);
-  const expected = role === "donor" ? "pending" : "countered";
-  if (input.action === "counter" && (role !== "donor" || !input.amountCents)) fail("Only the donor may counter a pending offer.");
-  const status = input.action === "accept" ? "accepted" : input.action === "decline" ? "declined" : "countered";
-  const result = await pool.query(`UPDATE rescue_resale_conversations c SET offer_status=$3,
-    offer_cents=COALESCE($4,offer_cents),expires_at=now()+interval '2 hours',updated_at=now()
-    WHERE c.id=$1 AND c.offer_status=$2 AND c.expires_at>now()
-    AND EXISTS(SELECT 1 FROM rescue_resale_items i WHERE i.id=c.item_id AND i.status='active') RETURNING id`,
-  [c.id, expected, status, input.action === "counter" ? input.amountCents : null]);
-  if (!result.rows.length) fail("The offer expired, changed, or the item is no longer available.", 409);
+  const { c, phone } = await ownedConversation(req);
+  const input = resaleOfferAction.parse(req.body);
+  const result = await applyResaleOffer(req.tenant.id, c.id, phone, input);
+  if (result.error) fail(result.error, 409);
   const t = await resaleTenant(req.tenant.id);
-  try { await sendResaleMessage(req.tenant.id, c.id, "system", `Offer ${status}${input.amountCents ? ` at $${(input.amountCents / 100).toFixed(2)}` : ""}. View My activity: ${resaleBase(t)}/rescue-resale . Accepted prices are valid for two hours, subject to availability.`); }
+  try { await sendResaleMessage(req.tenant.id, c.id, "system", `Offer ${result.status} at $${(result.amountCents! / 100).toFixed(2)}. View My activity: ${resaleBase(t)}/rescue-resale . Accepted prices are valid for two hours, subject to availability. Donors can reply R${c.code} YES, R${c.code} NO, or R${c.code} COUNTER $20 to pending offers. Buyers can reply R${c.code} ACCEPT or R${c.code} NO to counteroffers.`); }
   catch (e: any) { fail(e.message, 502); }
   res.json({ ok: true });
 }));

@@ -14,3 +14,9 @@ The rescue and donor must decide the legal transfer and tax acknowledgment arran
 **Why:** The original proposal conflated contributed goods and purchase receipts. The approved recommendation explicitly separated these.
 
 **How to apply:** Treat resale checkout as a sale, not the generic donation webhook path. Preserve exact inventory reservations until Stripe confirms expiry/payment. Do not release holds based on browser cancellation alone. SMS uses an explicit resale conversation prefix so existing foster, medication, and adopter routing keeps working.
+
+SMS offer negotiation is approved, but acceptance must not charge the buyer or promise that an item is reserved.
+
+**Why:** The user approved adapting the uploaded service's SMS commands, not replacing the tenant-integrated checkout or expanding the first-version scope.
+
+**How to apply:** Keep phone/tenant ownership checks, explicit conversation codes, and replay-safe offer transitions. Direct accepted buyers to the existing pickup selection and secure checkout.
