@@ -66,6 +66,7 @@ vite.config.ts.*
 *.sql
 !migrations/*.sql
 !scripts/free-squares.sql
+!scripts/transport-sms-operations.sql
 *.db
 *.sqlite
 *.sqlite3
