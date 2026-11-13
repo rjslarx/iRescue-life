@@ -1,0 +1,77 @@
+.resale {
+  --resale-paper: #faf6ed;
+  --resale-ink: #253e36;
+  --resale-muted: #596b60;
+  --resale-line: #d7dfd3;
+  --resale-soft: #edf1e7;
+  --resale-clay: #9c4b33;
+  color: var(--resale-ink);
+  background: var(--resale-paper);
+  min-height: 100dvh;
+  font-family: inherit;
+}
+.resale * { box-sizing: border-box; }
+.resale-wrap { width: min(1160px, calc(100% - 40px)); margin: 0 auto; padding: 36px 0 64px; }
+.resale h1, .resale h2, .resale h3 { color: var(--resale-ink); letter-spacing: -.025em; line-height: 1.15; }
+.resale h1 { font-family: Georgia, "Times New Roman", serif; font-size: clamp(2.5rem, 5vw, 4.5rem); font-weight: 500; margin: 12px 0 20px; }
+.resale h2 { font-size: 1.55rem; font-weight: 650; margin-bottom: 14px; }
+.resale h3 { font-size: 1.1rem; font-weight: 650; margin-bottom: 8px; }
+.resale p { line-height: 1.65; }
+.resale-kicker { text-transform: uppercase; font-weight: 700; font-size: .72rem; letter-spacing: .16em; color: var(--resale-clay); }
+.resale-hero { display: grid; grid-template-columns: 1.6fr 1fr; gap: 54px; padding: 30px 0 40px; align-items: center; }
+.resale-lede { max-width: 630px; color: var(--resale-muted); font-size: 1.1rem; }
+.resale-note { background: var(--resale-soft); border: 1px solid var(--resale-line); padding: 22px; border-radius: 14px; }
+.resale-note ol { list-style: decimal; padding-left: 20px; }
+.resale-note li { margin: 12px 0; line-height: 1.55; }
+.resale-tabs { display: flex; gap: 8px; flex-wrap: wrap; padding: 14px 0; border-top: 1px solid var(--resale-line); border-bottom: 1px solid var(--resale-line); margin-bottom: 28px; }
+.resale button, .resale a.resale-btn { transition: transform .15s ease, opacity .15s ease; }
+.resale button:active:not(:disabled) { transform: translateY(1px); }
+.resale-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: var(--resale-ink); color: #faf6ed; border: 1px solid var(--resale-ink); padding: 10px 17px; border-radius: 7px; font-weight: 600; font-size: .88rem; min-height: 44px; cursor: pointer; text-decoration: none; }
+.resale-btn.secondary { color: var(--resale-ink); background: transparent; border-color: #abbcaf; }
+.resale-btn.danger { color: #8c302b; background: #f9e7de; border-color: #d4b4a5; }
+.resale-btn:disabled { opacity: .48; cursor: not-allowed; }
+.resale :focus-visible { outline: 3px solid #b76d49; outline-offset: 3px; }
+.resale-toolbar, .resale-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.resale-toolbar { justify-content: space-between; margin: 22px 0; }
+.resale input:not([type=checkbox]), .resale select, .resale textarea { display: block; width: 100%; min-height: 44px; background: #fffdf7; color: var(--resale-ink); border: 1px solid #a4b5a6; padding: 10px 12px; border-radius: 6px; font: inherit; font-size: .92rem; }
+.resale input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--resale-ink); flex-shrink: 0; margin-top: 3px; }
+.resale textarea { min-height: 105px; resize: vertical; }
+.resale label { display: block; font-size: .88rem; font-weight: 600; margin-bottom: 6px; }
+.resale-field { margin-bottom: 17px; min-width: 0; }
+.resale-check { display: flex !important; gap: 10px; align-items: flex-start; font-weight: 400 !important; line-height: 1.55; }
+.resale-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
+.resale-card { background: #fffdf7; border: 1px solid var(--resale-line); border-radius: 12px; overflow: hidden; }
+.resale-card-body { padding: 20px; }
+.resale-photo { width: 100%; aspect-ratio: 4/3; object-fit: cover; background: #e4e9dd; }
+.resale-card .resale-btn { width: 100%; margin-top: 16px; }
+.resale-price { font-size: 1.4rem; font-weight: 700; letter-spacing: -.03em; }
+.resale-muted { color: var(--resale-muted); font-size: .88rem; }
+.resale-pill { display: inline-block; border: 1px solid var(--resale-line); background: var(--resale-soft); padding: 3px 9px; border-radius: 20px; font-size: .74rem; font-weight: 600; text-transform: capitalize; }
+.resale-panel { padding: clamp(20px, 3vw, 32px); margin-bottom: 22px; background: #fffdf7; border: 1px solid var(--resale-line); border-radius: 12px; }
+.resale-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; }
+.resale-form { max-width: 780px; }
+.resale-error { padding: 14px 18px; border: 1px solid #d4a596; background: #fff0e9; color: #853b2e; border-radius: 8px; margin: 14px 0; overflow-wrap: anywhere; }
+.resale-status { padding: 18px; border-left: 4px solid #6c8368; background: var(--resale-soft); margin: 18px 0; }
+.resale-empty { text-align: center; padding: 50px 24px; border: 1px dashed #acbca9; border-radius: 12px; background: var(--resale-soft); }
+.resale-empty svg { margin: 0 auto 16px; color: #6a7d65; }
+.resale-skeleton { height: 290px; background: #e4e9dd; border-radius: 12px; animation: resale-pulse 1.5s ease-in-out infinite alternate; }
+@keyframes resale-pulse { from { opacity: .5; } to { opacity: 1; } }
+.resale-details { margin-top: 22px; }
+.resale-details summary { cursor: pointer; font-weight: 600; padding: 12px 0; }
+.resale-gallery { display: flex; gap: 10px; flex-wrap: wrap; margin: 12px 0; }
+.resale-gallery img { width: 110px; height: 90px; border-radius: 7px; object-fit: cover; }
+.resale-message { border-left: 2px solid #b3c2ac; padding: 10px 14px; margin: 12px 0; background: var(--resale-paper); overflow-wrap: anywhere; white-space: pre-wrap; }
+.resale-table { width: 100%; border-collapse: collapse; font-size: .84rem; text-align: left; }
+.resale-table th { background: var(--resale-soft); font-weight: 600; }
+.resale-table th, .resale-table td { border-bottom: 1px solid var(--resale-line); padding: 13px 12px; vertical-align: top; }
+.resale-table-wrap { overflow-x: auto; }
+.resale-divider { margin: 24px 0; border: 0; border-top: 1px solid var(--resale-line); }
+@media (max-width: 767px) {
+  .resale-wrap { width: calc(100% - 28px); padding-top: 20px; }
+  .resale-hero, .resale-two, .resale-grid { grid-template-columns: 1fr; gap: 20px; }
+  .resale-hero { padding-top: 8px; }
+  .resale-grid { gap: 18px; }
+  .resale-toolbar > * { width: 100%; }
+  .resale-tabs .resale-btn { flex: 1; padding-left: 10px; padding-right: 10px; }
+}
+@media (prefers-reduced-motion: reduce) { .resale *, .resale *::before { animation: none !important; transition: none !important; } }

@@ -5,6 +5,7 @@ import fs from "fs";
 import { catVaccineGuardSql } from "./lib/cat-vaccine-guard";
 import { donationAuditSchemaSql } from "./lib/donation-audit";
 import { rescueVendSchemaSql } from "./lib/rescue-vend-schema";
+import { rescueResaleSchemaSql } from "./lib/rescue-resale-schema";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { sessionMiddleware, authenticateUser } from "./middleware/auth";
@@ -297,8 +298,21 @@ app.use((req, res, next) => {
   await pool.query(catVaccineGuardSql);
   console.log("[Startup] Preparing vending menu settings");
   await pool.query(rescueVendSchemaSql);
+  console.log("[Startup] Preparing Rescue Resale");
+  await pool.query(rescueResaleSchemaSql);
   console.log("[Startup] Registering application routes");
   const server = await registerRoutes(app);
+  if (process.env.REPLIT_DEPLOYMENT === "1") {
+    let resaleSweepRunning = false;
+    const resaleTimer = setInterval(async () => {
+      if (resaleSweepRunning) return;
+      resaleSweepRunning = true;
+      try { await (await import("./services/rescue-resale")).reconcileResaleOrders(); }
+      catch { console.warn("[Resale] Reconciliation unavailable; will retry"); }
+      finally { resaleSweepRunning = false; }
+    }, 15 * 60 * 1000);
+    resaleTimer.unref();
+  }
   console.log("[Startup] Application routes registered");
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

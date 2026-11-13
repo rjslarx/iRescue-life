@@ -129,6 +129,8 @@ import FundraisersPage from "@/pages/FundraisersPage";
 import FundraiserFulfillmentPage from "@/pages/FundraiserFulfillmentPage";
 import PublicFundraisersPage from "@/pages/PublicFundraisersPage";
 import RescueVendPage from "@/pages/RescueVendPage";
+import RescueResalePage from "@/pages/RescueResalePage";
+import RescueResaleAdminPage from "@/pages/RescueResaleAdminPage";
 import EventTicketCheckoutPage from "@/pages/EventTicketCheckoutPage";
 import EventSuccessPage from "@/pages/EventSuccessPage";
 import GivePage from "@/pages/GivePage";
@@ -267,6 +269,7 @@ function RouterSwitch() {
       <Route path="/fundraise/:slug" component={PeerCampaignPage} />
       <Route path="/fundraisers" component={PublicFundraisersPage} />
       <Route path="/rescue-vend" component={RescueVendPage} />
+      <Route path="/rescue-resale" component={RescueResalePage} />
       <Route path="/donate/event/:eventId" component={FundraiserEventPage} />
       <Route path="/donate/:linkId" component={DonationLinkRedirectPage} />
       <Route path="/five-dollar-friday" component={FiveDollarFridayPage} />
@@ -327,6 +330,7 @@ function RouterSwitch() {
       <ProtectedRoute path="/dashboard/team" pageId="team" component={TeamManagementPage} />
       <ProtectedRoute path="/dashboard/analytics" pageId="analytics" component={Analytics} />
       <ProtectedRoute path="/dashboard/finance" pageId="finance" component={FinancePage} />
+      <ProtectedRoute path="/dashboard/rescue-resale" pageId="finance" component={RescueResaleAdminPage} />
       <ProtectedRoute path="/dashboard/donation-links" pageId="finance" component={DonationLinksPage} />
       <ProtectedRoute path="/dashboard/fundraising" pageId="finance" component={FundraisingHubPage} />
       <ProtectedRoute path="/dashboard/fundraisers/:eventId" pageId="fundraiser-events" component={FundraiserFulfillmentPage} />

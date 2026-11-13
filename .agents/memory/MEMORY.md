@@ -48,3 +48,4 @@
 - [Donation notification navigation](donation-widget-navigation.md) — scroll to the home page donation section, with tenant-aware Donate navigation as fallback.
 - [VIP game perk scope](vip-game-perk-scope.md) — existing VIP bonus only; start with a private pilot before deciding on public rollout.
 - [Virtual vending donations](virtual-vending-donations.md) — public symbolic donations; all fees deducted within the displayed amount, never added on top.
+- [Rescue Resale scope](rescue-resale-scope.md) — Twilio-gated local resale; first version excludes seller splits, couriers, and automatic tax-receipt claims.

@@ -312,6 +312,7 @@ export function isKnownPublicTenantRoute(cleanUrl: string): boolean {
     '/donate',
     '/vip-club',
     '/rescue-vend',
+    '/rescue-resale',
     '/shop',
     '/contact',
     '/volunteer',
@@ -1103,6 +1104,13 @@ export async function injectOGTags(req: Request, res: Response, next: NextFuncti
       }
     }
 
+    if (!ogData && /^\/rescue-resale\/?(?:\?.*)?$/i.test(url)) {
+      ogData = {
+        title: `Rescue Resale | ${tenant.name}`,
+        description: `Shop local secondhand finds or donate an item. All net proceeds support ${tenant.name}. Items stay with donors until a scheduled local pickup.`,
+        image: defaultImage,
+      };
+    }
     if (!ogData && /^\/rescue-vend\/?(?:\?.*)?$/i.test(url)) {
       ogData = {
         title: `Virtual Supply Machine | ${tenant.name}`,

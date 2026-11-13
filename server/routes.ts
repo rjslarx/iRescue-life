@@ -29290,6 +29290,12 @@ Submitted: ${new Date().toLocaleString()}
         return res.status(403).send('Signature validation error');
       }
 
+      if (signatureValidated && typeof req.body.MessageSid === "string") {
+        const { handleResaleSms } = await import("./services/rescue-resale");
+        if (await handleResaleSms(From, To, Body || "", req.body.MessageSid)) {
+          return res.type("text/xml").send('<?xml version="1.0" encoding="UTF-8"?><Response/>');
+        }
+      }
       const result = await handleIncomingSms(From, To, Body || '', mediaUrls, {
         messageSid: typeof req.body.MessageSid === 'string' ? req.body.MessageSid : undefined,
         signatureValidated,
@@ -32452,6 +32458,15 @@ Submitted: ${new Date().toLocaleString()}
       }
 
       switch (event.type) {
+        case 'checkout.session.expired':
+        case 'charge.refunded': {
+          const object = event.data.object as any;
+          if (object.metadata?.type === "rescue_resale") {
+            const { syncResaleOrder } = await import("./services/rescue-resale");
+            await syncResaleOrder(object.metadata.resaleOrderId, object.metadata.tenantId);
+          }
+          break;
+        }
         case 'charge.dispute.created':
         case 'charge.dispute.funds_withdrawn': {
           // Direct-charge disputes belong to the connected account and arrive
@@ -32617,6 +32632,12 @@ Submitted: ${new Date().toLocaleString()}
         case 'checkout.session.completed': {
           console.log('[STRIPE-WEBHOOK] Processing checkout.session.completed event');
           const session = event.data.object as any;
+
+          if (session.metadata?.type === "rescue_resale") {
+            const { syncResaleOrder } = await import("./services/rescue-resale");
+            await syncResaleOrder(session.metadata.resaleOrderId, session.metadata.tenantId);
+            break;
+          }
 
           // P2P Campaign donation fulfillment — early exit to avoid donation processing.
           // Credit immediately for both card and ACH; if an ACH bounces later,
@@ -47869,6 +47890,8 @@ The user asking is a tenant administrator or staff member.`;
   app.use('/api/public/expense-campaigns', requireTenant, expenseCampaignRoutes.publicRouter);
   const rescueVendRoutes = await import('./routes/rescueVend');
   app.use('/api/public/rescue-vend', requireTenant, rescueVendRoutes.default);
+  const rescueResaleRoutes = await import('./routes/rescueResale');
+  app.use('/api/rescue-resale', requireTenant, rescueResaleRoutes.default);
 
   // Register VIP donor portal routes (token-authenticated giving history + receipts)
   const vipPortalRoutes = await import('./routes/vipPortal');

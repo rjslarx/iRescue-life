@@ -628,3 +628,4 @@ SQL
 npx tsx scripts/ensure-donation-audit.ts
 npx tsx scripts/ensure-cat-vaccine-guard.ts
 npx tsx scripts/ensure-rescue-vend-menus.ts
+npx tsx scripts/ensure-rescue-resale.ts
