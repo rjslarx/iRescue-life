@@ -6,7 +6,10 @@ import { eq } from "drizzle-orm";
 import { db, pool } from "../server/db";
 import { tenants } from "../shared/schema";
 import { DEFAULT_VENDING_MENU, verifiedVendingSession } from "../shared/rescue-vend";
-import { getVendingMenu, saveVendingMenu } from "../server/services/rescue-vend-menu";
+import { findVendingMenuVersion, getVendingMenu, saveVendingMenu } from "../server/services/rescue-vend-menu";
+import { collectStripeEconomicsReport } from "../server/lib/stripe-economics-report";
+import { vendingResultsCsv } from "../shared/rescue-vend-report-csv";
+import Papa from "papaparse";
 import router from "../server/routes/rescueVend";
 
 test("tenant menu persistence, concurrency, route guards and historical receipts", { skip: process.env.RUN_VEND_DB_TEST !== "1" }, async () => {
@@ -39,6 +42,30 @@ test("tenant menu persistence, concurrency, route guards and historical receipts
     assert.equal(receipt.items[0].name, "Custom rescue supply");
     assert.equal(receipt.totalCents, 1234);
     assert.deepEqual(await getVendingMenu(id, "1"), DEFAULT_VENDING_MENU);
+    assert.equal(await findVendingMenuVersion(other, saved.version), null);
+    const stripe: any = {
+      transfers: { list: async () => ({ data: [], has_more: false }) },
+      disputes: { list: async () => ({ data: [], has_more: false }) },
+      charges: { list: async () => ({ has_more: false, data: [{
+        id: "ch_custom_menu", paid: true, captured: true, status: "succeeded", currency: "usd",
+        created: Math.floor(Date.now() / 1000), amount: 2468, amount_refunded: 0,
+        metadata: { tenantId: id, type: "rescue_vend", vendingCatalogVersion: saved.version,
+          vendingItems: '[{"id":"treats","quantity":2}]', economicsVersion: "1",
+          iRescueRevenueCents: "49", processingRecoveryCents: "102" },
+        refunds: { data: [], has_more: false },
+      }] }) },
+    };
+    const economics = await collectStripeEconomicsReport(stripe, [
+      { id, name: "Test rescue", subdomain: "test", accountId: null },
+    ], 30, 0, id);
+    const report = economics.vendingResults!;
+    assert.equal(report.unattributedChargeCount, 0);
+    assert.equal(report.items[0].name, "Custom rescue supply");
+    assert.equal(report.items[0].quantity, 2);
+    const csv = Papa.parse<string[]>(vendingResultsCsv(report), { skipEmptyLines: true }).data;
+    assert.equal(csv[2][2], "Custom rescue supply");
+    assert.equal(csv[2][3], "2");
+    assert.deepEqual(csv[2].slice(5, 11), ["24.68", "0.00", "24.68", "0.49", "1.02", "Unknown"]);
 
     const app = express();
     app.use(express.json(), (req, _res, next) => {

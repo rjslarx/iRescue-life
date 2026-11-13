@@ -3,6 +3,8 @@ import { db } from '../db';
 import { tenants } from '@shared/schema';
 import { getPlatformStripeSecretKey } from '../config/platform';
 import { createVendingResults, isTenantVendingCharge } from '@shared/rescue-vend-report';
+import { findVendingMenuVersion } from '../services/rescue-vend-menu';
+import type { VendingMenu } from '@shared/rescue-vend';
 
 export type StripeEconomicsRow = {
   created: string;
@@ -387,6 +389,7 @@ export async function collectStripeEconomicsReport(
   days: number,
   limit: number,
   vendingTenantId?: string,
+  resolveVendingMenu = findVendingMenuVersion,
 ) {
   const byId = new Map(tenantRecords.map(tenant => [tenant.id, tenant]));
   const byAccount = new Map(
@@ -402,6 +405,7 @@ export async function collectStripeEconomicsReport(
   const cutoff = Math.floor(Date.now() / 1000) - days * 24 * 60 * 60;
   const rows: StripeEconomicsRow[] = [];
   const vending = createVendingResults(days);
+  const vendingMenus = new Map<string, VendingMenu | null>();
   const totals = emptyTotals();
   const categoryMap = new Map<string, NumericTotals>();
   let resultCount = 0;
@@ -590,12 +594,16 @@ export async function collectStripeEconomicsReport(
       };
       resultCount += 1;
       if (vendingTenantId) {
+        const version = metadata.vendingCatalogVersion;
+        if (version && !vendingMenus.has(version)) {
+          vendingMenus.set(version, await resolveVendingMenu(vendingTenantId, version));
+        }
         vending.add(charge.id, metadata, {
           grossCents, refundCents, netGiftCents: grossCents - refundCents,
           platformRevenueCents: row.iRescueRevenueCents,
           processingRecoveryCents: row.processingRecoveryCents,
           rescueProceedsCents: transfer ? row.rescueProceedsCents : null,
-        });
+        }, vendingMenus.get(version) ?? null);
       }
       addRow(totals, row);
       const category = categoryMap.get(row.surface) || emptyTotals();

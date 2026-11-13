@@ -1,4 +1,4 @@
-import { VENDING_CATALOG_VERSION, vendingCart } from "./rescue-vend";
+import { DEFAULT_VENDING_MENU, VENDING_CATALOG_VERSION, vendingCart, type VendingMenu } from "./rescue-vend";
 
 export type VendingMoney = {
   grossCents: number;
@@ -50,16 +50,18 @@ export function createVendingResults(days: number) {
   const items = new Map<string, VendingResultItem>();
   const seen = new Set<string>();
   return {
-    add(chargeId: string, metadata: Record<string, string> | null, money: VendingMoney) {
+    add(chargeId: string, metadata: Record<string, string> | null, money: VendingMoney, menu: VendingMenu | null = DEFAULT_VENDING_MENU) {
       if (seen.has(chargeId)) return;
       seen.add(chargeId);
       let selection: { id: string; name: string; quantity: number | null; weight: number }[];
       try {
-        if (metadata?.vendingCatalogVersion !== VENDING_CATALOG_VERSION) throw new Error("Unknown catalog");
-        const cart = vendingCart({ items: JSON.parse(metadata.vendingItems) });
+        if (!menu || metadata?.vendingCatalogVersion !== menu.version) throw new Error("Unknown catalog");
+        const cart = vendingCart({ items: JSON.parse(metadata.vendingItems) }, menu);
         if (cart.totalCents !== money.grossCents) throw new Error("Mismatched total");
         selection = cart.items.map(item => ({
-          id: item.id, name: item.name, quantity: item.quantity,
+          // Different historical menus can reuse a slot for different supplies.
+          id: menu.version === VENDING_CATALOG_VERSION ? item.id : `${menu.version}:${item.id}`,
+          name: item.name, quantity: item.quantity,
           weight: item.priceCents * item.quantity,
         }));
       } catch {

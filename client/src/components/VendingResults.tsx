@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AlertCircle, Package, RefreshCw } from "lucide-react";
+import { AlertCircle, Download, Package, RefreshCw } from "lucide-react";
 import type { VendingResultsReport } from "@shared/rescue-vend-report";
+import { vendingResultsCsv } from "@shared/rescue-vend-report-csv";
 import { apiRequest } from "@/lib/queryClient";
 import { useTenant } from "@/contexts/TenantContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -38,6 +39,23 @@ export default function VendingResults() {
     staleTime: 60_000,
   });
 
+  const canExport = !!data && data.days === days && !isLoading && !isFetching && !isError;
+  function downloadCsv() {
+    if (!canExport || !data) return;
+    const url = URL.createObjectURL(new Blob([vendingResultsCsv(data)], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `vending-results-${data.days}-days-${data.generatedAt.replace(/[^0-9TZ-]/g, "-")}.csv`;
+    document.body.appendChild(link);
+    try {
+      link.click();
+    } finally {
+      link.remove();
+      // Give the browser time to begin the download before releasing the blob.
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+  }
+
   return (
     <Card data-testid="card-vending-results">
       <CardHeader>
@@ -62,6 +80,17 @@ export default function VendingResults() {
               <option value={90}>Last 90 days</option>
               <option value={365}>Last 365 days</option>
             </select>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={downloadCsv}
+              disabled={!canExport}
+              data-testid="button-export-vending-results"
+            >
+              <Download className="mr-2 h-4 w-4" aria-hidden="true" />
+              Download CSV
+            </Button>
             <Button
               type="button"
               size="icon"
