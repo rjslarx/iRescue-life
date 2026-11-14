@@ -38,6 +38,14 @@ async function getTenant(id: string) {
   return (await db.select().from(tenants).where(eq(tenants.id, id)).limit(1))[0];
 }
 
+router.get("/navigation", async (req, res, next) => {
+  try {
+    const menu = await getVendingMenu(req.tenant!.id);
+    res.setHeader("Cache-Control", "no-store");
+    res.json({ showInNavigation: menu.showInNavigation });
+  } catch (error) { next(error); }
+});
+
 router.get("/", async (req, res, next) => {
   try {
     const tenant = await getTenant(req.tenant!.id);

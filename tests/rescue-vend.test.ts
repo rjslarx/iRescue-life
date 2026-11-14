@@ -5,6 +5,12 @@ import { StripeService } from "../server/lib/stripe-service";
 import { calculateDestinationChargeEconomics } from "../server/config/platform";
 
 const selection = [{ id: "treats", quantity: 2 }, { id: "toy", quantity: 1 }];
+test("navigation is opt-in and legacy menus remain hidden", () => {
+  const { showInNavigation, ...legacy } = DEFAULT_VENDING_MENU;
+  assert.equal(vendingMenuSchema.parse(legacy).showInNavigation, false);
+  assert.equal(vendingMenuSchema.parse({ ...legacy, showInNavigation: true }).showInNavigation, true);
+  assert.equal(vendingMenuSchema.safeParse({ ...legacy, showInNavigation: "true" }).success, false);
+});
 const session = {
   metadata: { tenantId: "rescue-a", type: "rescue_vend", vendingCatalogVersion: "1", vendingItems: JSON.stringify(selection) },
   mode: "payment", currency: "usd", amount_total: 1800, payment_status: "paid",

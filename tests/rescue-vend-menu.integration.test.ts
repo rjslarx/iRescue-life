@@ -26,6 +26,7 @@ test("tenant menu persistence, concurrency, route guards and historical receipts
     menu.items[0].priceCents = 1234;
     menu.machineStyle = "photorealistic";
     menu.shortName = "Test Rescue";
+    menu.showInNavigation = true;
     const results = await Promise.all([saveVendingMenu(id, menu), saveVendingMenu(id, menu)]);
     assert.equal(results.filter(Boolean).length, 1, "concurrent stale save rejected");
     const saved = results.find(Boolean)!;
@@ -90,6 +91,7 @@ test("tenant menu persistence, concurrency, route guards and historical receipts
     const response = await fetch(`${url}/settings`, { headers: { "test-role": "admin" } });
     assert.equal(response.status, 200);
     const latest = await response.json();
+    assert.deepEqual(await (await fetch(`${url}/navigation`)).json(), { showInNavigation: true });
     const publicMenu = await (await fetch(`${url}/`)).json();
     assert.equal(publicMenu.version, latest.version);
     assert.ok(!publicMenu.items.some((item: any) => item.id === "treats"));
@@ -97,6 +99,10 @@ test("tenant menu persistence, concurrency, route guards and historical receipts
     assert.equal((await fetch(`${url}/settings`, { method: "PUT", headers: { "test-role": "admin", "content-type": "application/json" }, body: '{"items":[]}' })).status, 400);
     assert.equal((await fetch(`${url}/checkout`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ catalogVersion: saved.version, items: [{ id: "toy", quantity: 1 }] }) })).status, 409);
     assert.equal((await fetch(`${url}/checkout`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ catalogVersion: latest.version, items: [{ id: "treats", quantity: 1 }] }) })).status, 400);
+    const hidden = await fetch(`${url}/settings`, { method: "PUT", headers: { "test-role": "admin", "content-type": "application/json" }, body: JSON.stringify({ ...latest, showInNavigation: false }) });
+    assert.equal(hidden.status, 200);
+    assert.deepEqual(await (await fetch(`${url}/navigation`)).json(), { showInNavigation: false });
+    assert.equal((await getVendingMenu(other)).showInNavigation, false);
   } finally {
     server?.close();
     await db.delete(tenants).where(eq(tenants.id, id));

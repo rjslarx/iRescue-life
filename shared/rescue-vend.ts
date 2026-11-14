@@ -23,6 +23,7 @@ export const vendingMenuItemSchema = z.object({
 export const vendingMenuSchema = z.object({
   version: z.string().min(1).max(80),
   machineStyle: z.enum(["classic", "photorealistic"]).default("classic"),
+  showInNavigation: z.boolean().default(false),
   shortName: z.string().trim().max(60).refine(value => !value || value.split(/\s+/).length <= 2, "Use one or two words").default(""),
   items: z.array(vendingMenuItemSchema).length(VENDING_ITEMS.length),
 }).strict().refine(({ items }) =>
@@ -33,6 +34,7 @@ export type VendingMenu = z.infer<typeof vendingMenuSchema>;
 export const DEFAULT_VENDING_MENU: VendingMenu = {
   version: VENDING_CATALOG_VERSION,
   machineStyle: "classic",
+  showInNavigation: false,
   shortName: "",
   items: VENDING_ITEMS.map(item => ({
     id: item.id, name: item.name, impactNote: item.impactNote,

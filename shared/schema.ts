@@ -24,6 +24,7 @@ export const smsOptOutEvents = pgTable("sms_opt_out_events", {
 
 // Append-only menus: Stripe sessions retain their original tenant/version.
 export const rescueVendMenus = pgTable("rescue_vend_menus", {
+  showInNavigation: boolean("show_in_navigation").notNull().default(false),
   id: serial("id").primaryKey(),
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   version: text("version").notNull(),

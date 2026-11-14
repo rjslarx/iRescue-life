@@ -18,6 +18,7 @@ type Draft = Omit<VendingMenu, "items"> & {
 function toDraft(menu: VendingMenu): Draft {
   return {
     version: menu.version,
+    showInNavigation: menu.showInNavigation,
     machineStyle: menu.machineStyle ?? "classic",
     shortName: menu.shortName ?? "",
     items: VENDING_ITEMS.map(slot => {
@@ -70,6 +71,7 @@ export default function RescueVendCatalogDialog({ onClose }: { onClose: () => vo
       setNotice("Catalog saved. Your public machine is up to date.");
       queryClient.setQueryData(queryKey, menu);
       void queryClient.invalidateQueries({ queryKey: ["rescue-vend", tenantId] });
+      void queryClient.invalidateQueries({ queryKey: ["rescue-vend-navigation", tenantId] });
     },
   });
   const conflict = save.error instanceof Error && /^409:/.test(save.error.message);
@@ -77,6 +79,7 @@ export default function RescueVendCatalogDialog({ onClose }: { onClose: () => vo
   const dirty = !!draft && JSON.stringify(draft) !== baseline.current;
   const parsed = draft ? vendingMenuSchema.safeParse({
     version: draft.version,
+    showInNavigation: draft.showInNavigation,
     machineStyle: draft.machineStyle,
     shortName: draft.shortName,
     items: draft.items.map(({ dollars, ...item }) => ({ ...item, priceCents: cents(dollars) })),
@@ -146,6 +149,13 @@ export default function RescueVendCatalogDialog({ onClose }: { onClose: () => vo
             <Button type="button" variant="outline" disabled={settings.isFetching} onClick={() => void reload()}>{settings.isFetching ? "Loading…" : "Try again"}</Button>
           </div>}
           {draft && <fieldset disabled={save.isPending || settings.isFetching} className="min-w-0 space-y-4">
+            <div className="flex items-center justify-between gap-4 rounded-lg border bg-card p-4">
+              <div>
+                <Label htmlFor="vend-show-navigation">Show Rescue Vend in website navigation</Label>
+                <p className="mt-1 text-xs text-muted-foreground">Adds a link to the desktop More menu and mobile menu. Turning this off does not disable your public machine.</p>
+              </div>
+              <Switch id="vend-show-navigation" data-testid="switch-vend-navigation" checked={draft.showInNavigation} onCheckedChange={checked => { setDraft(current => current && ({ ...current, showInNavigation: checked })); setNotice(""); }} />
+            </div>
             <fieldset className="min-w-0 rounded-lg border bg-card p-4">
               <legend className="px-2 text-xs font-semibold tracking-wide text-teal-700 dark:text-teal-300">YOUR MACHINE</legend>
               <p id="vend-style-help" className="mb-3 text-sm text-muted-foreground">Same supplies and secure Stripe checkout. Choose the cabinet your donors will see.</p>

@@ -11,4 +11,5 @@ export const rescueVendSchemaSql = `
     ON rescue_vend_menus (tenant_id, version);
   ALTER TABLE rescue_vend_menus ADD COLUMN IF NOT EXISTS machine_style text NOT NULL DEFAULT 'classic';
   ALTER TABLE rescue_vend_menus ADD COLUMN IF NOT EXISTS short_name text NOT NULL DEFAULT '';
+  ALTER TABLE rescue_vend_menus ADD COLUMN IF NOT EXISTS show_in_navigation boolean NOT NULL DEFAULT false;
 `;

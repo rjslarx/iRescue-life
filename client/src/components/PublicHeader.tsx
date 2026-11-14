@@ -17,6 +17,7 @@ interface ActiveCampaign {
   title: string;
 }
 import { useTenant } from "@/contexts/TenantContext";
+import { tenantApiRequest } from "@/lib/tenantApi";
 
 const DEFAULT_LOGO = "/icon-192.png";
 
@@ -28,6 +29,12 @@ interface PublicHeaderProps {
 export default function PublicHeader({ rescueName, logoUrl }: PublicHeaderProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { tenantId } = useTenant();
+  const { data: vendNavigation } = useQuery<{ showInNavigation: boolean }>({
+    queryKey: ["rescue-vend-navigation", tenantId],
+    queryFn: async () => (await tenantApiRequest("GET", "/api/public/rescue-vend/navigation")).json(),
+    enabled: !!tenantId,
+    staleTime: 60_000,
+  });
   
   const { data: tenantData } = useQuery<{ tenant: Tenant }>({
     queryKey: ['/api/tenant', tenantId],
@@ -151,6 +158,13 @@ export default function PublicHeader({ rescueName, logoUrl }: PublicHeaderProps)
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
+                {vendNavigation?.showInNavigation && (
+                  <DropdownMenuItem asChild>
+                    <Link href="/rescue-vend" className="cursor-pointer w-full flex items-center gap-2" data-testid="link-nav-rescue-vend">
+                      <Package className="h-4 w-4" />Rescue Vend
+                    </Link>
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem asChild>
                   <Link
                     href="/wall-of-heroes"
@@ -341,6 +355,13 @@ export default function PublicHeader({ rescueName, logoUrl }: PublicHeaderProps)
               {(showMoreDropdown || hasActiveFundraisers) && (
                 <>
                   <div className="border-t my-2" />
+                  {vendNavigation?.showInNavigation && (
+                    <Link href="/rescue-vend">
+                      <Button variant="ghost" className="w-full justify-start" data-testid="button-rescue-vend-mobile" onClick={() => setMobileMenuOpen(false)}>
+                        <Package className="h-4 w-4 mr-2" />Rescue Vend
+                      </Button>
+                    </Link>
+                  )}
                   <Link href="/wall-of-heroes">
                     <Button
                       variant="ghost"
