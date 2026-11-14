@@ -52,3 +52,4 @@
 - [Transport alert timing](transport-alert-timing.md) — preserve all-hours trip alerts, but never treat urgency as permission to bypass pauses or recorded opt-outs.
 - [SMS provider suppression](sms-provider-suppression.md) — START clears provider-event suppression only, never independent account opt-outs or marketing consent.
 - [Shared rescue help phone](rescue-help-phone.md) — separate public-help number; approved FAQ answers and volunteer inbox; no number purchase or activation without approval.
+- [Catalog response compatibility](catalog-response-compatibility.md) — strict older editors reject added response fields; preserve response shape and settings omitted by legacy clients.

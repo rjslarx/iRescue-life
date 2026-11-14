@@ -26,7 +26,7 @@ export async function findVendingMenuVersion(tenantId: string, version: string):
   return parsed.success ? parsed.data : null;
 }
 
-export async function saveVendingMenu(tenantId: string, menu: VendingMenu): Promise<VendingMenu | null> {
+export async function saveVendingMenu(tenantId: string, menu: VendingMenu, preserveNavigation = false): Promise<VendingMenu | null> {
   return db.transaction(async tx => {
     // Serialize edits for this rescue; reject a stale editor instead of losing edits.
     const [tenant] = await tx.select({ id: tenants.id }).from(tenants).where(eq(tenants.id, tenantId)).for("update");
@@ -34,7 +34,7 @@ export async function saveVendingMenu(tenantId: string, menu: VendingMenu): Prom
     const [latest] = await tx.select().from(rescueVendMenus).where(eq(rescueVendMenus.tenantId, tenantId))
       .orderBy(desc(rescueVendMenus.id)).limit(1);
     if (menu.version !== (latest?.version ?? "1")) return null;
-    const saved = vendingMenuSchema.parse({ ...menu, version: randomUUID() });
+    const saved = vendingMenuSchema.parse({ ...menu, showInNavigation: preserveNavigation ? latest?.showInNavigation ?? false : menu.showInNavigation, version: randomUUID() });
     await tx.insert(rescueVendMenus).values({ tenantId, ...saved });
     return saved;
   });

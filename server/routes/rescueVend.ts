@@ -21,16 +21,22 @@ router.use("/settings", requireAuth, requireRole("owner", "admin"), (req, res, n
   next();
 });
 router.get("/settings", async (req, res, next) => {
-  try { res.json(await getVendingMenu(req.tenant!.id)); }
+  try {
+    const menu = await getVendingMenu(req.tenant!.id);
+    // Older open tabs validate this response strictly and do not know the new flag.
+    const { showInNavigation, ...legacyMenu } = menu;
+    res.json(req.query.navigation === "1" ? menu : legacyMenu);
+  }
   catch (error) { next(error); }
 });
 router.put("/settings", async (req, res, next) => {
   const parsed = vendingMenuSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Check the machine style, one- or two-word rescue name, and all eight supplies with whole-cent amounts from $1 to $1,000." });
   try {
-    const menu = await saveVendingMenu(req.tenant!.id, parsed.data);
+    const menu = await saveVendingMenu(req.tenant!.id, parsed.data, !Object.prototype.hasOwnProperty.call(req.body, "showInNavigation"));
     if (!menu) return res.status(409).json({ error: "The menu changed since you opened it. Reload the latest menu before saving." });
-    res.json(menu);
+    const { showInNavigation, ...legacyMenu } = menu;
+    res.json(req.query.navigation === "1" ? menu : legacyMenu);
   } catch (error) { next(error); }
 });
 

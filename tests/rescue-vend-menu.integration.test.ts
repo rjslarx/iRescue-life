@@ -88,9 +88,12 @@ test("tenant menu persistence, concurrency, route guards and historical receipts
       assert.equal((await fetch(`${url}/settings`, { method, headers: { "test-role": "staff" } })).status, 403);
       assert.equal((await fetch(`${url}/settings`, { method, headers: { "test-role": "admin", "test-tenant": other } })).status, 403);
     }
-    const response = await fetch(`${url}/settings`, { headers: { "test-role": "admin" } });
+    const legacyResponse = await (await fetch(`${url}/settings`, { headers: { "test-role": "admin" } })).json();
+    assert.equal(Object.hasOwn(legacyResponse, "showInNavigation"), false, "old tabs receive the old response shape");
+    const response = await fetch(`${url}/settings?navigation=1`, { headers: { "test-role": "admin" } });
     assert.equal(response.status, 200);
     const latest = await response.json();
+    assert.equal(latest.showInNavigation, true);
     assert.deepEqual(await (await fetch(`${url}/navigation`)).json(), { showInNavigation: true });
     const publicMenu = await (await fetch(`${url}/`)).json();
     assert.equal(publicMenu.version, latest.version);
@@ -103,6 +106,13 @@ test("tenant menu persistence, concurrency, route guards and historical receipts
     assert.equal(hidden.status, 200);
     assert.deepEqual(await (await fetch(`${url}/navigation`)).json(), { showInNavigation: false });
     assert.equal((await getVendingMenu(other)).showInNavigation, false);
+    const current = await getVendingMenu(id);
+    await saveVendingMenu(id, { ...current, showInNavigation: true });
+    const oldTabMenu = await (await fetch(`${url}/settings`, { headers: { "test-role": "admin" } })).json();
+    const oldTabSave = await fetch(`${url}/settings`, { method: "PUT", headers: { "test-role": "admin", "content-type": "application/json" }, body: JSON.stringify(oldTabMenu) });
+    assert.equal(oldTabSave.status, 200);
+    assert.equal(Object.hasOwn(await oldTabSave.json(), "showInNavigation"), false);
+    assert.equal((await getVendingMenu(id)).showInNavigation, true, "old tabs cannot silently turn navigation off");
   } finally {
     server?.close();
     await db.delete(tenants).where(eq(tenants.id, id));

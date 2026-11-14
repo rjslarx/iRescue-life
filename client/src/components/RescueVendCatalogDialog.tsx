@@ -46,7 +46,7 @@ export default function RescueVendCatalogDialog({ onClose }: { onClose: () => vo
   const queryKey = ["rescue-vend-settings", tenantId];
   const settings = useQuery({
     queryKey,
-    queryFn: async () => vendingMenuSchema.parse(await (await tenantApiRequest("GET", "/api/public/rescue-vend/settings")).json()),
+    queryFn: async () => vendingMenuSchema.parse(await (await tenantApiRequest("GET", "/api/public/rescue-vend/settings?navigation=1")).json()),
     retry: false,
     refetchOnWindowFocus: false,
   });
@@ -60,7 +60,7 @@ export default function RescueVendCatalogDialog({ onClose }: { onClose: () => vo
 
   const save = useMutation({
     mutationFn: async (menu: VendingMenu) => vendingMenuSchema.parse(
-      await (await tenantApiRequest("PUT", "/api/public/rescue-vend/settings", menu)).json(),
+      await (await tenantApiRequest("PUT", "/api/public/rescue-vend/settings?navigation=1", menu)).json(),
     ),
     onSuccess: menu => {
       const saved = toDraft(menu);
@@ -145,7 +145,7 @@ export default function RescueVendCatalogDialog({ onClose }: { onClose: () => vo
           </div>}
           {!draft && settings.isError && <div role="alert" className="rounded-lg border border-destructive/30 p-5">
             <p className="font-medium">We couldn’t load your catalog.</p>
-            <p className="mb-3 mt-1 text-sm text-muted-foreground">Your machine has not been changed. Try connecting again.</p>
+            <p className="mb-3 mt-1 text-sm text-muted-foreground">Your machine has not been changed. {settings.error instanceof Error && /^401:/.test(settings.error.message) ? "Your session has expired. Sign in again, then reopen the catalog." : settings.error instanceof Error && /^403:/.test(settings.error.message) ? "You need owner or administrator access for this rescue to edit its catalog." : settings.error?.name === "ZodError" ? "The catalog format does not match this version of the editor. Refresh the page to load the latest version." : "Try connecting again. If this continues, refresh the page to load the latest editor."}</p>
             <Button type="button" variant="outline" disabled={settings.isFetching} onClick={() => void reload()}>{settings.isFetching ? "Loading…" : "Try again"}</Button>
           </div>}
           {draft && <fieldset disabled={save.isPending || settings.isFetching} className="min-w-0 space-y-4">
