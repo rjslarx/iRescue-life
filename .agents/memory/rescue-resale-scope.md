@@ -11,6 +11,12 @@ Rescue Resale is a separate page on the tenant website. Eligibility requires tha
 
 The rescue and donor must decide the legal transfer and tax acknowledgment arrangement separately; a buyer's resale purchase is not automatically a charitable donation.
 
+The user subsequently requested scoping an optional 50/50 split of net proceeds with automatic contributor bank payouts, while retaining full-donation listings. This is a proposed extension, not authorization to activate live transfers.
+
+**Why:** The user wants routine payouts to require no rescue-volunteer action and prefers automation over manually recording payments.
+
+**How to apply:** Plan contributor Stripe onboarding, automatic settlement and payout tracking, participant pickup confirmation, and refund/dispute safeguards. Preserve the current full-donation behavior until the extension is implemented and approved for live use.
+
 **Why:** The original proposal conflated contributed goods and purchase receipts. The approved recommendation explicitly separated these.
 
 **How to apply:** Treat resale checkout as a sale, not the generic donation webhook path. Preserve exact inventory reservations until Stripe confirms expiry/payment. Do not release holds based on browser cancellation alone. SMS uses an explicit resale conversation prefix so existing foster, medication, and adopter routing keeps working.
