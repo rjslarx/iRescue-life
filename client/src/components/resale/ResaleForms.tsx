@@ -98,6 +98,7 @@ export function DonateItemForm({ api }: { api: ResaleClient }) {
         {busy && <p role="status" className="resale-muted">Uploading photos…</p>}
         <div className="resale-gallery">{photos.map((url, index) => <div key={`${url}-${index}`}><img src={url} alt={`Item photo ${index + 1}`} /><button type="button" className="resale-btn secondary mt-2" aria-label={`Remove photo ${index + 1}`} onClick={() => setPhotos(current => current.filter((_, i) => i !== index))}><X size={14} />Remove</button></div>)}</div>
       </div>
+      <p className="resale-muted mb-3">A platform fee of 5% of the total sale price plus Stripe processing fees is deducted from your sale—not added to the buyer’s price. Full donation sends the remainder to the rescue. A 50/50 listing divides that remainder equally.</p>
       {api.config.data?.allowSplit && <fieldset className="resale-note mb-5"><legend className="px-2 font-semibold">Where the net proceeds go</legend>
         <label className="resale-check"><input type="radio" name="proceedsMode" checked={mode === "donate_all"} onChange={() => { setProceedsMode("donate_all"); setSplitConsent(false); setError(null); }} />Donate all net proceeds to the rescue (default)</label>
         <label className="resale-check mt-3"><input type="radio" name="proceedsMode" checked={mode === "split_50"} onChange={() => { setProceedsMode("split_50"); setError(null); }} />Optional 50/50 split with the rescue</label>

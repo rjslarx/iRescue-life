@@ -8,8 +8,8 @@ import { pool } from "../db";
 import { requireAuth, requireRoleOrPageAccess } from "../middleware/auth";
 import { isTwilioEnabled, sendSms } from "../lib/twilio-service";
 import { stripeService } from "../lib/stripe-service";
-import { calculatePlatformFee, calculateDestinationChargeEconomics, getDestinationChargeEconomicsMetadata } from "../config/platform";
-import { resaleItemSchema, resaleSettingsSchema, resalePhone, resaleMessageAllowed, resaleCsvCell } from "@shared/rescue-resale";
+import { calculateDestinationChargeEconomics, getDestinationChargeEconomicsMetadata } from "../config/platform";
+import { resaleItemSchema, resaleSettingsSchema, resalePhone, resaleMessageAllowed, resaleCsvCell, resalePlatformFee } from "@shared/rescue-resale";
 import { hashResale, resaleTenant, resaleBase, resaleSettings, resalePublicItem, resaleOrder, resaleConversation, sendResaleMessage, syncResaleOrder } from "../services/rescue-resale";
 import { applyResaleOffer, resaleOfferAction } from "../services/resale-offers";
 import { resaleAuditFilter, resaleAuditQuery, resaleAuditOffset, resaleMessageAuditQuery } from "../services/resale-audit";
@@ -267,7 +267,7 @@ router.post("/checkout", writeLimit, route(async (req: any, res: any) => {
       const pickup = settings.pickupOptions.find((p: any) => p.id === input.pickupId && Date.parse(p.startsAt) > Date.now() + 35 * 60000 && i.data.fulfillment.includes(p.kind));
       if (!pickup) fail("Choose an available pickup starting at least 35 minutes from now.");
       const id = randomUUID();
-      const economics = calculateDestinationChargeEconomics(amount, calculatePlatformFee(amount, t.subscriptionTier || "free", t.platformFeePercent));
+      const economics = calculateDestinationChargeEconomics(amount, resalePlatformFee(amount));
       const metadata = split
         ? { type: "rescue_resale", tenantId: t.id, resaleOrderId: id, proceedsMode: "split_50",
             iRescueRevenueCents: String(economics.iRescueRevenueCents) }

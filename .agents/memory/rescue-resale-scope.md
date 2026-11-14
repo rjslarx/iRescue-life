@@ -5,6 +5,12 @@ description: Approved first-version boundaries and safety decisions for the loca
 
 Rescue Resale is a separate page on the tenant website. Eligibility requires that tenant's configured Twilio SMS, not a Haseya-specific hardcoded allowlist. The user identified Haseya as the only currently eligible rescue.
 
+New Rescue Resale sales owe the platform 5% of the total sale price, independent of tenant subscription tier. Deduct this and processing fees within the sale price; split only the remainder for 50/50 listings.
+
+**Why:** The user explicitly requested a feature-specific fee to cover additional platform expenses.
+
+**How to apply:** Use the actual negotiated checkout price, not the listing asking price, and preserve fee snapshots for existing checkouts and paid sales. Do not change fees for other fundraisers.
+
 **Why:** The user approved the recommended first version on 2026-11-13, not the entire uploaded Antigravity proposal.
 
 **How to apply:** Full donation remains the default. Preserve donor-held items, staff listing approval, phone-number-masked conversations, private offers, Stripe checkout, scheduled shelter/event or approved public pickup, and sales records/CSV. The optional split extension below is now approved; Uber Direct, external Antigravity automation, and automatic charitable receipt claims remain outside scope.

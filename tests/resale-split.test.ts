@@ -7,10 +7,14 @@ import { eq } from "drizzle-orm";
 import { rescueResaleSchemaSql } from "../server/lib/rescue-resale-schema";
 import { splitNetProceeds, settleResaleSplit } from "../server/services/resale-split-settlement";
 import { bankAccountReady } from "../server/services/resale-payout-accounts";
-import { resaleItemSchema, resaleSettingsSchema } from "../shared/rescue-resale";
+import { resaleItemSchema, resaleSettingsSchema, resalePlatformFee } from "../shared/rescue-resale";
 import { resaleOrder } from "../server/services/rescue-resale";
 
 test("split defaults, fee math, rounding, and bank verification are conservative", () => {
+  assert.equal(resalePlatformFee(10000), 500);
+  assert.equal(resalePlatformFee(1700), 85);
+  assert.equal(resalePlatformFee(999), 50);
+  assert.throws(() => resalePlatformFee(-100));
   assert.equal(resaleSettingsSchema.parse({ pickupOptions: [] }).allowSplit, undefined);
   const item = { donorName: "Test Person", donorEmail: "test@example.com", zip: "70501", title: "Chair",
     description: "A sturdy wooden chair.", category: "Furniture", askingCents: 5000, photos: ["/objects/test"],

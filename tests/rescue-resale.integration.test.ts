@@ -124,6 +124,7 @@ test("resale tenant isolation, phone ownership, approval, single-item holds and 
     assert.equal(saved.stripeParams.payment_intent_data.transfer_data.destination,"acct_test_not_real");
     assert.ok(saved.stripeParams.payment_intent_data.application_fee_amount>0);
     assert.ok(saved.stripeParams.payment_intent_data.application_fee_amount<1700,"fees deducted within price");
+    assert.equal(saved.stripeParams.payment_intent_data.metadata.iRescueRevenueCents,"85","platform receives 5% of negotiated gross price");
     assert.equal((await call(`/admin/orders/${negotiated.id}/complete`,"POST",{},undefined,{"test-admin":"1"})).status,409,"unpaid cannot complete");
     assert.equal((await call(`/orders/${negotiated.id}/cancel`,"POST",{},tokens[1])).status,200);
     const csv = await call("/admin/ledger.csv","GET",undefined,undefined,{"test-admin":"1"});
@@ -146,6 +147,7 @@ test("resale tenant isolation, phone ownership, approval, single-item holds and 
     assert.equal(splitOrder.data.stripeParams.payment_intent_data.transfer_data,undefined);
     assert.equal(splitOrder.data.stripeParams.payment_intent_data.application_fee_amount,undefined);
     assert.equal(splitOrder.data.contributorAccountId,"acct_contributor");
+    assert.equal(splitOrder.data.platformRevenueCents,125,"split sale retains 5% of $25 before dividing net");
     const splitSession = sessions.get(splitOrder.session_id);
     splitSession.status="complete"; splitSession.payment_status="paid"; splitSession.payment_intent="pi_split_fake";
     // Prevent test-only notification side effects while verifying real paid-state logic.

@@ -1,5 +1,11 @@
 import { z } from "zod";
 
+/** Feature-specific fee, independent of subscription tier; rounded to cents. */
+export function resalePlatformFee(grossCents: number): number {
+  if (!Number.isSafeInteger(grossCents) || grossCents < 0) throw new Error("Invalid resale price");
+  return Math.round(grossCents / 20);
+}
+
 export const resalePickupSchema = z.object({
   id: z.string().uuid(),
   label: z.string().trim().min(2).max(100),

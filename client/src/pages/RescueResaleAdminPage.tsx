@@ -20,6 +20,7 @@ function SplitSettings({ api }: { api: ResaleClient }) {
   const allowSplit = data?.settings.allowSplit ?? false;
   return <section className="resale-panel">
     <h2>Optional contributor split</h2>
+    <p className="resale-muted mb-4">New sales carry a platform fee of 5% of the total sale price, regardless of subscription plan. This and Stripe processing fees are deducted from the sale, not added to the buyer’s total. Full donations send the remainder to the rescue; 50/50 listings divide the remainder equally.</p>
     <p className="resale-muted mb-4">Off by default. Enabling this permits contributors to choose an optional 50/50 split of net proceeds after Stripe processing and platform fees. Full donation remains the default for every new item. Connect/payout costs may apply separately.</p>
     <p className="resale-muted mb-4">Before enabling, confirm the marketplace arrangement with the platform administrator. Stripe eligibility, payout fees, tax reporting, and responsibility for refunds and disputes still apply. A payout already sent to a bank may not be recoverable.</p>
     <label className="resale-check"><input type="checkbox" role="switch" checked={allowSplit} disabled={!data?.canManageSplit || api.settings.isPending} onChange={async event => {
