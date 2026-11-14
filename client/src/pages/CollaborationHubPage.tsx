@@ -24,19 +24,19 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import DashboardLayout from "@/components/DashboardLayout";
 import { 
-  Plus, 
-  Loader2, 
-  Truck, 
-  AlertTriangle, 
-  MessageCircle, 
-  MapPin, 
-  Calendar, 
-  Users, 
-  ArrowRight, 
-  Clock, 
-  CheckCircle, 
-  XCircle, 
-  Radio, 
+  Plus,
+  Loader2,
+  Truck,
+  AlertTriangle,
+  MessageCircle,
+  MapPin,
+  Calendar,
+  Users,
+  ArrowRight,
+  Clock,
+  CheckCircle,
+  XCircle,
+  Radio,
   ChevronRight,
   ExternalLink,
   Send,
@@ -73,7 +73,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useTenant } from "@/contexts/TenantContext";
 import { MedicalFileUploadDialog } from "@/components/MedicalFileUploadDialog";
 import type { 
-  TransportEvent, 
+  TransportEvent,
   TransferAlert,
   TransportParticipant,
   TransportUpdate,
@@ -85,6 +85,8 @@ import type {
   PartnerOrganization,
 } from "@shared/schema";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+
+import { TransportBroadcastHistory } from "@/components/TransportBroadcastHistory";
 
 const transportFormSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -1647,8 +1649,9 @@ function TransportDetailDialogContent({
   onOpenChange: (open: boolean) => void;
 }) {
   const { toast } = useToast();
-  const { tenantId } = useTenant();
   const { user } = useAuth();
+  const canBroadcast = !!user && ['platform_admin', 'owner', 'admin', 'board_member', 'staff'].includes(user.activeRole);
+  const { tenantId } = useTenant();
   const { data: tenantTierData } = useQuery<{ tenant: { subscriptionTier: string; twilioEnabled?: boolean } }>({
     queryKey: ['/api/tenant'],
   });
@@ -1827,9 +1830,12 @@ function TransportDetailDialogContent({
     onError: () => {
       toast({
         title: "Broadcast could not be confirmed",
-        description: "Retry the same message to check this attempt without sending duplicates. Some messages may already have been accepted.",
+        description: "Do not resend. Refresh broadcast history to check this attempt; some messages may already have been accepted.",
         variant: "destructive",
       });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["transport-broadcast-history", tenantId, transport?.id] });
     },
   });
 
@@ -2507,6 +2513,7 @@ function TransportDetailDialogContent({
           </TabsContent>
 
           <TabsContent value="sms" className="space-y-4">
+            {canBroadcast && tenantId && transport?.id && <TransportBroadcastHistory tenantId={tenantId} transportId={transport.id} />}
             {isLiteTier ? (
               <ProFeatureGate
                 title="SMS Notifications"
@@ -2543,7 +2550,7 @@ function TransportDetailDialogContent({
                         </p>
                         <Button
                           onClick={handleBroadcast}
-                          disabled={!broadcastMessage.trim() || smsSubscribers.length === 0 || broadcastMutation.isPending}
+                          disabled={!canBroadcast || !broadcastMessage.trim() || smsSubscribers.length === 0 || broadcastMutation.isPending}
                           className="w-full sm:w-auto"
                           data-testid="button-send-broadcast"
                         >

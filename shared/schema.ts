@@ -6,6 +6,7 @@ import { medicalDateSchema } from "./medical-dates";
 import { supplyItemUnitPriceSchema } from "./supply-item-validation";
 export * from "./free-squares-tables";
 
+
 export const smsPhoneSuppressions = pgTable("sms_phone_suppressions", {
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   phoneKey: text("phone_key").notNull(),

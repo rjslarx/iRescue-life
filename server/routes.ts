@@ -15,6 +15,7 @@ import { registerFreeSquaresRoutes } from "./routes/free-squares";
 import { loginUser, createTenantWithAdmin, createUser } from "./services/auth";
 import { PushNotificationService } from "./services/push-notifications";
 import { db } from "./db";
+import { transportEvents } from "@shared/schema";
 import { tenants, users, demoRequests, insertDemoRequestSchema, smsMessageLogs, emailEvents, animals, animalProfileSubmissions, platformIntegrations, newsletterCampaigns, newsletterSubscribers, happyTails, animalMergeHistory, activityLogs, medicalExams, medicalPrescriptions, medicalBills, medicalFiles, animalNotes, applications, adoptionCheckoutSessions, adoptions, partnerOrganizations, microchipRecords, surrenderRequests, surrenderFormFields, insertSurrenderRequestSchema, insertSurrenderFormFieldSchema, inboundEmails, calendars, careInstructionSnippets, fosterApplications, volunteerApplications, adoptionContracts, fosterAgreementSessions, volunteerAgreementSessions, surrenderAgreementSessions, customFormSubmissions, customForms, placementAgreementSessions, medicationTasks, medicationPlans, fosterAnimals, messageQueue, contacts, campaignIntakeTokens, surgeryDayRequests, surgeryDayRequestAnimals, formSettings, customPages, shopProducts, peerCampaigns, expenseCampaigns, votingContests, subscriptions, payments, donors, paymentRefundAccounting, donationLinks as donationLinksTable, MAX_ANIMAL_PHOTOS } from "@shared/schema";
 import { eq, and, desc, asc, sql, inArray, lt, lte, gte, not, notInArray, or, ne, isNull, isNotNull } from "drizzle-orm";
 import { z } from "zod";
@@ -29368,7 +29369,20 @@ Submitted: ${new Date().toLocaleString()}
    * POST /api/transports/:id/sms-broadcast
    * Send SMS broadcast to transport subscribers (staff only)
    */
-  app.post('/api/transports/:id/sms-broadcast', requireTenant, requireAuth, async (req, res, next) => {
+  app.get('/api/transports/:id/sms-broadcasts', requireTenant, requireAuth, requireRole('staff'), async (req, res, next) => {
+    try {
+      const transportId = z.string().uuid().parse(req.params.id);
+      const offset = z.coerce.number().int().min(0).max(100000).parse(req.query.offset ?? 0);
+      const [transport] = await db.select({ id: transportEvents.id }).from(transportEvents)
+        .where(and(eq(transportEvents.id, transportId), eq(transportEvents.tenantId, req.tenant!.id))).limit(1);
+      if (!transport) return res.status(404).json({ error: 'Transport not found' });
+      const { getTransportBroadcastHistory } = await import('./lib/transport-broadcast-history');
+      res.set('Cache-Control', 'no-store');
+      res.json(await getTransportBroadcastHistory(req.tenant!.id, transportId, offset));
+    } catch (error) { next(error); }
+  });
+
+  app.post('/api/transports/:id/sms-broadcast', requireTenant, requireAuth, requireRole('staff'), async (req, res, next) => {
     try {
       const { broadcastTransportUpdate, getTransportSmsSubscribers } = await import('./lib/twilio-service');
       const { runTransportBroadcast, BroadcastRequestError } = await import('./services/transport-broadcast');

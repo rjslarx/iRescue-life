@@ -73,7 +73,7 @@ test("all-success and all-blocked summaries omit unrelated outcomes", () => {
 test("client keeps tenant-aware requests and isolates dialog results; endpoint retains access guards", () => {
   const client = readFileSync("client/src/pages/CollaborationHubPage.tsx", "utf8");
   assert.ok(client.includes("apiRequest('POST', `/api/transports/${transport?.id}/sms-broadcast`"));
-  assert.ok(client.includes('key={`${tenant?.id}:${transport?.id}:${open}`}'));
+  assert.ok(client.includes('key={`${tenantId}:${transport?.id}:${open}`}'));
   assert.ok(client.includes("broadcastMutation.isSuccess || broadcastMutation.isError"));
   const routes = readFileSync("server/routes.ts", "utf8");
   const broadcast = routes.slice(routes.indexOf("app.post('/api/transports/:id/sms-broadcast'"));
