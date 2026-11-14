@@ -29371,12 +29371,20 @@ Submitted: ${new Date().toLocaleString()}
   app.post('/api/transports/:id/sms-broadcast', requireTenant, requireAuth, async (req, res, next) => {
     try {
       const { broadcastTransportUpdate, getTransportSmsSubscribers } = await import('./lib/twilio-service');
+      const { runTransportBroadcast, BroadcastRequestError } = await import('./services/transport-broadcast');
+      const { pool } = await import('./db');
+      const { transportEvents } = await import('@shared/schema');
       
       const broadcastSchema = z.object({
         message: z.string().min(1).max(1600), // SMS length limit
+        operationKey: z.string().uuid(),
       });
 
-      const { message } = broadcastSchema.parse(req.body);
+      const parsed = broadcastSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: 'A message and a valid operationKey UUID are required.' });
+      }
+      const { message, operationKey } = parsed.data;
       const transportId = req.params.id;
 
       // Verify transport exists and belongs to tenant
@@ -29393,29 +29401,23 @@ Submitted: ${new Date().toLocaleString()}
         return res.status(404).json({ error: 'Transport not found' });
       }
 
-      const subscribers = await getTransportSmsSubscribers(transportId);
-      
-      if (subscribers.length === 0) {
-        return res.status(400).json({ error: 'No SMS subscribers for this transport' });
+      try {
+        const outcome = await runTransportBroadcast(
+          (text, values) => pool.query(text, values),
+          { tenantId: req.tenant!.id, transportId, message, operationKey },
+          () => getTransportSmsSubscribers(transportId),
+          async number => (await broadcastTransportUpdate(
+            req.tenant!.id, transportId, message, [number],
+            { id: req.user!.id, name: req.user!.fullName || req.user!.email },
+          ))[0],
+        );
+        return res.status(outcome.complete ? 200 : 202).json(outcome);
+      } catch (error) {
+        if (error instanceof BroadcastRequestError) {
+          return res.status(error.status).json({ error: error.message });
+        }
+        throw error;
       }
-
-      const results = await broadcastTransportUpdate(
-        req.tenant!.id,
-        transportId,
-        message,
-        subscribers,
-        { id: req.user!.id, name: req.user!.name || req.user!.email }
-      );
-
-      const sent = results.filter(r => r.status === 'sent').length;
-      const failed = results.filter(r => r.status === 'failed').length;
-
-      res.json({ 
-        success: true, 
-        sent, 
-        failed,
-        results 
-      });
     } catch (error) {
       next(error);
     }

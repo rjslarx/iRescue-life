@@ -7407,3 +7407,16 @@ export const insertCampaignMatchPoolSchema = createInsertSchema(campaignMatchPoo
 });
 export type InsertCampaignMatchPool = z.infer<typeof insertCampaignMatchPoolSchema>;
 export type CampaignMatchPool = typeof campaignMatchPools.$inferSelect;
+
+// Retain operation claims even if a transport is removed; never reuse a claim.
+export const transportSmsOperations = pgTable("transport_sms_operations", {
+  tenantId: varchar("tenant_id").notNull(),
+  transportId: varchar("transport_id").notNull(),
+  operationKey: varchar("operation_key", { length: 128 }).notNull(),
+  message: text("message").notNull(),
+  results: jsonb("results").notNull(),
+  complete: boolean("complete").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  scope: unique("transport_sms_operations_scope").on(table.tenantId, table.transportId, table.operationKey),
+}));

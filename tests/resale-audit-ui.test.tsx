@@ -208,7 +208,7 @@ test("masked recipient summaries preserve counts, warnings and legacy outcomes",
   const summaries = [...document.querySelectorAll('ul[aria-label="Delivery outcomes needing attention"]')];
   assert.match(summaries[0].textContent!, /To Buyer: Failed · 1 recipient outcome(?!s)/);
   assert.match(summaries[0].textContent!, /To Donor: Undelivered · 2 recipient outcomes/);
-  assert.match(summaries[0].textContent!, /To Unknown recipient: Unknown outcome — do not resend · 3 recipient outcomes/);
+  assert.match(summaries[0].textContent!, /To Unknown recipient: Unknown outcome — needs staff review; do not resend · 3 recipient outcomes/);
   assert.equal(summaries[1].textContent, "No attention outcomes recorded.");
   assert.match(text(), /To Donor: Not sent — blocked or rejected before acceptance · Twilio error 21610/);
   assert.match(text(), /Accepted by Twilio — delivery not confirmed/);
@@ -236,6 +236,10 @@ test("tenant and path navigation never displays another scope's cached conversat
     await click("Conversation logs");
     await until(() => text().includes(`${next.tenantId}:${next.basePath} all`));
     assert.equal(document.querySelector("select")!.value, "all");
+    respond = (filter, scope) => data(conversation(`${scope} ${filter}`));
+    await select("failed");
+    await until(() => text().includes(`${next.tenantId}:${next.basePath} failed`));
+    assert.equal(document.querySelector("select")!.value, "failed");
     assert.equal(document.querySelector("a")?.getAttribute("href"), `${next.basePath}/rescue-resale`);
   }
   assert.equal(cache.getQueryData<ResaleAdmin>(key("failed", "alpha", "/alpha"))?.conversations[0].itemTitle, "alpha:/alpha failed");

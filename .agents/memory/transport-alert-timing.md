@@ -8,3 +8,9 @@ Transport broadcasts retain the legacy all-hours behavior, not the ordinary broa
 **Why:** These staff-triggered messages can carry time-sensitive trip updates. The safeguard alignment intentionally preserves existing timing rather than silently introducing nighttime suppression. This is a compatibility decision, not permission to bypass consent.
 
 **How to apply:** Keep pauses and recorded tenant-scoped opt-outs authoritative even for urgent transport updates. Any future change to transport quiet hours should be an explicit product decision.
+
+Transport broadcast operation claims must not expire or be automatically reclaimed after a crash. An unknown outcome is not a safe failure to retry.
+
+**Why:** The provider may accept SMS before the worker saves its result. Retrying an old claim can text subscribers twice; the chosen tradeoff is at-most-once attempts, even if a crash leaves some recipients unsent.
+
+**How to apply:** Preserve the original operation key through response-loss retries. Any recovery feature must reconcile provider evidence before offering another send, and must distinguish unknown from confirmed failure.

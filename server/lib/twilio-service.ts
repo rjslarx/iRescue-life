@@ -15,7 +15,7 @@ interface TwilioConfig {
   tenantName?: string;
 }
 
-interface SendResult {
+export interface SendResult {
   number: string;
   status: 'sent' | 'failed';
   sid?: string;

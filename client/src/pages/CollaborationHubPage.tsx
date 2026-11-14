@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { TransportBroadcastSummary } from "@/components/TransportBroadcastSummary";
 import { transportPhoneKey, type TransportBroadcastResult } from "@/lib/transport-broadcast-results";
+import { transportBroadcastAttempt } from "@/lib/transport-broadcast-key";
 import { Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -1627,9 +1628,9 @@ function TransportDetailDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const { tenant } = useTenant();
+  const { tenantId } = useTenant();
   return <TransportDetailDialogContent
-    key={`${tenant?.id}:${transport?.id}:${open}`}
+    key={`${tenantId}:${transport?.id}:${open}`}
     transport={transport}
     open={open}
     onOpenChange={onOpenChange}
@@ -1646,8 +1647,9 @@ function TransportDetailDialogContent({
   onOpenChange: (open: boolean) => void;
 }) {
   const { toast } = useToast();
-  const { tenant } = useTenant();
-  const { data: tenantTierData } = useQuery<{ tenant: { subscriptionTier: string } }>({
+  const { tenantId } = useTenant();
+  const { user } = useAuth();
+  const { data: tenantTierData } = useQuery<{ tenant: { subscriptionTier: string; twilioEnabled?: boolean } }>({
     queryKey: ['/api/tenant'],
   });
   const isLiteTier = tenantTierData?.tenant?.subscriptionTier === 'lite';
@@ -1796,10 +1798,26 @@ function TransportDetailDialogContent({
 
   const broadcastMutation = useMutation({
     mutationFn: async (message: string) => {
-      const response = await apiRequest('POST', `/api/transports/${transport?.id}/sms-broadcast`, { message });
-      return response.json() as Promise<{ results?: TransportBroadcastResult[] }>;
+      const attempt = transportBroadcastAttempt(
+        localStorage, [user!.id, tenantId!, transport!.id], message,
+      );
+      const response = await apiRequest('POST', `/api/transports/${transport?.id}/sms-broadcast`, {
+        message, operationKey: attempt.operationKey,
+      });
+      const data = await response.json() as {
+        results?: TransportBroadcastResult[]; complete: boolean; uncertain: number; sent: number;
+      };
+      if (data.complete && !data.uncertain) attempt.finish();
+      return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      if (!data.complete || data.uncertain) {
+        toast({
+          title: "Broadcast recorded",
+          description: `${data.sent} accepted; ${data.uncertain} pending or unconfirmed. Checking again will not resend this message.`,
+        });
+        return;
+      }
       setBroadcastMessage("");
       toast({
         title: "Broadcast results available",
@@ -1809,7 +1827,7 @@ function TransportDetailDialogContent({
     onError: () => {
       toast({
         title: "Broadcast could not be confirmed",
-        description: "Do not resend. Check SMS logs and provider records first; some messages may already have been accepted.",
+        description: "Retry the same message to check this attempt without sending duplicates. Some messages may already have been accepted.",
         variant: "destructive",
       });
     },
@@ -1940,7 +1958,7 @@ function TransportDetailDialogContent({
 
   const smsSubscribers = detailData?.transport?.smsSubscribers || [];
   const uniqueSubscriberCount = new Set(smsSubscribers.map(transportPhoneKey)).size;
-  const twilioEnabled = tenant?.twilioEnabled;
+  const twilioEnabled = tenantTierData?.tenant?.twilioEnabled;
 
   if (!transport) return null;
 

@@ -302,6 +302,9 @@ app.use((req, res, next) => {
   console.log("[Startup] Preparing Rescue Resale");
   await pool.query(rescueResaleSchemaSql);
   await pool.query(smsSuppressionSchemaSql);
+  console.log("[Startup] Preparing transport SMS operations");
+  const { transportSmsSchemaSql } = await import("./lib/transport-sms-schema");
+  await pool.query(transportSmsSchemaSql);
   console.log("[Startup] Registering application routes");
   const server = await registerRoutes(app);
   if (process.env.REPLIT_DEPLOYMENT === "1") {
