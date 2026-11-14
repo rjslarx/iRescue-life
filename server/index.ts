@@ -6,6 +6,7 @@ import { catVaccineGuardSql } from "./lib/cat-vaccine-guard";
 import { donationAuditSchemaSql } from "./lib/donation-audit";
 import { rescueVendSchemaSql } from "./lib/rescue-vend-schema";
 import { rescueResaleSchemaSql } from "./lib/rescue-resale-schema";
+import { rescueHelpSchemaSql } from "./lib/rescue-help-schema";
 import { smsSuppressionSchemaSql } from "./lib/sms-suppression-schema";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
@@ -301,6 +302,7 @@ app.use((req, res, next) => {
   await pool.query(rescueVendSchemaSql);
   console.log("[Startup] Preparing Rescue Resale");
   await pool.query(rescueResaleSchemaSql);
+  await pool.query(rescueHelpSchemaSql);
   await pool.query(smsSuppressionSchemaSql);
   console.log("[Startup] Preparing transport SMS operations");
   const { transportSmsSchemaSql } = await import("./lib/transport-sms-schema");

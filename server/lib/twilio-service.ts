@@ -173,6 +173,8 @@ export async function sendSms(
     skipOrgPrefix?: boolean;
     bypassQuietHours?: boolean;
     statusCallbackUrl?: string;
+    /** Internal rescue-inbox sender; never supplied directly by public clients. */
+    publicHelpNumber?: boolean;
     /** Medication-task UUIDs grouped into this digest send (for DONE-reply routing). */
     relatedTaskIds?: string[];
     /** Optional FK back to the unified message_queue audit row (Communications Switchboard). */
@@ -250,6 +252,13 @@ export async function sendSms(
   }
 
   const client = createTwilioClient(config);
+  if (context?.publicHelpNumber) {
+    const { pool } = await import("../db");
+    const help = (await pool.query("SELECT phone FROM rescue_help_settings WHERE tenant_id=$1 AND enabled=true", [tenantId])).rows[0];
+    if (!help?.phone || help.phone === config.phoneNumber) return { number: toNumber, status: "failed", error: "Dedicated help line is not active" };
+    config.phoneNumber = help.phone;
+    config.messagingServiceSid = undefined;
+  }
   const prefixedMessage = applyOrgPrefix(message, config.tenantName, context?.skipOrgPrefix);
 
   let acceptedSid: string | undefined;

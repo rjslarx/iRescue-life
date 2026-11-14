@@ -131,6 +131,7 @@ import PublicFundraisersPage from "@/pages/PublicFundraisersPage";
 import RescueVendPage from "@/pages/RescueVendPage";
 import RescueResalePage from "@/pages/RescueResalePage";
 import RescueResaleAdminPage from "@/pages/RescueResaleAdminPage";
+import RescueInboxPage from "@/pages/RescueInboxPage";
 import EventTicketCheckoutPage from "@/pages/EventTicketCheckoutPage";
 import EventSuccessPage from "@/pages/EventSuccessPage";
 import GivePage from "@/pages/GivePage";
@@ -321,6 +322,8 @@ function RouterSwitch() {
       <Route path="/dashboard/free-squares" component={FreeSquaresPage} />
       {/* Team games use session + server eligibility, not dashboard page grants. */}
       <Route path="/dashboard/games" component={TeamGamesPage} />
+      {/* Explicit rescue-help team membership is enforced by the API. */}
+      <Route path="/dashboard/rescue-inbox" component={RescueInboxPage} />
       <ProtectedRoute path="/dashboard" pageId="dashboard" component={Dashboard} />
       <ProtectedRoute path="/dashboard/animals" pageId="animals" component={AnimalsPage} />
       <ProtectedRoute path="/dashboard/profile-contributions" pageId="profile-contributions" component={ProfileContributionsPage} />

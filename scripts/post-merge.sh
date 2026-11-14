@@ -631,3 +631,4 @@ npx tsx scripts/ensure-cat-vaccine-guard.ts
 npx tsx scripts/ensure-rescue-vend-menus.ts
 npx tsx scripts/ensure-rescue-resale.ts
 npx tsx scripts/ensure-sms-suppression.ts
+npx tsx scripts/ensure-rescue-help.ts

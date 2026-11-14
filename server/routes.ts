@@ -47923,6 +47923,9 @@ The user asking is a tenant administrator or staff member.`;
   app.use('/api/public/rescue-vend', requireTenant, rescueVendRoutes.default);
   const rescueResaleRoutes = await import('./routes/rescueResale');
   app.use('/api/rescue-resale', requireTenant, rescueResaleRoutes.default);
+  const rescueHelpRoutes = await import('./routes/rescueHelp');
+  app.use('/api/rescue-help', requireTenant, rescueHelpRoutes.default);
+  app.use('/api/rescue-help-webhooks', rescueHelpRoutes.helpWebhooks);
 
   // Register VIP donor portal routes (token-authenticated giving history + receipts)
   const vipPortalRoutes = await import('./routes/vipPortal');

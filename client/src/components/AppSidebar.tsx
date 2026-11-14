@@ -29,6 +29,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { LitterPawsIcon } from "@/components/icons/LitterPawsIcon";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTeamGameAccess } from "@/hooks/use-vip-game";
+import { useRescueHelpAccess } from "@/hooks/use-rescue-inbox";
 import { canManageFreeSquares } from "@/pages/free-squares/use-free-squares";
 import { useToast } from "@/hooks/use-toast";
 import { usePagePermissions } from "@/hooks/usePagePermissions";
@@ -164,6 +165,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
   const [location, navigate] = useLocation();
   const { user, switchRole, logout } = useAuth();
   const teamGameAccess = useTeamGameAccess();
+  const rescueHelpAccess = useRescueHelpAccess();
   const { isMobile, setOpenMobile } = useSidebar();
   const { toast } = useToast();
   const [isSwitching, setIsSwitching] = useState(false);
@@ -688,6 +690,16 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
     .filter(group => group.items.length > 0);
 
   // Inject additional granted pages not already in the role's nav list
+  // Explicit inbox membership is independent of general page grants, including
+  // on the volunteer calendar dashboard which shares this sidebar.
+  if (rescueHelpAccess.data?.allowed === true && !rescueHelpAccess.isError) {
+    filteredGroups.push({
+      title: "Rescue help",
+      items: [{ title: "Rescue Inbox", url: "/dashboard/rescue-inbox", icon: Inbox }],
+      defaultOpen: true,
+    });
+  }
+
   const existingUrls = new Set(filteredGroups.flatMap(g => g.items.map(i => i.url)));
   const accessiblePages = getAccessiblePages();
   const featureFlaggedPageIds: Record<string, boolean> = {
