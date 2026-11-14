@@ -7,15 +7,21 @@ Rescue Resale is a separate page on the tenant website. Eligibility requires tha
 
 **Why:** The user approved the recommended first version on 2026-11-13, not the entire uploaded Antigravity proposal.
 
-**How to apply:** Keep all net proceeds with the rescue, donor-held items, staff listing approval, phone-number-masked conversations, private offers, Stripe checkout, scheduled shelter/event or approved public pickup, and sales records/CSV. Do not add 50/50 donor payouts, Uber Direct, external Antigravity automation, or automated charitable receipt claims without further approval.
+**How to apply:** Full donation remains the default. Preserve donor-held items, staff listing approval, phone-number-masked conversations, private offers, Stripe checkout, scheduled shelter/event or approved public pickup, and sales records/CSV. The optional split extension below is now approved; Uber Direct, external Antigravity automation, and automatic charitable receipt claims remain outside scope.
 
 The rescue and donor must decide the legal transfer and tax acknowledgment arrangement separately; a buyer's resale purchase is not automatically a charitable donation.
 
-The user subsequently requested scoping an optional 50/50 split of net proceeds with automatic contributor bank payouts, while retaining full-donation listings. This is a proposed extension, not authorization to activate live transfers.
+The user approved optional 50/50 splits of net proceeds with automatic contributor bank payouts, gated by rescue-admin opt-in. The other option (full donation) must remain the default.
 
 **Why:** The user wants routine payouts to require no rescue-volunteer action and prefers automation over manually recording payments.
 
-**How to apply:** Plan contributor Stripe onboarding, automatic settlement and payout tracking, participant pickup confirmation, and refund/dispute safeguards. Preserve the current full-donation behavior until the extension is implemented and approved for live use.
+**How to apply:** Never enable the setting for tenants automatically. Require contributor Stripe onboarding and participant pickup confirmation. Preserve full-donation listings and existing orders; disabling new split purchases must not strand paid orders. Never exercise live transfers in workspace tests.
+
+Split sales use separate transfers; partial refunds or disputes conservatively recover both shares and require review before releasing any remainder. An uncertain request older than Stripe's idempotency retention must not be blindly recreated.
+
+**Why:** Once a contributor receives money in their bank, recovery is not guaranteed. Preventing duplicate or premature payouts matters more than automatically retrying every ambiguous failure.
+
+**How to apply:** Keep split-sale recovery separate from destination-charge recovery, show actual transferred balances separately from calculated shares, and treat “transferred to Stripe” as distinct from “paid to bank.”
 
 **Why:** The original proposal conflated contributed goods and purchase receipts. The approved recommendation explicitly separated these.
 

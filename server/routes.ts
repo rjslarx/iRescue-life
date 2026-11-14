@@ -32473,6 +32473,21 @@ Submitted: ${new Date().toLocaleString()}
         return res.status(400).send('Webhook signature verification failed');
       }
 
+      // Split resale charges have two separate transfers, not a destination
+      // transfer. Keep their recovery out of the legacy destination handler.
+      if (!event.account && event.type.startsWith("charge.dispute.")) {
+        const dispute = event.data.object as Stripe.Dispute;
+        const chargeId = typeof dispute.charge === "string" ? dispute.charge : dispute.charge?.id;
+        if (chargeId) {
+          const charge = await stripeService.getPlatformStripeClient()!.charges.retrieve(chargeId);
+          if (charge.metadata?.type === "rescue_resale" && charge.metadata?.proceedsMode === "split_50") {
+            const { syncResaleOrder } = await import("./services/rescue-resale");
+            await syncResaleOrder(charge.metadata.resaleOrderId, charge.metadata.tenantId);
+            return res.json({ received: true });
+          }
+        }
+      }
+
       switch (event.type) {
         case 'checkout.session.expired':
         case 'charge.refunded': {

@@ -3,12 +3,15 @@ import { ResaleDeliveryStatus } from "./ResaleDeliveryStatus";
 import { PackageOpen } from "lucide-react";
 import { CheckoutForm, MessageForm, PhoneVerification, ResaleError } from "@/components/resale/ResaleForms";
 import { resaleCents, resaleMoney, type ResaleClient, type ResaleConversation, type ResaleOrder } from "@/hooks/use-rescue-resale";
+import { DonorSale, PayoutSetup, SplitSummary } from "@/components/resale/ResalePayouts";
 
 export function PickupSummary({ order }: { order: ResaleOrder }) {
   return <><div className="resale-row"><strong>{order.itemTitle}</strong><span className="resale-pill">{order.status.replaceAll("_", " ")}</span><span>{resaleMoney(order.amountCents)}</span></div>
     <p className="resale-muted mt-2">Order {order.id}</p>
     {order.pickup && <p className="mt-2"><strong>{order.pickup.label}</strong> · {order.pickup.address}<br />{new Date(order.pickup.startsAt).toLocaleString()} – {new Date(order.pickup.endsAt).toLocaleString()}</p>}
     <p className="resale-muted mt-2">Only a confirmed payment reserves a purchase. Follow the order status above; a checkout redirect alone is not payment confirmation.</p>
+    <SplitSummary order={order} />
+    {order.status === "paid" && !order.pickupConfirmedAt && order.pickupCode && /^[0-9a-f]{12}$/i.test(order.pickupCode) && <details className="resale-details"><summary>Pickup code — reveal only at handoff</summary><p className="resale-muted">Keep this private until you have received the item. Giving the donor this code confirms pickup and, for split orders, starts settlement. Never send it in advance.</p><code className="block text-xl tracking-widest mt-3">{order.pickupCode}</code></details>}
   </>;
 }
 export function OrderActions({ order, api }: { order: ResaleOrder; api: ResaleClient }) {
@@ -58,8 +61,9 @@ export default function ResaleActivity({ api }: { api: ResaleClient }) {
   const [error, setError] = useState<unknown>(null);
   if (!api.token) return <PhoneVerification api={api} />;
   return <section>
-    <div className="resale-toolbar"><div><h2>My activity</h2><p className="resale-muted">Your listings, neighbor conversations, and purchases.</p></div><button className="resale-btn secondary" onClick={() => void api.me.refetch()} disabled={api.me.isFetching}>{api.me.isFetching ? "Refreshing…" : "Refresh activity"}</button></div>
+    <div className="resale-toolbar"><div><h2>My activity</h2><p className="resale-muted">Your listings, sales, payouts, neighbor conversations, and purchases.</p></div><button className="resale-btn secondary" onClick={() => { void api.me.refetch(); void api.payoutAccount.refetch(); }} disabled={api.me.isFetching}>{api.me.isFetching ? "Refreshing…" : "Refresh activity"}</button></div>
     <PhoneVerification api={api} />
+    <PayoutSetup api={api} />
     {api.me.isLoading && <div className="resale-skeleton mt-5" aria-label="Loading your activity" />}
     {api.me.isError && <><ResaleError error={api.me.error} /><button className="resale-btn secondary" onClick={() => void api.me.refetch()}>Retry activity</button></>}
     <ResaleError error={error} />
@@ -68,6 +72,7 @@ export default function ResaleActivity({ api }: { api: ResaleClient }) {
       {!api.me.data.items.length && <div className="resale-empty"><PackageOpen size={30} /><h3>Your next good deed could be in a cupboard.</h3><p className="resale-muted">Use Donate an item to submit something for rescue review.</p></div>}
       {api.me.data.items.map(item => <article className="resale-panel" key={item.id}>
         <div className="resale-row"><h3 className="!mb-0">{item.title}</h3><span className="resale-pill">{item.status.replaceAll("_", " ")}</span><strong>{resaleMoney(item.askingCents)}</strong></div>
+        <p className="resale-muted mt-2">{item.proceedsMode === "split_50" ? "Optional 50/50 net proceeds split" : "Full donation of net proceeds"}</p>
         {["pending", "pending_review"].includes(item.status) && <p className="resale-muted mt-3">Awaiting manual rescue review. Keep the item at home until the arranged pickup.</p>}
         {item.reviewNote && <p className="resale-status"><strong>Rescue review note:</strong> {item.reviewNote}</p>}
         {["pending", "pending_review", "active", "rejected"].includes(item.status) && <button className="resale-btn danger mt-4" disabled={api.withdraw.isPending} onClick={async () => {
@@ -75,6 +80,9 @@ export default function ResaleActivity({ api }: { api: ResaleClient }) {
           setError(null); try { await api.withdraw.mutateAsync(item.id); } catch (err) { setError(err); }
         }}>Withdraw listing</button>}
       </article>)}
+      <h2 className="mt-8">Your sales</h2>
+      {!api.me.data.sales?.length && <div className="resale-empty"><h3>No sales yet.</h3><p className="resale-muted">Your sold items, pickup confirmation, and settlement status will appear here.</p></div>}
+      {api.me.data.sales?.map(order => <DonorSale order={order} api={api} key={order.id} />)}
       <h2 className="mt-8">Conversations & offers</h2>
       {!api.me.data.conversations.length && <div className="resale-empty"><h3>No conversations yet.</h3><p className="resale-muted">Ask about an item in the shop. Replies and offers will appear here.</p></div>}
       {api.me.data.conversations.map(c => <Conversation key={c.id} conversation={c} api={api} />)}

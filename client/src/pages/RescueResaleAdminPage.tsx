@@ -13,6 +13,26 @@ function localDate(value: string) {
   const date = new Date(value);
   return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 }
+function SplitSettings({ api }: { api: ResaleClient }) {
+  const [error, setError] = useState<unknown>(null);
+  const [saved, setSaved] = useState(false);
+  const data = api.adminData.data;
+  const allowSplit = data?.settings.allowSplit ?? false;
+  return <section className="resale-panel">
+    <h2>Optional contributor split</h2>
+    <p className="resale-muted mb-4">Off by default. Enabling this permits contributors to choose an optional 50/50 split of net proceeds after Stripe processing and platform fees. Full donation remains the default for every new item. Connect/payout costs may apply separately.</p>
+    <p className="resale-muted mb-4">Before enabling, confirm the marketplace arrangement with the platform administrator. Stripe eligibility, payout fees, tax reporting, and responsibility for refunds and disputes still apply. A payout already sent to a bank may not be recoverable.</p>
+    <label className="resale-check"><input type="checkbox" role="switch" checked={allowSplit} disabled={!data?.canManageSplit || api.settings.isPending} onChange={async event => {
+      const next = event.target.checked;
+      setError(null); setSaved(false);
+      try { await api.settings.mutateAsync({ pickupOptions: data!.settings.pickupOptions, allowSplit: next }); setSaved(true); } catch (err) { setError(err); }
+    }} /><span>Allow optional 50/50 net proceeds splits</span></label>
+    <p className="resale-muted mt-3">Disabling prevents new split checkouts, but honors already-paid orders and their settlement. Contributors must complete Stripe setup and explicitly agree before listing a split item. Automatic bank payouts require pickup confirmation and available funds, not just payment.</p>
+    {!data?.canManageSplit && <p className="resale-muted mt-3">Only the rescue owner or an administrator can change this setting.</p>}
+    {saved && <p className="resale-status" role="status">Contributor split setting saved.</p>}
+    <ResaleError error={error} />
+  </section>;
+}
 function PickupSettings({ api, initial }: { api: ResaleClient; initial: ResalePickup[] }) {
   const [pickups, setPickups] = useState(initial.map(p => ({ ...p, startsAt: localDate(p.startsAt), endsAt: localDate(p.endsAt) })));
   const [error, setError] = useState<unknown>(null);
@@ -60,6 +80,7 @@ function ReviewListing({ item, api }: { item: ResaleItem; api: ResaleClient }) {
   return <article className="resale-panel">
     <div className="resale-row justify-between"><div className="resale-row"><h3 className="!mb-0">{item.title}</h3><span className="resale-pill">{item.status.replaceAll("_", " ")}</span></div><strong className="resale-price">{resaleMoney(item.askingCents)}</strong></div>
     <p className="resale-muted mt-2">{item.category} · ZIP {item.zip} · submitted {new Date(item.createdAt).toLocaleString()}</p>
+    <p className="resale-status"><strong>Proceeds choice:</strong> {item.proceedsMode === "split_50" ? "Optional 50/50 net proceeds split — half to contributor, half to rescue after Stripe processing and platform fees. Connect/payout costs may apply separately." : "Full donation — all net proceeds to the rescue."}</p>
     <div className="resale-gallery">{item.photos.map((url, index) => <a key={url} href={url} target="_blank" rel="noopener noreferrer"><img src={url} alt={`${item.title}, photo ${index + 1} — open full size`} loading="lazy" /></a>)}</div>
     <p className="whitespace-pre-wrap break-words">{item.description}</p>
     <p className="resale-muted mt-3">Pickup: {item.fulfillment.map(kind => kind === "shelter_meetup" ? "shelter / rescue event" : "public location").join(", ")}</p>
@@ -73,7 +94,7 @@ function SalesLedger({ api }: { api: ResaleClient }) {
   const orders = api.adminData.data?.orders || [];
   const run = async (id: string, type: "sync" | "complete") => {
     setError(null);
-    if (type === "complete" && !window.confirm("Confirm this paid item has been handed over at the arranged pickup?")) return;
+    if (type === "complete" && !window.confirm("Confirm this paid item has been handed over at the arranged pickup? For split orders, this is the staff exception backup to the buyer pickup code and starts settlement when funds are available.")) return;
     try { await (type === "sync" ? api.sync : api.complete).mutateAsync(id); } catch (err) { setError(err); }
   };
   const fee = (value: number | null | undefined) => value == null ? "Not settled" : resaleMoney(value);
@@ -84,8 +105,8 @@ function SalesLedger({ api }: { api: ResaleClient }) {
       <div className="resale-table-wrap"><table className="resale-table"><caption className="text-left resale-muted pb-4">Amounts in USD. Unavailable fees are not treated as zero. Net proceeds are server-reported, not estimates.</caption><thead><tr><th scope="col">Order / pickup</th><th scope="col">Payment</th><th scope="col">Fees & proceeds</th><th scope="col">Actions</th></tr></thead><tbody>{orders.map(order => <tr key={order.id}>
         <td className="min-w-[220px]"><strong>{order.itemTitle}</strong><p className="resale-muted">{new Date(order.createdAt).toLocaleString()}</p><p className="break-all text-xs mt-2">{order.id}</p>{order.pickup && <p className="mt-3"><strong>{order.pickup.label}</strong><br />{order.pickup.address}<br />{new Date(order.pickup.startsAt).toLocaleString()} – {new Date(order.pickup.endsAt).toLocaleString()}</p>}<details className="mt-3"><summary className="cursor-pointer font-semibold">Buyer phone (staff only)</summary><p>{order.buyerPhone || "Not available"}</p></details></td>
         <td className="min-w-[190px]"><span className="resale-pill">{order.status.replaceAll("_", " ")}</span><p className="font-semibold mt-2">{resaleMoney(order.amountCents)}</p>{order.notificationStatus && <div className="mt-3 resale-muted"><p>Buyer notification: {deliveryLabel(order.notificationStatus.buyer)}</p><p>Donor notification: {deliveryLabel(order.notificationStatus.donor)}</p></div>}<details className="mt-3"><summary className="cursor-pointer">Stripe references</summary><p className="break-all mt-2">Session: {order.stripeSessionId || "Not available"}</p><p className="break-all mt-2">Payment intent: {order.stripePaymentIntentId || "Not available"}</p></details></td>
-        <td className="min-w-[185px]"><p>Stripe fee: {fee(order.stripeFeeCents)}</p><p>Original platform revenue: {fee(order.platformFeeCents)}</p><p className="font-semibold mt-2">Actual rescue net proceeds: {fee(order.rescueProceedsCents)}</p><p className="mt-2">Refunded: {order.refundedCents == null ? "Not available" : resaleMoney(order.refundedCents)}</p></td>
-        <td className="min-w-[170px]"><button className="resale-btn secondary" disabled={api.sync.isPending || api.complete.isPending} onClick={() => void run(order.id, "sync")}>Sync with Stripe</button>{order.status === "paid" && <button className="resale-btn mt-3" disabled={api.complete.isPending || api.sync.isPending} onClick={() => void run(order.id, "complete")}>Mark picked up</button>}</td>
+        <td className="min-w-[185px]"><p>Stripe fee: {fee(order.stripeFeeCents)}</p><p>Original platform revenue: {fee(order.platformFeeCents)}</p><p className="font-semibold mt-2">Actual rescue net proceeds: {fee(order.rescueProceedsCents)}</p><p className="mt-2">{order.proceedsMode === "split_50" ? "50/50 net proceeds split" : "Full donation"}</p><p>Contributor share: {order.proceedsMode === "split_50" ? fee(order.split?.contributorCents) : "Not applicable"}</p><p>Rescue share: {fee(order.proceedsMode === "split_50" ? order.split?.rescueCents : order.rescueProceedsCents)}</p><p>Settlement status: {order.proceedsMode === "split_50" ? order.split?.status?.replaceAll("_", " ") || "Awaiting settlement" : "Not applicable"}</p>{order.split?.error && <p className="resale-error">{order.split.error}</p>}{order.pickupConfirmedAt && <p className="mt-2">Pickup confirmed: {new Date(order.pickupConfirmedAt).toLocaleString()}</p>}<p className="mt-2">Refunded: {order.refundedCents == null ? "Not available" : resaleMoney(order.refundedCents)}</p></td>
+        <td className="min-w-[170px]"><button className="resale-btn secondary" disabled={api.sync.isPending || api.complete.isPending} onClick={() => void run(order.id, "sync")}>Sync with Stripe</button>{order.status === "paid" && <button className="resale-btn mt-3" disabled={api.complete.isPending || api.sync.isPending} onClick={() => void run(order.id, "complete")}>{order.proceedsMode === "split_50" ? "Confirm pickup (staff exception)" : "Mark picked up"}</button>}</td>
       </tr>)}</tbody></table></div>}
   </section>;
 }
@@ -121,7 +142,7 @@ function ResaleAdminWorkspace() {
   const listings = data?.items.filter(i => !pendingOnly || ["pending", "pending_review"].includes(i.status)) || [];
   return <DashboardLayout title="Rescue Resale" description="A neighborhood fundraiser, thoughtfully managed.">
     <div className="resale rounded-xl !min-h-0"><main className="resale-wrap !w-auto !mx-0 !px-4 md:!px-7">
-      <div className="resale-toolbar !mt-0"><div><span className="resale-kicker">Community giving · Finance workspace</span><h1 className="!text-4xl !mb-2">Good things, doing good.</h1><p className="resale-muted">Manual listing review. Arranged local pickup. All net proceeds for rescue.</p></div><a className="resale-btn secondary" href={`${basePath}/rescue-resale`} target="_blank" rel="noopener noreferrer"><ExternalLink size={16} />View storefront</a></div>
+      <div className="resale-toolbar !mt-0"><div><span className="resale-kicker">Community giving · Finance workspace</span><h1 className="!text-4xl !mb-2">Good things, doing good.</h1><p className="resale-muted">Manual listing review. Arranged local pickup. Full donation by default.</p></div><a className="resale-btn secondary" href={`${basePath}/rescue-resale`} target="_blank" rel="noopener noreferrer"><ExternalLink size={16} />View storefront</a></div>
       <nav className="resale-tabs" aria-label="Resale management">{([
         { id: "listings", label: `Listings${pending ? ` (${pending} pending)` : ""}`, icon: PackageOpen },
         { id: "pickups", label: "Pickup settings", icon: CalendarDays },
@@ -129,7 +150,7 @@ function ResaleAdminWorkspace() {
         { id: "sales", label: "Sales ledger", icon: ReceiptText },
       ] as const).map(t => <button className={`resale-btn ${tab === t.id ? "" : "secondary"}`} key={t.id} aria-current={tab === t.id ? "page" : undefined} onClick={() => setTab(t.id)}><t.icon size={16} aria-hidden="true" />{t.label}</button>)}</nav>
       {api.adminData.isLoading ? <div className="resale-skeleton" aria-label="Loading resale workspace" /> : api.adminData.isError ? <><ResaleError error={api.adminData.error} /><button className="resale-btn" onClick={() => void api.adminData.refetch()}>Retry workspace</button></> : data && <>
-        {tab === "pickups" && <PickupSettings api={api} initial={data.settings.pickupOptions} />}
+        {tab === "pickups" && <><SplitSettings api={api} /><PickupSettings api={api} initial={data.settings.pickupOptions} /></>}
         {tab === "sales" && <SalesLedger api={api} />}
         {tab === "listings" && <><div className="resale-toolbar"><div><h2>Listing review</h2><p className="resale-muted">Review photos, safety, condition, and pickup compatibility before publishing. No automated triage.</p></div><div className="resale-row"><button className={`resale-btn ${pendingOnly ? "" : "secondary"}`} aria-pressed={pendingOnly} onClick={() => setPendingOnly(true)}>Pending review</button><button className={`resale-btn ${!pendingOnly ? "" : "secondary"}`} aria-pressed={!pendingOnly} onClick={() => setPendingOnly(false)}>All listings</button><button className="resale-btn secondary" disabled={api.adminData.isFetching} onClick={() => void api.adminData.refetch()}>Refresh</button></div></div>
           {!listings.length ? <div className="resale-empty"><PackageOpen size={32} /><h3>{pendingOnly ? "The review queue is clear." : "No listings yet."}</h3><p className="resale-muted">{pendingOnly ? "New donor submissions will appear here for your review." : "Share the storefront with your community to invite the first donated items."}</p></div> : listings.map(item => <ReviewListing key={item.id} item={item} api={api} />)}

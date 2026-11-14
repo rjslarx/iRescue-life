@@ -10,6 +10,7 @@ export const resalePickupSchema = z.object({
 }).refine(p => Date.parse(p.endsAt) > Date.parse(p.startsAt), "Pickup must end after it starts");
 export const resaleSettingsSchema = z.object({
   pickupOptions: z.array(resalePickupSchema).max(50),
+  allowSplit: z.boolean().optional(),
 }).strict();
 export const resaleItemSchema = z.object({
   donorName: z.string().trim().min(2).max(100),
@@ -24,7 +25,10 @@ export const resaleItemSchema = z.object({
   fulfillment: z.array(z.enum(["shelter_meetup", "public_meetup"])).min(1).max(2),
   consent: z.literal(true),
   ownership: z.literal(true),
-}).strict().refine(i => i.minCents === null || i.minCents <= i.askingCents, "Minimum cannot exceed asking price");
+  proceedsMode: z.enum(["donate_all", "split_50"]).default("donate_all"),
+  splitConsent: z.boolean().default(false),
+}).strict().refine(i => i.minCents === null || i.minCents <= i.askingCents, "Minimum cannot exceed asking price")
+  .refine(i => i.proceedsMode !== "split_50" || i.splitConsent, "Agree to the 50/50 net-proceeds terms before submitting.");
 export type ResaleItemInput = z.infer<typeof resaleItemSchema>;
 export type ResalePickup = z.infer<typeof resalePickupSchema>;
 export function resalePhone(value: string): string {

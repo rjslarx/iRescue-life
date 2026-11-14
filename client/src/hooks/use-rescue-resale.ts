@@ -5,6 +5,7 @@ import { tenantApiRequest, tenantFetch } from "@/lib/tenantApi";
 import type { ResaleItemInput, ResalePickup } from "@shared/rescue-resale";
 
 export type ResaleItem = {
+  proceedsMode?: "donate_all" | "split_50";
   id: string; title: string; description: string; category: string; zip: string;
   askingCents: number; photos: string[]; fulfillment: string[]; status: string; createdAt: string;
   reviewNote?: string | null; donorName?: string; donorEmail?: string; donorPhone?: string;
@@ -19,6 +20,9 @@ export type ResaleConversation = {
     deliveries?: { recipient: string; status: string; errorCode: string | null; updatedAt: string }[] }[];
 };
 export type ResaleOrder = {
+  proceedsMode?: "donate_all" | "split_50";
+  split?: { status: string; contributorCents: number | null; rescueCents: number | null; error?: string | null } | null;
+  pickupConfirmedAt?: string | null; pickupCode?: string;
   id: string; itemTitle: string; amountCents: number; status: string;
   pickup: ResalePickup | null; createdAt: string; buyerPhone?: string;
   stripeSessionId?: string | null; stripePaymentIntentId?: string | null;
@@ -26,9 +30,15 @@ export type ResaleOrder = {
   rescueProceedsCents?: number | null; refundedCents?: number;
   notificationStatus?: { buyer: string; donor: string };
 };
-export type ResaleConfig = { enabled: boolean; checkoutEnabled: boolean; rescueName: string; pickupOptions: ResalePickup[] };
-export type ResaleActivity = { items: ResaleItem[]; conversations: ResaleConversation[]; orders: ResaleOrder[] };
-export type ResaleAdmin = { settings: { pickupOptions: ResalePickup[] }; items: ResaleItem[]; conversations: ResaleConversation[]; conversationsHasMore: boolean; orders: ResaleOrder[] };
+export type ResaleConfig = { enabled: boolean; checkoutEnabled: boolean; rescueName: string; pickupOptions: ResalePickup[]; allowSplit: boolean };
+export type ResaleActivity = { items: ResaleItem[]; conversations: ResaleConversation[]; orders: ResaleOrder[]; sales: ResaleOrder[] };
+export type ResaleAdmin = { canManageSplit: boolean; settings: { pickupOptions: ResalePickup[]; allowSplit: boolean }; items: ResaleItem[]; conversations: ResaleConversation[]; conversationsHasMore: boolean; orders: ResaleOrder[] };
+export type ResalePayoutAccount = { exists: boolean; ready: boolean; status: string; requirements: string[]; bankPayouts: { id: string; status: string; amountCents: number; arrivalDate: number }[]; error?: string };
+function redirectToStripe(url: string) {
+  const destination = new URL(url);
+  if (destination.protocol !== "https:" || !(destination.hostname === "stripe.com" || destination.hostname.endsWith(".stripe.com"))) throw new Error("Stripe returned an invalid destination. Please try again.");
+  window.location.assign(destination.href);
+}
 const prefix = "/api/rescue-resale";
 export const resaleMoney = (value: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value / 100);
 export function resaleCents(value: string): number {
@@ -75,6 +85,7 @@ export function useRescueResale({ admin = false, orderId = null, activityOpen = 
     setSaved({ scope, token: next });
     cache.removeQueries({ queryKey: [...key, "me"] });
     cache.removeQueries({ queryKey: [...key, "order"] });
+     cache.removeQueries({ queryKey: [...key, "payout-account"] });
   };
   const request = async <T,>(method: string, path: string, data?: unknown, verified = false): Promise<T> => {
     // tenantApiRequest has no custom-header argument. Verified requests use the
@@ -102,6 +113,25 @@ export function useRescueResale({ admin = false, orderId = null, activityOpen = 
     queryKey: [...key, "admin", deliveryStatus, conversationOffset], queryFn: () => request("GET", `/admin?deliveryStatus=${encodeURIComponent(deliveryStatus)}&offset=${conversationOffset}`),
     enabled: !!tenantId && admin, retry: 1,
   });
+  const payoutAccount = useQuery<ResalePayoutAccount>({
+    queryKey: [...key, "payout-account", !!token],
+    queryFn: () => request("GET", "/payout-account", undefined, true),
+    enabled: !!tenantId && !!token && !admin && (!!config.data?.allowSplit || activityOpen),
+    retry: false,
+    refetchInterval: activityOpen && !!token ? 12000 : false,
+  });
+  const onboardPayout = useMutation({
+    mutationFn: () => request<{ url: string }>("POST", "/payout-account/onboard", {}, true),
+    onSuccess: ({ url }) => redirectToStripe(url),
+  });
+  const payoutDashboard = useMutation({
+    mutationFn: () => request<{ url: string }>("POST", "/payout-account/dashboard", {}, true),
+    onSuccess: ({ url }) => redirectToStripe(url),
+  });
+  const confirmPickup = useMutation({
+    mutationFn: ({ id, code }: { id: string; code: string }) => request("POST", `/orders/${encodeURIComponent(id)}/confirm-pickup`, { code }, true),
+    onSuccess: refresh,
+  });
   const order = useQuery<ResaleOrder>({
     queryKey: [...key, "order", orderId, !!token],
     queryFn: () => request("GET", `/orders/${encodeURIComponent(orderId!)}`, undefined, true),
@@ -123,7 +153,7 @@ export function useRescueResale({ admin = false, orderId = null, activityOpen = 
     },
   });
   const createItem = useMutation({
-    mutationFn: (data: ResaleItemInput) => request<{ id: string }>("POST", "/items", data, true), onSuccess: refresh,
+    mutationFn: (data: ResaleItemInput & { proceedsMode?: "donate_all" | "split_50"; splitConsent?: boolean }) => request<{ id: string }>("POST", "/items", data, true), onSuccess: refresh,
   });
   const withdraw = useMutation({
     mutationFn: (id: string) => request("POST", `/items/${encodeURIComponent(id)}/withdraw`, {}, true), onSuccess: refresh,
@@ -150,7 +180,7 @@ export function useRescueResale({ admin = false, orderId = null, activityOpen = 
     onSuccess: refresh,
   });
   const settings = useMutation({
-    mutationFn: (data: { pickupOptions: ResalePickup[] }) => request("PUT", "/admin/settings", data), onSuccess: refresh,
+    mutationFn: (data: { pickupOptions: ResalePickup[]; allowSplit?: boolean }) => request("PUT", "/admin/settings", data), onSuccess: refresh,
   });
   const review = useMutation({
     mutationFn: ({ id, ...data }: { id: string; status: "active" | "rejected"; note: string }) => request("POST", `/admin/items/${encodeURIComponent(id)}/review`, data), onSuccess: refresh,
@@ -169,7 +199,7 @@ export function useRescueResale({ admin = false, orderId = null, activityOpen = 
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     },
   });
-  return { config, items, me, adminData, order, token, signOut: () => saveToken(""), requestCode, verifyCode, upload, createItem, withdraw, startMessage, reply, offer, checkout, cancelOrder, settings, review, complete, sync, ledger };
+  return { config, items, me, adminData, order, payoutAccount, onboardPayout, payoutDashboard, confirmPickup, token, signOut: () => saveToken(""), requestCode, verifyCode, upload, createItem, withdraw, startMessage, reply, offer, checkout, cancelOrder, settings, review, complete, sync, ledger };
 }
 export type ResaleClient = ReturnType<typeof useRescueResale>;
 

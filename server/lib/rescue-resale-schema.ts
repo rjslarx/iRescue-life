@@ -1,4 +1,9 @@
 export const rescueResaleSchemaSql = `
+CREATE TABLE IF NOT EXISTS rescue_resale_payout_accounts (
+ id uuid PRIMARY KEY, tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+ phone text NOT NULL, stripe_account_id text UNIQUE,
+ created_at timestamptz NOT NULL DEFAULT now(), UNIQUE(tenant_id,phone)
+);
 CREATE TABLE IF NOT EXISTS rescue_resale_settings (
  tenant_id uuid PRIMARY KEY REFERENCES tenants(id) ON DELETE CASCADE,
  data jsonb NOT NULL DEFAULT '{"pickupOptions":[]}'
@@ -45,6 +50,13 @@ CREATE TABLE IF NOT EXISTS rescue_resale_orders (
 CREATE UNIQUE INDEX IF NOT EXISTS resale_one_sale ON rescue_resale_orders(item_id)
  WHERE status IN ('checkout','paid','completed','refunded','partially_refunded');
 ALTER TABLE rescue_resale_orders ADD COLUMN IF NOT EXISTS reconciled_at timestamptz;
+CREATE TABLE IF NOT EXISTS rescue_resale_splits (
+ order_id uuid PRIMARY KEY REFERENCES rescue_resale_orders(id) ON DELETE CASCADE,
+ tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+ status text NOT NULL DEFAULT 'awaiting_pickup',
+ data jsonb NOT NULL DEFAULT '{}',
+ updated_at timestamptz NOT NULL DEFAULT now()
+);
 CREATE TABLE IF NOT EXISTS rescue_resale_deliveries (
  id uuid PRIMARY KEY, tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
  message_id uuid REFERENCES rescue_resale_messages(id) ON DELETE CASCADE,

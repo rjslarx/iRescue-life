@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ShieldCheck, Upload, X } from "lucide-react";
 import { resaleItemSchema, resaleMessageAllowed, resalePhone } from "@shared/rescue-resale";
 import { resaleCents, resaleError, resaleMoney, type ResaleClient, type ResaleItem } from "@/hooks/use-rescue-resale";
+import { PayoutSetup } from "@/components/resale/ResalePayouts";
 
 export function ResaleError({ error }: { error: unknown }) {
   return error ? <div className="resale-error" role="alert">{resaleError(error)}</div> : null;
@@ -38,26 +39,31 @@ export function PhoneVerification({ api }: { api: ResaleClient }) {
 }
 
 export function DonateItemForm({ api }: { api: ResaleClient }) {
+  const [proceedsMode, setProceedsMode] = useState<"donate_all" | "split_50">("donate_all");
+  const [splitConsent, setSplitConsent] = useState(false);
+  const mode = api.config.data?.allowSplit ? proceedsMode : "donate_all";
   const [photos, setPhotos] = useState<string[]>([]);
   const [error, setError] = useState<unknown>(null);
   const [submitted, setSubmitted] = useState(false);
   const [busy, setBusy] = useState(false);
-  if (submitted) return <section className="resale-status" role="status"><h2>Thank you for making room for rescue.</h2><p>Your listing is pending manual review. Keep the item at home; please do not drop it off at the shelter. You can follow its status and review notes in My activity.</p><button className="resale-btn secondary mt-4" onClick={() => { setSubmitted(false); setPhotos([]); }}>Donate another item</button></section>;
+  if (submitted) return <section className="resale-status" role="status"><h2>Thank you for making room for rescue.</h2><p>Your listing is pending manual review. Keep the item at home; please do not drop it off at the shelter. You can follow its status and review notes in My activity.</p><button className="resale-btn secondary mt-4" onClick={() => { setSubmitted(false); setPhotos([]); setProceedsMode("donate_all"); setSplitConsent(false); }}>Donate another item</button></section>;
   return <section className="resale-panel resale-form">
     <span className="resale-kicker">Good things deserve another chapter</span><h2 className="mt-2">Donate an item, not a trip to the shelter.</h2>
-    <p className="resale-muted mb-5">You keep your belongings at home until the arranged pickup. Listings are reviewed by the rescue before appearing here. All net proceeds support the rescue; there is no seller payment.</p>
+    <p className="resale-muted mb-5">You keep your belongings at home until the arranged pickup. Listings are reviewed by the rescue before appearing here. Full donation of all net proceeds is the default{api.config.data?.allowSplit ? "; you may optionally choose a 50/50 net proceeds split below." : "; there is no seller payment for full-donation listings."}</p>
     <form onSubmit={async event => {
       event.preventDefault(); setError(null);
       const data = new FormData(event.currentTarget);
       try {
+        if (mode === "split_50" && (!splitConsent || !api.payoutAccount.data?.ready)) throw new Error("Agree to the split terms and finish Stripe payout setup before submitting a split listing.");
         const payload = resaleItemSchema.parse({
+          proceedsMode: mode, splitConsent: mode === "split_50" && splitConsent,
           donorName: data.get("donorName"), donorEmail: data.get("donorEmail"), zip: data.get("zip"),
           title: data.get("title"), description: data.get("description"), category: data.get("category"),
           askingCents: resaleCents(String(data.get("asking"))),
           minCents: data.get("minimum") ? resaleCents(String(data.get("minimum"))) : null,
           photos, fulfillment: data.getAll("fulfillment"), consent: data.get("consent") === "on", ownership: data.get("ownership") === "on",
         });
-        await api.createItem.mutateAsync(payload); setSubmitted(true);
+        await api.createItem.mutateAsync({ ...payload, proceedsMode: mode, splitConsent: mode === "split_50" && splitConsent }); setSubmitted(true);
       } catch (err) { setError(err); }
     }}>
       <div className="resale-two">
@@ -92,16 +98,21 @@ export function DonateItemForm({ api }: { api: ResaleClient }) {
         {busy && <p role="status" className="resale-muted">Uploading photos…</p>}
         <div className="resale-gallery">{photos.map((url, index) => <div key={`${url}-${index}`}><img src={url} alt={`Item photo ${index + 1}`} /><button type="button" className="resale-btn secondary mt-2" aria-label={`Remove photo ${index + 1}`} onClick={() => setPhotos(current => current.filter((_, i) => i !== index))}><X size={14} />Remove</button></div>)}</div>
       </div>
+      {api.config.data?.allowSplit && <fieldset className="resale-note mb-5"><legend className="px-2 font-semibold">Where the net proceeds go</legend>
+        <label className="resale-check"><input type="radio" name="proceedsMode" checked={mode === "donate_all"} onChange={() => { setProceedsMode("donate_all"); setSplitConsent(false); setError(null); }} />Donate all net proceeds to the rescue (default)</label>
+        <label className="resale-check mt-3"><input type="radio" name="proceedsMode" checked={mode === "split_50"} onChange={() => { setProceedsMode("split_50"); setError(null); }} />Optional 50/50 split with the rescue</label>
+        {mode === "split_50" && <><PayoutSetup api={api} /><label className="resale-check mt-4"><input type="checkbox" checked={splitConsent} required onChange={event => setSplitConsent(event.target.checked)} /><span>I explicitly agree to receive half of net proceeds after Stripe processing and platform fees, with half supporting the rescue. Connect/payout costs may apply separately. Payouts require confirmed pickup and available funds, and are not instant.</span></label></>}
+      </fieldset>}
       <label className="resale-check"><input type="checkbox" name="ownership" required />I own this item, have the right to donate it, and confirm it is safe, lawful, and not a prohibited item.</label>
-      <label className="resale-check mt-3"><input type="checkbox" name="consent" required />I understand that all net proceeds are donated to the rescue, I receive no seller payment, and I must keep the item at home until the arranged pickup.</label>
+      <label className="resale-check mt-3"><input type="checkbox" name="consent" required key={mode} />{mode === "split_50" ? "I understand the optional split selected above and will keep the item at home until the arranged pickup." : "I understand that all net proceeds are donated to the rescue, I receive no seller payment, and I must keep the item at home until the arranged pickup."}</label>
       <p className="resale-muted mt-4">A listing does not establish tax deductibility or guarantee a tax receipt. Ask your tax adviser about your circumstances.</p>
       <ResaleError error={error} />
-      <button className="resale-btn mt-5" disabled={busy || api.createItem.isPending || !photos.length}>{api.createItem.isPending ? "Submitting for review…" : "Submit for rescue review"}</button>
+      <button className="resale-btn mt-5" disabled={busy || api.createItem.isPending || !photos.length || (mode === "split_50" && (!splitConsent || !api.payoutAccount.data?.ready))}>{api.createItem.isPending ? "Submitting for review…" : "Submit for rescue review"}</button>
     </form>
   </section>;
 }
 
-export function CheckoutForm({ api, item, conversationId, amountCents }: { api: ResaleClient; item: Pick<ResaleItem, "id"> & Partial<Pick<ResaleItem, "fulfillment">>; conversationId?: string; amountCents: number }) {
+export function CheckoutForm({ api, item, conversationId, amountCents }: { api: ResaleClient; item: Pick<ResaleItem, "id"> & Partial<Pick<ResaleItem, "fulfillment" | "proceedsMode">>; conversationId?: string; amountCents: number }) {
   const [pickupId, setPickupId] = useState("");
   const [error, setError] = useState<unknown>(null);
   const options = (api.config.data?.pickupOptions || []).filter(p => Date.parse(p.startsAt) > Date.now() + 35 * 60 * 1000 && (!item.fulfillment || item.fulfillment.includes(p.kind)));
@@ -111,7 +122,8 @@ export function CheckoutForm({ api, item, conversationId, amountCents }: { api: 
     try { await api.checkout.mutateAsync({ itemId: item.id, conversationId, pickupId }); } catch (err) { setError(err); }
   }}>
     <h3>Choose your pickup before paying</h3>
-    <p className="resale-muted mb-3">Local pickup only, starting more than 35 minutes from now. Net proceeds support {api.config.data?.rescueName || "the rescue"}. Payment is securely handled by Stripe.</p>
+    <p className="resale-muted mb-3">Local pickup only, starting more than 35 minutes from now. {item.proceedsMode === "split_50" ? "Half of net proceeds after Stripe processing and platform fees supports the rescue; half goes to the contributor. Connect/payout costs may apply separately." : "Net proceeds support the rescue."} Payment is securely handled by Stripe.</p>
+    {item.proceedsMode === "split_50" && !api.config.data?.allowSplit && <p className="resale-status">New split checkouts are paused. Existing paid orders will still be honored.</p>}
     <label htmlFor={`pickup-${conversationId || item.id}`}>Available location and time</label>
     <select id={`pickup-${conversationId || item.id}`} value={pickupId} required onChange={e => setPickupId(e.target.value)}>
       <option value="">Select a pickup window</option>
@@ -120,7 +132,7 @@ export function CheckoutForm({ api, item, conversationId, amountCents }: { api: 
     {!options.length && <p className="resale-muted mt-3">No compatible pickup windows starting more than 35 minutes from now are available. Check back after the rescue adds one.</p>}
     {!api.config.data?.checkoutEnabled && <p className="resale-muted mt-3">Payments are not available right now.</p>}
     <ResaleError error={error} />
-    <button className="resale-btn mt-4" disabled={!api.token || !api.config.data?.checkoutEnabled || !options.length || api.checkout.isPending}>{api.checkout.isPending ? "Opening checkout…" : `Pay ${resaleMoney(amountCents)} with Stripe`}</button>
+    <button className="resale-btn mt-4" disabled={!api.token || !api.config.data?.checkoutEnabled || !options.length || api.checkout.isPending || (item.proceedsMode === "split_50" && !api.config.data?.allowSplit)}>{api.checkout.isPending ? "Opening checkout…" : `Pay ${resaleMoney(amountCents)} with Stripe`}</button>
   </form>;
 }
 

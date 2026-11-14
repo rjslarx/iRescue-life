@@ -7,6 +7,7 @@ import { isTwilioEnabled } from "../lib/twilio-service";
 import { stripeService } from "../lib/stripe-service";
 import { getAppBaseUrl } from "../lib/app-base-url";
 import { resaleMessageAllowed } from "@shared/rescue-resale";
+import { settleResaleSplit } from "./resale-split-settlement";
 import { applyResaleOffer, parseResaleCommand } from "./resale-offers";
 import { sendResaleSms } from "./resale-delivery";
 
@@ -21,11 +22,15 @@ export function resaleBase(t: any) {
 export function resalePublicItem(r: any) {
   const d = r.data;
   return { id: r.id, title: d.title, description: d.description, category: d.category, zip: d.zip,
-    askingCents: d.askingCents, photos: d.photos, fulfillment: d.fulfillment, status: r.status, createdAt: r.created_at };
+    askingCents: d.askingCents, photos: d.photos, fulfillment: d.fulfillment, status: r.status, createdAt: r.created_at,
+    proceedsMode: d.proceedsMode || "donate_all" };
 }
-export function resaleOrder(r: any, admin = false) {
+export function resaleOrder(r: any, admin = false, buyer = false) {
   return { id: r.id, itemTitle: r.data.itemTitle, amountCents: r.data.amountCents,
     status: r.status, pickup: r.data.pickup, createdAt: r.created_at,
+    proceedsMode: r.data.proceedsMode || "donate_all", split: r.data.split || null,
+    pickupConfirmedAt: r.data.pickupConfirmedAt || null,
+    ...(buyer && ["paid","completed"].includes(r.status) && r.data.proceedsMode === "split_50" ? { pickupCode: r.data.pickupCode } : {}),
     notificationStatus: { buyer: r.data.buyerNotice || "pending", donor: r.data.donorNotice || "pending" },
     ...(admin ? { buyerPhone: r.buyer_phone, stripeSessionId: r.session_id, stripePaymentIntentId: r.payment_intent_id,
       stripeFeeCents: r.stripe_fee_cents, platformFeeCents: r.platform_fee_cents,
@@ -33,7 +38,7 @@ export function resaleOrder(r: any, admin = false) {
 }
 export async function resaleSettings(tenantId: string) {
   const { rows } = await pool.query("SELECT data FROM rescue_resale_settings WHERE tenant_id=$1", [tenantId]);
-  return rows[0]?.data || { pickupOptions: [] };
+  return { pickupOptions: [], allowSplit: false, ...rows[0]?.data };
 }
 export async function resaleConversation(id: string, tenantId: string) {
   return (await pool.query(`SELECT c.*, i.phone AS donor_phone,i.data->>'title' AS item_title,i.status AS item_status
@@ -218,6 +223,9 @@ export async function syncResaleOrder(id: string, tenantId: string) {
       }
     }
   }
+  if (r.data.proceedsMode === "split_50" && session.payment_status === "paid") {
+    await settleResaleSplit(id, tenantId);
+  }
   return (await pool.query("SELECT * FROM rescue_resale_orders WHERE id=$1", [id])).rows[0];
 }
 
@@ -225,6 +233,7 @@ export async function reconcileResaleOrders() {
   const { rows } = await pool.query(`SELECT id,tenant_id FROM rescue_resale_orders
     WHERE (status='checkout' AND created_at<now()-interval '32 minutes')
       OR status IN ('paid','partially_refunded','completed')
+      OR (status='refunded' AND data->>'proceedsMode'='split_50' AND COALESCE(data->'split'->>'status','')<>'refunded')
     ORDER BY reconciled_at ASC NULLS FIRST LIMIT 50`);
   for (const r of rows) {
     try { await syncResaleOrder(r.id, r.tenant_id); }

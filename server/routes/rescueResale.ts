@@ -13,6 +13,8 @@ import { resaleItemSchema, resaleSettingsSchema, resalePhone, resaleMessageAllow
 import { hashResale, resaleTenant, resaleBase, resaleSettings, resalePublicItem, resaleOrder, resaleConversation, sendResaleMessage, syncResaleOrder } from "../services/rescue-resale";
 import { applyResaleOffer, resaleOfferAction } from "../services/resale-offers";
 import { resaleAuditFilter, resaleAuditQuery, resaleAuditOffset, resaleMessageAuditQuery } from "../services/resale-audit";
+import { createPayoutAccount, payoutAccount, payoutAccountView, requirePayoutAccount } from "../services/resale-payout-accounts";
+import { settleResaleSplit } from "../services/resale-split-settlement";
 
 const router = Router();
 const uuid = z.string().uuid();
@@ -31,7 +33,8 @@ router.get("/config", route(async (req: any, res: any) => {
   const enabled = await isTwilioEnabled(req.tenant.id);
   const settings = enabled ? await resaleSettings(req.tenant.id) : { pickupOptions: [] };
   res.json({ enabled, checkoutEnabled: enabled && !!tenant.stripeEnabled && !!tenant.stripeConnectedAccountId && !!stripeService.getPlatformStripeClient(),
-    rescueName: tenant.name, pickupOptions: settings.pickupOptions.filter((p: any) => Date.parse(p.startsAt) > Date.now()) });
+    rescueName: tenant.name, allowSplit: settings.allowSplit === true,
+    pickupOptions: settings.pickupOptions.filter((p: any) => Date.parse(p.startsAt) > Date.now()) });
 }));
 router.use(async (req, res, next) => {
   try {
@@ -80,6 +83,28 @@ async function verified(req: any) {
   if (!row) fail("Your verification expired. Verify your phone again.", 401);
   return row.phone as string;
 }
+router.get("/payout-account", route(async (req: any, res: any) => {
+  res.json(await payoutAccountView(req.tenant.id, await verified(req)));
+}));
+router.post("/payout-account/onboard", writeLimit, route(async (req: any, res: any) => {
+  const phone = await verified(req), t = await resaleTenant(req.tenant.id);
+  const settings = await resaleSettings(t.id);
+  if (!settings.allowSplit && !(await payoutAccount(t.id, phone))) fail("This rescue has not enabled 50/50 listings.", 403);
+  if (!t.stripeEnabled || !t.stripeConnectedAccountId) fail("The rescue must finish Stripe setup first.", 409);
+  const account = await createPayoutAccount(t.id, phone);
+  const link = await stripeService.getPlatformStripeClient()!.accountLinks.create({
+    account, type: "account_onboarding",
+    refresh_url: `${resaleBase(t)}/rescue-resale?payoutSetup=refresh`,
+    return_url: `${resaleBase(t)}/rescue-resale?payoutSetup=return`,
+  });
+  res.json({ url: link.url });
+}));
+router.post("/payout-account/dashboard", writeLimit, route(async (req: any, res: any) => {
+  const row = await payoutAccount(req.tenant.id, await verified(req));
+  if (!row?.stripe_account_id) fail("Complete payout setup first.", 409);
+  const link = await stripeService.getPlatformStripeClient()!.accounts.createLoginLink(row.stripe_account_id);
+  res.json({ url: link.url });
+}));
 router.get("/items", route(async (req: any, res: any) => {
   const { rows } = await pool.query("SELECT * FROM rescue_resale_items WHERE tenant_id=$1 AND status='active' ORDER BY created_at DESC LIMIT 200", [req.tenant.id]);
   res.json({ items: rows.map(resalePublicItem) });
@@ -104,8 +129,11 @@ router.get("/me", route(async (req: any, res: any) => {
   const conversations = (await pool.query(`SELECT c.*,i.data->>'title' AS item_title FROM rescue_resale_conversations c JOIN rescue_resale_items i ON i.id=c.item_id
     WHERE c.tenant_id=$1 AND (c.buyer_phone=$2 OR i.phone=$2) ORDER BY c.updated_at DESC LIMIT 100`, [req.tenant.id, phone])).rows;
   const orders = (await pool.query("SELECT * FROM rescue_resale_orders WHERE tenant_id=$1 AND buyer_phone=$2 ORDER BY created_at DESC LIMIT 100", [req.tenant.id, phone])).rows;
+  const sales = (await pool.query(`SELECT o.* FROM rescue_resale_orders o JOIN rescue_resale_items i ON i.id=o.item_id
+    WHERE o.tenant_id=$1 AND i.phone=$2 AND o.data->>'proceedsMode'='split_50' ORDER BY o.created_at DESC LIMIT 100`, [req.tenant.id, phone])).rows;
   res.json({ items: items.map((i: any) => ({ ...resalePublicItem(i), reviewNote: i.review_note })),
-    conversations: await Promise.all(conversations.map(c => conversationView(c, phone))), orders: orders.map(r => resaleOrder(r)) });
+    conversations: await Promise.all(conversations.map(c => conversationView(c, phone))),
+    orders: orders.map(r => resaleOrder(r, false, true)), sales: sales.map(r => resaleOrder(r)) });
 }));
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024, files: 1 } });
 router.post("/images", writeLimit, async (req: any, res, next) => {
@@ -128,6 +156,10 @@ router.post("/images", writeLimit, async (req: any, res, next) => {
 }));
 router.post("/items", writeLimit, route(async (req: any, res: any) => {
   const phone = await verified(req), data = resaleItemSchema.parse(req.body);
+  if (data.proceedsMode === "split_50") {
+    if (!(await resaleSettings(req.tenant.id)).allowSplit) fail("This rescue has not enabled 50/50 listings.", 403);
+    await requirePayoutAccount(req.tenant.id, phone);
+  }
   if (!resaleMessageAllowed(data.title) || !resaleMessageAllowed(data.description.slice(0, 1000)) ||
     /https?:|www\.|@|\+?\d[\d\s().-]{6,}\d/.test(data.description)) fail("Remove personal contact details and links from the public listing.");
   const images = (await pool.query("SELECT url FROM rescue_resale_images WHERE tenant_id=$1 AND phone=$2 AND url=ANY($3::text[])", [req.tenant.id, phone, data.photos])).rows;
@@ -229,11 +261,17 @@ router.post("/checkout", writeLimit, route(async (req: any, res: any) => {
         amount = c.offer_cents;
       }
       const settings = await resaleSettings(t.id);
+      const split = i.data.proceedsMode === "split_50";
+      if (split && !settings.allowSplit) fail("This rescue has paused new 50/50 purchases.", 409);
+      const contributorAccountId = split ? await requirePayoutAccount(t.id, i.phone) : null;
       const pickup = settings.pickupOptions.find((p: any) => p.id === input.pickupId && Date.parse(p.startsAt) > Date.now() + 35 * 60000 && i.data.fulfillment.includes(p.kind));
       if (!pickup) fail("Choose an available pickup starting at least 35 minutes from now.");
       const id = randomUUID();
       const economics = calculateDestinationChargeEconomics(amount, calculatePlatformFee(amount, t.subscriptionTier || "free", t.platformFeePercent));
-      const metadata = { type: "rescue_resale", tenantId: t.id, resaleOrderId: id, ...getDestinationChargeEconomicsMetadata(economics) };
+      const metadata = split
+        ? { type: "rescue_resale", tenantId: t.id, resaleOrderId: id, proceedsMode: "split_50",
+            iRescueRevenueCents: String(economics.iRescueRevenueCents) }
+        : { type: "rescue_resale", tenantId: t.id, resaleOrderId: id, ...getDestinationChargeEconomicsMetadata(economics) };
       const stripeParams = {
         mode: "payment", payment_method_types: ["card"], expires_at: Math.floor(Date.now() / 1000) + 31 * 60,
         success_url: `${resaleBase(t)}/rescue-resale?order=${id}`,
@@ -241,10 +279,14 @@ router.post("/checkout", writeLimit, route(async (req: any, res: any) => {
         line_items: [{ price_data: { currency: "usd", unit_amount: amount, product_data: { name: i.data.title,
           description: `Rescue Resale purchase. Local pickup: ${pickup.label}. No charitable purchase receipt.` } }, quantity: 1 }],
         metadata,
-        payment_intent_data: { on_behalf_of: t.stripeConnectedAccountId, transfer_data: { destination: t.stripeConnectedAccountId },
+        payment_intent_data: split ? { transfer_group: `resale_${id}`, metadata } : { on_behalf_of: t.stripeConnectedAccountId, transfer_data: { destination: t.stripeConnectedAccountId },
           application_fee_amount: economics.applicationFeeTotalCents, metadata },
       };
-      const data = { itemTitle: i.data.title, amountCents: amount, pickup, conversationId: input.conversationId || null, stripeParams };
+      const data = { itemTitle: i.data.title, amountCents: amount, pickup, conversationId: input.conversationId || null, stripeParams,
+        proceedsMode: split ? "split_50" : "donate_all",
+        ...(split ? { contributorAccountId, rescueAccountId: t.stripeConnectedAccountId,
+          platformRevenueCents: economics.iRescueRevenueCents, pickupCode: randomBytes(6).toString("hex"),
+          split: { status: "awaiting_payment", contributorCents: null, rescueCents: null } } : {}) };
       order = (await client.query("INSERT INTO rescue_resale_orders(id,tenant_id,item_id,buyer_phone,data) VALUES($1,$2,$3,$4,$5) RETURNING *", [id, t.id, i.id, phone, data])).rows[0];
       await client.query("UPDATE rescue_resale_items SET status='reserved' WHERE id=$1", [i.id]);
     }
@@ -261,7 +303,28 @@ router.get("/orders/:id", route(async (req: any, res: any) => {
   const phone = await verified(req), id = uuid.parse(req.params.id);
   const owned = (await pool.query("SELECT id FROM rescue_resale_orders WHERE id=$1 AND tenant_id=$2 AND buyer_phone=$3", [id, req.tenant.id, phone])).rows[0];
   if (!owned) fail("Order not found", 404);
-  res.json(resaleOrder(await syncResaleOrder(id, req.tenant.id)));
+  res.json(resaleOrder(await syncResaleOrder(id, req.tenant.id), false, true));
+}));
+router.post("/orders/:id/confirm-pickup", writeLimit, route(async (req: any, res: any) => {
+  const phone = await verified(req), id = uuid.parse(req.params.id);
+  const { code } = z.object({ code: z.string().trim().regex(/^[a-fA-F0-9]{12}$/) }).parse(req.body);
+  const owned = (await pool.query(`SELECT o.id FROM rescue_resale_orders o JOIN rescue_resale_items i ON i.id=o.item_id
+    WHERE o.id=$1 AND o.tenant_id=$2 AND i.phone=$3 AND o.data->>'proceedsMode'='split_50'`, [id, req.tenant.id, phone])).rows[0];
+  if (!owned) fail("Sale not found", 404);
+  await syncResaleOrder(id, req.tenant.id);
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const changed = await client.query(`UPDATE rescue_resale_orders SET status='completed',
+      data=jsonb_set(data,'{pickupConfirmedAt}',to_jsonb(now()::text))
+      WHERE id=$1 AND tenant_id=$2 AND status='paid' AND data->>'pickupCode'=$3 RETURNING item_id`, [id, req.tenant.id, code.toLowerCase()]);
+    if (!changed.rows.length) fail("Pickup code is incorrect, payment is not eligible, or pickup was already confirmed.", 409);
+    await client.query("UPDATE rescue_resale_items SET status='completed' WHERE id=$1", [changed.rows[0].item_id]);
+    await client.query("COMMIT");
+  } catch (e) { await client.query("ROLLBACK"); throw e; } finally { client.release(); }
+  // Completion is durable even when Stripe is temporarily unavailable.
+  try { await settleResaleSplit(id, req.tenant.id); } catch { console.warn("[Resale] Split settlement queued for reconciliation"); }
+  res.json({ ok: true });
 }));
 router.post("/orders/:id/cancel", writeLimit, route(async (req: any, res: any) => {
   const phone = await verified(req), id = uuid.parse(req.params.id);
@@ -288,7 +351,8 @@ router.get("/admin", route(async (req: any, res: any) => {
     pool.query("SELECT * FROM rescue_resale_orders WHERE tenant_id=$1 ORDER BY created_at DESC LIMIT 500", [req.tenant.id]),
     resaleSettings(req.tenant.id),
   ]);
-  res.json({ settings, items: items.rows.map(i => ({ ...resalePublicItem(i), donorName: i.data.donorName, donorEmail: i.data.donorEmail, donorPhone: i.phone, reviewNote: i.review_note })),
+  res.json({ settings: { ...settings, allowSplit: settings.allowSplit === true }, canManageSplit: canManageSplit(req),
+    items: items.rows.map(i => ({ ...resalePublicItem(i), donorName: i.data.donorName, donorEmail: i.data.donorEmail, donorPhone: i.phone, reviewNote: i.review_note })),
     conversations: await Promise.all(cs.rows.slice(0, 100).map(c => conversationView(c))),
     conversationsHasMore: cs.rows.length > 100, orders: orders.rows.map(r => resaleOrder(r, true)) });
 }));
@@ -300,14 +364,31 @@ router.get("/admin/conversations/:id/messages", route(async (req: any, res: any)
   const { rows } = await pool.query(resaleMessageAuditQuery, [id, req.tenant.id, offset]);
   res.json({ messages: rows.slice(0, 300), hasMore: rows.length > 300 });
 }));
+function canManageSplit(req: any) { return (req.user?.roles || []).some((r: string) => r === "owner" || r === "admin"); }
 router.put("/admin/settings", route(async (req: any, res: any) => {
   const data = resaleSettingsSchema.parse(req.body);
   if (new Set(data.pickupOptions.map(p => p.id)).size !== data.pickupOptions.length) fail("Each pickup window must have a unique ID.");
-  await pool.query("INSERT INTO rescue_resale_settings(tenant_id,data) VALUES($1,$2) ON CONFLICT(tenant_id) DO UPDATE SET data=excluded.data", [req.tenant.id, data]);
-  res.json(data);
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("INSERT INTO rescue_resale_settings(tenant_id) VALUES($1) ON CONFLICT DO NOTHING", [req.tenant.id]);
+    const current = (await client.query("SELECT data FROM rescue_resale_settings WHERE tenant_id=$1 FOR UPDATE", [req.tenant.id])).rows[0].data;
+    if (data.allowSplit !== undefined && data.allowSplit !== (current.allowSplit === true) && !canManageSplit(req)) fail("Only a rescue owner or admin can change 50/50 availability.", 403);
+    const next = { ...data, allowSplit: data.allowSplit ?? (current.allowSplit === true) };
+    await client.query("UPDATE rescue_resale_settings SET data=$2 WHERE tenant_id=$1", [req.tenant.id, next]);
+    await client.query("COMMIT");
+    res.json(next);
+  } catch (e) { await client.query("ROLLBACK"); throw e; } finally { client.release(); }
 }));
 router.post("/admin/items/:id/review", route(async (req: any, res: any) => {
   const input = z.object({ status: z.enum(["active","rejected"]), note: z.string().trim().max(1000).default("") }).parse(req.body);
+  if (input.status === "active") {
+    const item = (await pool.query("SELECT * FROM rescue_resale_items WHERE id=$1 AND tenant_id=$2", [uuid.parse(req.params.id), req.tenant.id])).rows[0];
+    if (item?.data.proceedsMode === "split_50") {
+      if (!(await resaleSettings(req.tenant.id)).allowSplit) fail("Enable 50/50 before approving this listing.", 409);
+      await requirePayoutAccount(req.tenant.id, item.phone);
+    }
+  }
   const r = await pool.query("UPDATE rescue_resale_items SET status=$3,review_note=$4 WHERE id=$1 AND tenant_id=$2 AND status IN ('pending_review','active','rejected') RETURNING id",
     [uuid.parse(req.params.id), req.tenant.id, input.status, input.note]);
   if (!r.rows.length) fail("This listing cannot be changed while reserved or sold.", 409);
@@ -323,20 +404,26 @@ router.post("/admin/orders/:id/complete", route(async (req: any, res: any) => {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    const changed = await client.query("UPDATE rescue_resale_orders SET status='completed' WHERE id=$1 AND status='paid' RETURNING item_id", [id]);
+    const changed = await client.query(`UPDATE rescue_resale_orders SET status='completed',
+      data=jsonb_set(data,'{pickupConfirmedAt}',to_jsonb(now()::text)) WHERE id=$1 AND status='paid' RETURNING item_id`, [id]);
     if (changed.rows.length) await client.query("UPDATE rescue_resale_items SET status='completed' WHERE id=$1", [changed.rows[0].item_id]);
     await client.query("COMMIT");
   } catch (e) { await client.query("ROLLBACK"); throw e; } finally { client.release(); }
+  if (r.data.proceedsMode === "split_50") {
+    try { await settleResaleSplit(id, req.tenant.id); } catch { console.warn("[Resale] Split settlement queued"); }
+  }
   res.json({ ok: true });
 }));
 router.get("/admin/ledger.csv", route(async (req: any, res: any) => {
   const { rows } = await pool.query("SELECT * FROM rescue_resale_orders WHERE tenant_id=$1 ORDER BY created_at", [req.tenant.id]);
-  const csv = [["Order ID","Item","Created","Status","Gross USD","Stripe Fee USD","Original Platform Revenue USD","Actual Rescue Proceeds USD","Refunded USD","Payment Intent","Pickup"],
+  const csv = [["Order ID","Item","Created","Status","Gross USD","Stripe Fee USD","Original Platform Revenue USD","Actual Rescue Proceeds USD","Refunded USD","Payment Intent","Pickup","Proceeds option","Contributor share USD","Contributor transferred USD","Split status"],
     ...rows.map(r => [r.id,r.data.itemTitle,r.created_at.toISOString(),r.status,(r.data.amountCents/100).toFixed(2),
       r.stripe_fee_cents === null ? "" : (r.stripe_fee_cents/100).toFixed(2),
       r.platform_fee_cents === null ? "" : (r.platform_fee_cents/100).toFixed(2),
       r.rescue_proceeds_cents === null ? "" : (r.rescue_proceeds_cents/100).toFixed(2),
-      (r.refunded_cents/100).toFixed(2),r.payment_intent_id,r.data.pickup.label])]
+      (r.refunded_cents/100).toFixed(2),r.payment_intent_id,r.data.pickup.label,
+      r.data.proceedsMode || "donate_all", r.data.split?.contributorCents == null ? "" : (r.data.split.contributorCents/100).toFixed(2),
+      r.data.split?.contributorTransferredCents == null ? "" : (r.data.split.contributorTransferredCents/100).toFixed(2), r.data.split?.status || ""])]
     .map(row => row.map(resaleCsvCell).join(",")).join("\r\n");
   res.type("text/csv").attachment("rescue-resale-sales.csv").send(csv);
 }));

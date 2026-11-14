@@ -27,6 +27,13 @@ test("resale tenant isolation, phone ownership, approval, single-item holds and 
     expire: async (id: string) => { sessions.get(id).status = "expired"; return sessions.get(id); },
   } } };
   stripeService.getPlatformStripeClient = () => stripe;
+  stripe.accounts = { retrieve: async () => ({ id: "acct_contributor", payouts_enabled: true,
+    capabilities: { transfers: "active" }, external_accounts: { data: [{ object: "bank_account", currency: "usd", status: "verified" }] } }) };
+  stripe.paymentIntents = { retrieve: async (id: string) => {
+    const s: any = [...sessions.values()].find(s => s.payment_intent === id);
+    return { id, status: "succeeded", amount: s.amount_total, currency: "usd", metadata: s.metadata,
+      latest_charge: { id: "ch_fake", amount_refunded: 0, balance_transaction: { fee: 100, status: "available", available_on: 1 } } };
+  } };
   let server: any;
   try {
     await pool.query(rescueResaleSchemaSql);
@@ -43,10 +50,13 @@ test("resale tenant isolation, phone ownership, approval, single-item holds and 
         [randomUUID(), tid, phone, hashResale(token)]);
     }
     await pool.query("INSERT INTO rescue_resale_images(url,tenant_id,phone) VALUES($1,$2,$3)", [image, tid, "+12025550101"]);
+    let testIp = "127.0.0.1";
     const app = express(); app.use(express.json());
     app.use((req: any, _res, next) => {
+      Object.defineProperty(req, "ip", { value: testIp });
       req.tenant = { id: req.get("test-disabled") ? disabled : tid };
       if (req.get("test-admin")) req.user = { id: randomUUID(), tenantId: tid, roles: ["admin"], activeRole: "admin" };
+      if (req.get("test-staff")) req.user = { id: randomUUID(), tenantId: tid, roles: ["staff"], activeRole: "staff" };
       next();
     });
     app.use(router);
@@ -55,6 +65,12 @@ test("resale tenant isolation, phone ownership, approval, single-item holds and 
     const call = (path: string, method = "GET", body?: any, token?: string, headers: any = {}) =>
       fetch(url + path, { method, headers: { "content-type": "application/json", ...(token ? { "X-Resale-Token": token } : {}), ...headers }, ...(body ? { body: JSON.stringify(body) } : {}) });
     assert.equal((await call("/config")).status, 200);
+    assert.equal((await (await call("/config")).json()).allowSplit, false);
+    assert.equal((await call("/admin/settings","PUT",{pickupOptions:[],allowSplit:true},undefined,{"test-staff":"1"})).status,403);
+    assert.equal((await call("/admin/settings","PUT",{pickupOptions:[],allowSplit:true},undefined,{"test-admin":"1"})).status,200);
+    assert.equal((await call("/admin/settings","PUT",{pickupOptions:[]},undefined,{"test-staff":"1"})).status,200);
+    assert.equal((await (await call("/config")).json()).allowSplit,true,"pickup edits preserve split setting");
+    assert.equal((await call("/admin/settings","PUT",{pickupOptions:[],allowSplit:false},undefined,{"test-admin":"1"})).status,200);
     assert.equal((await (await call("/config","GET",undefined,undefined,{"test-disabled":"1"})).json()).enabled, false);
     assert.equal((await call("/items","GET",undefined,undefined,{"test-disabled":"1"})).status, 403);
     assert.equal((await call("/admin")).status, 401);
@@ -73,6 +89,7 @@ test("resale tenant isolation, phone ownership, approval, single-item holds and 
       description: "A sturdy used chair in good condition.", category: "Furniture", askingCents: 2500, minCents: 1500, photos: [image],
       fulfillment: ["shelter_meetup"], consent: true, ownership: true };
     const submitted = await call("/items", "POST", item, tokens[0]);
+    assert.equal((await call("/items","POST",{...item,proceedsMode:"split_50",splitConsent:true},tokens[0])).status,403);
     assert.equal(submitted.status, 200, await submitted.clone().text());
     const id = (await submitted.json()).id;
     assert.equal((await (await call("/items")).json()).items.length, 0);
@@ -112,6 +129,42 @@ test("resale tenant isolation, phone ownership, approval, single-item holds and 
     const csv = await call("/admin/ledger.csv","GET",undefined,undefined,{"test-admin":"1"});
     assert.equal(csv.status,200);
     assert.match(await csv.text(),/17.00/);
+    // New split listings require explicit admin permission and a verified payout account.
+    testIp = "127.0.0.2";
+    await call("/admin/settings","PUT",{pickupOptions:[pickup],allowSplit:true},undefined,{"test-admin":"1"});
+    assert.equal((await call("/items","POST",{...item,proceedsMode:"split_50",splitConsent:true},tokens[0])).status,409);
+    await pool.query("INSERT INTO rescue_resale_payout_accounts(id,tenant_id,phone,stripe_account_id) VALUES($1,$2,$3,'acct_contributor')", [randomUUID(),tid,"+12025550101"]);
+    const splitResponse = await call("/items","POST",{...item,proceedsMode:"split_50",splitConsent:true},tokens[0]);
+    assert.equal(splitResponse.status,200);
+    const splitId = (await splitResponse.json()).id;
+    assert.equal((await call(`/admin/items/${splitId}/review`,"POST",{status:"active"},undefined,{"test-admin":"1"})).status,200);
+    await call("/admin/settings","PUT",{pickupOptions:[pickup],allowSplit:false},undefined,{"test-admin":"1"});
+    assert.equal((await call("/checkout","POST",{itemId:splitId,pickupId:pickup.id},tokens[1])).status,409);
+    await call("/admin/settings","PUT",{pickupOptions:[pickup],allowSplit:true},undefined,{"test-admin":"1"});
+    assert.equal((await call("/checkout","POST",{itemId:splitId,pickupId:pickup.id},tokens[1])).status,200);
+    const splitOrder = (await pool.query("SELECT * FROM rescue_resale_orders WHERE item_id=$1",[splitId])).rows[0];
+    assert.equal(splitOrder.data.stripeParams.payment_intent_data.transfer_data,undefined);
+    assert.equal(splitOrder.data.stripeParams.payment_intent_data.application_fee_amount,undefined);
+    assert.equal(splitOrder.data.contributorAccountId,"acct_contributor");
+    const splitSession = sessions.get(splitOrder.session_id);
+    splitSession.status="complete"; splitSession.payment_status="paid"; splitSession.payment_intent="pi_split_fake";
+    // Prevent test-only notification side effects while verifying real paid-state logic.
+    await pool.query(`UPDATE rescue_resale_orders SET data=data || '{"buyerNotice":"sent","donorNotice":"sent"}'::jsonb WHERE id=$1`,[splitOrder.id]);
+    const buyerView = await call(`/orders/${splitOrder.id}`,"GET",undefined,tokens[1]);
+    assert.equal(buyerView.status,200,await buyerView.clone().text());
+    const code=(await buyerView.json()).pickupCode;
+    assert.match(code,/^[a-f0-9]{12}$/);
+    const sellerView=(await (await call("/me","GET",undefined,tokens[0])).json()).sales[0];
+    assert.equal(sellerView.pickupCode,undefined);
+    assert.equal((await call(`/orders/${splitOrder.id}/confirm-pickup`,"POST",{code},tokens[2])).status,404);
+    assert.equal((await call(`/orders/${splitOrder.id}/confirm-pickup`,"POST",{code:"000000000000"},tokens[0])).status,409);
+    // Disabling new splits does not strand an existing paid sale.
+    await call("/admin/settings","PUT",{pickupOptions:[pickup],allowSplit:false},undefined,{"test-admin":"1"});
+    assert.equal((await call(`/orders/${splitOrder.id}/confirm-pickup`,"POST",{code},tokens[0])).status,200);
+    const confirmed=(await pool.query("SELECT * FROM rescue_resale_orders WHERE id=$1",[splitOrder.id])).rows[0];
+    assert.equal(confirmed.status,"completed");
+    assert.ok(confirmed.data.pickupConfirmedAt);
+    assert.equal(confirmed.data.split.status,"awaiting_deployment","workspace must never transfer real funds");
   } finally {
     stripeService.getPlatformStripeClient = original;
     server?.close();
