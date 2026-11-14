@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import ResaleShare from "./ResaleShare";
 import { ResaleDeliveryStatus } from "./ResaleDeliveryStatus";
 import { PackageOpen } from "lucide-react";
 import { CheckoutForm, MessageForm, PhoneVerification, ResaleError } from "@/components/resale/ResaleForms";
@@ -71,6 +72,7 @@ export default function ResaleActivity({ api }: { api: ResaleClient }) {
       <h2 className="mt-8">Your donated items</h2>
       {!api.me.data.items.length && <div className="resale-empty"><PackageOpen size={30} /><h3>Your next good deed could be in a cupboard.</h3><p className="resale-muted">Use Donate an item to submit something for rescue review.</p></div>}
       {api.me.data.items.map(item => <article className="resale-panel" key={item.id}>
+        <ResaleShare item={item} rescueName={api.config.data?.rescueName || "the rescue"} />
         <div className="resale-row"><h3 className="!mb-0">{item.title}</h3><span className="resale-pill">{item.status.replaceAll("_", " ")}</span><strong>{resaleMoney(item.askingCents)}</strong></div>
         <p className="resale-muted mt-2">{item.proceedsMode === "split_50" ? "Optional 50/50 net proceeds split" : "Full donation of net proceeds"}</p>
         {["pending", "pending_review"].includes(item.status) && <p className="resale-muted mt-3">Awaiting manual rescue review. Keep the item at home until the arranged pickup.</p>}

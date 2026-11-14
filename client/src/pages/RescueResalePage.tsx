@@ -1,4 +1,7 @@
 import { useState } from "react";
+import { useLocation, useSearch } from "wouter";
+import { tenantApiRequest } from "@/lib/tenantApi";
+import ResaleShare from "@/components/resale/ResaleShare";
 import { useQuery } from "@tanstack/react-query";
 import { HeartHandshake, MapPin, PackageOpen, Search } from "lucide-react";
 import type { Tenant } from "@shared/schema";
@@ -14,7 +17,8 @@ import "@/components/resale/resale.css";
 
 export default function RescueResalePage() {
   const { basePath, tenantId } = useTenant();
-  const params = new URLSearchParams(window.location.search);
+  const [, navigate] = useLocation();
+  const params = new URLSearchParams(useSearch());
   const orderParam = params.get("order");
   const orderId = orderParam && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orderParam) ? orderParam : null;
   const [tab, setTab] = useState<"shop" | "donate" | "activity">(params.get("payoutSetup") === "return" ? "activity" : "shop");
@@ -22,7 +26,20 @@ export default function RescueResalePage() {
   const { data: tenantData } = useQuery<{ tenant: Tenant }>({ queryKey: ["/api/tenant", tenantId], staleTime: 300000 });
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All categories");
-  const [selected, setSelected] = useState<ResaleItem | null>(null);
+  const itemParam = params.get("item");
+  const validItem = !!itemParam && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(itemParam);
+  const listing = useQuery<ResaleItem>({
+    queryKey: ["resale-shared-item", tenantId, itemParam],
+    queryFn: async () => (await tenantApiRequest("GET", `/api/rescue-resale/items/${encodeURIComponent(itemParam!)}`)).json(),
+    enabled: !!tenantId && validItem && !!api.config.data?.enabled,
+    retry: false,
+  });
+  const selected = api.config.data?.enabled ? listing.data : undefined;
+  function setSelected(item: ResaleItem | null) {
+    const next = new URLSearchParams(params);
+    if (item) next.set("item", item.id); else next.delete("item");
+    navigate(`/rescue-resale${next.size ? `?${next}` : ""}`);
+  }
   const name = api.config.data?.rescueName || tenantData?.tenant.name || "our rescue";
   const items = (api.items.data?.items || []).filter(item => item.status === "active" && (category === "All categories" || item.category === category) && `${item.title} ${item.description} ${item.zip}`.toLowerCase().includes(search.toLowerCase()));
   useSEO({ title: `Rescue Resale | ${name}`, description: `Buy local secondhand finds or offer an item to support ${name}.`, url: `${window.location.origin}${basePath}/rescue-resale` });
@@ -57,11 +74,18 @@ export default function RescueResalePage() {
                 <div className="resale-note mt-8"><h3>Belongings stay with their donors. Every sale supports rescue.</h3><p className="resale-muted">Please don’t bring items to the shelter before an arranged pickup. There are no home collections or couriers. Full-donation listings give all net proceeds to {name}. Listings marked 50/50 split divide net proceeds equally between contributor and rescue after Stripe processing and platform fees; Connect/payout costs may apply separately.</p></div>
               </>}
     </main>
-    <Dialog open={!!selected} onOpenChange={open => { if (!open) setSelected(null); }}>
+    <Dialog open={params.has("item")} onOpenChange={open => { if (!open) setSelected(null); }}>
       <DialogContent className="resale !min-h-0 max-h-[90dvh] overflow-y-auto sm:max-w-2xl">
+        {!selected && <><DialogHeader><DialogTitle>Shared listing</DialogTitle><DialogDescription>
+          {!validItem ? "This listing link is invalid." : api.config.isLoading || (api.config.data?.enabled && listing.isPending) ? "Loading the listing…" : !api.config.data?.enabled ? "This rescue’s resale board is not available right now." : listing.error instanceof Error && /^404:/.test(listing.error.message) ? "This listing is no longer available. It may have sold, been reserved, or been removed." : "We couldn’t load this listing. Please try again."}
+        </DialogDescription></DialogHeader>
+          {validItem && api.config.data?.enabled && listing.isError && <button className="resale-btn secondary" onClick={() => void listing.refetch()}>Try again</button>}
+          <button className="resale-btn" onClick={() => { setSelected(null); setTab("shop"); }}>Browse available items</button>
+        </>}
         {selected && <><DialogHeader><span className="resale-kicker">{selected.category} · ZIP {selected.zip}</span><DialogTitle className="!text-2xl">{selected.title}</DialogTitle><DialogDescription className="!text-[#596b60]">Local pickup only. {selected.proceedsMode === "split_50" ? "50/50 net proceeds split: half to the contributor, half to the rescue, after Stripe processing and platform fees. Connect/payout costs may apply separately." : `All net proceeds support ${name}.`}</DialogDescription></DialogHeader>
           <div className="resale-gallery">{selected.photos.map((photo, index) => <a href={photo} target="_blank" rel="noopener noreferrer" key={photo}><img src={photo} alt={`${selected.title}, photo ${index + 1} — open full size`} /></a>)}</div>
           <p className="whitespace-pre-wrap break-words">{selected.description}</p><strong className="resale-price">{resaleMoney(selected.askingCents)}</strong>
+          <ResaleShare key={selected.id} item={selected} rescueName={name} />
           <p className="resale-muted">Pickup: {selected.fulfillment.map(f => f === "shelter_meetup" ? "arranged shelter / rescue event" : "public meetup").join(" or ")}. Items remain with their donors until arranged pickup.</p>
           {api.me.data?.items.some(i => i.id === selected.id) ? <p className="resale-status">This is your donated item. Follow offers and listing status in My activity.</p> : !api.token ? <PhoneVerification api={api} /> : <><CheckoutForm api={api} item={selected} amountCents={selected.askingCents} /><MessageForm api={api} itemId={selected.id} /></>}
         </>}
