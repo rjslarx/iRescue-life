@@ -54681,12 +54681,14 @@ ${section('Metadata', metaRows)}
     try {
       const { vaccineRecords } = await import('@shared/schema');
       const { generateLocalShelterId } = await import('./utils/shelterId');
+      const { insertTnrAnimal } = await import('./services/tnr-batch-names');
+      const { randomUUID } = await import('node:crypto');
 
       const { trappingDate, colonyLocation, caretakerName, caretakerPhone, surgeryLocation, partnership, rows } = req.body;
       if (!Array.isArray(rows) || rows.length === 0) return res.status(400).json({ error: 'At least one row is required' });
 
       const trapDate = trappingDate ? new Date(trappingDate) : new Date();
-      const createdRecords: any[] = [];
+      if (Number.isNaN(trapDate.getTime())) return res.status(400).json({ error: 'Enter a valid trapping date. No records were saved.' });
 
       // Geocode colony locations (cache results for repeated locations)
       const { geocodeAddress } = await import('./lib/geocoding');
@@ -54700,28 +54702,28 @@ ${section('Metadata', metaRows)}
         return coords;
       }
 
+      // Resolve external geocoding before holding a database transaction open.
+      for (const row of rows) {
+        if (row.color || row.trapNumber || row.description) await getCoords(row.colonyLocation || colonyLocation || null);
+      }
+      const createdRecords = await db.transaction(async tx => {
+      const records: any[] = [];
+      // Serialize TNR batches for this tenant, including shelter-ID allocation.
+      await tx.select({ id: tenants.id }).from(tenants).where(eq(tenants.id, req.tenant!.id)).for('update');
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i];
         if (!row.color && !row.trapNumber && !row.description) continue; // skip completely empty rows
 
         // Generate unique IDs
-        const animalId = `TNR-${Date.now()}-${i}`;
-        const localShelterId = await generateLocalShelterId(req.tenant!.id, 'cat');
-        let catName = row.catName || row.name || `TNR-${(row.trapNumber || String(i + 1)).toUpperCase()}`;
-
-        const [existingName] = await db.select({ id: animals.id })
-          .from(animals)
-          .where(and(eq(animals.tenantId, req.tenant!.id), sql`LOWER(${animals.name}) = ${catName.toLowerCase()}`))
-          .limit(1);
-        if (existingName) {
-          const dateStr = trapDate.toISOString().split('T')[0].replace(/-/g, '');
-          catName = `${catName}-${dateStr}-${i + 1}`;
-        }
+        const animalId = `TNR-${randomUUID()}`;
+        const localShelterId = await generateLocalShelterId(req.tenant!.id, 'cat', tx as any);
+        const catName = String(row.catName || row.name || `TNR-${String(row.trapNumber || i + 1).toUpperCase()}`).trim();
+        const dateStr = trapDate.toISOString().split('T')[0].replace(/-/g, '');
 
         const rowLocation = row.colonyLocation || colonyLocation || null;
         const rowCoords = await getCoords(rowLocation);
 
-        const [newAnimal] = await db.insert(animals).values({
+        const newAnimal = await insertTnrAnimal(tx, {
           tenantId: req.tenant!.id,
           animalId,
           localShelterId,
@@ -54756,11 +54758,11 @@ ${section('Metadata', metaRows)}
           colors: row.color ? [row.color] : [],
           neuterStatus: row.snCompleted ? (row.sex === 'female' ? 'spayed' : 'neutered') : 'unknown',
           locationType: 'offsite',
-        }).returning();
+        }, `${dateStr}-${i + 1}`);
 
         // Auto-create Rabies vaccine record if checked
         if (row.rabiesVaxGiven && newAnimal) {
-          await db.insert(vaccineRecords).values({
+          await tx.insert(vaccineRecords).values({
             tenantId: req.tenant!.id,
             animalId: newAnimal.id,
             itemName: 'Rabies',
@@ -54773,7 +54775,7 @@ ${section('Metadata', metaRows)}
 
         // Auto-create FVRCP vaccine record if checked
         if (row.fvrcpVaxGiven && newAnimal) {
-          await db.insert(vaccineRecords).values({
+          await tx.insert(vaccineRecords).values({
             tenantId: req.tenant!.id,
             animalId: newAnimal.id,
             itemName: 'FVRCP',
@@ -54784,8 +54786,10 @@ ${section('Metadata', metaRows)}
           });
         }
 
-        createdRecords.push(newAnimal);
+        records.push(newAnimal);
       }
+      return records;
+      });
 
       res.status(201).json({ created: createdRecords.length, records: createdRecords });
     } catch (error) { next(error); }
