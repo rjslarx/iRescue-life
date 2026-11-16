@@ -45,6 +45,12 @@ Treat old resale `failed` send outcomes as uncertain, not as proof that Twilio r
 
 **How to apply:** Automatically retry pickup notifications only when non-acceptance is explicitly established. Missing delivery callbacks or old failure labels require reconciliation or staff review, never an automatic resend.
 
+For any optional courier-delivery expansion, the buyer pays delivery; local pickup remains the existing baseline.
+
+**Why:** On 2026-11-16, the user chose buyer-paid delivery while discussing comparing Uber Direct and DoorDash Drive quotes. This does not authorize paid account setup or live dispatch.
+
+**How to apply:** Keep delivery charges separate from item sale proceeds and the contributor split. Provider access and resale eligibility must be confirmed before activation.
+
 Direct SMS replies may bypass quiet hours, but not explicit organization-scoped unsubscribe records or communication pauses.
 
 **Why:** The user authorized expanding a tests-only investigation to add the missing local unsubscribe safeguard. A default false marketing opt-in is not an explicit transactional SMS unsubscribe.
