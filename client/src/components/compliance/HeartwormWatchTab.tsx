@@ -22,6 +22,7 @@ import {
   AlertTriangle,
   Calendar,
   CheckCircle2,
+  Clock,
   Eye,
   FileText,
   Heart,
@@ -43,6 +44,7 @@ import { ObjectUploader } from "@/components/ObjectUploader";
 import { todayLocalISO } from "@/lib/utils";
 import { HeartwormTreatmentModal } from "@/components/HeartwormTreatmentModal";
 import { HeartwormWatchHelp } from "@/components/dashboard/HeartwormWatchHelp";
+import { warningHistoryDisplay, type WarningResolution } from "@shared/warning-history";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -85,6 +87,7 @@ type EngagementStatus =
   | "proof_uploaded";
 
 interface RecentlyWarnedItem {
+  resolutionStatus?: WarningResolution;
   warningId: string;
   animalId: string;
   animalName: string;
@@ -137,7 +140,9 @@ function daysSince(iso: string | null): number | null {
 
 function formatDate(iso: string | null): string {
   if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  // Date-only deadlines are calendar dates, not midnight-UTC timestamps.
+  const value = /^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso}T00:00:00` : iso;
+  return new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
 interface LogProofItem {
@@ -317,7 +322,8 @@ const ENGAGEMENT_BADGE: Record<
   },
 };
 
-function RecentlyWarnedRow({ item, onLogProof }: { item: RecentlyWarnedItem; onLogProof: () => void }) {
+export function RecentlyWarnedRow({ item, onLogProof }: { item: RecentlyWarnedItem; onLogProof: () => void }) {
+  const history = warningHistoryDisplay(item.resolutionStatus, item.engagementStatus === "proof_uploaded");
   const sentDaysAgo = daysSince(item.sentAt);
   const daysUntilDeadline = item.deadlineDate
     ? Math.max(
@@ -343,28 +349,28 @@ function RecentlyWarnedRow({ item, onLogProof }: { item: RecentlyWarnedItem; onL
             {item.animalName}
           </p>
           <Badge variant="outline" className="text-xs">{item.careName}</Badge>
-          <Badge variant="destructive" className="text-xs gap-1">
-            <AlertTriangle className="h-3 w-3" />
-            {item.daysOverdue}d overdue
+          <Badge variant="outline" className={`text-xs gap-1 ${history.resolved ? "text-emerald-700 dark:text-emerald-400" : ""}`}>
+            {history.resolved ? <CheckCircle2 className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
+            {history.label}
           </Badge>
-          <Badge
+          {item.engagementStatus !== "proof_uploaded" && <Badge
             variant="outline"
             className={`text-xs gap-1 ${status.className}`}
             data-testid={`badge-engagement-${item.engagementStatus}-${item.warningId}`}
           >
             <StatusIcon className="h-3 w-3" />
             {status.label}
-          </Badge>
+          </Badge>}
         </div>
         <p className="text-sm text-muted-foreground mt-1">
-          Adopter: <span className="font-medium text-foreground">{item.adopterName}</span> · Due{" "}
+          Adopter: <span className="font-medium text-foreground">{item.adopterName}</span> · Original warning due date:{" "}
           {formatDate(item.dueDate)}
         </p>
         <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
           <span className="flex items-center gap-1">
             <Send className="h-3 w-3" />
             Warned {sentDaysAgo}d ago
-            {daysUntilDeadline !== null && ` · ${daysUntilDeadline}d to deadline`}
+            {history.needsProof && daysUntilDeadline !== null && ` · ${daysUntilDeadline}d to original warning deadline`}
           </span>
           {item.emailOpenedAt && (
             <span
@@ -396,7 +402,7 @@ function RecentlyWarnedRow({ item, onLogProof }: { item: RecentlyWarnedItem; onL
         </div>
       </div>
       <div className="flex items-center gap-2 shrink-0 flex-wrap">
-        {item.engagementStatus !== "proof_uploaded" && (
+        {history.needsProof && (
           <Button
             size="sm"
             variant="outline"
@@ -411,7 +417,11 @@ function RecentlyWarnedRow({ item, onLogProof }: { item: RecentlyWarnedItem; onL
           className="text-xs text-muted-foreground italic max-w-[14rem] text-right"
           data-testid={`text-warning-locked-${item.animalId}-${item.itemId}`}
         >
-          Locked for 30 days after last warning
+          {history.resolved
+            ? "Resolved warning · retained for history"
+            : history.needsProof
+              ? "Repeat warning blocked for 30 days"
+              : "Proof received · staff review needed"}
         </p>
       </div>
     </div>

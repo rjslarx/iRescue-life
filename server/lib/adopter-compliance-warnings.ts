@@ -10,6 +10,7 @@
  * a marketing message.
  */
 import crypto from 'crypto';
+import { warningResolution, type WarningResolution } from '@shared/warning-history';
 import { db } from '../db';
 import {
   animals,
@@ -664,6 +665,7 @@ export async function findEligibleHeartwormWarnings(
 }
 
 export interface RecentlyWarnedItem {
+  resolutionStatus: WarningResolution;
   warningId: string;
   animalId: string;
   animalName: string;
@@ -841,12 +843,17 @@ export async function findRecentlyWarnedItems(
     // Find a proof confirmation that arrived on or after this warning was sent
     // for the same care item. Prefer matching by preventative_care_record_id
     // when set (strong key), otherwise fall back to careName equality.
-    const proof = confirmations.find(c => {
+    const matchingProofs = confirmations.filter(c => {
       if (c.animalId !== w.animalId) return false;
       if (new Date(c.createdAt) < w.sentAt) return false;
       if (c.preventativeCareRecordId === w.itemId) return true;
       return c.preventativeCareRecordId === null && c.careName === w.careName;
     });
+    // Prefer approved evidence deterministically if there are multiple uploads.
+    const proof = matchingProofs.sort((a, b) =>
+      Number(b.status === 'approved') - Number(a.status === 'approved') ||
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    )[0];
 
     const resolvedObligation = resolvedObligationById.get(w.itemId);
 
@@ -857,6 +864,7 @@ export async function findRecentlyWarnedItems(
 
     return {
       warningId: w.warningId,
+      resolutionStatus: warningResolution(proof?.status, resolvedObligation?.status),
       animalId: w.animalId,
       animalName: w.animalName,
       itemId: w.itemId,
