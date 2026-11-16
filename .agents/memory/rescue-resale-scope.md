@@ -51,6 +51,12 @@ For any optional courier-delivery expansion, the buyer pays delivery; local pick
 
 **How to apply:** Keep delivery charges separate from item sale proceeds and the contributor split. Provider access and resale eligibility must be confirmed before activation.
 
+Courier accounts are platform-owned: iRescue collects buyer-paid delivery charges and pays the courier.
+
+**Why:** On 2026-11-16, the user explicitly chose platform-owned rather than rescue-owned accounts after being informed about billing and unrecovered cancellation/return/dispute costs.
+
+**How to apply:** Use platform courier credentials with tenant-scoped orders, quotes and address access. Keep provider pass-through and delivery processing recovery separate from platform sale revenue. Account creation and live dispatch still require approval.
+
 Direct SMS replies may bypass quiet hours, but not explicit organization-scoped unsubscribe records or communication pauses.
 
 **Why:** The user authorized expanding a tests-only investigation to add the missing local unsubscribe safeguard. A default false marketing opt-in is not an explicit transactional SMS unsubscribe.
