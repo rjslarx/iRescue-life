@@ -13,7 +13,7 @@ New Rescue Resale sales owe the platform 5% of the total sale price, independent
 
 **Why:** The user approved the recommended first version on 2026-11-13, not the entire uploaded Antigravity proposal.
 
-**How to apply:** Full donation remains the default. Preserve donor-held items, staff listing approval, phone-number-masked conversations, private offers, Stripe checkout, scheduled shelter/event or approved public pickup, and sales records/CSV. Optional splits and the buyer-paid courier expansion below are approved; external Antigravity automation and automatic charitable receipt claims remain outside scope.
+**How to apply:** Full donation remains the default. Preserve donor-held items, staff listing approval, phone-number-masked conversations, private offers, Stripe checkout, scheduled shelter/event or approved public pickup, and sales records/CSV. Optional splits are approved; courier expansion is deferred as described below. External Antigravity automation and automatic charitable receipt claims remain outside scope.
 
 The rescue and donor must decide the legal transfer and tax acknowledgment arrangement separately; a buyer's resale purchase is not automatically a charitable donation.
 
@@ -46,6 +46,12 @@ Treat old resale `failed` send outcomes as uncertain, not as proof that Twilio r
 **How to apply:** Automatically retry pickup notifications only when non-acceptance is explicitly established. Missing delivery callbacks or old failure labels require reconciliation or staff review, never an automatic resend.
 
 For any optional courier-delivery expansion, the buyer pays delivery; local pickup remains the existing baseline.
+
+Courier integration is deferred to a possible phase two. Keep phase one pickup-only; do not resume Uber Direct or DoorDash implementation or request credentials without renewed authorization.
+
+**Why:** On 2026-11-16, the user explicitly asked to hold off on courier integration and compare a pickup-only launch proposal. Volunteer delivery and a proposed $10 delivery charge were suggestions for review, not approved features.
+
+**How to apply:** Preserve unused quote foundations without connecting them to checkout. Previously chosen platform ownership and buyer-paid economics apply only if courier work is later resumed.
 
 **Why:** On 2026-11-16, the user chose buyer-paid delivery while discussing comparing Uber Direct and DoorDash Drive quotes. This does not authorize paid account setup or live dispatch.
 
