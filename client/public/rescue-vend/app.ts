@@ -5,6 +5,7 @@ import {
   type VendingProduct
 } from './inventory.js';
 import { VendingSoundEngine } from './audio.js';
+import { configureReceiptShare, shareReceipt } from './share';
 
 export interface CartItemPayload {
   id: string;
@@ -946,7 +947,7 @@ class RescueVendApp {
    * Shares the donor's itemized impact using navigator.share with automatic clipboard fallback.
    */
   private async shareDonationReceipt(): Promise<void> {
-    window.parent.postMessage({ type: 'RESCUE_VEND_SHARE' }, window.location.origin);
+    await shareReceipt(document.getElementById('share-donation-btn'));
   }
 
   private showToast(message: string): void {
@@ -1022,6 +1023,7 @@ window.addEventListener('message', (event) => {
   if (event.origin !== window.location.origin || event.source !== window.parent || window.parent === window) return;
   const data = event.data;
   if (data?.type === 'RESCUE_VEND_INIT' && !machine && Array.isArray(data.items)) {
+    configureReceiptShare(data.shareUrl);
     const title = document.querySelector<HTMLElement>('.marquee-title');
     if (title) title.textContent = typeof data.machineTitle === 'string' ? data.machineTitle.slice(0, 80) : 'Rescue Vend';
     window.VENDING_INVENTORY = data.items.filter((p: VendingProduct) => /^[A-D][12]$/.test(p.code) && /^[a-z0-9-]+$/.test(p.id)).map((p: VendingProduct) => ({

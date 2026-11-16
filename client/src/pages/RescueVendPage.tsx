@@ -61,8 +61,8 @@ export default function RescueVendPage() {
       const saved = JSON.parse(sessionStorage.getItem(storageKey) || "[]");
       if (Array.isArray(saved)) cart = saved;
     } catch { /* Storage is optional; never used as payment proof. */ }
-    send({ type: "RESCUE_VEND_INIT", items: catalog.data?.items || [], machineTitle: catalog.data?.machineTitle || "Rescue Vend", cart });
-  }, [catalog.data, send, storageKey]);
+    send({ type: "RESCUE_VEND_INIT", items: catalog.data?.items || [], machineTitle: catalog.data?.machineTitle || "Rescue Vend", cart, shareUrl: canonical });
+  }, [catalog.data, send, storageKey, canonical]);
   const retryCheckout = () => {
     checkoutLock.current = false;
     setSubmitting(false);
@@ -162,7 +162,7 @@ export default function RescueVendPage() {
           catalog.isError ? <section className="vend-status vend-error" role="alert"><h2>The machine couldn’t connect.</h2><p>We couldn’t load this rescue’s supplies. Nothing has been charged by this page.</p><button onClick={() => void catalog.refetch()}>Try loading again</button></section> :
             unavailable && !paid ? <section className="vend-status"><h2>The machine is resting.</h2><p>This rescue isn’t accepting vending donations right now. Please check back soon.</p><button onClick={() => void catalog.refetch()}>Check availability</button></section> :
               catalog.data && loadedStyle ? <section className="vend-stage" aria-label="Interactive rescue supply vending machine">
-                <iframe ref={frame} className="vend-machine" style={{ height: frameHeight }} title={`${catalog.data.machineTitle || "Rescue Vend"} — choose symbolic shelter supplies`} src={loadedStyle === "photorealistic" ? "/rescue-vend/photorealistic/index.html" : "/rescue-vend/index.html"} onLoad={() => { setFrameReady(false); confirmedSession.current = null; initialize(); }} />
+                <iframe ref={frame} allow="web-share; clipboard-write" className="vend-machine" style={{ height: frameHeight }} title={`${catalog.data.machineTitle || "Rescue Vend"} — choose symbolic shelter supplies`} src={loadedStyle === "photorealistic" ? "/rescue-vend/photorealistic/index.html" : "/rescue-vend/index.html"} onLoad={() => { setFrameReady(false); confirmedSession.current = null; initialize(); }} />
               </section> : null}
         <section className="vend-notes">
           <div><h2>Virtual items. Real generosity.</h2><p>Every item is a symbolic donation to {rescueName}, not an order for physical goods. Descriptions show examples of what rescue support can make possible; gifts aren’t guaranteed to buy or be earmarked for a particular item.</p></div>

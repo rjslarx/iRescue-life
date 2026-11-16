@@ -5,6 +5,7 @@ import {
   type CartItem
 } from './catalog.js';
 import { VendingSoundEngine } from './audio.js';
+import { configureReceiptShare, shareReceipt } from '../share';
 
 const escapeHtml = (value: string) => String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]!));
 
@@ -785,7 +786,7 @@ class RescueSupplyVendorApp {
    * Shares the donor's sponsored shelter supplies via navigator.share with clipboard fallback
    */
   private async handleShareGift(): Promise<void> {
-    window.parent.postMessage({ type: 'RESCUE_VEND_SHARE' }, window.location.origin);
+    await shareReceipt(this.shareGiftBtn);
   }
 
   private delay(ms: number): Promise<void> {
@@ -799,6 +800,7 @@ window.addEventListener('message', event => {
   if (event.origin !== window.location.origin || event.source !== window.parent || window.parent === window) return;
   const data = event.data;
   if (data?.type === 'RESCUE_VEND_INIT' && !machine && Array.isArray(data.items)) {
+    configureReceiptShare(data.shareUrl);
     window.RESCUE_VENDING_ITEMS = data.items
       .filter((item: RescueSupplyItem) => item && /^[A-D][12]$/.test(item.code) && /^[a-z0-9-]+$/.test(item.id) && typeof item.name === 'string' && Number.isInteger(item.priceCents) && item.priceCents >= 100)
       .map(toSupply);

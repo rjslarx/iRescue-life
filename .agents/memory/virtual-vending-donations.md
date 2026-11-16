@@ -23,6 +23,12 @@ Bind checkout to the menu version actually displayed by the embedded machine, no
 
 Treat cabinet designs as interchangeable presentations of the same fundraiser, not separate catalogs or payment flows. Preserve the existing style until a rescue chooses another.
 
+Receipt sharing should run directly in the embedded machine's click handler, with fallback feedback inside the receipt.
+
+**Why:** Relaying a receipt click to the parent hides feedback above the machine and may lose the user activation required by mobile browser sharing permissions.
+
+**How to apply:** Supply only the clean tenant fundraising URL to both designs; never share payment-session parameters. Keep native sharing and clipboard/manual-link fallbacks separate from payment verification.
+
 **Why:** The user requested an additional Antigravity design as a per-rescue choice, with a one- or two-word rescue name followed by “Rescue Vend,” rather than a replacement fundraiser.
 
 **How to apply:** Keep donation totals, fee policy, receipts, and historical menus identical across styles. Short cabinet branding must not change the rescue’s full identity elsewhere.
