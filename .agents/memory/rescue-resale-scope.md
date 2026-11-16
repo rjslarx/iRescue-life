@@ -13,7 +13,7 @@ New Rescue Resale sales owe the platform 5% of the total sale price, independent
 
 **Why:** The user approved the recommended first version on 2026-11-13, not the entire uploaded Antigravity proposal.
 
-**How to apply:** Full donation remains the default. Preserve donor-held items, staff listing approval, phone-number-masked conversations, private offers, Stripe checkout, scheduled shelter/event or approved public pickup, and sales records/CSV. The optional split extension below is now approved; Uber Direct, external Antigravity automation, and automatic charitable receipt claims remain outside scope.
+**How to apply:** Full donation remains the default. Preserve donor-held items, staff listing approval, phone-number-masked conversations, private offers, Stripe checkout, scheduled shelter/event or approved public pickup, and sales records/CSV. Optional splits and the buyer-paid courier expansion below are approved; external Antigravity automation and automatic charitable receipt claims remain outside scope.
 
 The rescue and donor must decide the legal transfer and tax acknowledgment arrangement separately; a buyer's resale purchase is not automatically a charitable donation.
 
