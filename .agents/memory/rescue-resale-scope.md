@@ -49,6 +49,12 @@ For any optional courier-delivery expansion, the buyer pays delivery; local pick
 
 Courier integration is deferred to a possible phase two. Keep phase one pickup-only; do not resume Uber Direct or DoorDash implementation or request credentials without renewed authorization.
 
+Volunteer delivery is excluded from Rescue Resale, including any future delivery phase.
+
+**Why:** The user explicitly stated they do not want volunteers involved with delivery.
+
+**How to apply:** Do not propose or build volunteer delivery requests, driver-claim queues, or volunteer delivery fees. Any future delivery discussion should concern professional couriers and still requires renewed authorization.
+
 **Why:** On 2026-11-16, the user explicitly asked to hold off on courier integration and compare a pickup-only launch proposal. Volunteer delivery and a proposed $10 delivery charge were suggestions for review, not approved features.
 
 **How to apply:** Preserve unused quote foundations without connecting them to checkout. Previously chosen platform ownership and buyer-paid economics apply only if courier work is later resumed.
