@@ -19,6 +19,11 @@ query invalidation, and fetch errors exercise:
   disabled during repeated clicks, only one selected-recipient POST is sent,
   statuses stay unchanged until success, and both controls recover after the
   response and ledger refresh. No queued duplicate is sent on response arrival.
+- Concurrent authorized email retries on two orders with opposite recipients:
+  responses complete in reverse order, exact order IDs and recipient payloads
+  stay separate, each row's controls and feedback recover independently, and
+  refreshed statuses stay attached to the correct order and recipient. Repeated
+  pending clicks and delayed observation after completion catch queued duplicates.
 - Lost response persistence, locked restored fields, no automatic resubmission.
 - Sync failure and exact-ID terminal matching (including `requestId` alias).
 - Unrelated refunds/balance changes and incomplete recovery never clearing intent.
