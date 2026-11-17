@@ -14,3 +14,9 @@ When a Node DOM test loads bundled CommonJS components from an ESM test, inject 
 **Why:** Node's separate ESM and CommonJS exports create separate React Query contexts; an otherwise valid component reports “No QueryClient set” when it consumes the other instance.
 
 **How to apply:** Share the real imported module at the bundle's require boundary rather than mocking hooks or cache behavior.
+
+Keep isolated financial browser regressions offline at the network boundary, including font stylesheets.
+
+**Why:** Production CSS can import remote fonts even when every API is mocked. An otherwise isolated browser fixture may still make external requests.
+
+**How to apply:** Strip remote stylesheet imports from fixture-only CSS, allow local data-URL assets, and fail on unexpected API or external network requests. Keep production CSS unchanged.
