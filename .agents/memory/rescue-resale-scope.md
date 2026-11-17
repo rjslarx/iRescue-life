@@ -29,6 +29,12 @@ New Rescue Resale sales owe the platform 5% of the total sale price, independent
 
 The rescue and donor must decide the legal transfer and tax acknowledgment arrangement separately; a buyer's resale purchase is not automatically a charitable donation.
 
+Community resale must not release payouts merely because 48 or 72 hours passed without a complaint. Forgotten pickup codes require reminders and an audited staff-reviewed handoff confirmation, not presumed delivery.
+
+**Why:** The user approved the safer launch safeguards without automatic time-based payout release.
+
+**How to apply:** Preserve existing payout timing unless separately authorized. Staff confirmation must not bypass an unresolved buyer issue, refund, dispute, or Stripe funds-availability requirement.
+
 The user approved optional 50/50 splits of net proceeds with automatic contributor bank payouts, gated by rescue-admin opt-in. The other option (full donation) must remain the default.
 
 **Why:** The user wants routine payouts to require no rescue-volunteer action and prefers automation over manually recording payments.
