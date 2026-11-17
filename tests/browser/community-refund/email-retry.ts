@@ -7,8 +7,9 @@ export async function runEmailRetryScenarios(browser: Browser, origin: string) {
   let passed = 0;
   for (const scope of ["tenant", "platform"] as const) {
     for (const width of [1280, 390]) {
-      for (const mode of ["native", "rapid", "read-only", "refresh-failure"] as const) {
+      for (const mode of ["native", "rapid", "read-only", "refresh-failure", "http-failure", "network-failure"] as const) {
         const canManage = mode !== "read-only";
+        const failureMode = mode === "http-failure" || mode === "network-failure";
         for (const recipient of ["buyer", "donor"] as const) {
           const label = recipient === "donor" ? "seller" : "buyer";
           const scenario = `${scope} ${width}px: ${mode} ${label} cross-order email retry`;
@@ -77,9 +78,18 @@ export async function runEmailRetryScenarios(browser: Browser, origin: string) {
                 await req.respond({ contentType: "application/json", body: JSON.stringify({ orders: [otherOrder, order] }) }); return;
               }
               if (req.method() === "POST" && path === `${root}/orders/${order.id}/retry-email`) {
+                const attempt = posts.length;
                 // Keep every retry in flight until the pending-state assertions
                 // finish. Extra requests must be counted, not silently discarded.
                 await retryPending;
+                if (failureMode && attempt === 1) {
+                  if (mode === "network-failure") await req.abort("failed");
+                  else await req.respond({
+                    status: 503, contentType: "application/json",
+                    body: JSON.stringify({ error: "Email retry temporarily unavailable." }),
+                  });
+                  return;
+                }
                 // Change only the requested recipient. The POST deliberately
                 // returns no statuses: the UI must refresh them from the ledger.
                 const requested = JSON.parse(req.postData() || "{}").recipient;
@@ -157,7 +167,62 @@ export async function runEmailRetryScenarios(browser: Browser, origin: string) {
               message: `Retry ${label} email? Check recorded status first to avoid duplicates.`,
               accepted: false,
             };
-            if (canManage) {
+            if (failureMode) {
+              assert.deepEqual(dialogs, [confirmation]);
+              const readsBeforeRetry = ledgerReads;
+              const expectedPost = {
+                path: `${root}/orders/${order.id}/retry-email`, body: { recipient },
+              };
+              const successText = "Email retry requested. Review the returned notification status.";
+              const failureText = mode === "http-failure"
+                ? "Email retry temporarily unavailable." : "Failed to fetch";
+              acceptNext = true;
+              await control.click();
+              await assertRetryControls(true);
+              await settle();
+              assert.deepEqual(posts, [expectedPost]);
+              await assertStatuses(order.id, initialStatuses);
+              await assertStatuses(otherOrder.id, otherInitialStatuses);
+              assert.equal(ledgerReads, readsBeforeRetry);
+              assert.equal(await targetRow.evaluate((row, text) => row.textContent?.includes(text), failureText), false,
+                "Failure feedback must wait for the deferred response");
+              releaseRetry();
+              await page.waitForFunction((row, text) => row.textContent?.includes(text), {}, targetRow, failureText);
+              await assertRetryControls(false);
+              // Observe beyond the usual first retry delay, without any click.
+              await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 1500)));
+              assert.deepEqual(posts, [expectedPost], "Failure must not automatically retry either recipient");
+              assert.equal(ledgerReads, readsBeforeRetry, "Failed POST must not refresh recipient statuses");
+              await assertStatuses(order.id, initialStatuses);
+              await assertStatuses(otherOrder.id, otherInitialStatuses);
+              assert.equal(await targetRow.evaluate((row, text) => row.textContent?.includes(text), successText), false,
+                "Failed requests must not show success feedback");
+              assert.deepEqual(dialogs, [confirmation, { ...confirmation, accepted: true }]);
+
+              // Recovery still requires fresh consent; dismissing it does nothing.
+              await control.click();
+              await settle();
+              assert.deepEqual(posts, [expectedPost]);
+              await assertRetryControls(false);
+              await assertStatuses(order.id, initialStatuses);
+              await assertStatuses(otherOrder.id, otherInitialStatuses);
+              acceptNext = true;
+              await control.click();
+              await page.waitForFunction((row, text) => row.textContent?.includes(text), {}, targetRow, successText);
+              await assertRetryControls(false);
+              await settle();
+              assert.deepEqual(posts, [expectedPost, expectedPost],
+                "Only the later explicitly confirmed retry may send a second POST");
+              assert.deepEqual(dialogs, [
+                confirmation, { ...confirmation, accepted: true },
+                confirmation, { ...confirmation, accepted: true },
+              ]);
+              await assertStatuses(order.id, { ...initialStatuses, [recipient]: "accepted" });
+              await assertStatuses(otherOrder.id, otherInitialStatuses);
+              assert.ok(ledgerReads > readsBeforeRetry, "Recovery must fetch the updated ledger");
+              assert.equal(await targetRow.evaluate((row, text) => row.textContent?.includes(text), failureText), false,
+                "Successful recovery must clear the prior failure feedback");
+            } else if (canManage) {
               assert.deepEqual(dialogs, [confirmation], "First attempt must dismiss the native confirmation");
               assert.equal(await control.evaluate(e => (e as HTMLButtonElement).disabled), false);
               const readsBeforeRetry = ledgerReads;
