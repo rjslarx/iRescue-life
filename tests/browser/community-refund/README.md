@@ -32,5 +32,18 @@ query invalidation, and fetch errors exercise:
   an ID, erasing evidence, crashing, or posting a replacement refund.
 - Storage failures show actionable recovery instructions, not raw browser errors.
 
+Four additional isolation scenarios run at both widths and with each workspace
+visited first. Each keeps one tab/context alive while two ledger orders appear
+in both scopes with identical order IDs. Fixture navigation uses same-tab SPA
+links and warm query caches, with reload checks as well.
+The fixture establishes tenant context before navigating back to the tenant
+ledger; it does not test the real dashboard's route/context transition timing.
+Distinct requests are
+saved through all four production forms; row-scoped assertions check exact
+amounts, reasons, request references, locked fields, and initially blank forms.
+Each request is then reconciled independently: exact sessionStorage snapshots
+prove only that scope/order key is removed, preserving the other requests and
+unrelated session data. Navigation and reload must not submit or sync anything.
+
 The existing `tests/community-resale-safeguards.test.ts` complements this suite
 with server-side idempotency and recovery checks; it is not replaced.

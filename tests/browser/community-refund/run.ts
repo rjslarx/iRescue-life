@@ -3,6 +3,7 @@ import { createServer } from "node:http";
 import { execFileSync } from "node:child_process";
 import { build } from "esbuild";
 import puppeteer, { type Page } from "puppeteer";
+import { runIsolationScenarios } from "./isolation";
 
 const bundle = await build({
   entryPoints: ["tests/browser/community-refund/fixture.tsx"],
@@ -341,6 +342,7 @@ try {
       }
     }
   }
+  passed += await runIsolationScenarios(browser, origin);
   console.log(`Passed ${passed} mocked refund browser scenarios; no database or Stripe access.`);
 } finally {
   await browser.close();

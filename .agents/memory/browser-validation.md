@@ -20,3 +20,9 @@ Keep isolated financial browser regressions offline at the network boundary, inc
 **Why:** Production CSS can import remote fonts even when every API is mocked. An otherwise isolated browser fixture may still make external requests.
 
 **How to apply:** Strip remote stylesheet imports from fixture-only CSS, allow local data-URL assets, and fail on unexpected API or external network requests. Keep production CSS unchanged.
+
+Isolated ledger fixtures that omit dashboard route gates must establish tenant context before SPA navigation back from platform scope.
+
+**Why:** Tenant restoration occurs in a parent effect; a child query can start earlier with no tenant header. This is separate from refund-intent isolation.
+
+**How to apply:** Set tenant context before fixture navigation, keep strict request-header assertions, and do not claim this verifies real dashboard route-transition timing.
