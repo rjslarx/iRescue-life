@@ -7,10 +7,12 @@ export async function runEmailRetryScenarios(browser: Browser, origin: string) {
   let passed = 0;
   for (const scope of ["tenant", "platform"] as const) {
     for (const width of [1280, 390]) {
-      for (const mode of ["native", "rapid", "read-only", "refresh-failure", "http-failure", "network-failure", "refresh-pending", "concurrent", "malformed-json", "html-response", "permission-revoked"] as const) {
+      for (const mode of ["native", "rapid", "read-only", "refresh-failure", "http-failure", "network-failure", "refresh-pending", "concurrent", "malformed-json", "html-response", "permission-revoked", "independent-http-failure", "independent-network-failure"] as const) {
         const canManage = mode !== "read-only";
         const parsingFailure = mode === "malformed-json" || mode === "html-response";
-        const failureMode = mode === "http-failure" || mode === "network-failure" || parsingFailure;
+        const independent = mode === "independent-http-failure" || mode === "independent-network-failure";
+        const networkFailure = mode === "network-failure" || mode === "independent-network-failure";
+        const failureMode = mode === "http-failure" || networkFailure || parsingFailure || independent;
         for (const recipient of ["buyer", "donor"] as const) {
           const label = recipient === "donor" ? "seller" : "buyer";
           const scenario = `${scope} ${width}px: ${mode} ${label} cross-order email retry`;
@@ -103,7 +105,7 @@ export async function runEmailRetryScenarios(browser: Browser, origin: string) {
                 // finish. Extra requests must be counted, not silently discarded.
                 await (retryOrder === order ? retryPending : otherRetryPending);
                 if (failureMode && attempt === 1) {
-                  if (mode === "network-failure") await req.abort("failed");
+                  if (networkFailure) await req.abort("failed");
                   // HTTP success with an unreadable body must fail during JSON
                   // parsing in both request paths, not their HTTP error checks.
                   else if (parsingFailure) await req.respond({
@@ -127,6 +129,14 @@ export async function runEmailRetryScenarios(browser: Browser, origin: string) {
                 // This is a successful POST, not failed-POST recovery. Keep
                 // subsequent reads failing until an explicit ledger-only retry.
                 failLedgerRefresh = mode === "refresh-failure";
+                await req.respond({ contentType: "application/json", body: JSON.stringify({ success: true }) }); return;
+              }
+              if (independent && req.method() === "POST" && path === `${root}/orders/${otherOrder.id}/retry-email`) {
+                await otherRetryPending;
+                const requested = JSON.parse(req.postData() || "{}").recipient;
+                if (requested === "buyer" || requested === "donor") {
+                  otherOrder.notificationStatus[requested as "buyer" | "donor"] = "accepted";
+                }
                 await req.respond({ contentType: "application/json", body: JSON.stringify({ success: true }) }); return;
               }
               unexpected.push(`${req.method()} ${path}`); await req.abort();
@@ -288,6 +298,83 @@ export async function runEmailRetryScenarios(browser: Browser, origin: string) {
                 { type: "confirm", message: `Retry ${secondLabel} email? Check recorded status first to avoid duplicates.`, accepted: true },
               ], "Only the two explicitly authorized retries may open confirmations");
               await secondControl.dispose();
+              await secondRow.dispose();
+            } else if (independent) {
+              const secondRow = await row(otherOrder.id);
+              // Use the opposite recipient to expose order/recipient mix-ups.
+              const secondRecipient = recipient === "buyer" ? "donor" : "buyer";
+              const secondLabel = secondRecipient === "donor" ? "seller" : "buyer";
+              const secondControl = await secondRow.$(`button::-p-text(Retry ${secondLabel} email)`);
+              assert.ok(secondControl);
+              const assertSecondControls = async (disabled: boolean) => {
+                await page.waitForFunction((row, expected) => {
+                  const buttons = Array.from(row.querySelectorAll("button"))
+                    .filter(b => /^Retry (buyer|seller) email$/.test(b.textContent || ""));
+                  return buttons.length === 2 && buttons.every(b => b.disabled === expected);
+                }, {}, secondRow, disabled);
+              };
+              const successText = "Email retry requested. Review the returned notification status.";
+              const failureText = networkFailure ? "Failed to fetch" : "Email retry temporarily unavailable.";
+              const expectedPosts = [
+                { path: `${root}/orders/${order.id}/retry-email`, body: { recipient } },
+                { path: `${root}/orders/${otherOrder.id}/retry-email`, body: { recipient: secondRecipient } },
+              ];
+              const readsBeforeRetry = ledgerReads;
+              acceptNext = true;
+              await control.click();
+              await assertRetryControls(true);
+              await assertSecondControls(false);
+              await settle();
+              assert.deepEqual(posts, expectedPosts.slice(0, 1));
+              assert.equal(ledgerReads, readsBeforeRetry);
+
+              acceptNext = true;
+              await secondControl.scrollIntoView();
+              await secondControl.click();
+              await assertSecondControls(true);
+              await assertRetryControls(true);
+              await settle();
+              assert.deepEqual(posts, expectedPosts);
+              await assertStatuses(order.id, initialStatuses);
+              await assertStatuses(otherOrder.id, otherInitialStatuses);
+              for (const element of [targetRow, secondRow]) {
+                assert.equal(await element.evaluate((row, texts) =>
+                  texts.some(text => row.textContent?.includes(text)), [successText, failureText]), false);
+              }
+              assert.equal(ledgerReads, readsBeforeRetry, "Neither pending POST may refresh the ledger");
+
+              // Complete the second order while the first request remains held.
+              releaseOtherRetry();
+              await page.waitForFunction((row, text) => row.textContent?.includes(text), {}, secondRow, successText);
+              await assertSecondControls(false);
+              await assertRetryControls(true);
+              const secondStatuses = { ...otherInitialStatuses, [secondRecipient]: "accepted" };
+              await assertStatuses(otherOrder.id, secondStatuses);
+              await assertStatuses(order.id, initialStatuses);
+              assert.equal(await targetRow.evaluate((row, text) => row.textContent?.includes(text), successText), false,
+                "The second order's success must not appear on the pending order");
+              const readsAfterSuccess = ledgerReads;
+              assert.equal(readsAfterSuccess, readsBeforeRetry + 1);
+
+              releaseRetry();
+              await page.waitForFunction((row, text) => row.textContent?.includes(text), {}, targetRow, failureText);
+              await assertRetryControls(false);
+              await assertSecondControls(false);
+              // Catch automatic resend attempts after either response settles.
+              await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 1500)));
+              await assertStatuses(order.id, initialStatuses);
+              await assertStatuses(otherOrder.id, secondStatuses);
+              assert.equal(await secondRow.evaluate((row, text) => row.textContent?.includes(text), successText), true,
+                "The first order's failure must preserve the second order's success feedback");
+              assert.equal(await secondRow.evaluate((row, text) => row.textContent?.includes(text), failureText), false,
+                "Failure feedback must remain on the failed order");
+              assert.equal(await targetRow.evaluate((row, text) => row.textContent?.includes(text), successText), false);
+              assert.equal(ledgerReads, readsAfterSuccess, "The failed POST must not refresh either order");
+              assert.deepEqual(posts, expectedPosts, "Each explicit retry must target its own order and recipient exactly once");
+              assert.deepEqual(dialogs, [
+                confirmation, { ...confirmation, accepted: true },
+                { type: "confirm", message: `Retry ${secondLabel} email? Check recorded status first to avoid duplicates.`, accepted: true },
+              ]);
               await secondRow.dispose();
             } else if (failureMode) {
               assert.deepEqual(dialogs, [confirmation]);

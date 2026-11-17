@@ -88,11 +88,20 @@ unrelated session data. Navigation and reload must not submit or sync anything.
 The existing `tests/community-resale-safeguards.test.ts` complements this suite
 with server-side idempotency and recovery checks; it is not replaced.
 
-Eighty manual email retry scenarios also run through the same fixture: buyer
+One hundred four manual email retry scenarios also run through the same fixture: buyer
 and seller, authorized and read-only staff, tenant and platform, desktop and
 mobile. Authorized cases dismiss the real native confirmation and assert zero
 mutation requests, then explicitly accept a later attempt and assert exactly one
 `retry-email` POST with the selected recipient (`buyer` or `donor` for seller).
+
+Sixteen of these cases explicitly retry two independent orders: the first POST
+stays pending while the opposite recipient on the second order is confirmed and
+retried. Both orders are briefly pending, then the second succeeds and refreshes
+its status before the first fails with HTTP 503 or a network error. Row-scoped
+assertions verify independent busy controls, local failure/success feedback,
+preserved successful statuses, exact scoped order/recipient payloads and tenant
+headers, and no automatic resend or refresh after failure. Every API and external
+request remains intercepted; neither retry contacts a provider.
 They verify the scoped URL, tenant header, confirmation copy, and success
 feedback after query refresh. Distinct initial buyer/seller statuses change only
 for the selected recipient in the refreshed ledger; assertions verify both
