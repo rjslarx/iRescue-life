@@ -130,6 +130,7 @@ try {
         "correction persistence failure", "succeeded clearing failure",
         "failed clearing failure", "canceled clearing failure",
         "rapid initial submit", "rapid unchanged retry", "rapid corrected retry",
+        "cancel initial confirmation", "cancel unchanged retry confirmation", "cancel corrected retry confirmation",
         ...["succeeded", "failed", "canceled", "absent", "pending", "unresolved recovery",
           "split pending", "split failed", "split handoff only",
           "lost response", "wrong reference", "storage failure", "changed evidence", "read-only"].map(s => `recovery: ${s}`),
@@ -145,12 +146,17 @@ try {
         await page.setViewport({ width, height: 844 });
         const errors: string[] = [], unexpected: string[] = [];
         page.on("pageerror", error => errors.push(String(error)));
-        page.on("dialog", dialog => void dialog.accept());
+        let dismissConfirmation = false;
+        const dialogs: { type: string; message: string; dismissed: boolean }[] = [];
+        page.on("dialog", dialog => {
+          dialogs.push({ type: dialog.type(), message: dialog.message(), dismissed: dismissConfirmation });
+          void (dismissConfirmation ? dialog.dismiss() : dialog.accept());
+        });
         const root = scope === "tenant" ? "/api/community-resale-admin" : "/api/platform/community-resale";
         const route = scope === "tenant" ? "/demo/dashboard/community-resale" : "/platform/community-resale";
         const key = `community-refund-request:${scope}:refund-browser-order`;
         let order = baseOrder(), syncOrder = order, syncFailure = false;
-        let refundReply: "lost" | "rejected" | "pending" = ["correct rejected request", "correction persistence failure", "rapid corrected retry"].includes(scenario) ? "rejected" : "lost";
+        let refundReply: "lost" | "rejected" | "pending" = ["correct rejected request", "correction persistence failure", "rapid corrected retry", "cancel corrected retry confirmation"].includes(scenario) ? "rejected" : "lost";
         let syncGate: ReturnType<typeof deferredResponse> | undefined;
         let refundGate: ReturnType<typeof deferredResponse> | undefined;
         let inFlightRefunds = 0, maxInFlightRefunds = 0;
@@ -232,7 +238,76 @@ try {
         try {
           await page.goto(origin + route);
           await text(page, "Fixture chair");
-          if (scenario.startsWith("delayed ")) {
+          if (scenario.startsWith("cancel ")) {
+            await openForm(page);
+            await fill(page);
+            const retry = scenario !== "cancel initial confirmation";
+            const corrected = scenario === "cancel corrected retry confirmation";
+            const actionText = !retry ? "Request $25.00 refund"
+              : corrected ? "Request $20.00 refund with same ID" : retryText;
+            if (retry) {
+              await button(page, "Request $25.00 refund");
+              await text(page, corrected ? "Mock request rejected" : "Failed to fetch");
+              await waitIdle();
+              await sync();
+              await text(page, retryText);
+              if (corrected) {
+                assert.equal((await stored())!.rejectionStatus, 409);
+                await fill(page, "20.00", "Corrected buyer refund reason");
+              } else await locked();
+            }
+            const intentBefore = await stored();
+            const rawBefore = await page.evaluate(key => sessionStorage.getItem(key), key);
+            const uuidBefore = await count();
+            const postsBefore = posts.length;
+            const refundsBefore = refunds().length;
+            const dialogsBefore = dialogs.length;
+            const expectedMessage = retry && !corrected
+              ? "Retry the exact same $25.00 request"
+              : `Request a buyer refund of $${corrected ? "20" : "25"}.00?`;
+            dismissConfirmation = true;
+            await button(page, actionText);
+            await waitIdle();
+            // Allow fetch interception and React updates to surface accidental
+            // work after dismissing the real browser confirmation.
+            await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 150)));
+            assert.equal(dialogs.length, dialogsBefore + 1, "Cancellation must exercise a native dialog");
+            assert.equal(dialogs.at(-1)!.type, "confirm");
+            assert.ok(dialogs.at(-1)!.message.startsWith(expectedMessage));
+            assert.equal(dialogs.at(-1)!.dismissed, true);
+            assert.equal(posts.length, postsBefore, "Cancel must send neither refund nor retry-preflight sync");
+            assert.equal(await count(), uuidBefore, "Cancel must not allocate a UUID");
+            assert.equal(await page.evaluate(key => sessionStorage.getItem(key), key), rawBefore,
+              "Cancel must preserve the exact saved intent, including rejection metadata");
+            assert.equal(await page.$eval('input[inputmode="decimal"]', e => (e as HTMLInputElement).value), corrected ? "20.00" : "25.00");
+            assert.equal(await page.$eval("textarea", e => (e as HTMLTextAreaElement).value), corrected ? "Corrected buyer refund reason" : originalReason);
+            if (!retry || corrected) {
+              assert.equal(await page.$eval('form input[type="checkbox"]', e => (e as HTMLInputElement).checked), true);
+            }
+            // The same control must still work, but only after explicit consent.
+            dismissConfirmation = false;
+            refundReply = "pending";
+            await button(page, actionText);
+            await text(page, "Refund request recorded.");
+            await waitIdle();
+            assert.equal(dialogs.length, dialogsBefore + 2);
+            assert.equal(dialogs.at(-1)!.type, "confirm");
+            assert.ok(dialogs.at(-1)!.message.startsWith(expectedMessage));
+            assert.equal(dialogs.at(-1)!.dismissed, false);
+            assert.equal(refunds().length, refundsBefore + 1);
+            assert.deepEqual(posts.slice(postsBefore).map(p => p.path.split("/").at(-1)),
+              retry ? ["sync", "refund"] : ["refund"]);
+            const finalIntent = (await stored())!;
+            assert.deepEqual(refunds().at(-1)!.body, {
+              requestId: retry ? intentBefore!.requestId : finalIntent.requestId,
+              amountCents: corrected ? 2000 : 2500,
+              expectedRefundedCents: 0,
+              reason: corrected ? "Corrected buyer refund reason" : originalReason,
+            });
+            assert.deepEqual(finalIntent, refunds().at(-1)!.body);
+            assert.equal(await count(), retry ? uuidBefore : uuidBefore + 1);
+            await locked();
+          } else if (scenario.startsWith("delayed ")) {
             const syncError = scenario.startsWith("delayed sync");
             const initial = scenario.includes("initial");
             const corrected = scenario.includes("corrected");

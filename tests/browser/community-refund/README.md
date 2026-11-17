@@ -20,6 +20,10 @@ query invalidation, and fetch errors exercise:
 - Unrelated refunds/balance changes and incomplete recovery never clearing intent.
 - Same-ID unchanged retries with an immediate second sync.
 - Corrected rejected requests retaining their ID and tenant HTTP error status.
+- Dismissing native confirmations for initial refunds, unchanged retries, and
+  corrected retries sends neither refund nor retry-preflight sync, allocates no
+  UUID, and preserves the saved intent exactly. A later explicitly confirmed
+  action succeeds with the expected payload and original retry ID.
 - Balance changes or newly discovered records blocking the final retry.
 - Failed/canceled outcomes clearing intent without reporting refunded funds.
 - Read-only staff lacking refund/retry controls even with a stored intent.
