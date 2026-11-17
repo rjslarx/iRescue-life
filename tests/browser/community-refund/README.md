@@ -8,7 +8,7 @@ React Query, TenantProvider, and request hooks into an isolated in-memory HTTP
 fixture. It mounts the ledger at the tenant-admin and platform URLs, checks the
 actual scoped API paths and tenant headers, and mocks every API response at the
 browser network boundary. It does not start the application backend, use a
-database, or contact Stripe. Unexpected APIs and external requests fail the test.
+database, or contact Stripe or an email provider. Unexpected APIs and external requests fail the test.
 It tests the ledger's permission handling, not login or the dashboard route gate.
 
 Each scenario runs for tenant and platform scopes at desktop and 390px mobile
@@ -72,3 +72,13 @@ unrelated session data. Navigation and reload must not submit or sync anything.
 
 The existing `tests/community-resale-safeguards.test.ts` complements this suite
 with server-side idempotency and recovery checks; it is not replaced.
+
+Sixteen manual email retry scenarios also run through the same fixture: buyer
+and seller, authorized and read-only staff, tenant and platform, desktop and
+mobile. Authorized cases dismiss the real native confirmation and assert zero
+mutation requests, then explicitly accept a later attempt and assert exactly one
+`retry-email` POST with the selected recipient (`buyer` or `donor` for seller).
+They verify the scoped URL, tenant header, confirmation copy, and success
+feedback after query refresh. Read-only cases click each disabled retry control
+and assert no confirmation or request. All responses are intercepted; these
+checks do not test email delivery, backend authorization, or dashboard login.
