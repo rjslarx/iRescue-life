@@ -24,6 +24,7 @@ import FinancePage from "@/pages/FinancePage";
 import DonationLinksPage from "@/pages/DonationLinksPage";
 import FreeSquaresPage from "@/pages/free-squares/FreeSquaresPage";
 import PublicFreeSquaresPage from "@/pages/free-squares/PublicFreeSquaresPage";
+import PublicPuzzlePage from "@/pages/PublicPuzzlePage";
 import GrantsPage from "@/pages/GrantsPage";
 import DonorsPage from "@/pages/DonorsPage";
 import VipClubPage from "@/pages/VipClubPage";
@@ -273,6 +274,7 @@ function RouterSwitch() {
       <Route path="/fundraise/:slug" component={PeerCampaignPage} />
       <Route path="/fundraisers" component={PublicFundraisersPage} />
       <Route path="/rescue-vend" component={RescueVendPage} />
+      <Route path="/puzzle" component={PublicPuzzlePage} />
       <Route path="/rescue-resale" component={RescueResalePage} />
       <Route path="/resale" component={CommunityResalePage} />
       <Route path="/resale/create" component={CommunityCreatePage} />

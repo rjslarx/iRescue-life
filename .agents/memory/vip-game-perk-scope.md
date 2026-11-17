@@ -26,15 +26,16 @@ Rescue Merge should reshuffle animal identities on each restarted round, not onl
 
 Staff and volunteers at game-enabled rescues also receive dashboard game access without VIP membership or a donor invitation. This does not expand public donor access.
 
+**Why:** The owner explicitly expanded the private pilot to rescue teams as a perk, while keeping rescue-level enablement.
+
+**How to apply:** Keep team play separate from donor participation metrics and preserve existing invited-VIP eligibility.
+
+## Haseya’s public puzzle exception
 Haseya’s may offer the 15-puzzle free to the public, with an optional donate action after completion and a saved solved-puzzle image for manual Facebook comments. Haseya’s selects winners from replies outside the app.
 
 **Why:** The owner explicitly requested this narrow public exception; it does not authorize public access to other games or tenants.
 
 **How to apply:** Donation must not be required for participation or affect chances. Keep winner selection and Facebook comment submission manual, and preserve the existing member/team gates elsewhere.
-
-**Why:** The owner explicitly expanded the private pilot to rescue teams as a perk, while keeping rescue-level enablement.
-
-**How to apply:** Keep team play separate from donor participation metrics and preserve existing invited-VIP eligibility.
 
 ## Production sandbox verification
 Validate embedded games under the parent page's production Content Security Policy, not only an isolated iframe or development page.
@@ -48,3 +49,9 @@ For photo-based Phaser games in the opaque sandbox, use Canvas rendering and ima
 **Why:** Public rescue images can display cross-origin without CORS but taint canvases; WebGL uploads and pixel readback fail even though the same photos work in a plain canvas.
 
 **How to apply:** Load public photos with plain Image and no-referrer, retain the sandbox, and test image loading without an Access-Control-Allow-Origin response header.
+
+Shareable completion images need a separate export-safe photo pipeline; do not read back the existing cross-origin game canvas or weaken its sandbox.
+
+**Why:** The public puzzle needs downloadable pixels, unlike the private games. Public-storage raster photos can be bounded, re-encoded without metadata, and embedded inline so the parent can compose a clean image without an arbitrary remote-image proxy.
+
+**How to apply:** Recheck animal visibility and storage access, preserve opaque iframe isolation, and treat completion images as unverified keepsakes rather than authenticated contest entries.

@@ -20,6 +20,7 @@ class RescueShuffleGame {
     this.nextPetBtn = document.getElementById('next-pet-btn');
     this.playAgainBtn = document.getElementById('play-again-btn');
     this.toggleNumbersBtn = document.getElementById('toggle-numbers-btn');
+    if (PUBLIC_CHALLENGE) this.nextPetBtn.textContent = 'Restart puzzle';
     this.winOverlay = document.getElementById('win-overlay');
     this.winTitle = document.getElementById('win-title');
     this.winStats = document.getElementById('win-stats');
@@ -105,6 +106,7 @@ class RescueShuffleGame {
   }
 
   startNewGame(changePet = true) {
+    if (PUBLIC_CHALLENGE) window.parent.postMessage({ type: 'rescue-shuffle-reset' }, '*');
     clearTimeout(this.winTimeout);
     this.stopTimer();
     this.started = false;
@@ -374,6 +376,7 @@ class RescueShuffleGame {
   }
 
   handleWin() {
+    if (!this.checkSolved() || this.isSolved) return;
     this.isSolved = true;
     this.stopTimer();
     const pet = SHELTER_PETS[this.currentPetIndex];
@@ -381,6 +384,16 @@ class RescueShuffleGame {
     this.winStats.textContent = `Solved in ${this.moves} moves (${this.formatTime(
       this.elapsedSeconds
     )})`;
+    if (PUBLIC_CHALLENGE) {
+      // The parent builds the share card from sanitized inline photo pixels.
+      // This is a friendly completion image, not server-certified contest proof.
+      this.showNumbers = false;
+      window.parent.postMessage({ type: 'rescue-shuffle-solved', petId: pet?.id || null,
+        moves: this.moves, seconds: this.elapsedSeconds }, '*');
+      this.petSubtitleEl.textContent = 'Puzzle complete! Save your image and find the donation button below.';
+      this.render();
+      return;
+    }
     this.winTimeout = setTimeout(() => {
       this.winOverlay.classList.remove('hidden');
       this.winOverlay.inert = false;

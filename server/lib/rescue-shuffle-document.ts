@@ -22,7 +22,7 @@ export function shufflePhotoUrl(value: unknown, base: string): string | null {
   }
 }
 
-export async function rescueShuffleDocument(pets: ShufflePet[]): Promise<string> {
+export async function rescueShuffleDocument(pets: ShufflePet[], options: { publicChallenge?: boolean } = {}): Promise<string> {
   const root = path.resolve(process.cwd(), 'server/games/rescue-shuffle');
   const [html, css, script] = await Promise.all([
     readFile(path.join(root, 'index.html'), 'utf8'),
@@ -36,5 +36,5 @@ export async function rescueShuffleDocument(pets: ShufflePet[]): Promise<string>
   return html
     .replace('<head>', `<head><meta http-equiv="Content-Security-Policy" content="${policy}"><meta name="referrer" content="no-referrer">`)
     .replace('<link rel="stylesheet" href="style.css" />', `<style>${css}</style>`)
-    .replace('<script type="module" src="app.js"></script>', `<script>const SHELTER_PETS = ${data};\n${script.replace(/<\/script/gi, '<\\/script')}</script>`);
+    .replace('<script type="module" src="app.js"></script>', `<script>const PUBLIC_CHALLENGE = ${options.publicChallenge === true}; const SHELTER_PETS = ${data};\n${script.replace(/<\/script/gi, '<\\/script')}</script>`);
 }

@@ -29,6 +29,8 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { LitterPawsIcon } from "@/components/icons/LitterPawsIcon";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTeamGameAccess } from "@/hooks/use-vip-game";
+import { publicPuzzleRequest, type PublicPuzzleConfig } from "@/hooks/use-public-puzzle";
+import { useTenant } from "@/contexts/TenantContext";
 import { useRescueHelpAccess } from "@/hooks/use-rescue-inbox";
 import { canManageFreeSquares } from "@/pages/free-squares/use-free-squares";
 import { useToast } from "@/hooks/use-toast";
@@ -165,6 +167,13 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
   const [location, navigate] = useLocation();
   const { user, switchRole, logout } = useAuth();
   const teamGameAccess = useTeamGameAccess();
+  const { tenantId: puzzleTenantId } = useTenant();
+  const puzzleSettingsAccess = useQuery({
+    queryKey: ["public-puzzle-settings-access", puzzleTenantId, user?.tenantId, user?.id, user?.roles],
+    queryFn: () => publicPuzzleRequest<PublicPuzzleConfig>("settings"),
+    enabled: !!user?.roles.some(role => role === "owner" || role === "admin"),
+    retry: false, staleTime: 60000,
+  });
   const rescueHelpAccess = useRescueHelpAccess();
   const { isMobile, setOpenMobile } = useSidebar();
   const { toast } = useToast();
@@ -862,7 +871,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
             </SidebarGroup>
           </Collapsible>
         ))}
-        {teamGameAccess.data?.eligible === true && !teamGameAccess.isError && (
+        {((teamGameAccess.data?.eligible === true && !teamGameAccess.isError) || (!!puzzleSettingsAccess.data && !puzzleSettingsAccess.isError)) && (
           <SidebarGroup>
             <SidebarGroupLabel>Team downtime</SidebarGroupLabel>
             <SidebarGroupContent>

@@ -7,6 +7,7 @@ import { useTenant } from "@/contexts/TenantContext";
 import { useTeamGameAccess } from "@/hooks/use-vip-game";
 import DashboardLayout from "@/components/DashboardLayout";
 import { PrivateGamePlayer } from "@/components/vip/PrivateGamePlayer";
+import { PublicPuzzleSettings } from "@/components/vip/PublicPuzzleSettings";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +25,7 @@ function GamesLoading() {
 }
 
 function SignedInGames() {
+  const { user } = useAuth();
   const access = useTeamGameAccess();
   const [selectedGame, setSelectedGame] = useState<VipGameId | null>(null);
   const permitted = access.data?.eligible === true && !access.isError;
@@ -34,6 +36,7 @@ function SignedInGames() {
   return (
     <DashboardLayout title="Games" description="A little downtime for the people who show up.">
       <div className="mx-auto max-w-5xl space-y-6">
+        {user?.roles.some(role => role === "owner" || role === "admin") && <PublicPuzzleSettings />}
         {access.isPending ? <GamesLoading /> : access.isError ? (
           <Card>
             <CardContent className="flex flex-col items-start gap-3 p-6" role="alert">
