@@ -41,9 +41,11 @@ export function communityPublicItem(row: any) {
     proceedsMode: d.proceedsMode, sellerFirstName: d.donorName.split(/\s+/)[0],
     facebookContactUrl: d.facebookContactUrl, status: row.status, version: row.version, createdAt: row.created_at };
 }
-export function communityCaption(item: any, name: string, url: string) {
+export function communityCaption(item: any, name: string, url: string, linkFree = false) {
   const proceeds = item.proceedsMode === "split_50"
     ? `Half of net proceeds supports ${name}; half goes to the seller.`
     : `All net proceeds support ${name}.`;
-  return `${item.title} — $${(item.askingCents / 100).toFixed(2)}\n\n${item.description}\n\nLocal pickup · ZIP ${item.zip}\n${proceeds} A 5% platform fee and payment processing fees are deducted from the price.\nArrange pickup and negotiate in Messenger. Pay the agreed price securely here:\n${url}\nPlease check availability on the item page. Facebook posts are updated manually.`;
+  const payment = linkFree ? "Message me for availability and the secure checkout link."
+    : `Arrange pickup and negotiate in Messenger. Pay the agreed price securely here:\n${url}`;
+  return `${item.title} — $${(item.askingCents / 100).toFixed(2)}\n\n${item.description}\n\nLocal pickup · ZIP ${item.zip}\n${proceeds} A 5% platform fee and payment processing fees are deducted from the price.\n${payment}\nFacebook posts are updated manually.`;
 }

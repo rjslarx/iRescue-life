@@ -35,6 +35,12 @@ Community resale must not release payouts merely because 48 or 72 hours passed w
 
 **How to apply:** Preserve existing payout timing unless separately authorized. Staff confirmation must not bypass an unresolved buyer issue, refund, dispute, or Stripe funds-availability requirement.
 
+Community refunds separate the buyer refund from transfer recovery and proportional application-fee returns. An accepted refund can leave platform exposure if recipient funds cannot be recovered.
+
+**Why:** Combining these outcomes would falsely imply an insolvent recipient had returned funds, or prevent a buyer refund solely because recovery failed. Original processing costs can remain even after a full refund.
+
+**How to apply:** Persist mutation intents before provider calls, recover ambiguous results by provider reference/metadata, and never replace an unknown request with a new key. Serialize issue reports, refunds, handoff confirmation, and split settlement with the same order lock.
+
 The user approved optional 50/50 splits of net proceeds with automatic contributor bank payouts, gated by rescue-admin opt-in. The other option (full donation) must remain the default.
 
 **Why:** The user wants routine payouts to require no rescue-volunteer action and prefers automation over manually recording payments.

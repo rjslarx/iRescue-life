@@ -48,9 +48,10 @@ test("community resale identity, approvals, concurrent checkout, fees, email ded
     paymentIntents: { retrieve: async (id: string) => {
       const s = [...sessions.values()].find(s => s.payment_intent === id);
       return { status: "succeeded", currency: "usd", amount: s.amount_total, metadata: s.metadata,
-        latest_charge: { balance_transaction: { fee: 175 }, amount_refunded: 0, disputed: false } };
+         latest_charge: { id: "ch_fake", balance_transaction: { fee: 175 }, amount_refunded: 0, disputed: false } };
     } },
-  };
+     refunds: { list: () => ({ autoPagingToArray: async () => [] }) },
+   };
   stripeService.getPlatformStripeClient = () => stripe;
   EmailService.forTenant = async () => ({ send: async () => { sends++; return { success: !failMail }; } }) as any;
   let server: any;

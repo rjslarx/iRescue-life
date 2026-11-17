@@ -1,11 +1,14 @@
 import { useState } from "react";
 import { useParams } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, ArrowUpRight, Copy, HeartHandshake, MapPin, ShieldCheck, Upload } from "lucide-react";
-import { communityCategories, communityCaption, communityItemSchema } from "@shared/community-resale";
+import { ArrowRight, ArrowUpRight, HeartHandshake, MapPin, ShieldCheck, Upload } from "lucide-react";
+import { communityCategories, communityItemSchema } from "@shared/community-resale";
 import { communityRequest, communityToken, saveCommunityToken, useCommunityQuery, useRefreshCommunity } from "@/hooks/use-community-resale";
 import { useCommunityAction } from "@/hooks/use-community-actions";
 import { Check, date, Empty, ErrorBox, Feedback, Field, GroundRules, human, money, QueryState, SellerContact, Shell, Verification } from "@/components/community-resale/CommunityUI";
+import { ShareListing as SafeguardedShareListing } from "@/components/community-resale/ShareListing";
+import { SafeguardedSale, BuyerOrderSafeguards } from "@/components/community-resale/ParticipantOrderSafeguards";
+import { pickupBlocked } from "@/components/community-resale/OrderSafeguardStatus";
 
 function PartnerSelect({ partners, value, onChange }: { partners: any[]; value: string; onChange: (id: string) => void }) {
   return <Field label="Rescue partner"><select required value={value} onChange={e => onChange(e.target.value)}><option value="">Choose a local rescue</option>{partners.map(p => <option key={p.tenantId} value={p.tenantId}>{p.name}{p.city ? ` · ${p.city}` : ""}</option>)}</select></Field>;
@@ -78,14 +81,7 @@ export function CommunityCreatePage() {
 }
 
 function ShareListing({ item, rescueName }: { item: any; rescueName: string }) {
-  const [fallback, setFallback] = useState(""); const [copied, setCopied] = useState(""); const [error, setError] = useState<unknown>(null);
-  const url = `${window.location.origin}/resale/item/${item.id}`;
-  const caption = communityCaption(item, rescueName, url);
-  async function copy(text: string, label: string) {
-    setError(null); setCopied(""); setFallback(text);
-    try { await navigator.clipboard.writeText(text); setCopied(label); } catch { setError(new Error("Clipboard access is unavailable. Select and copy the text below.")); }
-  }
-  return <section className="cr-panel"><span className="cr-kicker">Word of mouth, made easier</span><h3>Share a little good.</h3><p className="cr-muted">Copy the ready-to-share caption, save the photos, then create your own Facebook post. Talk price and pickup in Messenger. We never post or update Facebook for you.</p><div className="cr-row"><button className="cr-btn secondary" onClick={() => void copy(caption, "Caption copied. Paste it into your own Facebook post.")}><Copy size={15} />Copy Facebook caption</button><button className="cr-btn secondary" onClick={() => void copy(url, "Clean listing link copied.")}>Copy item link</button><a className="cr-btn secondary" href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`} target="_blank" rel="noopener noreferrer">Open Facebook share <ArrowUpRight size={14} /></a></div><ErrorBox error={error} />{copied && <p className="cr-success" role="status">{copied}</p>}{fallback && <Field label="Copyable text (contains no private order tokens)"><textarea readOnly value={fallback} onFocus={e => e.target.select()} /></Field>}<details><summary>Save original photos for your post</summary><p className="cr-muted">Open a photo below. On mobile, touch and hold the original and choose Save Image. On a computer, right-click and save. Return here to copy the caption.</p><div className="cr-row">{item.photos?.map((src: string, n: number) => <a key={src} href={src} target="_blank" rel="noopener noreferrer">Open original photo {n + 1}</a>)}</div></details></section>;
+  return <SafeguardedShareListing item={item} rescueName={rescueName} />;
 }
 export function CommunityItemPage() {
   const { id } = useParams<{ id: string }>(); const query = useCommunityQuery(`/items/${id}`);
@@ -106,8 +102,7 @@ function SellerItem({ item, partners }: { item: any; partners: any[] }) {
   return <article className="cr-panel"><div className="cr-toolbar" style={{ marginTop: 0 }}><div><span className="cr-pill">{human(item.status)}</span><h3 style={{ marginTop: 13 }}>{item.title}</h3><p className="cr-muted">{money(item.askingCents)} · {item.proceedsMode === "split_50" ? "50/50 net split" : "All net proceeds donated"}</p></div><a href={`/resale/item/${item.id}`} className="cr-btn secondary">View / share listing</a></div>{item.reviewNote && <div className="cr-note"><strong>Rescue review note</strong><p>{item.reviewNote}</p></div>}{editable && <><div className="cr-row"><button className="cr-btn secondary" onClick={() => setEditing(v => !v)}>{editing ? "Close editor" : "Edit listing"}</button><button className="cr-btn danger" disabled={action.busy} onClick={() => { if (window.confirm("Withdraw this listing? It will no longer be available to buyers. Update any Facebook posts yourself.")) void action.run(`/items/${item.id}/withdraw`, "POST", {}, "Listing withdrawn. Update your Facebook posts manually."); }}>Withdraw listing</button></div>{editing ? <ItemEditor key={item.version} partner={partner} initial={item} onSaved={() => setEditing(false)} /> : <form className="cr-note" onSubmit={async e => { e.preventDefault(); await action.run(`/items/${item.id}/price`, "POST", { askingCents: Math.round(Number(price) * 100), version: item.version }, "Price updated. Remember to update your Facebook post."); }}><Field label="Agreed price (USD) · update before buyer checks out"><input type="number" min="1" max="5000" step=".01" required value={price} onChange={e => setPrice(e.target.value)} /></Field><button className="cr-btn secondary" disabled={action.busy}>Update price</button></form>}</>}<Feedback action={action} /></article>;
 }
 function SellerSale({ order }: { order: any }) {
-  const action = useCommunityAction(); const [code, setCode] = useState("");
-  return <article className="cr-panel"><div className="cr-row"><h3>{order.itemTitle}</h3><span className="cr-pill">{human(order.status)}</span><strong>{money(order.amountCents)}</strong></div><p className="cr-muted">{date(order.createdAt)} · Order {order.id}</p><p>Pickup: {order.pickupConfirmedAt ? date(order.pickupConfirmedAt) : "Not yet confirmed"} · Settlement: {human(order.split?.status || order.settlementStatus || "awaiting information")}</p><p className="cr-muted">Rescue proceeds: {money(order.rescueProceedsCents)} · Contributor share: {money(order.contributorShareCents ?? order.split?.contributorCents)}</p>{order.status === "paid" && !order.pickupConfirmedAt && <form onSubmit={async e => { e.preventDefault(); const r = await action.run(`/orders/${order.id}/confirm-pickup`, "POST", { code }, "Pickup confirmed. Settlement proceeds when funds are available."); if (r) setCode(""); }}><Field label="Buyer's private pickup code (only enter at handover)"><input required value={code} onChange={e => setCode(e.target.value)} autoComplete="off" /></Field><button className="cr-btn" disabled={action.busy}>Confirm safe handover</button></form>}<Feedback action={action} /></article>;
+  return <SafeguardedSale order={order} />;
 }
 function SellerPayouts({ partners }: { partners: any[] }) {
   const [tenantId, setTenantId] = useState("");
@@ -152,8 +147,8 @@ export function CommunityManagePage() {
   </Shell>;
 }
 
-async function orderRequest(id: string, method = "GET", suffix = "") {
-  const response = await fetch(`/api/community-resale/orders/${encodeURIComponent(id)}${suffix}`, { method, credentials: "include", headers: { "X-Order-Token": sessionStorage.getItem(`community-order-${id}`) || "", "X-Community-Token": communityToken(), ...(method === "POST" ? { "Content-Type": "application/json" } : {}) }, ...(method === "POST" ? { body: "{}" } : {}) });
+async function orderRequest(id: string, method = "GET", suffix = "", body: any = {}) {
+  const response = await fetch(`/api/community-resale/orders/${encodeURIComponent(id)}${suffix}`, { method, credentials: "include", headers: { "X-Order-Token": sessionStorage.getItem(`community-order-${id}`) || "", "X-Community-Token": communityToken(), ...(method === "POST" ? { "Content-Type": "application/json" } : {}) }, ...(method === "POST" ? { body: JSON.stringify(body) } : {}) });
   const data = await response.json(); if (!response.ok) throw new Error(data.error || "Unable to load this order. Use the private return link or verify the buyer email."); return data;
 }
 export function CommunityOrderPage() {
@@ -173,7 +168,8 @@ export function CommunityOrderPage() {
       <SellerContact context="order" url={order.facebookContactUrl || order.data?.facebookContactUrl} orderId={order.id} />
       {order.status === "checkout" && <div className="cr-note">Payment has not been confirmed yet. This page checks for updates automatically. Do not hand over the item until payment is confirmed. To change the agreed price, cancel this unpaid checkout first, then ask the seller to update the listing. A checkout is not released simply because time passes.</div>}
       {order.status === "paid" && <div className="cr-note"><strong>Payment received. Next: a safe public handover.</strong><p>Coordinate with the seller in Messenger. Keep your code private until you have inspected and received the item.</p></div>}
-      {order.pickupCode && order.status === "paid" && !order.pickupConfirmedAt && <><p>Your private pickup code</p><div className="cr-code">{order.pickupCode}</div><p className="cr-muted">Give this code only to the seller at pickup. It confirms handover and can trigger settlement.</p></>}
+      {order.pickupCode && order.status === "paid" && !order.pickupConfirmedAt && !pickupBlocked(order) && <><p>Your private pickup code</p><div className="cr-code">{order.pickupCode}</div><p className="cr-muted">Give this code only to the seller at pickup. It confirms handover and can trigger settlement.</p></>}
+      <BuyerOrderSafeguards order={order} orderRequest={orderRequest} />
       {order.pickupConfirmedAt && <p className="cr-success">Pickup confirmed {date(order.pickupConfirmedAt)}.</p>}
       <p>{order.proceedsMode === "split_50" ? "Net proceeds are split equally between the rescue and seller." : "All net proceeds support the rescue."}</p>
       <div className="cr-two"><div><p>Processing fee: {money(order.stripeFeeCents)}</p><p>Platform fee: {money(order.platformFeeCents)}</p><p>Rescue proceeds: {money(order.rescueProceedsCents)}</p><p>Refunded: {money(order.refundedCents)}</p></div>

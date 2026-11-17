@@ -6,6 +6,9 @@ import { getAppBaseUrl } from "../lib/app-base-url";
 import { decrypt } from "../lib/encryption";
 import { resaleTenant } from "./rescue-resale";
 import { settleResaleSplit } from "./resale-split-settlement";
+import { withCommunityOrderLock, communityReleaseBlocked } from "./community-resale-lock";
+import { reconcileCommunityRefunds } from "./community-resale-refunds";
+import { communityFinanceSnapshot } from "./community-resale-finance";
 
 export const communityBase = () => getAppBaseUrl().replace(/\/$/, "");
 export function failCommunity(message: string, status = 400): never {
@@ -50,10 +53,16 @@ export function communityOrderView(r: any, buyer = false, admin = false) {
   return { id: r.id, tenantId: r.tenant_id, itemId: r.item_id, itemTitle: d.itemTitle, facebookContactUrl: d.facebookContactUrl, amountCents: d.amountCents,
     status: r.status, createdAt: r.created_at, proceedsMode: d.proceedsMode, disputed: !!d.disputed,
     pickupConfirmedAt: d.pickupConfirmedAt || null, split: d.split || null,
-    ...(buyer && ["paid", "completed"].includes(r.status) && !d.disputed ? { pickupCode: d.pickupCode } : {}),
-    notificationStatus: { buyer: d.buyerNotice || "pending", donor: d.donorNotice || "pending" },
+    issue: d.issue || null, pickupHelp: d.pickupHelp || null, finance: d.finance || null,
+    refunds: (d.refunds || []).map((f: any) => ({ id: f.id, amountCents: f.amountCents,
+      ...(admin ? { reason: f.reason, actor: f.actor } : {}),
+      status: f.status, refundId: f.refundId, recoveryStatus: f.recoveryStatus, createdAt: f.createdAt })),
+    ...(buyer && ["paid", "completed"].includes(r.status) && !communityReleaseBlocked(r) ? { pickupCode: d.pickupCode } : {}),
+    notificationStatus: { buyer: d.buyerNotice || "pending", donor: d.donorNotice || "pending",
+      pickupBuyer: d.pickupBuyerNotice || "pending", pickupSeller: d.pickupSellerNotice || "pending",
+      proceeds: d.proceedsNotice || "pending" },
     stripeFeeCents: r.stripe_fee_cents, platformFeeCents: r.platform_fee_cents,
-    rescueProceedsCents: r.rescue_proceeds_cents, refundedCents: r.refunded_cents,
+    rescueProceedsCents: d.finance?.rescueProceedsCents ?? r.rescue_proceeds_cents, refundedCents: r.refunded_cents,
     netCents: net, contributorShareCents: d.proceedsMode === "split_50" ? d.split?.contributorCents ?? null : 0,
     rescueShareCents: d.proceedsMode === "split_50" ? d.split?.rescueCents ?? null : net,
     ...(admin ? { buyerEmail: r.buyer_email, stripeSessionId: r.session_id, stripePaymentIntentId: r.payment_intent_id,
@@ -86,6 +95,30 @@ export async function notifyCommunityOrder(id: string) {
 }
 /** Authoritative Stripe reconciliation; no state transition trusts a return URL. */
 export async function syncCommunityOrder(id: string, tenantId: string) {
+  await withCommunityOrderLock(id, async c => {
+    await syncCommunityOrderLocked(id, tenantId);
+    const o = (await c.query("SELECT * FROM community_resale_orders WHERE id=$1", [id])).rows[0];
+    if (o?.data.refunds?.length) {
+      await reconcileCommunityRefunds(c, o, stripeService.getPlatformStripeClient(), process.env.REPLIT_DEPLOYMENT === "1");
+      await syncCommunityOrderLocked(id, tenantId);
+    }
+  });
+  const row = (await pool.query("SELECT * FROM community_resale_orders WHERE id=$1", [id])).rows[0];
+  if (row?.data.proceedsMode === "split_50") await settleResaleSplit(id, tenantId, undefined, "community");
+  // Snapshot again after settlement, without nesting the shared lock.
+  await withCommunityOrderLock(id, async c => {
+    const o = (await c.query("SELECT * FROM community_resale_orders WHERE id=$1", [id])).rows[0];
+    if (o?.payment_intent_id) {
+      const stripe = stripeService.getPlatformStripeClient()!;
+      const pi = await stripe.paymentIntents.retrieve(o.payment_intent_id, { expand: ["latest_charge.balance_transaction"] });
+      await communityFinanceSnapshot(c, o, stripe, pi.latest_charge);
+    }
+  });
+  await notifyCommunityOrder(id);
+  await (await import("./community-resale-notifications")).notifyCommunityProceeds(id);
+  return (await pool.query("SELECT * FROM community_resale_orders WHERE id=$1", [id])).rows[0];
+}
+async function syncCommunityOrderLocked(id: string, tenantId: string) {
   const stripe = stripeService.getPlatformStripeClient();
   if (!stripe) failCommunity("Stripe is unavailable", 503);
   let r = (await pool.query("SELECT * FROM community_resale_orders WHERE id=$1 AND tenant_id=$2", [id, tenantId])).rows[0];
@@ -126,7 +159,9 @@ export async function syncCommunityOrder(id: string, tenantId: string) {
     const current = (await c.query("SELECT * FROM community_resale_orders WHERE id=$1 FOR UPDATE", [id])).rows[0];
     if (session.payment_status === "paid") {
       const pi = typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent?.id;
-      await c.query("UPDATE community_resale_orders SET status=CASE WHEN status='checkout' THEN 'paid' ELSE status END,payment_intent_id=$2 WHERE id=$1", [id, pi]);
+      await c.query(`UPDATE community_resale_orders SET status=CASE WHEN status='checkout' THEN 'paid' ELSE status END,
+        data=CASE WHEN data->>'paidAt' IS NULL THEN jsonb_set(data,'{paidAt}',to_jsonb(now()::text)) ELSE data END,
+        payment_intent_id=$2 WHERE id=$1`, [id, pi]);
       await c.query("UPDATE community_resale_items SET status='paid' WHERE id=$1 AND status IN ('active','reserved')", [r.item_id]);
     } else if (session.status === "expired" && current.status === "checkout") {
       await c.query("UPDATE community_resale_orders SET status='expired' WHERE id=$1", [id]);
@@ -151,8 +186,6 @@ export async function syncCommunityOrder(id: string, tenantId: string) {
         [id, balance.fee, r.data.platformRevenueCents, net, charge.amount_refunded || 0, r.data.amountCents,
           JSON.stringify({ disputed: !!charge.disputed, rescueTransferId: transfer?.id || null })]);
     }
-    if (r.data.proceedsMode === "split_50") await settleResaleSplit(id, tenantId, undefined, "community");
-    await notifyCommunityOrder(id);
   }
   return (await pool.query("SELECT * FROM community_resale_orders WHERE id=$1", [id])).rows[0];
 }
@@ -160,11 +193,12 @@ export async function reconcileCommunityOrders() {
   const rows = (await pool.query(`SELECT id,tenant_id FROM community_resale_orders
     WHERE (status='checkout' AND created_at<now()-interval '32 minutes')
     OR status IN ('paid','completed','partially_refunded')
-    OR (status='refunded' AND data->>'proceedsMode'='split_50' AND COALESCE(data->'split'->>'status','')<>'refunded')
+    OR status='refunded'
     ORDER BY reconciled_at ASC NULLS FIRST LIMIT 50`)).rows;
   for (const r of rows) {
     try { await syncCommunityOrder(r.id, r.tenant_id); }
     catch { console.warn("[Community resale] Reconciliation deferred"); }
     finally { await pool.query("UPDATE community_resale_orders SET reconciled_at=now() WHERE id=$1", [r.id]); }
   }
+  await (await import("./community-resale-notifications")).sendCommunityPickupReminders();
 }

@@ -10,6 +10,8 @@ import { communityAudit, communityPartner, communityOrderView, failCommunity as 
   notifyCommunityOrder, readyCommunityPartner, syncCommunityOrder } from "../services/community-resale";
 import { requirePayoutAccount } from "../services/resale-payout-accounts";
 import { hashResale } from "../services/rescue-resale";
+import { requestCommunityRefund } from "../services/community-resale-refunds";
+import { updateCommunityPickup } from "../services/community-resale-pickup";
 const uuid = z.string().uuid();
 export const tenantCommunityRouter = Router();
 export const platformCommunityRouter = Router();
@@ -86,14 +88,19 @@ const filterSchema = z.object({
   mode: z.enum(["all", "donate_all", "split_50"]).default("all"),
   status: z.enum(["all", "checkout", "expired", "paid", "completed", "refunded", "partially_refunded"]).default("all"),
   settlement: z.enum(["all", "awaiting_payment", "awaiting_pickup", "awaiting_funds", "transferred", "needs_review",
-    "retry_pending", "setup_required", "awaiting_deployment", "recovering", "transferring", "refunded"]).default("all"),
+    "retry_pending", "setup_required", "awaiting_deployment", "recovering", "transferring", "refunded", "on_hold"]).default("all"),
 }).strict();
 async function ledger(req: any, platform: boolean) {
   const f = filterSchema.parse(req.query);
   if (!platform && f.tenantId && f.tenantId !== req.tenant.id) fail("Rescue access denied", 403);
   if (f.from && f.to && f.from > f.to) fail("End date must follow start date.");
   const tenantId = platform ? f.tenantId || null : req.tenant.id;
-  return (await pool.query(`SELECT o.*,s.data->'rescue'->>'transferId' AS rescue_transfer_id,
+  return (await pool.query(`SELECT o.*,
+    (SELECT COALESCE(jsonb_agg(a),'[]'::jsonb) FROM (
+      SELECT actor_id AS actor,action,created_at AS "createdAt",data FROM community_resale_audit
+      WHERE tenant_id=o.tenant_id AND data->>'orderId'=o.id::text ORDER BY created_at DESC LIMIT 100
+    ) a) AS audit,
+    s.data->'rescue'->>'transferId' AS rescue_transfer_id,
     s.data->'contributor'->>'transferId' AS contributor_transfer_id
     FROM community_resale_orders o LEFT JOIN community_resale_splits s ON s.order_id=o.id
     WHERE ($1::uuid IS NULL OR o.tenant_id=$1)
@@ -105,7 +112,10 @@ async function ledger(req: any, platform: boolean) {
 }
 for (const [router, platform] of [[tenantCommunityRouter, false], [platformCommunityRouter, true]] as const) {
   router.get("/ledger", route(async (req: any, res: any) => {
-    res.json({ orders: (await ledger(req, platform)).map(r => communityOrderView(r, false, true)) });
+    const rows = await ledger(req, platform);
+    res.json({ canManageFinancialActions: platform || !!canManage(req),
+      orders: rows.map(r => ({ ...communityOrderView(r, false, true),
+        canManageFinancialActions: platform || !!canManage(req), audit: r.audit })) });
   }));
   router.get("/ledger.csv", route(async (req: any, res: any) => {
     const rows = (await ledger(req, platform)).map(r => communityOrderView(r, false, true));
@@ -128,6 +138,28 @@ for (const [router, platform] of [[tenantCommunityRouter, false], [platformCommu
     const r = await adminOrder(req);
     res.json(communityOrderView(await syncCommunityOrder(r.id, r.tenant_id), false, true));
   }));
+  router.post("/orders/:id/refund", route(async (req: any, res: any) => {
+    if (!platform && !canManage(req)) fail("Only rescue owners and admins can issue refunds.", 403);
+    const r = await adminOrder(req);
+    const input = z.object({ requestId: uuid, amountCents: z.number().int().positive(),
+      expectedRefundedCents: z.number().int().nonnegative(), reason: z.string().trim().min(10).max(2000) }).strict().parse(req.body);
+    await requestCommunityRefund(r.id, r.tenant_id, req.user.id, input);
+    res.json(communityOrderView(await syncCommunityOrder(r.id, r.tenant_id), false, true));
+  }));
+  for (const [path, action] of [["resolve-issue", "resolve_issue"], ["confirm-handoff", "staff_handoff"]] as const) {
+    router.post(`/orders/:id/${path}`, route(async (req: any, res: any) => {
+      if (!platform && !canManage(req)) fail("Only rescue owners and admins can resolve pickup issues.", 403);
+      const r = await adminOrder(req);
+      const base = { reason: z.string().trim().min(10).max(2000), evidence: z.string().trim().min(10).max(3000) };
+      const input = action === "resolve_issue"
+        ? z.object({ ...base, issueId: uuid }).strict().parse(req.body)
+        : z.object({ ...base, requestId: uuid }).strict().parse(req.body);
+      await updateCommunityPickup(r.id, r.tenant_id, req.user.id, action, input);
+      // Completion is durable even if Stripe is temporarily unavailable.
+      try { await syncCommunityOrder(r.id, r.tenant_id); } catch { /* scheduled reconciliation follows */ }
+      res.json({ ok: true });
+    }));
+  }
   router.post("/orders/:id/retry-email", route(async (req: any, res: any) => {
     const r = await adminOrder(req);
     const { recipient } = z.object({ recipient: z.enum(["buyer", "donor"]) }).strict().parse(req.body);

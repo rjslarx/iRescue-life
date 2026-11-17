@@ -1,6 +1,7 @@
 import { pool } from "../db";
 import { stripeService } from "../lib/stripe-service";
 import { bankAccountReady } from "./resale-payout-accounts";
+import { communityReleaseBlocked } from "./community-resale-lock";
 
 export function splitNetProceeds(gross: number, processing: number, platform: number) {
   if (![gross, processing, platform].every(n => Number.isSafeInteger(n) && n >= 0))
@@ -102,6 +103,13 @@ export async function settleResaleSplit(orderId: string, tenantId: string, testS
         [state.contributor, state.rescue].some(l => l?.reversed > 0)) {
       await save("needs_review", "A prior recovery or uncertain transfer requires platform review."); return;
     }
+    if (workflow === "community") {
+      const pending = await stripe.refunds.list({ charge: charge.id, limit: 100 }).autoPagingToArray({ limit: 1000 });
+      if (communityReleaseBlocked(order) || pending.length >= 1000 ||
+          pending.some((r: any) => !["failed", "canceled"].includes(r.status))) {
+        await save("on_hold", "An issue or refund blocks release. Resolve it before settlement."); return;
+      }
+    }
     if (!order.data.pickupConfirmedAt) { await save("awaiting_pickup"); return; }
     if (balance.status !== "available" || balance.available_on * 1000 > Date.now()) { await save("awaiting_funds"); return; }
     if (!execute) { await save("awaiting_deployment", "Automatic transfers run only on the published app."); return; }
@@ -117,6 +125,12 @@ export async function settleResaleSplit(orderId: string, tenantId: string, testS
       // Recheck the charge immediately before each outgoing share.
       const current = await stripe.charges.retrieve(charge.id);
       if (current.disputed || current.amount_refunded > 0) { await save("recovering", "Refund or dispute detected; recovery queued."); return; }
+      if (workflow === "community") {
+        const pending = await stripe.refunds.list({ charge: charge.id, limit: 100 }).autoPagingToArray({ limit: 1000 });
+        if (pending.length >= 1000 || pending.some((r: any) => !["failed", "canceled"].includes(r.status))) {
+          await save("on_hold", "A refund blocks release."); return;
+        }
+      }
       leg.attemptedAt ||= new Date().toISOString();
       await save("transferring");
       const transfer = await stripe.transfers.create({ amount: leg.amount, currency: "usd", destination: leg.destination,

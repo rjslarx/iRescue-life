@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS community_resale_audit (
  id uuid PRIMARY KEY, tenant_id uuid NOT NULL REFERENCES tenants(id), actor_id text NOT NULL,
  action text NOT NULL, data jsonb NOT NULL DEFAULT '{}', created_at timestamptz NOT NULL DEFAULT now()
 );
+CREATE INDEX IF NOT EXISTS community_audit_order ON community_resale_audit(tenant_id,(data->>'orderId'),created_at);
 CREATE TABLE IF NOT EXISTS community_resale_auth (
  id uuid PRIMARY KEY, email text NOT NULL, code_hash text NOT NULL, attempts int NOT NULL DEFAULT 0,
  token_hash text UNIQUE, expires_at timestamptz NOT NULL, created_at timestamptz NOT NULL DEFAULT now()

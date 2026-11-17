@@ -15,6 +15,7 @@ import { encrypt } from "../lib/encryption";
 import { resalePlatformFee } from "@shared/rescue-resale";
 import { calculateDestinationChargeEconomics, getDestinationChargeEconomicsMetadata } from "../config/platform";
 import { settleResaleSplit } from "../services/resale-split-settlement";
+import { updateCommunityPickup } from "../services/community-resale-pickup";
 
 export const communityRoute = (fn: any) => async (req: any, res: any) => {
   try { await fn(req, res); } catch (e: any) {
@@ -119,7 +120,7 @@ router.get("/me", communityRoute(async (req: any, res: any) => {
   const sales = (await pool.query(`SELECT o.* FROM community_resale_orders o JOIN community_resale_items i ON i.id=o.item_id
     WHERE i.seller_email=$1 OR o.buyer_email=$1 ORDER BY o.created_at DESC LIMIT 200`, [email])).rows;
   res.json({ items: items.map(r => ({ ...communityPublicItem(r), reviewNote: r.review_note })),
-    sales: sales.map(r => communityOrderView(r, r.buyer_email === email)) });
+     sales: sales.map(r => ({ ...communityOrderView(r, r.buyer_email === email), isBuyer: r.buyer_email === email })) });
 }));
 router.get("/payout-account", communityRoute(async (req: any, res: any) => {
   res.json(await payoutAccountView(uuid.parse(req.query.tenantId), sellerIdentity(await communityVerified(req))));
@@ -315,21 +316,26 @@ router.post("/orders/:id/confirm-pickup", communityRoute(async (req: any, res: a
   const r = (await pool.query(`SELECT o.* FROM community_resale_orders o JOIN community_resale_items i ON i.id=o.item_id
     WHERE o.id=$1 AND i.seller_email=$2`, [id, email])).rows[0];
   if (!r) fail("Sale not found", 404);
-  await syncCommunityOrder(id, r.tenant_id);
-  const c = await pool.connect();
-  try {
-    await c.query("BEGIN");
-    const update = await c.query(`UPDATE community_resale_orders SET status='completed',data=jsonb_set(data,'{pickupConfirmedAt}',to_jsonb(now()::text))
-      WHERE id=$1 AND status='paid' AND data->>'pickupCode'=$2 AND COALESCE(data->>'disputed','false')='false' RETURNING item_id`,
-      [id, code.toLowerCase()]);
-    if (!update.rows.length) fail("Incorrect code or payment is not eligible for handoff.", 409);
-    await c.query("UPDATE community_resale_items SET status='completed' WHERE id=$1", [r.item_id]);
-    await c.query("COMMIT");
-  } catch (e) { await c.query("ROLLBACK"); throw e; } finally { c.release(); }
+  await updateCommunityPickup(id, r.tenant_id, `seller:${hashResale(email)}`, "code_handoff", { code });
   if (r.data.proceedsMode === "split_50") {
     try { await settleResaleSplit(id, r.tenant_id, undefined, "community"); }
     catch { console.warn("[Community resale] Settlement queued for reconciliation"); }
   }
+  res.json({ ok: true });
+}));
+router.post("/orders/:id/issue", communityRoute(async (req: any, res: any) => {
+  const o = await ownedOrder(req);
+  const input = z.object({ description: z.string().trim().min(10).max(2000) }).strict().parse(req.body);
+  await updateCommunityPickup(o.id, o.tenant_id, `buyer:${hashResale(o.buyer_email)}`, "issue", input);
+  res.json({ ok: true });
+}));
+router.post("/orders/:id/pickup-help", communityRoute(async (req: any, res: any) => {
+  const email = await communityVerified(req);
+  const o = (await pool.query(`SELECT o.* FROM community_resale_orders o JOIN community_resale_items i ON i.id=o.item_id
+    WHERE o.id=$1 AND i.seller_email=$2`, [uuid.parse(req.params.id), email])).rows[0];
+  if (!o) fail("Sale not found.", 404);
+  const input = z.object({ description: z.string().trim().min(10).max(2000) }).strict().parse(req.body);
+  await updateCommunityPickup(o.id, o.tenant_id, `seller:${hashResale(email)}`, "pickup_help", input);
   res.json({ ok: true });
 }));
 router.use((error: any, _req: any, res: any, _next: any) => {

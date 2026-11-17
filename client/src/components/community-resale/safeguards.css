@@ -1,0 +1,14 @@
+.cr .cr-safeguards { min-width: 0; overflow-wrap: anywhere; }
+.cr .cr-safeguards fieldset { min-width: 0; border: 0; margin: 0; padding: 0; }
+.cr .cr-safeguards summary { min-height: 44px; padding: 10px 0; }
+.cr .cr-safeguards .cr-btn { min-height: 44px; }
+.cr .cr-safeguards dl { margin: 16px 0; }
+.cr .cr-finance-row { display: flex; flex-wrap: wrap; gap: 6px 18px; justify-content: space-between; border-bottom: 1px solid var(--cr-line); padding: 9px 0; }
+.cr .cr-finance-row dt { color: var(--cr-muted); }
+.cr .cr-finance-row dd { margin: 0; font-variant-numeric: tabular-nums; font-weight: 600; }
+.cr .cr-safeguard-record { border-top: 1px solid var(--cr-line); padding: 16px 0 4px; }
+.cr .cr-safeguard-description { white-space: pre-wrap; overflow-wrap: anywhere; }
+.cr .cr-safeguard-audit { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; max-height: 280px; overflow: auto; }
+@media (max-width: 767px) {
+  .cr .cr-safeguards .cr-row > .cr-btn { width: 100%; }
+}
