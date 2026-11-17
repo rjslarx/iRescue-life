@@ -26,3 +26,9 @@ Isolated ledger fixtures that omit dashboard route gates must establish tenant c
 **Why:** Tenant restoration occurs in a parent effect; a child query can start earlier with no tenant header. This is separate from refund-intent isolation.
 
 **How to apply:** Set tenant context before fixture navigation, keep strict request-header assertions, and do not claim this verifies real dashboard route-transition timing.
+
+Do not wait for Puppeteer's request event before releasing a response held inside an asynchronous interception handler.
+
+**Why:** A deferred interception handler can delay `waitForRequest` resolution until interception finishes, creating a circular wait instead of observing the pending UI.
+
+**How to apply:** Observe pending controls and count requests inside the interception handler, or signal arrival explicitly from that handler. Release held responses in cleanup even if assertions fail.

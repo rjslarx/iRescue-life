@@ -63,6 +63,8 @@ export async function runEmailRetryScenarios(browser: Browser, origin: string) {
                 await req.respond({ contentType: "application/json", body: JSON.stringify({ orders: [order] }) }); return;
               }
               if (req.method() === "POST" && path === `${root}/orders/${order.id}/retry-email`) {
+                // Keep every retry in flight until the pending-state assertions
+                // finish. Extra requests must be counted, not silently discarded.
                 await retryPending;
                 // Change only the requested recipient. The POST deliberately
                 // returns no statuses: the UI must refresh them from the ledger.
@@ -95,6 +97,15 @@ export async function runEmailRetryScenarios(browser: Browser, origin: string) {
             await assertStatuses(initialStatuses);
             const control = await page.waitForSelector(`button::-p-text(Retry ${label} email)`);
             assert.ok(control);
+            const otherControl = await page.waitForSelector(`button::-p-text(Retry ${recipient === "buyer" ? "seller" : "buyer"} email)`);
+            assert.ok(otherControl);
+            const assertRetryControls = async (disabled: boolean) => {
+              await page.waitForFunction(expected => {
+                const buttons = Array.from(document.querySelectorAll("button"))
+                  .filter(b => /^Retry (buyer|seller) email$/.test(b.textContent || ""));
+                return buttons.length === 2 && buttons.every(b => b.disabled === expected);
+              }, {}, disabled);
+            };
             await control.scrollIntoView();
             assert.equal(await control.evaluate(e => (e as HTMLButtonElement).disabled), !canManage);
             await control.click();
@@ -130,11 +141,7 @@ export async function runEmailRetryScenarios(browser: Browser, origin: string) {
                 acceptNext = true;
                 await control.click();
               } else await rapidClicks();
-              await page.waitForFunction(() => {
-                const buttons = Array.from(document.querySelectorAll("button"))
-                  .filter(b => /^Retry (buyer|seller) email$/.test(b.textContent || ""));
-                return buttons.length === 2 && buttons.every(b => b.disabled);
-              });
+              await assertRetryControls(true);
               await settle();
               const expectedPosts = [{
                 path: `${root}/orders/${order.id}/retry-email`, body: { recipient },
@@ -147,20 +154,33 @@ export async function runEmailRetryScenarios(browser: Browser, origin: string) {
                 .map(b => b.disabled)), [true, true], "Both retry controls stay disabled throughout the deferred response");
               assert.deepEqual(posts, expectedPosts, "Pending clicks must not send additional requests");
               await assertStatuses(initialStatuses);
+              // Real pointer clicks on both disabled controls must neither open
+              // another confirmation nor enqueue another recipient's request.
+              for (let attempt = 0; attempt < 3; attempt++) {
+                await control.click();
+                await otherControl.click();
+              }
+              await settle();
+              await assertRetryControls(true);
+              await assertStatuses(initialStatuses);
+              assert.equal(ledgerReads, readsBeforeRetry, "Pending retry must not refresh statuses before success");
+              assert.deepEqual(posts, expectedPosts, "Repeated pending clicks send only the selected-recipient POST");
+              assert.deepEqual(dialogs, mode === "native"
+                ? [confirmation, { ...confirmation, accepted: true }] : [confirmation],
+                "Both recipient controls must suppress confirmation while pending");
+              assert.equal(await page.evaluate(() => document.body.textContent?.includes(
+                "Email retry requested. Review the returned notification status.")), false,
+              "Success feedback must wait for the response");
               releaseRetry();
               await page.waitForFunction(() => document.body.textContent?.includes(
                 "Email retry requested. Review the returned notification status."));
-              await page.waitForFunction(() => Array.from(document.querySelectorAll("button"))
-                .filter(b => /^Retry (buyer|seller) email$/.test(b.textContent || ""))
-                .every(b => !b.disabled));
+              await assertRetryControls(false);
               await settle();
               await assertStatuses({ ...initialStatuses, [recipient]: "accepted" });
               assert.ok(ledgerReads > readsBeforeRetry, "Retry must refetch the ledger, not just show success feedback");
               assert.deepEqual(dialogs, mode === "native"
                 ? [confirmation, { ...confirmation, accepted: true }] : [confirmation]);
-              assert.deepEqual(posts, [{
-                path: `${root}/orders/${order.id}/retry-email`, body: { recipient },
-              }], "Explicit acceptance sends exactly one request to the selected recipient");
+              assert.deepEqual(posts, expectedPosts, "Response arrival must not send queued duplicate retries");
             } else {
               assert.deepEqual(dialogs, [], "Read-only staff cannot open retry confirmation");
               assert.deepEqual(posts, []);

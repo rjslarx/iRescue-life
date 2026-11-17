@@ -15,6 +15,10 @@ Each scenario runs for tenant and platform scopes at desktop and 390px mobile
 widths. Real clicks, form inputs, confirmation dialogs, reloads, sessionStorage,
 query invalidation, and fetch errors exercise:
 
+- Delayed email retry success for either recipient: both retry controls remain
+  disabled during repeated clicks, only one selected-recipient POST is sent,
+  statuses stay unchanged until success, and both controls recover after the
+  response and ledger refresh. No queued duplicate is sent on response arrival.
 - Lost response persistence, locked restored fields, no automatic resubmission.
 - Sync failure and exact-ID terminal matching (including `requestId` alias).
 - Unrelated refunds/balance changes and incomplete recovery never clearing intent.
