@@ -116,7 +116,7 @@ async function ledger(req: any, platform: boolean) {
   const tenantId = platform ? f.tenantId || null : req.tenant.id;
   return (await pool.query(`SELECT o.*,
     (SELECT COALESCE(jsonb_agg(a),'[]'::jsonb) FROM (
-      SELECT actor_id AS actor,action,created_at AS "createdAt",data FROM community_resale_audit
+      SELECT id AS "auditId",actor_id AS actor,action,created_at AS "createdAt",data FROM community_resale_audit
       WHERE tenant_id=o.tenant_id AND data->>'orderId'=o.id::text ORDER BY created_at DESC LIMIT 100
     ) a) AS audit,
     s.data->'rescue'->>'transferId' AS rescue_transfer_id,

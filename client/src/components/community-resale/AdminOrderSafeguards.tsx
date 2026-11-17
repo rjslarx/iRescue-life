@@ -4,6 +4,7 @@ import { communityRequest, useRefreshCommunity } from "@/hooks/use-community-res
 import { Check, date, ErrorBox, Feedback, Field, human, money } from "./CommunityUI";
 import { OrderSafeguardStatus, pickupBlocked } from "./OrderSafeguardStatus";
 import { savedRefundReference, settledRefund } from "@shared/community-refund-recovery";
+import { StaffDecisionAudit } from "./StaffDecisionAudit";
 
 type Scope = "tenant" | "platform";
 type RefundRequest = {
@@ -242,6 +243,6 @@ export function AdminOrderSafeguards({ order, scope, canManageFinancialActions =
     <details><summary>Notification audit & manual retry</summary><p>Buyer: {human(order.notificationStatus?.buyer)}</p><p>Seller: {human(order.notificationStatus?.donor)}</p><p className="cr-muted">Provider acceptance is not proof of delivery. Manual retry may duplicate email.</p><div className="cr-row">{(["buyer", "donor"] as const).map(recipient => <button key={recipient} className="cr-btn secondary" disabled={notificationAction.busy || !canManage} onClick={() => {
       if (window.confirm(`Retry ${recipient === "donor" ? "seller" : "buyer"} email? Check recorded status first to avoid duplicates.`)) void notificationAction.run(`/orders/${encodeURIComponent(order.id)}/retry-email`, "POST", { recipient }, "Email retry requested. Review the returned notification status.");
     }}>Retry {recipient === "donor" ? "seller" : "buyer"} email</button>)}</div><Feedback action={notificationAction} /></details>
-    <details><summary>Staff decision audit</summary>{order.audit?.length ? order.audit.map((entry: any, index: number) => <div className="cr-safeguard-record" key={`${entry.createdAt}:${index}`}><strong>{human(entry.action)}</strong><p>{human(entry.actor)} · {date(entry.createdAt)}</p><pre className="cr-safeguard-audit">{JSON.stringify(entry.data, null, 2)}</pre></div>) : <p className="cr-muted">No staff decision audit entries reported.</p>}</details>
+    <StaffDecisionAudit entries={order.audit} />
   </div>;
 }
