@@ -14,7 +14,10 @@ export function splitNetProceeds(gross: number, processing: number, platform: nu
  * Session advisory lock serializes replicas without rolling back durable provider
  * intents on network errors. Each external request is recorded before it is sent.
  */
-export async function settleResaleSplit(orderId: string, tenantId: string, testStripe?: any) {
+export async function settleResaleSplit(orderId: string, tenantId: string, testStripe?: any, workflow: "legacy" | "community" = "legacy") {
+  // Closed enum only: callers cannot supply SQL identifiers.
+  const orders = workflow === "community" ? "community_resale_orders" : "rescue_resale_orders";
+  const splits = workflow === "community" ? "community_resale_splits" : "rescue_resale_splits";
   const stripe: any = testStripe || stripeService.getPlatformStripeClient();
   if (!stripe) throw new Error("Stripe unavailable");
   const execute = !!testStripe || process.env.REPLIT_DEPLOYMENT === "1";
@@ -23,10 +26,10 @@ export async function settleResaleSplit(orderId: string, tenantId: string, testS
   let state: any, order: any;
   const save = async (status: string, error?: string) => {
     state.status = status; state.error = error || null;
-    await client.query("UPDATE rescue_resale_splits SET status=$2,data=$3,updated_at=now() WHERE order_id=$1", [orderId, status, state]);
+    await client.query(`UPDATE ${splits} SET status=$2,data=$3,updated_at=now() WHERE order_id=$1`, [orderId, status, state]);
     const contributorActual = state.contributor?.transferId ? state.contributor.amount - (state.contributor.reversed || 0) : 0;
     const rescueActual = state.rescue?.transferId ? state.rescue.amount - (state.rescue.reversed || 0) : 0;
-    await client.query(`UPDATE rescue_resale_orders SET data=jsonb_set(data,'{split}',$2::jsonb),
+    await client.query(`UPDATE ${orders} SET data=jsonb_set(data,'{split}',$2::jsonb),
       rescue_proceeds_cents=$3 WHERE id=$1 AND tenant_id=$4`,
     [orderId, JSON.stringify({ status, contributorCents: state.contributor?.amount ?? null,
       rescueCents: state.rescue?.amount ?? null, contributorTransferredCents: contributorActual,
@@ -34,10 +37,10 @@ export async function settleResaleSplit(orderId: string, tenantId: string, testS
   };
   try {
     await client.query("SELECT pg_advisory_lock(hashtext($1))", [lock]);
-    order = (await client.query("SELECT * FROM rescue_resale_orders WHERE id=$1 AND tenant_id=$2", [orderId, tenantId])).rows[0];
+    order = (await client.query(`SELECT * FROM ${orders} WHERE id=$1 AND tenant_id=$2`, [orderId, tenantId])).rows[0];
     if (!order || order.data.proceedsMode !== "split_50" || !order.payment_intent_id) return;
-    await client.query("INSERT INTO rescue_resale_splits(order_id,tenant_id) VALUES($1,$2) ON CONFLICT DO NOTHING", [orderId, tenantId]);
-    state = (await client.query("SELECT data FROM rescue_resale_splits WHERE order_id=$1", [orderId])).rows[0].data;
+    await client.query(`INSERT INTO ${splits}(order_id,tenant_id) VALUES($1,$2) ON CONFLICT DO NOTHING`, [orderId, tenantId]);
+    state = (await client.query(`SELECT data FROM ${splits} WHERE order_id=$1`, [orderId])).rows[0].data;
     const pi = await stripe.paymentIntents.retrieve(order.payment_intent_id, { expand: ["latest_charge.balance_transaction"] });
     const charge = pi.latest_charge;
     if (pi.status !== "succeeded" || pi.metadata?.resaleOrderId !== orderId || pi.metadata?.tenantId !== tenantId ||

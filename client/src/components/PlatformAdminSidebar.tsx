@@ -44,6 +44,11 @@ const navigationItems = [
     icon: Gamepad2,
   },
   {
+    title: "Community Resale",
+    url: "/platform/community-resale",
+    icon: BadgeDollarSign,
+  },
+  {
     title: "Audit Logs",
     url: "/platform/audit-logs",
     icon: FileText,

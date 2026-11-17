@@ -11,6 +11,7 @@ import { Loader2, Wallet, ArrowDownToLine, CreditCard, RefreshCw, ExternalLink, 
 import type { Donation, Expenditure } from "@shared/schema";
 import Papa from 'papaparse';
 import DashboardLayout from "@/components/DashboardLayout";
+import CommunityResaleLink from "@/components/community-resale/CommunityResaleLink";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -483,6 +484,7 @@ export default function FinancePage() {
       description="Track donations and expenditures"
     >
       <div className="flex-1 overflow-auto p-6 space-y-6">
+        {hasFinanceAccess && <CommunityResaleLink />}
         {hasFinanceAccess && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Card data-testid="card-balance-available">

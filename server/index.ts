@@ -6,6 +6,7 @@ import { catVaccineGuardSql } from "./lib/cat-vaccine-guard";
 import { donationAuditSchemaSql } from "./lib/donation-audit";
 import { rescueVendSchemaSql } from "./lib/rescue-vend-schema";
 import { rescueResaleSchemaSql } from "./lib/rescue-resale-schema";
+import { communityResaleSchemaSql } from "./lib/community-resale-schema";
 import { rescueHelpSchemaSql } from "./lib/rescue-help-schema";
 import { smsSuppressionSchemaSql } from "./lib/sms-suppression-schema";
 import { registerRoutes } from "./routes";
@@ -276,7 +277,7 @@ app.use((req, res, next) => {
     const duration = Date.now() - start;
     if (path.startsWith("/api")) {
       let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
+      if (capturedJsonResponse && !path.includes("community-resale")) {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
       }
 
@@ -302,6 +303,7 @@ app.use((req, res, next) => {
   await pool.query(rescueVendSchemaSql);
   console.log("[Startup] Preparing Rescue Resale");
   await pool.query(rescueResaleSchemaSql);
+  await pool.query(communityResaleSchemaSql);
   await pool.query(rescueHelpSchemaSql);
   await pool.query(smsSuppressionSchemaSql);
   console.log("[Startup] Preparing transport SMS operations");
@@ -316,6 +318,8 @@ app.use((req, res, next) => {
       resaleSweepRunning = true;
       try { await (await import("./services/rescue-resale")).reconcileResaleOrders(); }
       catch { console.warn("[Resale] Reconciliation unavailable; will retry"); }
+      try { await (await import("./services/community-resale")).reconcileCommunityOrders(); }
+      catch { console.warn("[Community resale] Reconciliation unavailable; will retry"); }
       try { await (await import("./services/resale-delivery")).reconcilePendingResaleDeliveries(); }
       catch { console.warn("[Resale] Delivery reconciliation unavailable; will retry"); }
       finally { resaleSweepRunning = false; }

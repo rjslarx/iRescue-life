@@ -541,6 +541,35 @@ export async function injectOGTags(req: Request, res: Response, next: NextFuncti
     return next();
   }
 
+  // Platform resale has its own beneficiaries; never infer one from the viewing hostname.
+  const communityPath = req.path;
+  if (communityPath === "/resale" || communityPath.startsWith("/resale/")) {
+    const match = communityPath.match(/^\/resale\/item\/([0-9a-f-]{36})\/?$/i);
+    const { communityBase } = await import("../services/community-resale");
+    let title = "Acadiana Rescue Resale";
+    let description = "Local secondhand finds supporting approved animal rescues. Arrange pickup in Messenger and pay securely.";
+    let image = "";
+    let canonical = `${communityBase()}/resale`;
+    if (match && UUID_PATTERN.test(match[1])) {
+      const { pool } = await import("../db");
+      const r = (await pool.query(`SELECT i.*,p.data->>'publicName' AS rescue_name FROM community_resale_items i
+        JOIN community_resale_partners p ON p.tenant_id=i.tenant_id
+        WHERE i.id=$1 AND i.status IN ('active','reserved','paid','completed')`, [match[1]])).rows[0];
+      if (r) {
+        title = `${r.data.title} | Acadiana Rescue Resale`;
+        const state = ["paid", "completed"].includes(r.status) ? "Sold" : r.status === "reserved" ? "Reserved" : `$${(r.data.askingCents / 100).toFixed(2)}`;
+        description = `${state} · Local pickup · Supports ${r.rescue_name}. ${r.data.proceedsMode === "split_50" ? "50/50 net proceeds split." : "All net proceeds support rescue."} Fees deducted within the price.`;
+        image = r.data.photos[0] ? new URL(r.data.photos[0], communityBase()).href : "";
+        canonical = `${communityBase()}/resale/item/${r.id}`;
+      } else res.set("X-Robots-Tag", "noindex, nofollow");
+    } else if (communityPath !== "/resale" && communityPath !== "/resale/") {
+      res.set({ "X-Robots-Tag": "noindex, nofollow", "Referrer-Policy": "no-referrer", "Cache-Control": "no-store" });
+      return next();
+    }
+    res.set("Cache-Control", "no-store");
+    return serveInjectedHtml(req, res, next, title, description, canonical, image, "Acadiana Rescue Resale");
+  }
+
   // ── Platform marketing pages (/platform/**) ──────────────────────────────
   // Served to ALL requests (no UA gate) so search engines, AI crawlers, and
   // even plain HTTP clients receive real titles/descriptions on the first

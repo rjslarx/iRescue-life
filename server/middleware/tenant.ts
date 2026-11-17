@@ -207,7 +207,7 @@ export async function resolveTenant(req: Request, res: Response, next: NextFunct
       // First try path-based routing (same as production platform domain)
       const pathMatch = req.path.match(/^\/([^\/]+)/);
       const firstPathSegment = pathMatch ? pathMatch[1] : null;
-      const reservedPaths = ['platform', 'api'];  // 'demo' is a real tenant, not reserved!
+      const reservedPaths = ['platform', 'api', 'resale'];  // 'demo' is a real tenant, not reserved!
       
       // Try path-based tenant first (for testing path-based routing in dev)
       if (firstPathSegment && !reservedPaths.includes(firstPathSegment)) {
@@ -273,7 +273,7 @@ export async function resolveTenant(req: Request, res: Response, next: NextFunct
       const firstPathSegment = pathMatch ? pathMatch[1] : null;
       
       // Reserved paths that are NOT tenants (platform routes)
-      const reservedPaths = ['platform', 'api'];  // 'demo' is a real tenant, not reserved!
+      const reservedPaths = ['platform', 'api', 'resale'];  // 'demo' is a real tenant, not reserved!
       
       // If we have a first path segment that's not reserved, treat it as a potential tenant subdomain
       if (firstPathSegment && !reservedPaths.includes(firstPathSegment)) {

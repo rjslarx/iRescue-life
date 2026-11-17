@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import RescueVendShareCard from "@/components/RescueVendShareCard";
 import ResaleToolkitCard from "@/components/resale/ResaleToolkitCard";
+import CommunityResaleLink from "@/components/community-resale/CommunityResaleLink";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import QRCode from "qrcode";
@@ -138,6 +139,7 @@ export default function FundraisingHubPage() {
   return (
     <DashboardLayout title="Donation & Fundraising Hub" description="Your centralized toolkit for managing donations, running campaigns, and maximizing fundraising impact.">
       <div className="space-y-6" data-testid="page-fundraising-hub">
+      <CommunityResaleLink />
 
       <Tabs defaultValue="toolkit" className="space-y-4">
         <TabsList data-testid="tabs-fundraising">

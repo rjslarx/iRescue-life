@@ -26,7 +26,7 @@ const RESERVED_PATHS = [
   'forgot-password', 'verify-email', 'unsubscribe', 'volunteer-training', 'contest',
   'vip-club', 'wall-of-heroes', 'surgery-day-request', 'matchmaker',
   'five-dollar-friday', 'foster-agreement', 'surrender-agreement',
-  'adoption-agreement', 'squares', 'rescue-vend', 'rescue-resale'
+  'adoption-agreement', 'squares', 'rescue-vend', 'rescue-resale', 'resale'
 ];
 
 // Helper to check if a path segment is reserved

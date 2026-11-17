@@ -131,6 +131,8 @@ import PublicFundraisersPage from "@/pages/PublicFundraisersPage";
 import RescueVendPage from "@/pages/RescueVendPage";
 import RescueResalePage from "@/pages/RescueResalePage";
 import RescueResaleAdminPage from "@/pages/RescueResaleAdminPage";
+import CommunityResalePage, { CommunityCreatePage, CommunityManagePage, CommunityItemPage, CommunityOrderPage } from "@/pages/CommunityResalePage";
+import CommunityResaleAdminPage, { PlatformCommunityResalePage } from "@/pages/CommunityResaleAdminPage";
 import RescueInboxPage from "@/pages/RescueInboxPage";
 import EventTicketCheckoutPage from "@/pages/EventTicketCheckoutPage";
 import EventSuccessPage from "@/pages/EventSuccessPage";
@@ -242,6 +244,7 @@ function RouterSwitch() {
       <Route path="/platform/users" component={UsersPage} />
       <Route path="/platform/feature-flags" component={FeatureFlagsPage} />
       <Route path="/platform/vip-game-pilot" component={VipGamePilotPage} />
+      <Route path="/platform/community-resale" component={PlatformCommunityResalePage} />
       <Route path="/platform/audit-logs" component={AuditLogsPage} />
       <Route path="/platform/announcements" component={AnnouncementsPage} />
       <Route path="/platform/health" component={SystemHealthPage} />
@@ -271,6 +274,11 @@ function RouterSwitch() {
       <Route path="/fundraisers" component={PublicFundraisersPage} />
       <Route path="/rescue-vend" component={RescueVendPage} />
       <Route path="/rescue-resale" component={RescueResalePage} />
+      <Route path="/resale" component={CommunityResalePage} />
+      <Route path="/resale/create" component={CommunityCreatePage} />
+      <Route path="/resale/manage" component={CommunityManagePage} />
+      <Route path="/resale/item/:id" component={CommunityItemPage} />
+      <Route path="/resale/order/:id" component={CommunityOrderPage} />
       <Route path="/donate/event/:eventId" component={FundraiserEventPage} />
       <Route path="/donate/:linkId" component={DonationLinkRedirectPage} />
       <Route path="/five-dollar-friday" component={FiveDollarFridayPage} />
@@ -334,6 +342,7 @@ function RouterSwitch() {
       <ProtectedRoute path="/dashboard/analytics" pageId="analytics" component={Analytics} />
       <ProtectedRoute path="/dashboard/finance" pageId="finance" component={FinancePage} />
       <ProtectedRoute path="/dashboard/rescue-resale" pageId="finance" component={RescueResaleAdminPage} />
+      <ProtectedRoute path="/dashboard/community-resale" pageId="finance" component={CommunityResaleAdminPage} />
       <ProtectedRoute path="/dashboard/donation-links" pageId="finance" component={DonationLinksPage} />
       <ProtectedRoute path="/dashboard/fundraising" pageId="finance" component={FundraisingHubPage} />
       <ProtectedRoute path="/dashboard/fundraisers/:eventId" pageId="fundraiser-events" component={FundraiserFulfillmentPage} />
@@ -621,7 +630,7 @@ function AppContent() {
   );
 }
 
-export default function App() {
+function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TenantProvider>
@@ -634,3 +643,5 @@ export default function App() {
     </QueryClientProvider>
   );
 }
+
+export default App;

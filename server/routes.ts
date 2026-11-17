@@ -32480,6 +32480,11 @@ Submitted: ${new Date().toLocaleString()}
         const chargeId = typeof dispute.charge === "string" ? dispute.charge : dispute.charge?.id;
         if (chargeId) {
           const charge = await stripeService.getPlatformStripeClient()!.charges.retrieve(chargeId);
+          if (charge.metadata?.type === "community_resale" && charge.metadata?.proceedsMode === "split_50") {
+            const { syncCommunityOrder } = await import("./services/community-resale");
+            await syncCommunityOrder(charge.metadata.resaleOrderId, charge.metadata.tenantId);
+            return res.json({ received: true });
+          }
           if (charge.metadata?.type === "rescue_resale" && charge.metadata?.proceedsMode === "split_50") {
             const { syncResaleOrder } = await import("./services/rescue-resale");
             await syncResaleOrder(charge.metadata.resaleOrderId, charge.metadata.tenantId);
@@ -32492,6 +32497,10 @@ Submitted: ${new Date().toLocaleString()}
         case 'checkout.session.expired':
         case 'charge.refunded': {
           const object = event.data.object as any;
+          if (object.metadata?.type === "community_resale") {
+            const { syncCommunityOrder } = await import("./services/community-resale");
+            await syncCommunityOrder(object.metadata.resaleOrderId, object.metadata.tenantId);
+          }
           if (object.metadata?.type === "rescue_resale") {
             const { syncResaleOrder } = await import("./services/rescue-resale");
             await syncResaleOrder(object.metadata.resaleOrderId, object.metadata.tenantId);
@@ -32664,6 +32673,11 @@ Submitted: ${new Date().toLocaleString()}
           console.log('[STRIPE-WEBHOOK] Processing checkout.session.completed event');
           const session = event.data.object as any;
 
+          if (session.metadata?.type === "community_resale") {
+            const { syncCommunityOrder } = await import("./services/community-resale");
+            await syncCommunityOrder(session.metadata.resaleOrderId, session.metadata.tenantId);
+            break;
+          }
           if (session.metadata?.type === "rescue_resale") {
             const { syncResaleOrder } = await import("./services/rescue-resale");
             await syncResaleOrder(session.metadata.resaleOrderId, session.metadata.tenantId);
@@ -47923,6 +47937,11 @@ The user asking is a tenant administrator or staff member.`;
   app.use('/api/public/rescue-vend', requireTenant, rescueVendRoutes.default);
   const rescueResaleRoutes = await import('./routes/rescueResale');
   app.use('/api/rescue-resale', requireTenant, rescueResaleRoutes.default);
+  const communityResaleRoutes = await import('./routes/communityResale');
+  const communityResaleAdmin = await import('./routes/communityResaleAdmin');
+  app.use('/api/community-resale', communityResaleRoutes.default);
+  app.use('/api/community-resale-admin', communityResaleAdmin.tenantCommunityRouter);
+  app.use('/api/platform/community-resale', communityResaleAdmin.platformCommunityRouter);
   const rescueHelpRoutes = await import('./routes/rescueHelp');
   app.use('/api/rescue-help', requireTenant, rescueHelpRoutes.default);
   app.use('/api/rescue-help-webhooks', rescueHelpRoutes.helpWebhooks);

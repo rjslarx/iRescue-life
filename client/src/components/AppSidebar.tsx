@@ -336,6 +336,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
       title: "Fundraising",
       items: [
         { title: "Fundraising Hub", url: "/dashboard/fundraising", icon: Megaphone },
+        { title: "Community Resale", url: "/dashboard/community-resale", icon: ShoppingBag },
         { title: "Donation Links", url: "/dashboard/donation-links", icon: DollarSign },
         { title: "Events & Products", url: "/dashboard/fundraisers", icon: TicketPercent },
         { title: "Event Ticket Sales", url: "/dashboard/event-ticket-sales", icon: Ticket },
@@ -433,6 +434,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
       title: "Fundraising",
       items: [
         { title: "Fundraising Hub", url: "/dashboard/fundraising", icon: Megaphone },
+        { title: "Community Resale", url: "/dashboard/community-resale", icon: ShoppingBag },
         { title: "Donation Links", url: "/dashboard/donation-links", icon: DollarSign },
         { title: "Events & Products", url: "/dashboard/fundraisers", icon: TicketPercent },
         { title: "Event Ticket Sales", url: "/dashboard/event-ticket-sales", icon: Ticket },
@@ -575,6 +577,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
     '/dashboard/team': 'team',
     '/dashboard/finance': 'finance',
     '/dashboard/fundraising': 'finance',
+    '/dashboard/community-resale': 'finance',
     '/dashboard/fundraisers': 'fundraiser-events',
     '/dashboard/donation-links': 'finance',
     '/dashboard/grants': 'grants',
@@ -714,6 +717,7 @@ export default function AppSidebar({ rescueName, userName, userRole }: AppSideba
   const pageIdToNavItems: Record<string, NavItem[]> = {
     finance: [
       { title: "Fundraising Hub", url: "/dashboard/fundraising", icon: Megaphone },
+      { title: "Community Resale", url: "/dashboard/community-resale", icon: ShoppingBag },
       { title: "Donation Links", url: "/dashboard/donation-links", icon: DollarSign },
       { title: "Finance", url: "/dashboard/finance", icon: DollarSign },
     ],

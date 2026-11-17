@@ -5,6 +5,18 @@ description: Approved first-version boundaries and safety decisions for the loca
 
 Rescue Resale is a separate page on the tenant website. Eligibility requires that tenant's configured Twilio SMS, not a Haseya-specific hardcoded allowlist. The user identified Haseya as the only currently eligible rescue.
 
+The separately approved Facebook-first community workflow does not require Twilio. It uses manual Facebook posts, Messenger coordination, email-verified sellers, and approved existing rescue tenants. Preserve the original SMS workflow.
+
+**Why:** The user explicitly requested a new workflow without deleting previous work, rather than a replacement or Facebook API integration.
+
+**How to apply:** Never relax the original workflow's Twilio guard globally. Keep courier and volunteer delivery excluded from both workflows.
+
+Community-gallery buyers need a reviewed public Facebook/Messenger contact link, not just a seller's first name. Keep that link with the order and explain that buyers must retain their Messenger conversation and share only the order reference after paying.
+
+**Why:** Manual sharing alone left buyers who discovered an item on the site unable to arrange pickup.
+
+**How to apply:** Require explicit disclosure that the contact link is public and may reveal Facebook identity; changing it must go through listing review again. Never put private access tokens in share links.
+
 New Rescue Resale sales owe the platform 5% of the total sale price, independent of tenant subscription tier. Deduct this and processing fees within the sale price; split only the remainder for 50/50 listings.
 
 **Why:** The user explicitly requested a feature-specific fee to cover additional platform expenses.
