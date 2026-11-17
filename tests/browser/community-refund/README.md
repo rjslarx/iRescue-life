@@ -31,6 +31,10 @@ query invalidation, and fetch errors exercise:
 - Malformed JSON and invalid saved intent fields fail closed without allocating
   an ID, erasing evidence, crashing, or posting a replacement refund.
 - Storage failures show actionable recovery instructions, not raw browser errors.
+- Rapid same-turn initial submits, unchanged retries, and corrected retries with
+  deferred sync/refund responses: one in-flight refund, one UUID, disabled
+  controls throughout pending work, and no resubmission on response arrival.
+  These cases cover same-component concurrency, not workspace-switch isolation.
 
 Four additional isolation scenarios run at both widths and with each workspace
 visited first. Each keeps one tab/context alive while two ledger orders appear

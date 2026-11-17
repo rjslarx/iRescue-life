@@ -90,6 +90,33 @@ async function fill(page: Page, amount = "25.00", reason = originalReason) {
   await page.click('form input[type="checkbox"]');
 }
 
+function deferredResponse() {
+  let release!: () => void;
+  let arrived!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  const started = new Promise<void>(resolve => { arrived = resolve; });
+  return { pending, started, release, arrived };
+}
+
+// Dispatch in one browser turn, before React can render disabled controls.
+// Native confirm is replaced only for this burst so dialogs cannot serialize it.
+async function rapidAction(page: Page, retry = false) {
+  await page.evaluate(retry => {
+    const original = window.confirm;
+    window.confirm = () => true;
+    try {
+      const form = document.querySelector("form")!;
+      const button = Array.from(document.querySelectorAll("button"))
+        .find(b => b.textContent === "Recheck & retry unchanged request");
+      if (retry && !button) throw new Error("Retry control missing before burst");
+      for (let i = 0; i < 8; i++) {
+        if (retry) button!.click();
+        else form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      }
+    } finally { window.confirm = original; }
+  }, retry);
+}
+
 let passed = 0;
 try {
   // Every scenario runs in a fresh browser context; reload alone preserves storage.
@@ -102,6 +129,7 @@ try {
         "sync failure", "initial persistence failure", "retry persistence failure",
         "correction persistence failure", "succeeded clearing failure",
         "failed clearing failure", "canceled clearing failure",
+        "rapid initial submit", "rapid unchanged retry", "rapid corrected retry",
         ...Object.keys(malformedIntents).map(name => `malformed: ${name}`),
       ];
       for (const scenario of scenarios) {
@@ -116,7 +144,10 @@ try {
         const route = scope === "tenant" ? "/demo/dashboard/community-resale" : "/platform/community-resale";
         const key = `community-refund-request:${scope}:refund-browser-order`;
         let order = baseOrder(), syncOrder = order, syncFailure = false;
-        let refundReply: "lost" | "rejected" | "pending" = ["correct rejected request", "correction persistence failure"].includes(scenario) ? "rejected" : "lost";
+        let refundReply: "lost" | "rejected" | "pending" = ["correct rejected request", "correction persistence failure", "rapid corrected retry"].includes(scenario) ? "rejected" : "lost";
+        let syncGate: ReturnType<typeof deferredResponse> | undefined;
+        let refundGate: ReturnType<typeof deferredResponse> | undefined;
+        let inFlightRefunds = 0, maxInFlightRefunds = 0;
         const posts: { path: string; body: any }[] = [];
         const seeded: Intent = { requestId: "11111111-1111-4111-8111-111111111111", amountCents: 2500, expectedRefundedCents: 0, reason: originalReason };
         if (scenario === "read-only staff") order.canManageFinancialActions = false;
@@ -144,15 +175,22 @@ try {
           if (req.method() === "GET" && path === `${root}/ledger`) { await json({ orders: [order] }); return; }
           posts.push({ path, body: JSON.parse(req.postData() || "{}") });
           if (path.endsWith("/sync")) {
+            if (syncGate) { syncGate.arrived(); await syncGate.pending; }
             if (syncFailure) await json({ error: "Mock sync unavailable" }, 500);
             else { order = syncOrder; await json({ order }); }
           } else if (path.endsWith("/refund")) {
+            const body = JSON.parse(req.postData() || "{}");
+            inFlightRefunds++;
+            maxInFlightRefunds = Math.max(maxInFlightRefunds, inFlightRefunds);
+            try {
+            if (refundGate) { refundGate.arrived(); await refundGate.pending; }
             if (refundReply === "lost") await req.abort("failed");
             else if (refundReply === "rejected") await json({ error: "Mock request rejected" }, 409);
             else {
-              order = { ...order, refunds: [{ id: posts.at(-1)!.body.requestId, status: "pending" }] };
+              order = { ...order, refunds: [{ id: body.requestId, status: "pending" }] };
               await json({ order });
             }
+            } finally { inFlightRefunds--; }
           } else { unexpected.push(path); await req.abort(); }
         });
         const stored = () => page.evaluate(key => JSON.parse(sessionStorage.getItem(key) || "null"), key) as Promise<Intent | null>;
@@ -161,10 +199,77 @@ try {
         const locked = async () => assert.equal(await page.$eval("form fieldset", e => (e as HTMLFieldSetElement).disabled), true);
         const waitIdle = () => page.waitForFunction(() => !Array.from(document.querySelectorAll("button")).some(b => /Working…|Submitting…/.test(b.textContent || "")));
         const sync = async () => { await button(page, "Sync with Stripe"); await waitIdle(); };
+        const assertBusy = async () => {
+          await text(page, "Submitting…");
+          await locked();
+          const controls = await page.$eval("form", form => {
+            const container = form.closest(".cr-safeguards")!;
+            return Array.from(container.querySelectorAll("button, input, textarea"))
+              .every(control => control.matches(":disabled"));
+          });
+          assert.equal(controls, true, "Sync, refund, retry and editable fields must be disabled while pending");
+        };
         try {
           await page.goto(origin + route);
           await text(page, "Fixture chair");
-          if (scenario.startsWith("malformed: ")) {
+          if (scenario.startsWith("rapid ")) {
+            await openForm(page);
+            await fill(page);
+            const retry = scenario !== "rapid initial submit";
+            if (retry) {
+              await button(page, "Request $25.00 refund");
+              await text(page, refundReply === "rejected" ? "Mock request rejected" : "Failed to fetch");
+              await waitIdle();
+              await sync();
+              await text(page, retryText);
+              if (scenario === "rapid corrected retry") {
+                await fill(page, "20.00", "Corrected buyer refund reason");
+              }
+              syncGate = deferredResponse();
+            }
+            refundReply = "pending";
+            refundGate = deferredResponse();
+            const baseline = refunds().length;
+            const syncBaseline = posts.filter(p => p.path.endsWith("/sync")).length;
+            const unchanged = scenario === "rapid unchanged retry";
+            await rapidAction(page, unchanged);
+            if (syncGate) {
+              await syncGate.started;
+              await assertBusy();
+              await rapidAction(page); // Scripted submit cannot bypass the pending retry.
+              assert.equal(refunds().length, baseline, "No refund before the deferred preflight sync completes");
+              assert.equal(posts.filter(p => p.path.endsWith("/sync")).length, syncBaseline + 1, "Only one retry preflight");
+              assert.equal(await count(), 1);
+              syncGate.release();
+            }
+            await refundGate.started;
+            await assertBusy();
+            await rapidAction(page);
+            const intent = (await stored())!;
+            assert.equal(refunds().length, baseline + 1, "Burst must send exactly one refund POST");
+            assert.equal(inFlightRefunds, 1);
+            assert.equal(maxInFlightRefunds, 1, "Refund requests must never overlap");
+            assert.equal(await count(), 1, "Burst must allocate only one UUID");
+            assert.equal(new Set(refunds().map(p => p.body.requestId)).size, 1);
+            assert.deepEqual(refunds().at(-1)!.body, {
+              requestId: intent.requestId,
+              amountCents: scenario === "rapid corrected retry" ? 2000 : 2500,
+              expectedRefundedCents: 0,
+              reason: scenario === "rapid corrected retry" ? "Corrected buyer refund reason" : originalReason,
+            });
+            refundGate.release();
+            await text(page, "Refund request recorded.");
+            await waitIdle();
+            // Let invalidation and subsequent renders settle; no queued click or
+            // effect may turn the late response into another financial request.
+            await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 150)));
+            await locked();
+            assert.equal(refunds().length, baseline + 1, "Response arrival must not resubmit");
+            assert.equal(posts.filter(p => p.path.endsWith("/sync")).length, syncBaseline + (retry ? 1 : 0));
+            assert.equal(inFlightRefunds, 0);
+            assert.equal(await count(), 1);
+            assert.deepEqual(await stored(), intent);
+          } else if (scenario.startsWith("malformed: ")) {
             const raw = malformedIntents[scenario.slice("malformed: ".length)];
             await page.evaluate(({ key, raw }) => sessionStorage.setItem(key, raw), { key, raw });
             await page.reload();
@@ -338,7 +443,11 @@ try {
           passed++;
         } catch (error) {
           throw new Error(`${scope} ${width}px: ${scenario}`, { cause: error });
-        } finally { await context.close(); }
+        } finally {
+          syncGate?.release();
+          refundGate?.release();
+          await context.close();
+        }
       }
     }
   }
