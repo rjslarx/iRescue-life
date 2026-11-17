@@ -38,6 +38,31 @@ const baseOrder = () => ({
   refundedCents: 0, status: "paid", disputed: false, refunds: [] as any[],
   finance: { pendingRefundCents: 0 }, canManageFinancialActions: true,
 });
+const malformedIntents: Record<string, string> = {
+  "invalid JSON": '{"requestId":',
+  "empty saved value": "",
+  "null intent": "null",
+  "array intent": "[]",
+  "missing fields": JSON.stringify({ requestId: "saved-request-reference" }),
+  "non-string reason": JSON.stringify({ requestId: "saved-request-reference", amountCents: 2500, expectedRefundedCents: 0, reason: 123 }),
+  "invalid amount": JSON.stringify({ requestId: "saved-request-reference", amountCents: -1, expectedRefundedCents: 0, reason: "Buyer requested refund" }),
+  "invalid balance": JSON.stringify({ requestId: "saved-request-reference", amountCents: 2500, expectedRefundedCents: "0", reason: "Buyer requested refund" }),
+  "invalid request ID": JSON.stringify({ requestId: 123, amountCents: 2500, expectedRefundedCents: 0, reason: "Buyer requested refund" }),
+  "invalid rejection status": JSON.stringify({ requestId: "saved-request-reference", amountCents: 2500, expectedRefundedCents: 0, reason: "Buyer requested refund", rejectionStatus: 200 }),
+};
+// Patch only the actual intent key. UUID instrumentation and fixture setup must
+// remain usable, and the native method must throw before mutating storage.
+async function failStorage(page: Page, key: string, method: "setItem" | "removeItem") {
+  await page.evaluate(({ key, method }) => {
+    const original = Storage.prototype[method];
+    Storage.prototype[method] = function (itemKey: string, value?: string) {
+      if (this === sessionStorage && itemKey === key) {
+        throw new DOMException("Mock browser storage denied", method === "setItem" ? "QuotaExceededError" : "SecurityError");
+      }
+      return original.call(this, itemKey, value!);
+    };
+  }, { key, method });
+}
 async function button(page: Page, text: string) {
   await page.waitForFunction(text => Array.from(document.querySelectorAll("button"))
     .some(b => b.textContent === text && !b.disabled), {}, text);
@@ -73,7 +98,10 @@ try {
         "lost response and unchanged retry", "exact terminal matching",
         "correct rejected request", "failed terminal", "canceled terminal",
         "read-only staff", "retry rechecks balance", "retry rechecks record",
-        "sync failure",
+        "sync failure", "initial persistence failure", "retry persistence failure",
+        "correction persistence failure", "succeeded clearing failure",
+        "failed clearing failure", "canceled clearing failure",
+        ...Object.keys(malformedIntents).map(name => `malformed: ${name}`),
       ];
       for (const scenario of scenarios) {
         const context = await browser.createBrowserContext();
@@ -87,7 +115,7 @@ try {
         const route = scope === "tenant" ? "/demo/dashboard/community-resale" : "/platform/community-resale";
         const key = `community-refund-request:${scope}:refund-browser-order`;
         let order = baseOrder(), syncOrder = order, syncFailure = false;
-        let refundReply: "lost" | "rejected" | "pending" = scenario === "correct rejected request" ? "rejected" : "lost";
+        let refundReply: "lost" | "rejected" | "pending" = ["correct rejected request", "correction persistence failure"].includes(scenario) ? "rejected" : "lost";
         const posts: { path: string; body: any }[] = [];
         const seeded: Intent = { requestId: "11111111-1111-4111-8111-111111111111", amountCents: 2500, expectedRefundedCents: 0, reason: originalReason };
         if (scenario === "read-only staff") order.canManageFinancialActions = false;
@@ -135,7 +163,38 @@ try {
         try {
           await page.goto(origin + route);
           await text(page, "Fixture chair");
-          if (scenario === "read-only staff") {
+          if (scenario.startsWith("malformed: ")) {
+            const raw = malformedIntents[scenario.slice("malformed: ".length)];
+            await page.evaluate(({ key, raw }) => sessionStorage.setItem(key, raw), { key, raw });
+            await page.reload();
+            await text(page, "The saved refund request cannot be read safely.");
+            await text(page, "Sync with Stripe and contact support to reconcile the saved request before trying again.");
+            await openForm(page);
+            await locked();
+            await sync();
+            await locked();
+            // Even a scripted submit cannot bypass the fail-closed guard.
+            await page.$eval("form", form => form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+            await waitIdle();
+            assert.equal(await page.evaluate(key => sessionStorage.getItem(key), key), raw, "Preserve corrupted evidence for reconciliation");
+            assert.equal(await page.evaluate(t => document.body.textContent!.includes(t), retryText), false);
+            assert.equal(refunds().length, 0);
+            assert.equal(await count(), 0, "Corrupted saved intent must not allocate a replacement request ID");
+          } else if (scenario === "initial persistence failure") {
+            await openForm(page);
+            await fill(page);
+            await failStorage(page, key, "setItem");
+            await button(page, "Request $25.00 refund");
+            await text(page, "The refund request could not be saved safely in browser storage.");
+            await text(page, "Restore browser storage access before trying again.");
+            await waitIdle();
+            assert.equal(refunds().length, 0, "No refund POST before durable intent persistence");
+            assert.equal(await stored(), null);
+            assert.equal(await count(), 1);
+            await page.reload();
+            await text(page, "Fixture chair");
+            assert.equal(refunds().length, 0, "Reload must not send the unsaved request");
+          } else if (scenario === "read-only staff") {
             await page.evaluate(({ key, seeded }) => sessionStorage.setItem(key, JSON.stringify(seeded)), { key, seeded });
             await page.reload();
             await text(page, "Financial actions require an authorized owner or administrator.");
@@ -165,7 +224,32 @@ try {
             assert.deepEqual(await stored(), intent);
             assert.equal(refunds().length, 1, "Reload must never submit a refund");
 
-            if (scenario === "exact terminal matching") {
+            if (scenario.endsWith("clearing failure")) {
+              const status = scenario.split(" ")[0];
+              syncOrder = { ...baseOrder(), refunds: [{ id: intent.requestId, status, recoveryStatus: "recovered" }] };
+              await failStorage(page, key, "removeItem");
+              await sync();
+              await text(page, "The reconciled refund request could not be cleared from browser storage.");
+              await text(page, "Restore browser storage access, then Sync with Stripe again.");
+              await locked();
+              assert.deepEqual(await stored(), intent);
+              await text(page, `Request reference: ${intent.requestId}`);
+              assert.equal(await page.evaluate(t => document.body.textContent!.includes(t), retryText), false);
+              await page.$eval("form", form => form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+              await waitIdle();
+              assert.equal(refunds().length, 1, "Failed clear must not allow a replacement POST");
+              await page.reload();
+              await text(page, `Request reference: ${intent.requestId}`);
+              await openForm(page);
+              await locked();
+              assert.deepEqual(await stored(), intent);
+              // Restoring storage alone does not unlock; an explicit sync must
+              // still reconcile the exact original ID before clearing it.
+              await sync();
+              await page.waitForFunction(key => sessionStorage.getItem(key) === null, {}, key);
+              assert.equal(await page.$eval("form fieldset", e => (e as HTMLFieldSetElement).disabled), false);
+              assert.equal(refunds()[0].body.requestId, intent.requestId);
+            } else if (scenario === "exact terminal matching") {
               for (const candidate of [
                 { id: "another-request", status: "succeeded", recoveryStatus: "recovered" },
                 { id: intent.requestId, status: "pending" },
@@ -196,7 +280,26 @@ try {
               syncOrder = baseOrder();
               await sync();
               await text(page, retryText);
-              if (scenario === "correct rejected request") {
+              if (scenario === "retry persistence failure" || scenario === "correction persistence failure") {
+                await failStorage(page, key, "setItem");
+                if (scenario === "correction persistence failure") {
+                  assert.equal(intent.rejectionStatus, 409);
+                  await fill(page, "20.00", "Corrected buyer refund reason");
+                  await button(page, "Request $20.00 refund with same ID");
+                } else {
+                  await locked();
+                  await button(page, retryText);
+                }
+                await text(page, "The refund request could not be saved safely in browser storage.");
+                await text(page, "If a request was already sent, Sync with Stripe and keep its original request reference; do not start a replacement refund.");
+                await waitIdle();
+                assert.equal(refunds().length, 1, "Failed retry persistence must not send a second POST");
+                assert.deepEqual(await stored(), intent, "Original saved ID and payload must survive failed overwrite");
+                await page.reload();
+                await text(page, `Request reference: ${intent.requestId}`);
+                assert.deepEqual(await stored(), intent);
+                assert.equal(refunds()[0].body.requestId, intent.requestId);
+              } else if (scenario === "correct rejected request") {
                 assert.equal((await stored())!.rejectionStatus, 409, "Tenant HTTP status must survive request wrapper");
                 await fill(page, "20.00", "Corrected buyer refund reason");
                 refundReply = "pending";
@@ -222,7 +325,7 @@ try {
                 }
               }
               assert.deepEqual(posts.slice(-2).map(p => p.path.split("/").at(-1)),
-                scenario.startsWith("retry rechecks") ? ["sync", "sync"] : ["sync", "refund"],
+                scenario.startsWith("retry rechecks") || scenario.endsWith("persistence failure") ? ["sync", "sync"] : ["sync", "refund"],
                 "Retry must recheck server state immediately before sending");
             }
             assert.equal(await count(), 1, "Uncertain/rejected outcomes must not allocate a replacement UUID");

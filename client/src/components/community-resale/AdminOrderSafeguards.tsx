@@ -31,9 +31,23 @@ function safeRefundSnapshot(order: any) {
     !order.disputed && !refundNeedsReview(order);
 }
 
-function readRequest(key: string): RefundRequest | null {
-  try { const value = sessionStorage.getItem(key); return value ? JSON.parse(value) : null; }
-  catch { return null; }
+function readRequest(key: string): { request: RefundRequest | null; error: Error | null } {
+  try {
+    const value = sessionStorage.getItem(key);
+    if (value === null) return { request: null, error: null };
+    const request = JSON.parse(value);
+    if (!request || typeof request !== "object" || Array.isArray(request) ||
+      typeof request.requestId !== "string" || !request.requestId.trim() ||
+      !Number.isSafeInteger(request.amountCents) || request.amountCents <= 0 ||
+      !Number.isSafeInteger(request.expectedRefundedCents) || request.expectedRefundedCents < 0 ||
+      typeof request.reason !== "string" || request.reason.trim().length < 10 || request.reason.trim().length > 2000 ||
+      (request.rejectionStatus !== undefined && ![400, 403, 409, 503].includes(request.rejectionStatus))) {
+      throw new Error("Invalid saved refund request");
+    }
+    return { request, error: null };
+  } catch {
+    return { request: null, error: new Error("The saved refund request cannot be read safely. Do not start a replacement refund. Sync with Stripe and contact support to reconcile the saved request before trying again.") };
+  }
 }
 function centsFromInput(value: string): number | null {
   if (!/^\d+(?:\.\d{1,2})?$/.test(value)) return null;
@@ -46,7 +60,8 @@ function AdminRefund({ order, scope, canManage }: { order: any; scope: Scope; ca
   const action = useCommunityAction(scope);
   const refresh = useRefreshCommunity();
   const key = `community-refund-request:${scope}:${order.id}`;
-  const [request, setRequest] = useState<RefundRequest | null>(() => readRequest(key));
+  const [saved] = useState(() => readRequest(key));
+  const [request, setRequest] = useState<RefundRequest | null>(saved.request);
   const requestInFlight = useRef(false);
   const [amount, setAmount] = useState(() => request ? (request.amountCents / 100).toFixed(2) : "");
   const [reason, setReason] = useState(() => request?.reason || "");
@@ -79,7 +94,7 @@ function AdminRefund({ order, scope, canManage }: { order: any; scope: Scope; ca
     if (own && ["succeeded", "failed", "canceled"].includes(own.status) &&
       (own.status !== "succeeded" || ["recovered", "split_reconciliation"].includes(own.recoveryStatus))) {
       try { sessionStorage.removeItem(key); setRequest(null); setSyncedOrder(null); }
-      catch (err) { setStorageError(err); }
+      catch { setStorageError(new Error("The reconciled refund request could not be cleared from browser storage. Do not start a replacement refund. Restore browser storage access, then Sync with Stripe again.")); }
     }
   }, [request, syncedOrder, key]);
 
@@ -91,7 +106,7 @@ function AdminRefund({ order, scope, canManage }: { order: any; scope: Scope; ca
     return null;
   }
   async function send(next: RefundRequest, unchangedRetry = false) {
-    if (busy || requestInFlight.current || !canManage) return;
+    if (busy || requestInFlight.current || !canManage || saved.error) return;
     requestInFlight.current = true; setSubmitting(true); setStorageError(null); setSubmitError(null); setSubmitMessage("");
     try {
       if (request) {
@@ -142,7 +157,7 @@ function AdminRefund({ order, scope, canManage }: { order: any; scope: Scope; ca
       }
       setConfirmed(false);
       try { await refresh(); } catch (err) { setSubmitError(err); }
-    } catch (err) { setStorageError(err); }
+    } catch { setStorageError(new Error("The refund request could not be saved safely in browser storage. Restore browser storage access before trying again. If a request was already sent, Sync with Stripe and keep its original request reference; do not start a replacement refund.")); }
     finally { requestInFlight.current = false; setSubmitting(false); }
   }
   return <div className="cr-safeguards"><button className="cr-btn secondary" disabled={busy} onClick={() => void sync()}>{busy ? "Working…" : "Sync with Stripe"}</button>
@@ -156,10 +171,10 @@ function AdminRefund({ order, scope, canManage }: { order: any; scope: Scope; ca
       {!eligible && <p className="cr-note">This payment is not eligible for a new refund here. Disputed payments require separate review.</p>}
       <form onSubmit={async e => {
         e.preventDefault();
-        if (!canManage || !eligible || !valid || !confirmed || (request && !canCorrect) || pending || busy || requestInFlight.current) return;
+        if (!canManage || saved.error || !eligible || !valid || !confirmed || (request && !canCorrect) || pending || busy || requestInFlight.current) return;
         if (!window.confirm(`Request a buyer refund of ${money(cents)}? Refund and transfer recovery can fail separately. The application-fee refund is proportional; original processing costs can remain. Check the recorded outcome after submitting.`)) return;
         await send({ requestId: request?.requestId || crypto.randomUUID(), amountCents: cents!, expectedRefundedCents: reportedRefunded, reason: reason.trim() });
-      }}><fieldset disabled={busy || (!!request && !canCorrect) || !!pending || !knownBalance || !eligible}>
+      }}><fieldset disabled={!!saved.error || busy || (!!request && !canCorrect) || !!pending || !knownBalance || !eligible}>
         <Field label="Refund amount (USD)"><input required type="text" inputMode="decimal" value={amount} onChange={e => { setAmount(e.target.value); setConfirmed(false); }} placeholder="0.00" /></Field>
         <button type="button" className="cr-btn secondary" disabled={remaining == null || remaining <= 0} onClick={() => { if (remaining != null) setAmount((remaining / 100).toFixed(2)); setConfirmed(false); }}>Use full remaining amount</button>
         {amount && !valid && <p className="cr-muted">Enter a positive amount with at most two decimal places, no more than the remaining balance, and a reason of 10–2,000 characters.</p>}
@@ -167,7 +182,7 @@ function AdminRefund({ order, scope, canManage }: { order: any; scope: Scope; ca
         <Check checked={confirmed} onChange={setConfirmed}>I understand the buyer refund and recovery from recipients can fail separately. The application fee is refunded proportionally; the original processing cost may remain. A submitted request is not proof of a successful refund.</Check>
         <button className="cr-btn danger" disabled={!valid || !confirmed || busy || (!!request && !canCorrect) || !!pending}>{busy ? "Submitting…" : `Request ${cents == null ? "buyer" : money(cents)} refund${request ? " with same ID" : ""}`}</button>
       </fieldset></form>
-    </details>}<ErrorBox error={storageError} /><ErrorBox error={submitError} />{submitMessage && <p className="cr-note" role="status">{submitMessage}</p>}<Feedback action={action} />
+    </details>}<ErrorBox error={saved.error} /><ErrorBox error={storageError} /><ErrorBox error={submitError} />{submitMessage && <p className="cr-note" role="status">{submitMessage}</p>}<Feedback action={action} />
   </div>;
 }
 

@@ -24,6 +24,13 @@ query invalidation, and fetch errors exercise:
 - Failed/canceled outcomes clearing intent without reporting refunded funds.
 - Read-only staff lacking refund/retry controls even with a stored intent.
 - UUID allocation counts surviving reload: no replacement on uncertain outcomes.
+- Throwing `sessionStorage.setItem` before initial submission and same-ID retries
+  (including corrected rejections): no refund POST until persistence succeeds.
+- Throwing `removeItem` for succeeded/failed/canceled exact-ID records: saved
+  reference and locked form survive reload until storage and explicit sync recover.
+- Malformed JSON and invalid saved intent fields fail closed without allocating
+  an ID, erasing evidence, crashing, or posting a replacement refund.
+- Storage failures show actionable recovery instructions, not raw browser errors.
 
 The existing `tests/community-resale-safeguards.test.ts` complements this suite
 with server-side idempotency and recovery checks; it is not replaced.
