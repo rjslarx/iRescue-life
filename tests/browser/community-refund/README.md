@@ -41,6 +41,11 @@ query invalidation, and fetch errors exercise:
   read-only staff have no recovery control.
 - Split recovery pending/failure responses and a hand-off-only result retain the
   damaged-intent block; only a verified recovered result permits retirement.
+- Delayed preflight sync failures for unchanged/corrected retries send no refund.
+  Delayed network failures and HTTP rejections for initial/unchanged/corrected
+  submissions preserve the saved ID and payload, release busy controls, and do
+  not queue another request. Explicit sync and unchanged retry recover using
+  that same ID, with one UUID and no overlapping refund requests throughout.
 
 `npx tsx --test tests/community-refund-intent-recovery.test.ts` checks the recovery
 service with mocked database/provider boundaries: exact identity, terminal status,

@@ -133,6 +133,9 @@ try {
         ...["succeeded", "failed", "canceled", "absent", "pending", "unresolved recovery",
           "split pending", "split failed", "split handoff only",
           "lost response", "wrong reference", "storage failure", "changed evidence", "read-only"].map(s => `recovery: ${s}`),
+        "delayed sync unchanged", "delayed sync corrected",
+        ...["initial", "unchanged", "corrected"].flatMap(action =>
+          ["lost", "rejected"].map(outcome => `delayed refund ${action} ${outcome}`)),
         ...Object.keys(malformedIntents).map(name => `malformed: ${name}`),
       ];
       for (const scenario of scenarios) {
@@ -229,7 +232,93 @@ try {
         try {
           await page.goto(origin + route);
           await text(page, "Fixture chair");
-          if (scenario.startsWith("rapid ")) {
+          if (scenario.startsWith("delayed ")) {
+            const syncError = scenario.startsWith("delayed sync");
+            const initial = scenario.includes("initial");
+            const corrected = scenario.includes("corrected");
+            const rejected = scenario.endsWith("rejected");
+            await openForm(page);
+            await fill(page);
+            if (!initial) {
+              refundReply = corrected ? "rejected" : "lost";
+              await button(page, "Request $25.00 refund");
+              await text(page, corrected ? "Mock request rejected" : "Failed to fetch");
+              await waitIdle();
+              await sync();
+              await text(page, retryText);
+              if (corrected) await fill(page, "20.00", "Corrected buyer refund reason");
+            }
+            const before = await stored();
+            const baseline = refunds().length;
+            const syncBaseline = posts.filter(p => p.path.endsWith("/sync")).length;
+            refundReply = rejected ? "rejected" : "lost";
+            if (!initial) syncGate = deferredResponse();
+            refundGate = deferredResponse();
+            syncFailure = syncError;
+            await rapidAction(page, !initial && !corrected);
+            if (syncGate) {
+              await syncGate.started;
+              await assertBusy();
+              await rapidAction(page);
+              assert.equal(refunds().length, baseline, "No refund while preflight is unresolved");
+              assert.equal(posts.filter(p => p.path.endsWith("/sync")).length, syncBaseline + 1);
+              assert.deepEqual(await stored(), before);
+              syncGate.release();
+            }
+            let sent: Intent | null = null;
+            if (!syncError) {
+              await refundGate.started;
+              await assertBusy();
+              await rapidAction(page);
+              sent = (await stored())!;
+              assert.ok(sent.requestId);
+              if (before) assert.equal(sent.requestId, before.requestId);
+              assert.deepEqual(refunds().at(-1)!.body, {
+                requestId: sent.requestId, amountCents: corrected ? 2000 : 2500,
+                expectedRefundedCents: 0,
+                reason: corrected ? "Corrected buyer refund reason" : originalReason,
+              });
+              assert.equal(refunds().length, baseline + 1);
+              assert.equal(inFlightRefunds, 1);
+              refundGate.release();
+            }
+            await text(page, syncError ? "Mock sync unavailable" : rejected ? "Mock request rejected" : "Failed to fetch");
+            await waitIdle();
+            await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 150)));
+            const retained = syncError ? before! : { ...sent!, ...(rejected ? { rejectionStatus: 409 } : {}) };
+            assert.deepEqual(await stored(), retained, "Delayed failure must retain the original intent");
+            await text(page, `Request reference: ${retained.requestId}`);
+            await locked();
+            assert.equal(await page.evaluate(t => document.body.textContent!.includes(t), retryText), false);
+            assert.equal(await page.evaluate(() => Array.from(document.querySelectorAll("button"))
+              .some(b => b.textContent === "Sync with Stripe" && !b.disabled)), true, "Sync must leave busy state");
+            assert.equal(refunds().length, baseline + (syncError ? 0 : 1), "Failure must not queue a refund");
+            assert.equal(posts.filter(p => p.path.endsWith("/sync")).length, syncBaseline + (initial ? 0 : 1));
+            assert.equal(inFlightRefunds, 0);
+            assert.equal(await count(), 1);
+
+            // Recover explicitly, never through a queued action or a replacement ID.
+            syncGate = undefined;
+            refundGate = undefined;
+            syncFailure = false;
+            refundReply = "pending";
+            const recoveryBaseline = refunds().length;
+            await sync();
+            await text(page, retryText);
+            assert.equal(refunds().length, recoveryBaseline, "Recovery sync alone must not refund");
+            await button(page, retryText);
+            await text(page, "Refund request recorded.");
+            await waitIdle();
+            assert.equal(refunds().length, recoveryBaseline + 1);
+            const { rejectionStatus: _, ...payload } = retained;
+            assert.deepEqual(refunds().at(-1)!.body, payload, "Recovery must reuse the saved ID and payload");
+            assert.deepEqual(await stored(), payload);
+            assert.deepEqual(posts.slice(-3).map(p => p.path.split("/").at(-1)), ["sync", "sync", "refund"]);
+            assert.equal(await count(), 1, "Recovery must not allocate a replacement UUID");
+            assert.equal(maxInFlightRefunds, 1);
+            assert.equal(inFlightRefunds, 0);
+            await locked();
+          } else if (scenario.startsWith("rapid ")) {
             await openForm(page);
             await fill(page);
             const retry = scenario !== "rapid initial submit";
