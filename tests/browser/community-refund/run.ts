@@ -130,6 +130,9 @@ try {
         "correction persistence failure", "succeeded clearing failure",
         "failed clearing failure", "canceled clearing failure",
         "rapid initial submit", "rapid unchanged retry", "rapid corrected retry",
+        ...["succeeded", "failed", "canceled", "absent", "pending", "unresolved recovery",
+          "split pending", "split failed", "split handoff only",
+          "lost response", "wrong reference", "storage failure", "changed evidence", "read-only"].map(s => `recovery: ${s}`),
         ...Object.keys(malformedIntents).map(name => `malformed: ${name}`),
       ];
       for (const scenario of scenarios) {
@@ -150,7 +153,7 @@ try {
         let inFlightRefunds = 0, maxInFlightRefunds = 0;
         const posts: { path: string; body: any }[] = [];
         const seeded: Intent = { requestId: "11111111-1111-4111-8111-111111111111", amountCents: 2500, expectedRefundedCents: 0, reason: originalReason };
-        if (scenario === "read-only staff") order.canManageFinancialActions = false;
+        if (scenario === "read-only staff" || scenario === "recovery: read-only") order.canManageFinancialActions = false;
         // Record UUID allocation across reloads, not just the last outbound body.
         await page.evaluateOnNewDocument(() => {
           const randomUUID = crypto.randomUUID.bind(crypto);
@@ -178,6 +181,20 @@ try {
             if (syncGate) { syncGate.arrived(); await syncGate.pending; }
             if (syncFailure) await json({ error: "Mock sync unavailable" }, 500);
             else { order = syncOrder; await json({ order }); }
+          } else if (path.endsWith("/recover-refund-intent")) {
+            if (scenario === "recovery: lost response") { await req.abort("failed"); return; }
+            if (["recovery: absent", "recovery: pending", "recovery: unresolved recovery",
+              "recovery: split pending", "recovery: split failed"].includes(scenario)) {
+              await json({ error: "Outcome is ambiguous. Absence is not proof that a refund was never sent." }, 409); return;
+            }
+            if (scenario === "recovery: changed evidence")
+              await page.evaluate(key => sessionStorage.setItem(key, '{"changed":true}'), key);
+            const status = ["recovery: failed", "recovery: canceled"].includes(scenario) ? scenario.split(": ")[1] : "succeeded";
+            order = { ...baseOrder(), refundedCents: status === "succeeded" ? 2500 : 0,
+              refunds: [{ id: seeded.requestId, status, recoveryStatus: "recovered" }] };
+            await json({ retired: true, orderId: order.id, auditId: "verified-audit",
+              requestId: scenario === "recovery: wrong reference" ? "other" : seeded.requestId, status,
+              recoveryStatus: scenario === "recovery: split handoff only" ? "split_reconciliation" : "recovered" });
           } else if (path.endsWith("/refund")) {
             const body = JSON.parse(req.postData() || "{}");
             inFlightRefunds++;
@@ -269,6 +286,35 @@ try {
             assert.equal(inFlightRefunds, 0);
             assert.equal(await count(), 1);
             assert.deepEqual(await stored(), intent);
+          } else if (scenario.startsWith("recovery: ")) {
+            const raw = JSON.stringify({ ...seeded, amountCents: "damaged" });
+            await page.evaluate(({ key, raw }) => sessionStorage.setItem(key, raw), { key, raw });
+            await page.reload(); await text(page, "The saved refund request cannot be read safely.");
+            if (scenario === "recovery: read-only") {
+              assert.equal(await page.evaluate(() => document.body.textContent!.includes("Reconcile damaged saved request")), false);
+              assert.equal(posts.length, 0);
+            } else {
+              await openForm(page); await locked();
+              if (scenario === "recovery: storage failure") await failStorage(page, key, "removeItem");
+              await button(page, "Reconcile damaged saved request"); await waitIdle();
+              assert.deepEqual(posts.filter(p => p.path.endsWith("/recover-refund-intent")).map(p => p.body), [{ savedIntent: raw }]);
+              if (["recovery: succeeded", "recovery: failed", "recovery: canceled"].includes(scenario)) {
+                await text(page, "Original evidence is preserved in the staff audit. No new refund was sent.");
+                assert.equal(await stored(), null);
+                assert.equal(await page.$eval("form fieldset", e => (e as HTMLFieldSetElement).disabled), false);
+                await page.reload(); await text(page, "Fixture chair");
+                assert.equal(await stored(), null);
+              } else {
+                await text(page, "Recovery did not retire the saved request.");
+                await locked();
+                assert.equal(await page.evaluate(key => sessionStorage.getItem(key), key),
+                  scenario === "recovery: changed evidence" ? '{"changed":true}' : raw);
+                await page.$eval("form", form => form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+                await page.reload(); await text(page, "The saved refund request cannot be read safely.");
+              }
+            }
+            assert.equal(refunds().length, 0, "Recovery never issues a refund");
+            assert.equal(await count(), 0, "Recovery never mints a replacement ID");
           } else if (scenario.startsWith("malformed: ")) {
             const raw = malformedIntents[scenario.slice("malformed: ".length)];
             await page.evaluate(({ key, raw }) => sessionStorage.setItem(key, raw), { key, raw });

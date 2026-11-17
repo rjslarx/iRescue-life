@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { stripeService } from "../lib/stripe-service";
 import { withCommunityOrderLock } from "./community-resale-lock";
+import { savedRefundReference, settledRefund } from "../../shared/community-refund-recovery";
 
 const fail = (message: string, status = 409): never => { throw Object.assign(new Error(message), { status }); };
 const ref = (v: any): string | undefined => typeof v === "string" ? v : v?.id;
@@ -147,6 +148,37 @@ export async function trackCommunityRefundRecovery(c: any, o: any, finance: any)
     [o.id, needsReview, new Date().toISOString(), o.tenant_id]);
 }
 
+/** split_reconciliation is a hand-off, not evidence that either reversal
+ * finished. Check both durable legs against live provider cashflows while the
+ * caller holds the same lock used by split settlement. Never repair by sending. */
+async function verifySplitRefundRecovery(c: any, o: any, stripe: any, charge: any) {
+  const unresolved = () => fail("Split refund recovery is still unresolved. Sync with Stripe or contact support; keep the saved evidence.");
+  const state = (await c.query("SELECT data,status FROM community_resale_splits WHERE order_id=$1 AND tenant_id=$2",
+    [o.id, o.tenant_id])).rows[0];
+  // Partial refunds intentionally keep the split paused for proceeds review.
+  // That pause can coexist with completed recovery, verified below.
+  if (!state || !["refunded", "needs_review"].includes(state.status) || charge.disputed) unresolved();
+  const history = await all(stripe.transfers.list({ transfer_group: `resale_${o.id}`, limit: 100 }));
+  const known = new Set<string>();
+  for (const role of ["rescue", "contributor"]) {
+    const leg = state.data?.[role];
+    if (!leg || !Number.isSafeInteger(leg.amount) || leg.amount < 0) unresolved();
+    if (leg.amount === 0 && !leg.attemptedAt && !leg.transferId) continue;
+    // An attempted transfer with no ID remains uncertain even if list is empty.
+    if (!leg.transferId || known.has(leg.transferId)) unresolved();
+    const transfer = await stripe.transfers.retrieve(leg.transferId);
+    if (!transfer || transfer.id !== leg.transferId ||
+      transfer.amount !== leg.amount || transfer.amount_reversed !== transfer.amount ||
+      transfer.currency !== "usd" || ref(transfer.source_transaction) !== charge.id ||
+      ref(transfer.destination) !== leg.destination ||
+      leg.destination !== o.data[role === "rescue" ? "rescueAccountId" : "contributorAccountId"] ||
+      transfer.metadata?.resaleOrderId !== o.id || transfer.metadata?.tenantId !== o.tenant_id ||
+      transfer.metadata?.resaleLeg !== role) unresolved();
+    known.add(transfer.id);
+  }
+  if (history.length !== known.size || history.some((t: any) => !known.has(t.id))) unresolved();
+}
+
 export async function requestCommunityRefund(id: string, tenantId: string, actor: string,
   input: { requestId: string; amountCents: number; expectedRefundedCents: number; reason: string }, testStripe?: any) {
   const stripe = testStripe || stripeService.getPlatformStripeClient();
@@ -166,6 +198,8 @@ export async function requestCommunityRefund(id: string, tenantId: string, actor
       if (charge.disputed || pending || o.data.refunds.some((r: any) => !["succeeded", "failed", "canceled"].includes(r.status) ||
           (r.status === "succeeded" && !["recovered", "split_reconciliation"].includes(r.recoveryStatus))))
         fail("An existing refund, recovery or dispute needs review before another refund.");
+      if (o.data.proceedsMode === "split_50" && o.data.refunds.some((r: any) => r.status === "succeeded"))
+        await verifySplitRefundRecovery(c, o, stripe, charge);
       if (input.expectedRefundedCents !== charge.amount_refunded) fail("Refund balance changed. Sync before requesting a refund.");
       if (!Number.isSafeInteger(input.amountCents) || input.amountCents <= 0 || input.amountCents > charge.amount - charge.amount_refunded)
         fail("Refund exceeds the remaining refundable balance.", 400);
@@ -182,5 +216,42 @@ export async function requestCommunityRefund(id: string, tenantId: string, actor
     }
     await reconcileCommunityRefunds(c, o, stripe, true);
     return o.data.refunds;
+  });
+}
+
+/** Authorized route only. Read-only provider reconciliation; never creates a
+ * refund, reversal, or fee refund. Retain the exact damaged evidence in audit
+ * before permitting this browser to retire its local guard. */
+export async function recoverCommunityRefundIntent(id: string, tenantId: string, actor: string,
+  raw: string, testStripe?: any) {
+  const requestId = savedRefundReference(raw);
+  if (!requestId) fail("The original request reference cannot be recovered. Keep the saved evidence and contact support; no replacement refund is safe.");
+  const stripe = testStripe || stripeService.getPlatformStripeClient();
+  if (!stripe) fail("Stripe is unavailable.", 503);
+  return withCommunityOrderLock(id, async c => {
+    const o = (await c.query("SELECT * FROM community_resale_orders WHERE id=$1 AND tenant_id=$2", [id, tenantId])).rows[0];
+    if (!o) fail("Order not found.", 404);
+    const matches = (o.data.refunds || []).filter((r: any) => r.id === requestId);
+    if (matches.length !== 1) fail("No unique matching refund record was found. Absence is not proof that a refund was never sent. Keep the saved evidence and contact support.");
+    await reconcileCommunityRefunds(c, o, stripe, false);
+    const op = matches[0];
+    const charge = await verifiedCommunityCharge(stripe, o);
+    let recoveryStatus = op.recoveryStatus;
+    if (op.status === "succeeded" && o.data.proceedsMode === "split_50") {
+      await verifySplitRefundRecovery(c, o, stripe, charge);
+      recoveryStatus = "recovered";
+    }
+    if (!settledRefund({ ...op, recoveryStatus })) fail("This refund or its recovery is still unresolved. Keep the saved evidence and contact support.");
+    const provider = await stripe.refunds.retrieve(op.refundId);
+    if (charge.disputed || !provider || provider.status !== op.status ||
+      ref(provider.charge) !== charge.id || provider.amount !== op.amountCents ||
+      provider.metadata?.communityRefundId !== requestId ||
+      provider.metadata?.resaleOrderId !== id || provider.metadata?.tenantId !== tenantId)
+      fail("The refund identity or payment state could not be verified. Keep the saved evidence and contact support.");
+    const auditId = randomUUID();
+    await c.query("INSERT INTO community_resale_audit(id,tenant_id,actor_id,action,data) VALUES($1,$2,$3,'refund_intent_recovered',$4)",
+      [auditId, tenantId, actor, { orderId: id, requestId, savedIntent: raw,
+        refundId: provider.id, status: op.status, recoveryStatus }]);
+    return { retired: true, orderId: id, requestId, auditId, status: op.status, recoveryStatus };
   });
 }

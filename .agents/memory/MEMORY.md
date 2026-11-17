@@ -53,3 +53,4 @@
 - [SMS provider suppression](sms-provider-suppression.md) — START clears provider-event suppression only, never independent account opt-outs or marketing consent.
 - [Shared rescue help phone](rescue-help-phone.md) — separate public-help number; approved FAQ answers and volunteer inbox; no number purchase or activation without approval.
 - [Catalog response compatibility](catalog-response-compatibility.md) — strict older editors reject added response fields; preserve response shape and settings omitted by legacy clients.
+- [Damaged refund recovery](damaged-refund-recovery.md) — no manual matching or absence-based clearing; unverifiable original identity must remain blocked for support.

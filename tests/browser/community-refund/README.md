@@ -35,6 +35,18 @@ query invalidation, and fetch errors exercise:
   deferred sync/refund responses: one in-flight refund, one UUID, disabled
   controls throughout pending work, and no resubmission on response arrival.
   These cases cover same-component concurrency, not workspace-switch isolation.
+- Authorized damaged-intent recovery, terminal outcomes, absent/pending/unresolved
+  results, lost responses, wrong references, failed storage removal, and evidence
+  changed during recovery. Recovery never issues a refund or allocates a new ID;
+  read-only staff have no recovery control.
+- Split recovery pending/failure responses and a hand-off-only result retain the
+  damaged-intent block; only a verified recovered result permits retirement.
+
+`npx tsx --test tests/community-refund-intent-recovery.test.ts` checks the recovery
+service with mocked database/provider boundaries: exact identity, terminal status,
+audit preservation, tenant isolation, and fail-closed provider/audit errors.
+It also verifies both split legs were actually reversed and blocks further refunds
+while split recovery is unresolved.
 
 Four additional isolation scenarios run at both widths and with each workspace
 visited first. Each keeps one tab/context alive while two ledger orders appear

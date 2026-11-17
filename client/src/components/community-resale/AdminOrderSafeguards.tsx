@@ -3,6 +3,7 @@ import { useCommunityAction } from "@/hooks/use-community-actions";
 import { communityRequest, useRefreshCommunity } from "@/hooks/use-community-resale";
 import { Check, date, ErrorBox, Feedback, Field, human, money } from "./CommunityUI";
 import { OrderSafeguardStatus, pickupBlocked } from "./OrderSafeguardStatus";
+import { savedRefundReference, settledRefund } from "@shared/community-refund-recovery";
 
 type Scope = "tenant" | "platform";
 type RefundRequest = {
@@ -60,7 +61,7 @@ function AdminRefund({ order, scope, canManage }: { order: any; scope: Scope; ca
   const action = useCommunityAction(scope);
   const refresh = useRefreshCommunity();
   const key = `community-refund-request:${scope}:${order.id}`;
-  const [saved] = useState(() => readRequest(key));
+  const [saved, setSaved] = useState(() => readRequest(key));
   const [request, setRequest] = useState<RefundRequest | null>(saved.request);
   const requestInFlight = useRef(false);
   const [amount, setAmount] = useState(() => request ? (request.amountCents / 100).toFixed(2) : "");
@@ -104,6 +105,29 @@ function AdminRefund({ order, scope, canManage }: { order: any; scope: Scope; ca
     const fresh = result?.order || result;
     if (fresh?.id === order.id) { setSyncedOrder(fresh); return fresh; }
     return null;
+  }
+  async function recover() {
+    if (!canManage || !saved.error || busy || requestInFlight.current) return;
+    if (!window.confirm("Reconcile the damaged saved request with server and Stripe history? It will be retired only if its original reference has a verified terminal result. The evidence will be kept in the staff audit. This does not send a refund.")) return;
+    requestInFlight.current = true; setSubmitting(true); setStorageError(null); setSubmitError(null); setSubmitMessage("");
+    try {
+      const raw = sessionStorage.getItem(key);
+      if (raw === null) throw new Error("The saved evidence changed. Reload and contact support before proceeding.");
+      const result = await communityRequest(`/orders/${encodeURIComponent(order.id)}/recover-refund-intent`, "POST", { savedIntent: raw }, scope);
+      if (result?.retired !== true || result.orderId !== order.id || !result.auditId ||
+        !savedRefundReference(raw) || result.requestId !== savedRefundReference(raw) || !settledRefund(result))
+        throw new Error("Recovery was not verified. Keep the saved evidence and contact support.");
+      // Refresh must succeed before unlocking, and a concurrent local change
+      // must never be removed on the strength of an older recovery response.
+      await refresh();
+      if (sessionStorage.getItem(key) !== raw) throw new Error("The saved evidence changed during recovery. Reload and contact support.");
+      sessionStorage.removeItem(key);
+      setSaved({ request: null, error: null }); setSyncedOrder(null); setConfirmed(false);
+      setSubmitMessage(`Saved request retired after verified ${result.status} outcome. Original evidence is preserved in the staff audit. No new refund was sent.`);
+    } catch (err) {
+      setSubmitError(err);
+      setStorageError(new Error("Recovery did not retire the saved request. Keep the evidence; restore browser storage or contact support, then retry reconciliation. Do not start a replacement refund."));
+    } finally { requestInFlight.current = false; setSubmitting(false); }
   }
   async function send(next: RefundRequest, unchangedRetry = false) {
     if (busy || requestInFlight.current || !canManage || saved.error) return;
@@ -161,6 +185,9 @@ function AdminRefund({ order, scope, canManage }: { order: any; scope: Scope; ca
     finally { requestInFlight.current = false; setSubmitting(false); }
   }
   return <div className="cr-safeguards"><button className="cr-btn secondary" disabled={busy} onClick={() => void sync()}>{busy ? "Working…" : "Sync with Stripe"}</button>
+    {saved.error && <div className="cr-note"><p>A missing record never proves a refund was not sent. Recovery requires the original reference and a verified terminal refund, with any required recovery reconciled. Unreadable references require support review; there is no clear-without-verification option.</p>
+      {canManage && <button className="cr-btn secondary" disabled={busy} onClick={() => void recover()}>Reconcile damaged saved request</button>}
+    </div>}
     {request && <div className="cr-note" role="status"><strong>Refund request awaiting reconciliation</strong><p>Requested {money(request.amountCents)}. Do not start a replacement request for an unknown result. Sync with Stripe to check this request.</p><p className="cr-muted">Request reference: {request.requestId}</p>{syncedOrder && <p>Only a terminal result with this exact request ID can complete it. Another refund or balance change does not confirm this request.</p>}{canCorrect && <p>The server rejected this request and sync found no matching record. You may correct the form and submit using the same request ID. Eligibility is checked again before sending.</p>}{canRetry && canManage && <button className="cr-btn secondary" disabled={busy} onClick={() => {
       if (window.confirm(`Retry the exact same ${money(request.amountCents)} request with its original ID and unchanged details? The current Stripe state will be checked again before sending.`)) void send(request, true);
     }}>Recheck & retry unchanged request</button>}</div>}

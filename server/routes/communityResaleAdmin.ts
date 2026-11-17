@@ -10,7 +10,7 @@ import { communityAudit, communityPartner, communityOrderView, failCommunity as 
   notifyCommunityOrder, readyCommunityPartner, syncCommunityOrder } from "../services/community-resale";
 import { requirePayoutAccount } from "../services/resale-payout-accounts";
 import { hashResale } from "../services/rescue-resale";
-import { requestCommunityRefund } from "../services/community-resale-refunds";
+import { requestCommunityRefund, recoverCommunityRefundIntent } from "../services/community-resale-refunds";
 import { updateCommunityPickup } from "../services/community-resale-pickup";
 import { communityAttentionOrders } from "../services/community-resale-notifications";
 const uuid = z.string().uuid();
@@ -164,6 +164,12 @@ for (const [router, platform] of [[tenantCommunityRouter, false], [platformCommu
       expectedRefundedCents: z.number().int().nonnegative(), reason: z.string().trim().min(10).max(2000) }).strict().parse(req.body);
     await requestCommunityRefund(r.id, r.tenant_id, req.user.id, input);
     res.json(communityOrderView(await syncCommunityOrder(r.id, r.tenant_id), false, true));
+  }));
+  router.post("/orders/:id/recover-refund-intent", route(async (req: any, res: any) => {
+    if (!platform && !canManage(req)) fail("Only rescue owners and admins can recover saved refund requests.", 403);
+    const r = await adminOrder(req);
+    const { savedIntent } = z.object({ savedIntent: z.string().max(16000) }).strict().parse(req.body);
+    res.json(await recoverCommunityRefundIntent(r.id, r.tenant_id, req.user.id, savedIntent));
   }));
   for (const [path, action] of [["resolve-issue", "resolve_issue"], ["confirm-handoff", "staff_handoff"]] as const) {
     router.post(`/orders/:id/${path}`, route(async (req: any, res: any) => {
