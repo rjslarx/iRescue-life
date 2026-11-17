@@ -107,7 +107,10 @@ Eight accepted-POST/failed-refresh cases cover both recipients, scopes, and
 viewport widths. The retry returns HTTP 200 without statuses, then the ledger
 GET returns HTTP 503. Assertions require a visible ledger error and hidden stale
 rows, with no invented accepted/delivered statuses or automatic repeat POST.
-An explicit **Refresh ledger** then returns the selected recipient's recorded
+Both **Refresh ledger** and **Try again** explicitly fail twice more, with the
+error remaining visible and all recipient status claims hidden after each failure.
+Each action must send exactly one ledger GET and no other request or confirmation.
+A final successful **Refresh ledger** (buyer) or **Try again** (seller) returns the selected recipient's recorded
 bounced/failed outcome, preserves the other recipient and order, clears the
 error, and restores manual retry controls without sending email again. These
 cases are distinct from a failed retry POST and never access a real provider.
