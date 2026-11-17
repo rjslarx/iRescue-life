@@ -7,7 +7,7 @@ export function createPublicPuzzleRouter(deps: {
   requireAuth: RequestHandler;
   read: (tenantId: string) => Promise<PublicPuzzleSettings>;
   save: (tenantId: string, value: PublicPuzzleSettings, userId: string) => Promise<void>;
-  launch: (tenantId: string) => Promise<{ html: string; pet: unknown }>;
+  launch: (tenantId: string, resume?: { petId: string | null; photoVersion: string | null }) => Promise<{ html: string; pet: unknown; photoVersion?: string | null }>;
 }) {
   const router = Router();
   router.use((_req, res, next) => {
@@ -30,10 +30,18 @@ export function createPublicPuzzleRouter(deps: {
   router.post('/launch', rateLimit({ windowMs: 60_000, limit: 10, standardHeaders: 'draft-7', legacyHeaders: false }), async (req, res, next) => {
     try {
       // This endpoint can only generate this puzzle, never a caller-selected game.
-      if (Object.keys(req.query).length || Object.keys(req.body ?? {}).length) return res.status(400).json({ error: 'Unexpected puzzle parameters.' });
+      const input = z.object({ resume: z.object({
+        petId: z.string().min(1).max(100).nullable(),
+        photoVersion: z.string().regex(/^[a-f0-9]{64}$/).nullable(),
+      }).strict().optional() }).strict().safeParse(req.body ?? {});
+      if (Object.keys(req.query).length || !input.success) return res.status(400).json({ error: 'Unexpected puzzle parameters.' });
       const config = await deps.read(req.tenant!.id);
       if (!config.enabled) return res.status(403).json({ error: 'The public puzzle is paused. Please check back later.' });
-      const game = await deps.launch(req.tenant!.id);
+      const game = await deps.launch(req.tenant!.id, input.data.resume);
+      if (input.data.resume && ((game.pet as { id?: string } | null)?.id ?? null) !== input.data.resume.petId ||
+          input.data.resume && (game.photoVersion ?? null) !== input.data.resume.photoVersion) {
+        return res.status(409).json({ error: 'That saved puzzle photo is no longer available. Please start a new puzzle.' });
+      }
       if (!(await deps.read(req.tenant!.id)).enabled) return res.status(403).json({ error: 'The public puzzle is paused.' });
       res.json({ ...config, ...game, rescueName: req.tenant!.name });
     } catch (error) { next(error); }

@@ -6,6 +6,7 @@ export interface PublicPuzzleConfig {
   rescueName: string;
 }
 export interface PublicPuzzleLaunch extends PublicPuzzleConfig {
+  photoVersion: string | null;
   html: string;
   pet: { id: string; name: string; breed: string; imageUrl: string } | null;
 }

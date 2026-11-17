@@ -24,10 +24,11 @@ export function shufflePhotoUrl(value: unknown, base: string): string | null {
 
 export async function rescueShuffleDocument(pets: ShufflePet[], options: { publicChallenge?: boolean } = {}): Promise<string> {
   const root = path.resolve(process.cwd(), 'server/games/rescue-shuffle');
-  const [html, css, script] = await Promise.all([
+  const [html, css, script, progress] = await Promise.all([
     readFile(path.join(root, 'index.html'), 'utf8'),
     readFile(path.join(root, 'style.css'), 'utf8'),
     readFile(path.join(root, 'app.js'), 'utf8'),
+    readFile(path.resolve(process.cwd(), 'shared/puzzle-progress.js'), 'utf8'),
   ]);
   // This data is selected from the public whitelist by the caller. Escaping '<'
   // prevents a stored animal name from terminating the script element.
@@ -36,5 +37,5 @@ export async function rescueShuffleDocument(pets: ShufflePet[], options: { publi
   return html
     .replace('<head>', `<head><meta http-equiv="Content-Security-Policy" content="${policy}"><meta name="referrer" content="no-referrer">`)
     .replace('<link rel="stylesheet" href="style.css" />', `<style>${css}</style>`)
-    .replace('<script type="module" src="app.js"></script>', `<script>const PUBLIC_CHALLENGE = ${options.publicChallenge === true}; const SHELTER_PETS = ${data};\n${script.replace(/<\/script/gi, '<\\/script')}</script>`);
+    .replace('<script type="module" src="app.js"></script>', `<script>const PUBLIC_CHALLENGE = ${options.publicChallenge === true}; const SHELTER_PETS = ${data};\n${progress.replace('export function', 'function')}\n${script.replace(/<\/script/gi, '<\\/script')}</script>`);
 }

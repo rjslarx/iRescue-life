@@ -39,6 +39,8 @@ class RescueShuffleGame {
     this.imageRequest = 0;
     this.winTimeout = null;
     this.started = false;
+    this.awaitingResume = PUBLIC_CHALLENGE;
+    this.pendingResume = null;
 
     // Animation state
     this.animatingTile = null; // { value, fromRow, fromCol, toRow, toCol, progress }
@@ -55,6 +57,20 @@ class RescueShuffleGame {
   }
 
   initEvents() {
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') {
+        this.stopTimer();
+        this.reportProgress();
+      }
+    });
+    window.addEventListener('message', (event) => {
+      if (!PUBLIC_CHALLENGE || event.source !== window.parent || !this.awaitingResume) return;
+      const data = event.data;
+      if (!data || data.type !== 'rescue-shuffle-restore' || Object.keys(data).length !== 2) return;
+      if (data.round !== null && !validPuzzleRound(data.round)) return;
+      this.pendingResume = data.round;
+      this.finishRestore();
+    });
     window.addEventListener('resize', () => {
       this.resizeCanvas();
       this.render();
@@ -82,6 +98,36 @@ class RescueShuffleGame {
     window.addEventListener('keydown', (e) => this.handleKeyDown(e));
   }
 
+  finishRestore() {
+    if (this.pendingResume && SHELTER_PETS.length && !this.imageLoaded) return;
+    if (this.pendingResume) {
+      const round = this.pendingResume;
+      clearTimeout(this.winTimeout);
+      this.stopTimer();
+      this.board = [...round.board];
+      this.moves = round.moves;
+      this.elapsedSeconds = round.seconds;
+      this.isSolved = false;
+      this.animatingTile = null;
+      this.pointerStart = null;
+      this.started = true;
+      this.winOverlay.classList.add('hidden');
+      this.winOverlay.inert = true;
+      this.updateStatsUI();
+      this.render();
+    }
+    this.pendingResume = null;
+    this.awaitingResume = false;
+    this.reportProgress();
+  }
+
+  reportProgress() {
+    if (PUBLIC_CHALLENGE && !this.awaitingResume && !this.isSolved && this.moves > 0) {
+      window.parent.postMessage({ type: 'rescue-shuffle-progress',
+        round: { board: [...this.board], moves: this.moves, seconds: this.elapsedSeconds } }, '*');
+    }
+  }
+
   resizeCanvas() {
     const rect = this.canvas.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
@@ -106,10 +152,12 @@ class RescueShuffleGame {
   }
 
   startNewGame(changePet = true) {
+    if (this.board.length) this.awaitingResume = false;
     if (PUBLIC_CHALLENGE) window.parent.postMessage({ type: 'rescue-shuffle-reset' }, '*');
     clearTimeout(this.winTimeout);
     this.stopTimer();
     this.started = false;
+    this.pendingResume = null;
     this.moves = 0;
     this.elapsedSeconds = 0;
     this.isSolved = false;
@@ -159,12 +207,14 @@ class RescueShuffleGame {
       this.toggleNumbersBtn.disabled = false;
       status.textContent = 'Arrange tiles 1–15, leaving the empty space at the bottom right.';
       this.render();
+      if (this.pendingResume) this.finishRestore();
     };
     img.onerror = () => {
       if (request !== this.imageRequest) return;
       this.imageLoaded = false;
       this.petPreviewEl.hidden = true;
       status.textContent = 'This photo could not load. Play with numbers or try Next Pet.';
+      if (PUBLIC_CHALLENGE) window.parent.postMessage({ type: 'rescue-shuffle-photo-error' }, '*');
       this.render();
     };
     img.src = url;
@@ -307,7 +357,7 @@ class RescueShuffleGame {
   }
 
   tryMoveTile(tileIndex) {
-    if (this.isSolved || this.animatingTile) return;
+    if (this.awaitingResume || this.isSolved || this.animatingTile) return;
     const emptyIndex = this.board.indexOf(EMPTY_TILE);
     const adjacent = this.getAdjacentIndices(emptyIndex);
 
@@ -346,6 +396,7 @@ class RescueShuffleGame {
     if (this.checkSolved()) {
       this.handleWin();
     }
+    this.reportProgress();
   }
 
   animateStep(timestamp) {
@@ -407,6 +458,7 @@ class RescueShuffleGame {
     this.timerInterval = setInterval(() => {
       this.elapsedSeconds += 1;
       this.updateStatsUI();
+      this.reportProgress();
     }, 1000);
   }
 

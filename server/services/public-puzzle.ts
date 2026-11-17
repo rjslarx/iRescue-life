@@ -1,5 +1,6 @@
 import { and, eq, sql } from 'drizzle-orm';
 import sharp from 'sharp';
+import { createHash } from 'node:crypto';
 import { animals, tenants, platformSettings } from '@shared/schema';
 import { db } from '../db';
 import { requireAuth } from '../middleware/auth';
@@ -18,13 +19,14 @@ async function read(tenantId: string) {
   return parsed.success ? parsed.data : { enabled: false, facebookPostUrl: '' };
 }
 
-async function launch(tenantId: string) {
+async function launch(tenantId: string, resume?: { petId: string | null; photoVersion: string | null }) {
   const [tenant] = await db.select({ subdomain: tenants.subdomain, customDomain: tenants.customDomain })
     .from(tenants).where(eq(tenants.id, tenantId));
   if (!publicPuzzleTenant(tenant?.subdomain)) throw new Error('Public puzzle not available.');
   const hosts = [new URL(getAppBaseUrl()).hostname, ...(tenant.customDomain ? [tenant.customDomain] : [])];
   const rows = await db.select({ id: animals.id, name: animals.name, breed: animals.breed, photoUrls: animals.photoUrls })
     .from(animals).where(and(publicAnimalFilter(tenantId), eq(animals.status, 'available'),
+      resume ? eq(animals.id, resume.petId ?? '') : undefined,
       sql`cardinality(${animals.photoUrls}) > 0`)).orderBy(sql`random()`).limit(8);
   const storage = new ObjectStorageService();
   let pet: ShufflePet | null = null;
@@ -46,9 +48,9 @@ async function launch(tenantId: string) {
       if (!['jpeg', 'png', 'webp', 'gif', 'avif', 'heif'].includes(info.format || '')) continue;
       const jpeg = await image.rotate().resize(900, 900, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 85 }).toBuffer();
       // Recheck visibility after storage I/O, before returning the public photo.
-      const [stillPublic] = await db.select({ id: animals.id }).from(animals).where(and(
+      const [stillPublic] = await db.select({ id: animals.id, photoUrls: animals.photoUrls }).from(animals).where(and(
         eq(animals.id, row.id), publicAnimalFilter(tenantId), eq(animals.status, 'available')));
-      if (!stillPublic) continue;
+      if (!stillPublic || !(stillPublic.photoUrls || []).some(url => puzzleObjectPath(url, hosts) === objectPath)) continue;
       pet = { id: row.id, name: row.name, breed: row.breed || '', imageUrl: `data:image/jpeg;base64,${jpeg.toString('base64')}` };
       break;
     } catch {
@@ -56,7 +58,8 @@ async function launch(tenantId: string) {
       console.warn('[Public puzzle] Available animal photo could not be prepared.');
     }
   }
-  return { pet, html: await rescueShuffleDocument(pet ? [pet] : [], { publicChallenge: true }) };
+  const photoVersion = pet ? createHash('sha256').update(pet.imageUrl).digest('hex') : null;
+  return { pet, photoVersion, html: await rescueShuffleDocument(pet ? [pet] : [], { publicChallenge: true }) };
 }
 
 export const publicPuzzleRouter = createPublicPuzzleRouter({

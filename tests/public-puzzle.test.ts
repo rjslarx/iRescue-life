@@ -32,6 +32,7 @@ test('public launch and settings enforce tenant, roles, pause, no game bypass an
   let config = { enabled: false, facebookPostUrl: '' };
   let launchCount = 0;
   let pauseDuringLaunch = false;
+  let gamePet: { id: string } | null = null;
   const app = express();
   app.use(express.json());
   app.use((req, _res, next) => {
@@ -48,7 +49,7 @@ test('public launch and settings enforce tenant, roles, pause, no game bypass an
     launch: async id => {
       assert.equal(id, 'haseyas-id'); launchCount++;
       if (pauseDuringLaunch) config.enabled = false;
-      return { html: 'puzzle only', pet: null };
+      return { html: 'puzzle only', pet: gamePet, photoVersion: gamePet ? 'b'.repeat(64) : null };
     },
   }));
   const server = app.listen(0, '127.0.0.1');
@@ -63,6 +64,7 @@ test('public launch and settings enforce tenant, roles, pause, no game bypass an
     assert.equal(access.headers.get('cache-control'), 'no-store');
     assert.equal((await access.json()).enabled, false);
     assert.equal((await request('launch', 'POST')).status, 403);
+    assert.equal((await request('launch', 'POST', { resume: { petId: 'pet', photoVersion: 'a'.repeat(64) } })).status, 403);
     assert.equal(launchCount, 0);
     assert.equal((await request('settings')).status, 401);
     for (const role of ['volunteer', 'staff', 'adopter', 'platform_admin']) {
@@ -76,6 +78,13 @@ test('public launch and settings enforce tenant, roles, pause, no game bypass an
     assert.equal((await request('launch', 'POST', { tenantId: 'other' })).status, 400);
     assert.equal((await request('launch', 'POST')).status, 200);
     assert.equal(launchCount, 1);
+    assert.equal((await request('launch', 'POST', { resume: { petId: 'pet', photoVersion: 'a'.repeat(64) } })).status, 409);
+    assert.equal((await request('launch', 'POST', { resume: { petId: null, photoVersion: null } }, { 'x-slug': 'other' })).status, 404);
+    gamePet = { id: 'pet' };
+    const changedPhoto = await request('launch', 'POST', { resume: { petId: 'pet', photoVersion: 'a'.repeat(64) } });
+    assert.equal(changedPhoto.status, 409);
+    assert.equal((await changedPhoto.json()).pet, undefined);
+    assert.equal((await request('launch', 'POST', { resume: { petId: 'pet', photoVersion: 'b'.repeat(64) } })).status, 200);
     pauseDuringLaunch = true;
     assert.equal((await request('launch', 'POST')).status, 403);
     assert.equal((await request('launch', 'POST')).status, 403);

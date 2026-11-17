@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { puzzleTime, renderPuzzleImage, type PuzzleCompletion } from "@/components/vip/public-puzzle-export";
 import "@/components/vip/public-puzzle.css";
+import { parsePuzzleSave, PUZZLE_SAVE_KEY, validPuzzleRound, type PuzzleSave } from "@/lib/puzzle-progress";
 
 type SavedImage = { url: string; file: File | null; canShare: boolean };
 
@@ -19,7 +20,18 @@ function facebookLink(value: string | undefined) {
 }
 
 function PuzzleContent() {
-  const { basePath } = useTenant();
+  const { basePath, tenantId } = useTenant();
+  const tenantKey = tenantId || "";
+  const [saved, setSaved] = useState<PuzzleSave | null>(null);
+  const [remember, setRemember] = useState(false);
+  const rememberRef = useRef(false);
+  const restoring = useRef<PuzzleSave | null>(null);
+  const [saveNotice, setSaveNotice] = useState("");
+  const clearProgress = () => {
+    restoring.current = null;
+    setSaved(null);
+    try { localStorage.removeItem(PUZZLE_SAVE_KEY); } catch { /* Optional storage. */ }
+  };
   const [config, setConfig] = useState<PublicPuzzleConfig | null>(null);
   const [checking, setChecking] = useState(true);
   const [accessError, setAccessError] = useState("");
@@ -75,7 +87,15 @@ function PuzzleContent() {
         if (typeof result.enabled !== "boolean") throw new Error("Puzzle availability could not be checked.");
         setConfig(result); setAccessError("");
         allowed.current = result.enabled;
-        if (!result.enabled) closeGame();
+        if (!result.enabled) { closeGame(); clearProgress(); }
+        else {
+          try {
+            const raw = localStorage.getItem(PUZZLE_SAVE_KEY);
+            const progress = parsePuzzleSave(raw, tenantKey);
+            setSaved(progress);
+            if (raw && !progress) localStorage.removeItem(PUZZLE_SAVE_KEY);
+          } catch { setSaveNotice("Saving is unavailable in this browser. You can still play."); }
+        }
       } catch {
         if (!active) return;
         closeGame(); setConfig(null);
@@ -98,8 +118,14 @@ function PuzzleContent() {
     };
   }, [accessAttempt]);
 
-  const start = async () => {
+  const start = async (resume?: PuzzleSave) => {
     if (!allowed.current || launching || launchController.current) return;
+    const progress = resume ? parsePuzzleSave(JSON.stringify(resume), tenantKey) : null;
+    if (!resume || !progress) clearProgress();
+    else setSaved(null);
+    if (resume && !progress) { setGameError("That saved round has expired. Please start a new puzzle."); return; }
+    restoring.current = progress;
+    if (progress) { rememberRef.current = true; setRemember(true); }
     const version = ++generation.current;
     const controller = new AbortController();
     launchController.current = controller;
@@ -107,12 +133,18 @@ function PuzzleContent() {
     readyRef.current = false; solvedRef.current = false;
     const deadline = window.setTimeout(() => controller.abort(), 20000);
     try {
-      const result = await publicPuzzleRequest<PublicPuzzleLaunch>("launch", "POST", undefined, controller.signal);
+      const result = await publicPuzzleRequest<PublicPuzzleLaunch>("launch", "POST",
+        progress ? { resume: { petId: progress.petId, photoVersion: progress.photoVersion } } : undefined, controller.signal);
       if (!mounted.current || version !== generation.current || !allowed.current) return;
       if (!result.enabled || typeof result.html !== "string" || !result.html) throw new Error("The puzzle is not available right now. Please check availability again.");
+      if (progress && ((result.pet?.id ?? null) !== progress.petId || result.photoVersion !== progress.photoVersion)) throw Object.assign(new Error("That saved photo is no longer available. Please start a new puzzle."), { status: 409 });
       setLaunch(result);
     } catch (reason) {
       if (!mounted.current || version !== generation.current) return;
+      if (progress) {
+        if ([403, 404, 409].includes((reason as { status?: number })?.status ?? 0)) clearProgress();
+        else setSaved(progress);
+      }
       setGameError(controller.signal.aborted ? "The puzzle took too long to open. Please try again." : reason instanceof Error ? reason.message : "The puzzle could not be opened.");
     } finally {
       window.clearTimeout(deadline);
@@ -136,13 +168,28 @@ function PuzzleContent() {
       const keys = Object.keys(payload);
       if (payload.type === "rescue-shuffle-ready" && keys.length === 1) {
         readyRef.current = true; setReady(true); window.clearTimeout(timeout);
+        frame.current.contentWindow?.postMessage({ type: "rescue-shuffle-restore", round: restoring.current?.round ?? null }, "*");
+      } else if (payload.type === "rescue-shuffle-photo-error" && keys.length === 1) {
+        clearProgress(); generation.current++; solvedRef.current = false;
+        setLaunch(null); setCompletion(null); setImage(null);
+        setGameError("This animal’s photo could not load. Please start a new puzzle.");
+      } else if (payload.type === "rescue-shuffle-progress" && keys.length === 2 && readyRef.current && !solvedRef.current && validPuzzleRound(payload.round)) {
+        if (!rememberRef.current || !tenantKey) return;
+        const progress = { version: 1, tenant: tenantKey, savedAt: Date.now(), petId: launch.pet?.id ?? null,
+          photoVersion: launch.photoVersion, round: payload.round };
+        const raw = JSON.stringify(progress);
+        if (!parsePuzzleSave(raw, tenantKey)) return;
+        try { localStorage.setItem(PUZZLE_SAVE_KEY, raw); }
+        catch { setSaveNotice("Your browser could not save progress. Keep this page open to continue."); }
       } else if (payload.type === "rescue-shuffle-reset" && keys.length === 1 && readyRef.current) {
+        clearProgress();
         generation.current++;
         solvedRef.current = false;
         setCompletion(null); setImage(null); setImageError(""); setShareMessage("");
       } else if (payload.type === "rescue-shuffle-solved" && keys.length === 4 && keys.every(key => ["type", "petId", "moves", "seconds"].includes(key)) && readyRef.current && !solvedRef.current) {
         if (payload.petId !== (launch.pet?.id ?? null) || !Number.isSafeInteger(payload.moves) || (payload.moves as number) < 1 || !Number.isSafeInteger(payload.seconds) || (payload.seconds as number) < 0) return;
         solvedRef.current = true;
+        clearProgress();
         setCompletion({ petId: payload.petId as string | null, moves: payload.moves as number, seconds: payload.seconds as number });
       }
     };
@@ -194,6 +241,14 @@ function PuzzleContent() {
         <div className="puzzle-layout">
           <section className="puzzle-stage" aria-label="Rescue puzzle">
             <div className="puzzle-stage-heading"><span><Grid3X3 size={17} aria-hidden="true" />Rescue Shuffle</span><small>{completion ? "Puzzle complete" : "Free to play · No sign-in"}</small></div>
+            {available && !completion && <div className="px-5 py-3 text-sm">
+              <label className="flex items-center gap-2"><input type="checkbox" checked={remember} onChange={event => {
+                setRemember(event.target.checked); rememberRef.current = event.target.checked;
+                if (!event.target.checked) clearProgress();
+              }} />Save unfinished progress on this device for up to 7 days</label>
+              <p>Only the board and play counters are saved—no donor information or photos. Time away is not counted.</p>
+              {saveNotice && <p role="status">{saveNotice}</p>}
+            </div>}
             {checking && !launch ? <div className="puzzle-welcome" role="status" aria-label="Checking puzzle availability"><Skeleton className="h-36 w-36 rounded-xl" /><Skeleton className="h-7 w-52" /><p>Checking puzzle availability…</p></div> :
               !available ? <div className="puzzle-welcome">
                 <AlertCircle size={35} strokeWidth={1.4} aria-hidden="true" /><h2>{accessError ? "Let’s check that connection." : "A little pause in play."}</h2>
@@ -223,6 +278,7 @@ function PuzzleContent() {
                   <h2>{gameError ? "Let’s try that again." : "Your next happy little challenge."}</h2>
                   <p role={gameError ? "alert" : undefined}>{gameError || "Slide the tiles into place to reveal an animal photo. If a photo isn’t available, enjoy a classic numbered puzzle instead."}</p>
                   <Button className="puzzle-primary" onClick={() => void start()}><Play className="mr-2 h-4 w-4" aria-hidden="true" />{gameError ? "Retry puzzle" : "Start your puzzle"}<ArrowRight className="ml-4 h-4 w-4" aria-hidden="true" /></Button>
+                  {saved && <Button variant="outline" onClick={() => void start(saved)}>Resume unfinished puzzle</Button>}
                   <p>No donation required. Just a little patience.</p>
                 </>}
               </div>}
