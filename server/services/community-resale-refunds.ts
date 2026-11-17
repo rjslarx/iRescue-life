@@ -243,11 +243,24 @@ export async function recoverCommunityRefundIntent(id: string, tenantId: string,
     }
     if (!settledRefund({ ...op, recoveryStatus })) fail("This refund or its recovery is still unresolved. Keep the saved evidence and contact support.");
     const provider = await stripe.refunds.retrieve(op.refundId);
-    if (charge.disputed || !provider || provider.status !== op.status ||
+    if (charge.disputed || !provider || provider.id !== op.refundId || provider.status !== op.status ||
       ref(provider.charge) !== charge.id || provider.amount !== op.amountCents ||
       provider.metadata?.communityRefundId !== requestId ||
       provider.metadata?.resaleOrderId !== id || provider.metadata?.tenantId !== tenantId)
       fail("The refund identity or payment state could not be verified. Keep the saved evidence and contact support.");
+    // The shared order lock serializes lookup + insert across connections.
+    // Never use an audit receipt as a shortcut around fresh reconciliation.
+    // Keep actors distinct: a retry must not inherit another staff member's action.
+    const previous = (await c.query(`SELECT id,data FROM community_resale_audit
+      WHERE tenant_id=$1 AND actor_id=$2 AND action='refund_intent_recovered'
+        AND data->>'orderId'=$3 AND data->>'savedIntent'=$4
+      ORDER BY created_at,id LIMIT 1`, [tenantId, actor, id, raw])).rows[0];
+    if (previous) {
+      if (previous.data.requestId !== requestId || previous.data.refundId !== provider.id ||
+          previous.data.status !== op.status || previous.data.recoveryStatus !== recoveryStatus)
+        fail("The saved recovery receipt no longer matches the verified refund. Keep the saved evidence and contact support.");
+      return { retired: true, orderId: id, requestId, auditId: previous.id, status: op.status, recoveryStatus };
+    }
     const auditId = randomUUID();
     await c.query("INSERT INTO community_resale_audit(id,tenant_id,actor_id,action,data) VALUES($1,$2,$3,'refund_intent_recovered',$4)",
       [auditId, tenantId, actor, { orderId: id, requestId, savedIntent: raw,

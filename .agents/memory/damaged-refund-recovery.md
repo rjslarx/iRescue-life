@@ -12,3 +12,9 @@ Damaged refund intent recovery must not let staff choose an unrelated historical
 Treat a split engine hand-off as unfinished recovery, not a terminal cashflow result. Verify both recipient legs against provider reversals before retiring damaged evidence or allowing a further refund.
 
 **Why:** The buyer refund can succeed while a recipient reversal remains pending or fails. Partial refunds also intentionally pause proceeds even after both shares are recovered, so a split's generic review status alone cannot identify the cashflow outcome.
+
+Recovery receipt reuse is actor-specific, and exact saved text must not be normalized for deduplication.
+
+**Why:** Retries by one staff member should not multiply equivalent audit entries, but another staff member's recovery action must remain attributable. Whitespace or other evidence differences must not be silently discarded.
+
+**How to apply:** Reuse only that actor's receipt after fresh authoritative verification; never treat a prior audit entry as proof of the current payment state.

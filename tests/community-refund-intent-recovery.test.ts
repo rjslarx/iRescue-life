@@ -8,6 +8,7 @@ test("damaged intent recovery verifies exact provider history and preserves evid
   const raw = JSON.stringify({ requestId, amountCents: "damaged" });
   const original = pool.connect;
   let order: any, provider: any, split: any, transfers: any[], audit: any[], unavailable = false, auditFails = false;
+  let lockTail = Promise.resolve(), reads = 0, loseInsertResponse = false;
   const charge = { id: "charge", amount: 10000, amount_refunded: 2500, disputed: false };
   const stripe = {
     transfers: {
@@ -18,25 +19,38 @@ test("damaged intent recovery verifies exact provider history and preserves evid
     paymentIntents: { retrieve: async () => ({ status: "succeeded", amount: 10000, currency: "usd",
       metadata: { type: "community_resale", resaleOrderId: "order", tenantId: "tenant" }, latest_charge: charge }) },
     refunds: {
-      retrieve: async () => { if (unavailable) throw new Error("Stripe unavailable"); return provider; },
+      retrieve: async () => { reads++; if (unavailable) throw new Error("Stripe unavailable"); return provider; },
       list: () => ({ autoPagingToArray: async () => provider ? [provider] : [] }),
       create: () => { assert.fail("Recovery must not send money"); },
     },
   };
-  (pool as any).connect = async () => ({
+  (pool as any).connect = async () => {
+    let unlock: () => void;
+    return {
     query: async (sql: string, params: any[]) => {
+      if (sql.startsWith("SELECT pg_advisory_lock")) {
+        const previous = lockTail;
+        lockTail = new Promise<void>(resolve => { unlock = resolve; });
+        await previous;
+      }
+      if (sql.startsWith("SELECT pg_advisory_unlock")) unlock!();
+      if (sql.startsWith("SELECT id,data FROM community_resale_audit"))
+        return { rows: audit.filter(a => a.tenantId === params[0] && a.actor === params[1] &&
+          a.orderId === params[2] && a.savedIntent === params[3]).slice(0, 1).map(a => ({ id: a.auditId, data: a })) };
       if (sql.startsWith("SELECT data,status")) return { rows: split ? [split] : [] };
       if (sql.startsWith("SELECT *")) return { rows: params[1] === "tenant" ? [order] : [] };
       if (sql.startsWith("INSERT")) {
         if (auditFails) throw new Error("Audit unavailable");
-        audit.push(params[3]);
+        audit.push({ ...params[3], auditId: params[0], tenantId: params[1], actor: params[2] });
+        if (loseInsertResponse) { loseInsertResponse = false; throw new Error("Response lost"); }
       }
       return { rows: [] };
     },
     release() {},
-  });
+    };
+  };
   const reset = (status = "succeeded") => {
-    unavailable = auditFails = false; audit = []; charge.disputed = false;
+    unavailable = auditFails = loseInsertResponse = false; audit = []; charge.disputed = false; reads = 0;
     order = { id: "order", tenant_id: "tenant", payment_intent_id: "pi", data: {
       amountCents: 10000, proceedsMode: "split_50",
       rescueAccountId: "rescue-account", contributorAccountId: "contributor-account",
@@ -52,7 +66,7 @@ test("damaged intent recovery verifies exact provider history and preserves evid
         metadata: { resaleOrderId: "order", tenantId: "tenant", resaleLeg: role } };
     });
   };
-  const recover = (value = raw, tenant = "tenant") => recoverCommunityRefundIntent("order", tenant, "admin", value, stripe);
+  const recover = (value = raw, tenant = "tenant", actor = "admin") => recoverCommunityRefundIntent("order", tenant, actor, value, stripe);
   try {
     for (const status of ["succeeded", "failed", "canceled"]) {
       reset(status);
@@ -60,6 +74,44 @@ test("damaged intent recovery verifies exact provider history and preserves evid
       assert.equal(result.retired, true); assert.equal(result.status, status);
       assert.equal(result.requestId, requestId);
       assert.equal(audit![0].savedIntent, raw);
+      assert.deepEqual(await recover(), result);
+      assert.equal(audit!.length, 1);
+      assert.equal(reads, 4, "Both requests must freshly retrieve and verify the provider refund");
+    }
+    reset();
+    const concurrent = await Promise.all(Array.from({ length: 8 }, () => recover()));
+    assert.equal(new Set(concurrent.map(r => r.auditId)).size, 1);
+    assert.equal(audit!.length, 1);
+    assert.equal(reads, 16);
+    const distinctActor = await recover(raw, "tenant", "other-admin");
+    assert.notEqual(distinctActor.auditId, concurrent[0].auditId);
+    assert.equal(audit![1].actor, "other-admin");
+    assert.deepEqual(await recover(raw, "tenant", "other-admin"), distinctActor);
+    const distinctEvidence = await recover(` ${raw}`);
+    assert.notEqual(distinctEvidence.auditId, concurrent[0].auditId);
+    assert.equal(audit![2].savedIntent, ` ${raw}`);
+    assert.equal(audit!.length, 3);
+    reset(); loseInsertResponse = true;
+    await assert.rejects(recover(), /Response lost/);
+    assert.equal((await recover()).auditId, audit![0].auditId);
+    assert.equal(audit!.length, 1);
+    reset(); auditFails = true;
+    await assert.rejects(recover(), /Audit unavailable/);
+    assert.equal(audit!.length, 0);
+    auditFails = false; await recover(); assert.equal(audit!.length, 1);
+    for (const corrupt of [
+      () => { unavailable = true; },
+      () => { charge.disputed = true; },
+      () => { transfers![0].amount_reversed = 0; },
+      () => { provider.status = "pending"; },
+      () => { provider.metadata.tenantId = "other"; },
+      () => { provider.id = "other-refund"; },
+      () => { order.data.refunds = []; },
+      () => { audit![0].refundId = "other"; },
+    ]) {
+      reset(); await recover(); corrupt();
+      await assert.rejects(recover());
+      assert.equal(audit!.length, 1, "Existing receipt must not bypass verification or create another audit");
     }
     for (const value of ["", "{", "null", "[]", '{"requestId":"not-a-uuid"}']) {
       reset(); await assert.rejects(recover(value), /reference cannot be recovered/);
