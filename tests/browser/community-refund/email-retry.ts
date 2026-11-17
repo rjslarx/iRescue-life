@@ -11,7 +11,7 @@ export async function runEmailRetryScenarios(browser: Browser, origin: string) {
         const canManage = mode !== "read-only";
         for (const recipient of ["buyer", "donor"] as const) {
           const label = recipient === "donor" ? "seller" : "buyer";
-          const scenario = `${scope} ${width}px: ${mode} ${label} email retry`;
+          const scenario = `${scope} ${width}px: ${mode} ${label} cross-order email retry`;
           const context = await browser.createBrowserContext();
           let releaseRetry!: () => void;
           const retryPending = new Promise<void>(resolve => { releaseRetry = resolve; });
@@ -29,6 +29,11 @@ export async function runEmailRetryScenarios(browser: Browser, origin: string) {
               notificationStatus: { buyer: "failed", donor: "unknown" },
             };
             const initialStatuses = { ...order.notificationStatus };
+            const otherOrder = {
+              ...order, id: "email-retry-other-order", itemTitle: "Unchanged email fixture table",
+              notificationStatus: { buyer: "delivered", donor: "bounced" },
+            };
+            const otherInitialStatuses = { ...otherOrder.notificationStatus };
             let ledgerReads = 0;
             const errors: string[] = [], unexpected: string[] = [];
             const posts: { path: string; body: unknown }[] = [];
@@ -60,7 +65,8 @@ export async function runEmailRetryScenarios(browser: Browser, origin: string) {
               }
               if (req.method() === "GET" && path === `${root}/ledger`) {
                 ledgerReads++;
-                await req.respond({ contentType: "application/json", body: JSON.stringify({ orders: [order] }) }); return;
+                // Put the target second so an accidental first-row lookup fails.
+                await req.respond({ contentType: "application/json", body: JSON.stringify({ orders: [otherOrder, order] }) }); return;
               }
               if (req.method() === "POST" && path === `${root}/orders/${order.id}/retry-email`) {
                 // Keep every retry in flight until the pending-state assertions
@@ -78,40 +84,63 @@ export async function runEmailRetryScenarios(browser: Browser, origin: string) {
             });
             const settle = () => page.evaluate(() => new Promise(resolve => setTimeout(resolve, 150)));
             await page.goto(origin + route);
-            const summary = await page.waitForSelector("summary::-p-text(Notification audit & manual retry)");
-            await summary!.click();
-            const assertStatuses = async (expected: typeof initialStatuses) => {
+            await page.waitForSelector("tbody tr");
+            assert.equal(await page.$$eval("tbody tr", rows => rows.length), 2);
+            const row = async (id: string) => {
+              const handle = await page.evaluateHandle(id => Array.from(document.querySelectorAll("tbody tr"))
+                .find(row => Array.from(row.querySelectorAll("td:first-child p")).some(p => p.textContent === id))!, id);
+              const element = handle.asElement();
+              assert.ok(element, `Missing ledger row for ${id}`);
+              return element;
+            };
+            for (const id of [otherOrder.id, order.id]) {
+              const element = await row(id);
+              const summary = await element.$("summary::-p-text(Notification audit & manual retry)");
+              assert.ok(summary);
+              await summary.scrollIntoView();
+              await summary.click();
+              await element.dispose();
+            }
+            const assertStatuses = async (id: string, expected: typeof initialStatuses) => {
               const paragraphs = [
                 `Buyer: ${expected.buyer}`, `Seller: ${expected.donor}`,
                 "Provider acceptance is not proof of delivery. Manual retry may duplicate email.",
               ];
-              await page.waitForFunction(expected => {
-                const audit = Array.from(document.querySelectorAll("details"))
+              await page.waitForFunction((id, expected) => {
+                const row = Array.from(document.querySelectorAll("tbody tr"))
+                  .find(row => Array.from(row.querySelectorAll("td:first-child p")).some(p => p.textContent === id));
+                const audit = Array.from(row?.querySelectorAll("details") || [])
                   .find(e => e.querySelector("summary")?.textContent === "Notification audit & manual retry");
                 return !!audit?.open && expected.every((text, i) => audit.querySelectorAll("p")[i]?.textContent === text);
-              }, {}, paragraphs);
+              }, {}, id, paragraphs);
+              const element = await row(id);
+              const summary = await element.$("summary::-p-text(Notification audit & manual retry)");
               assert.deepEqual(await summary!.evaluate(e => Array.from(
                 e.parentElement!.querySelectorAll("p"), p => p.textContent).slice(0, 3)),
-              paragraphs, "Recipient statuses and the delivery caveat must remain accurate");
+              paragraphs, `${id}: recipient statuses and the delivery caveat must remain accurate`);
+              await element.dispose();
             };
-            await assertStatuses(initialStatuses);
-            const control = await page.waitForSelector(`button::-p-text(Retry ${label} email)`);
+            await assertStatuses(order.id, initialStatuses);
+            await assertStatuses(otherOrder.id, otherInitialStatuses);
+            const targetRow = await row(order.id);
+            const control = await targetRow.$(`button::-p-text(Retry ${label} email)`);
             assert.ok(control);
-            const otherControl = await page.waitForSelector(`button::-p-text(Retry ${recipient === "buyer" ? "seller" : "buyer"} email)`);
+            const otherControl = await targetRow.$(`button::-p-text(Retry ${recipient === "buyer" ? "seller" : "buyer"} email)`);
             assert.ok(otherControl);
             const assertRetryControls = async (disabled: boolean) => {
-              await page.waitForFunction(expected => {
-                const buttons = Array.from(document.querySelectorAll("button"))
+              await page.waitForFunction((row, expected) => {
+                const buttons = Array.from(row.querySelectorAll("button"))
                   .filter(b => /^Retry (buyer|seller) email$/.test(b.textContent || ""));
                 return buttons.length === 2 && buttons.every(b => b.disabled === expected);
-              }, {}, disabled);
+              }, {}, targetRow, disabled);
             };
             await control.scrollIntoView();
             assert.equal(await control.evaluate(e => (e as HTMLButtonElement).disabled), !canManage);
             await control.click();
             await settle();
             assert.deepEqual(posts, [], "Canceled or disabled retry must not send any mutation");
-            await assertStatuses(initialStatuses);
+            await assertStatuses(order.id, initialStatuses);
+            await assertStatuses(otherOrder.id, otherInitialStatuses);
             const confirmation = {
               type: "confirm",
               message: `Retry ${label} email? Check recorded status first to avoid duplicates.`,
@@ -123,8 +152,8 @@ export async function runEmailRetryScenarios(browser: Browser, origin: string) {
               const readsBeforeRetry = ledgerReads;
               // Replace confirm only for a same-turn burst: native dialogs can
               // serialize clicks and conceal the pre-render race.
-              const rapidClicks = () => page.evaluate(label => {
-                const buttons = Array.from(document.querySelectorAll("button"))
+              const rapidClicks = () => targetRow.evaluate((row, label) => {
+                const buttons = Array.from(row.querySelectorAll("button"))
                   .filter(b => /^Retry (buyer|seller) email$/.test(b.textContent || ""));
                 const selected = buttons.find(b => b.textContent === `Retry ${label} email`)!;
                 const other = buttons.find(b => b !== selected)!;
@@ -149,11 +178,12 @@ export async function runEmailRetryScenarios(browser: Browser, origin: string) {
               assert.deepEqual(posts, expectedPosts, "Rapid same-turn clicks must send only the selected recipient once");
               await rapidClicks();
               await settle();
-              assert.deepEqual(await page.$$eval("button", buttons => buttons
+              assert.deepEqual(await targetRow.$$eval("button", buttons => buttons
                 .filter(b => /^Retry (buyer|seller) email$/.test(b.textContent || ""))
                 .map(b => b.disabled)), [true, true], "Both retry controls stay disabled throughout the deferred response");
               assert.deepEqual(posts, expectedPosts, "Pending clicks must not send additional requests");
-              await assertStatuses(initialStatuses);
+              await assertStatuses(order.id, initialStatuses);
+              await assertStatuses(otherOrder.id, otherInitialStatuses);
               // Real pointer clicks on both disabled controls must neither open
               // another confirmation nor enqueue another recipient's request.
               for (let attempt = 0; attempt < 3; attempt++) {
@@ -162,7 +192,8 @@ export async function runEmailRetryScenarios(browser: Browser, origin: string) {
               }
               await settle();
               await assertRetryControls(true);
-              await assertStatuses(initialStatuses);
+              await assertStatuses(order.id, initialStatuses);
+              await assertStatuses(otherOrder.id, otherInitialStatuses);
               assert.equal(ledgerReads, readsBeforeRetry, "Pending retry must not refresh statuses before success");
               assert.deepEqual(posts, expectedPosts, "Repeated pending clicks send only the selected-recipient POST");
               assert.deepEqual(dialogs, mode === "native"
@@ -176,11 +207,12 @@ export async function runEmailRetryScenarios(browser: Browser, origin: string) {
                 "Email retry requested. Review the returned notification status."));
               await assertRetryControls(false);
               await settle();
-              await assertStatuses({ ...initialStatuses, [recipient]: "accepted" });
+              await assertStatuses(order.id, { ...initialStatuses, [recipient]: "accepted" });
+              await assertStatuses(otherOrder.id, otherInitialStatuses);
               assert.ok(ledgerReads > readsBeforeRetry, "Retry must refetch the ledger, not just show success feedback");
               assert.deepEqual(dialogs, mode === "native"
                 ? [confirmation, { ...confirmation, accepted: true }] : [confirmation]);
-              assert.deepEqual(posts, expectedPosts, "Response arrival must not send queued duplicate retries");
+              assert.deepEqual(posts, expectedPosts, "Response arrival must leave exactly one request to the selected order and recipient");
             } else {
               assert.deepEqual(dialogs, [], "Read-only staff cannot open retry confirmation");
               assert.deepEqual(posts, []);
