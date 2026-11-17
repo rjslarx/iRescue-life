@@ -7,7 +7,7 @@ export async function runEmailRetryScenarios(browser: Browser, origin: string) {
   let passed = 0;
   for (const scope of ["tenant", "platform"] as const) {
     for (const width of [1280, 390]) {
-      for (const mode of ["native", "rapid", "read-only", "refresh-failure", "http-failure", "network-failure"] as const) {
+      for (const mode of ["native", "rapid", "read-only", "refresh-failure", "http-failure", "network-failure", "refresh-pending"] as const) {
         const canManage = mode !== "read-only";
         const failureMode = mode === "http-failure" || mode === "network-failure";
         for (const recipient of ["buyer", "donor"] as const) {
@@ -16,6 +16,10 @@ export async function runEmailRetryScenarios(browser: Browser, origin: string) {
           const context = await browser.createBrowserContext();
           let releaseRetry!: () => void;
           const retryPending = new Promise<void>(resolve => { releaseRetry = resolve; });
+          let releaseLedger!: () => void;
+          let ledgerArrived!: () => void;
+          const ledgerPending = new Promise<void>(resolve => { releaseLedger = resolve; });
+          const ledgerStarted = new Promise<void>(resolve => { ledgerArrived = resolve; });
           try {
             const page = await context.newPage();
             page.setDefaultTimeout(7000);
@@ -69,6 +73,10 @@ export async function runEmailRetryScenarios(browser: Browser, origin: string) {
               }
               if (req.method() === "GET" && path === `${root}/ledger`) {
                 ledgerReads++;
+                if (mode === "refresh-pending" && ledgerReads > 1) {
+                  ledgerArrived();
+                  await ledgerPending;
+                }
                 if (failLedgerRefresh) {
                   failedLedgerReads++;
                   await req.respond({ status: 503, contentType: "application/json",
@@ -242,7 +250,7 @@ export async function runEmailRetryScenarios(browser: Browser, origin: string) {
                   }
                 } finally { window.confirm = original; }
               }, label);
-              if (mode === "native" || mode === "refresh-failure") {
+              if (mode !== "rapid") {
                 acceptNext = true;
                 await control.click();
               } else await rapidClicks();
@@ -283,6 +291,44 @@ export async function runEmailRetryScenarios(browser: Browser, origin: string) {
                 new URL(response.url()).pathname.endsWith(`/orders/${order.id}/retry-email`));
               releaseRetry();
               assert.equal((await retryResponse).status(), 200, "The email retry POST was accepted");
+              if (mode === "refresh-pending") {
+                // Signal from inside interception: waiting for Puppeteer's
+                // request event can deadlock on the held interception handler.
+                let timeout!: ReturnType<typeof setTimeout>;
+                try {
+                  await Promise.race([ledgerStarted, new Promise<never>((_, reject) => {
+                    timeout = setTimeout(() => reject(new Error("Ledger refresh did not start")), 7000);
+                  })]);
+                } finally { clearTimeout(timeout); }
+                await assertRetryControls(true);
+                await settle();
+                assert.equal(ledgerReads, readsBeforeRetry + 1, "Accepted POST starts exactly one held ledger GET");
+                assert.equal(order.notificationStatus[recipient], "accepted", "POST completed before refresh assertions");
+                await assertStatuses(order.id, initialStatuses);
+                await assertStatuses(otherOrder.id, otherInitialStatuses);
+                await rapidClicks();
+                await settle();
+                await assertRetryControls(true);
+                assert.deepEqual(posts, expectedPosts, "Same-turn clicks during ledger refresh cannot resend either recipient");
+                for (let attempt = 0; attempt < 3; attempt++) {
+                  await control.click();
+                  await otherControl.click();
+                  await assertRetryControls(true);
+                }
+                await settle();
+                await assertRetryControls(true);
+                await assertStatuses(order.id, initialStatuses);
+                await assertStatuses(otherOrder.id, otherInitialStatuses);
+                assert.deepEqual(posts, expectedPosts, "Pointer clicks during ledger refresh cannot resend either recipient");
+                assert.deepEqual(dialogs, [confirmation, { ...confirmation, accepted: true }],
+                  "Neither recipient opens a confirmation while the ledger GET is pending");
+                assert.equal(ledgerReads, readsBeforeRetry + 1, "Pending clicks cannot start additional refreshes");
+                const ledgerResponse = page.waitForResponse(response =>
+                  response.request().method() === "GET" &&
+                  new URL(response.url()).pathname.endsWith(`${root}/ledger`));
+                releaseLedger();
+                assert.equal((await ledgerResponse).status(), 200, "Deferred ledger refresh succeeds");
+              }
               if (mode === "refresh-failure") {
                 await page.waitForFunction(message => Array.from(document.querySelectorAll('[role="alert"]'))
                   .some(e => e.textContent?.includes(message)), {}, refreshError);
@@ -338,7 +384,7 @@ export async function runEmailRetryScenarios(browser: Browser, origin: string) {
                 await assertStatuses(order.id, { ...initialStatuses, [recipient]: "accepted" });
                 await assertStatuses(otherOrder.id, otherInitialStatuses);
                 assert.ok(ledgerReads > readsBeforeRetry, "Retry must refetch the ledger, not just show success feedback");
-                assert.deepEqual(dialogs, mode === "native"
+                assert.deepEqual(dialogs, mode !== "rapid"
                   ? [confirmation, { ...confirmation, accepted: true }] : [confirmation]);
                 assert.deepEqual(posts, expectedPosts, "Response arrival must leave exactly one request to the selected order and recipient");
               }
@@ -354,6 +400,7 @@ export async function runEmailRetryScenarios(browser: Browser, origin: string) {
             throw new Error(scenario, { cause: error });
           } finally {
             releaseRetry();
+            releaseLedger();
             await context.close();
           }
         }
