@@ -7,7 +7,7 @@ export async function runEmailRetryScenarios(browser: Browser, origin: string) {
   let passed = 0;
   for (const scope of ["tenant", "platform"] as const) {
     for (const width of [1280, 390]) {
-      for (const mode of ["native", "rapid", "read-only", "refresh-failure", "http-failure", "network-failure", "refresh-pending", "concurrent", "malformed-json", "html-response"] as const) {
+      for (const mode of ["native", "rapid", "read-only", "refresh-failure", "http-failure", "network-failure", "refresh-pending", "concurrent", "malformed-json", "html-response", "permission-revoked"] as const) {
         const canManage = mode !== "read-only";
         const parsingFailure = mode === "malformed-json" || mode === "html-response";
         const failureMode = mode === "http-failure" || mode === "network-failure" || parsingFailure;
@@ -86,6 +86,11 @@ export async function runEmailRetryScenarios(browser: Browser, origin: string) {
                   failedLedgerReads++;
                   await req.respond({ status: 503, contentType: "application/json",
                     body: JSON.stringify({ error: refreshError }) }); return;
+                }
+                // Revoke access only in the successful post-retry ledger read,
+                // never in the POST response or the initial authorized ledger.
+                if (mode === "permission-revoked" && ledgerReads > 1) {
+                  order.canManageFinancialActions = false;
                 }
                 // Put the target second so an accidental first-row lookup fails.
                 await req.respond({ contentType: "application/json", body: JSON.stringify({ orders: [otherOrder, order] }) }); return;
@@ -366,13 +371,15 @@ export async function runEmailRetryScenarios(browser: Browser, origin: string) {
                 const selected = buttons.find(b => b.textContent === `Retry ${label} email`)!;
                 const other = buttons.find(b => b !== selected)!;
                 const original = window.confirm;
-                window.confirm = () => true;
+                let confirmations = 0;
+                window.confirm = () => { confirmations++; return true; };
                 try {
                   for (let i = 0; i < 5; i++) {
                     selected.click();
                     other.click();
                   }
                 } finally { window.confirm = original; }
+                return confirmations;
               }, label);
               if (mode !== "rapid") {
                 acceptNext = true;
@@ -541,10 +548,26 @@ export async function runEmailRetryScenarios(browser: Browser, origin: string) {
               } else {
                 await page.waitForFunction(() => document.body.textContent?.includes(
                   "Email retry requested. Review the returned notification status."));
-                await assertRetryControls(false);
+                await assertRetryControls(mode === "permission-revoked");
                 await settle();
                 await assertStatuses(order.id, { ...initialStatuses, [recipient]: "accepted" });
                 await assertStatuses(otherOrder.id, otherInitialStatuses);
+                if (mode === "permission-revoked") {
+                  assert.equal(ledgerReads, readsBeforeRetry + 1, "Accepted retry refreshes the ledger exactly once");
+                  assert.equal(order.canManageFinancialActions, false, "Refreshed ledger revokes financial access");
+                  assert.equal(await rapidClicks(), 0,
+                    "Same-turn clicks after permission revocation must not ask for confirmation");
+                  for (let attempt = 0; attempt < 3; attempt++) {
+                    await control.click();
+                    await otherControl.click();
+                  }
+                  await settle();
+                  await assertRetryControls(true);
+                  await assertStatuses(order.id, { ...initialStatuses, [recipient]: "accepted" });
+                  await assertStatuses(otherOrder.id, otherInitialStatuses);
+                  assert.equal(ledgerReads, readsBeforeRetry + 1,
+                    "Blocked clicks must not start another ledger refresh");
+                }
                 assert.ok(ledgerReads > readsBeforeRetry, "Retry must refetch the ledger, not just show success feedback");
                 assert.deepEqual(dialogs, mode !== "rapid"
                   ? [confirmation, { ...confirmation, accepted: true }] : [confirmation]);
