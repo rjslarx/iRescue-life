@@ -79,6 +79,11 @@ mobile. Authorized cases dismiss the real native confirmation and assert zero
 mutation requests, then explicitly accept a later attempt and assert exactly one
 `retry-email` POST with the selected recipient (`buyer` or `donor` for seller).
 They verify the scoped URL, tenant header, confirmation copy, and success
-feedback after query refresh. Read-only cases click each disabled retry control
+feedback after query refresh. Distinct initial buyer/seller statuses change only
+for the selected recipient in the refreshed ledger; assertions verify both
+recipient rows and the warning that provider acceptance is not proof of delivery.
+The retry POST returns no statuses, so these checks require a ledger refetch.
+Canceled and read-only attempts preserve both initial statuses.
+Read-only cases click each disabled retry control
 and assert no confirmation or request. All responses are intercepted; these
 checks do not test email delivery, backend authorization, or dashboard login.

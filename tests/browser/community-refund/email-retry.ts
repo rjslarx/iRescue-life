@@ -23,8 +23,10 @@ export async function runEmailRetryScenarios(browser: Browser, origin: string) {
               amountCents: 10000, refundedCents: 0, status: "paid",
               disputed: false, refunds: [], finance: { pendingRefundCents: 0 },
               canManageFinancialActions: canManage,
-              notificationStatus: { buyer: "failed", donor: "failed" },
+              notificationStatus: { buyer: "failed", donor: "unknown" },
             };
+            const initialStatuses = { ...order.notificationStatus };
+            let ledgerReads = 0;
             const errors: string[] = [], unexpected: string[] = [];
             const posts: { path: string; body: unknown }[] = [];
             const dialogs: { type: string; message: string; accepted: boolean }[] = [];
@@ -54,10 +56,17 @@ export async function runEmailRetryScenarios(browser: Browser, origin: string) {
                 unexpected.push(`${req.method()} ${path}: wrong tenant header`); await req.abort(); return;
               }
               if (req.method() === "GET" && path === `${root}/ledger`) {
+                ledgerReads++;
                 await req.respond({ contentType: "application/json", body: JSON.stringify({ orders: [order] }) }); return;
               }
               if (req.method() === "POST" && path === `${root}/orders/${order.id}/retry-email`) {
-                await req.respond({ contentType: "application/json", body: JSON.stringify({ notificationStatus: order.notificationStatus }) }); return;
+                // Change only the requested recipient. The POST deliberately
+                // returns no statuses: the UI must refresh them from the ledger.
+                const requested = JSON.parse(req.postData() || "{}").recipient;
+                if (requested === "buyer" || requested === "donor") {
+                  order.notificationStatus[requested as "buyer" | "donor"] = "accepted";
+                }
+                await req.respond({ contentType: "application/json", body: JSON.stringify({ success: true }) }); return;
               }
               unexpected.push(`${req.method()} ${path}`); await req.abort();
             });
@@ -65,6 +74,21 @@ export async function runEmailRetryScenarios(browser: Browser, origin: string) {
             await page.goto(origin + route);
             const summary = await page.waitForSelector("summary::-p-text(Notification audit & manual retry)");
             await summary!.click();
+            const assertStatuses = async (expected: typeof initialStatuses) => {
+              const paragraphs = [
+                `Buyer: ${expected.buyer}`, `Seller: ${expected.donor}`,
+                "Provider acceptance is not proof of delivery. Manual retry may duplicate email.",
+              ];
+              await page.waitForFunction(expected => {
+                const audit = Array.from(document.querySelectorAll("details"))
+                  .find(e => e.querySelector("summary")?.textContent === "Notification audit & manual retry");
+                return !!audit?.open && expected.every((text, i) => audit.querySelectorAll("p")[i]?.textContent === text);
+              }, {}, paragraphs);
+              assert.deepEqual(await summary!.evaluate(e => Array.from(
+                e.parentElement!.querySelectorAll("p"), p => p.textContent).slice(0, 3)),
+              paragraphs, "Recipient statuses and the delivery caveat must remain accurate");
+            };
+            await assertStatuses(initialStatuses);
             const control = await page.waitForSelector(`button::-p-text(Retry ${label} email)`);
             assert.ok(control);
             await control.scrollIntoView();
@@ -72,6 +96,7 @@ export async function runEmailRetryScenarios(browser: Browser, origin: string) {
             await control.click();
             await settle();
             assert.deepEqual(posts, [], "Canceled or disabled retry must not send any mutation");
+            await assertStatuses(initialStatuses);
             const confirmation = {
               type: "confirm",
               message: `Retry ${label} email? Check recorded status first to avoid duplicates.`,
@@ -80,6 +105,7 @@ export async function runEmailRetryScenarios(browser: Browser, origin: string) {
             if (canManage) {
               assert.deepEqual(dialogs, [confirmation], "First attempt must dismiss the native confirmation");
               assert.equal(await control.evaluate(e => (e as HTMLButtonElement).disabled), false);
+              const readsBeforeRetry = ledgerReads;
               acceptNext = true;
               await control.click();
               await page.waitForFunction(() => document.body.textContent?.includes(
@@ -88,6 +114,8 @@ export async function runEmailRetryScenarios(browser: Browser, origin: string) {
                 .filter(b => /^Retry (buyer|seller) email$/.test(b.textContent || ""))
                 .every(b => !b.disabled));
               await settle();
+              await assertStatuses({ ...initialStatuses, [recipient]: "accepted" });
+              assert.ok(ledgerReads > readsBeforeRetry, "Retry must refetch the ledger, not just show success feedback");
               assert.deepEqual(dialogs, [confirmation, { ...confirmation, accepted: true }]);
               assert.deepEqual(posts, [{
                 path: `${root}/orders/${order.id}/retry-email`, body: { recipient },
