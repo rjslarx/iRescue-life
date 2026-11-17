@@ -3,6 +3,14 @@ name: Rescue Resale scope
 description: Approved first-version boundaries and safety decisions for the local resale fundraiser.
 ---
 
+## Public resale paused
+
+Both resale experiences are paused platform-wide; preserve code and records but do not expose public listings or permit new checkout.
+
+**Why:** The user abandoned the idea for now after receiving pushback and explicitly requested unpublishing without deletion.
+
+**How to apply:** Do not reactivate resale without renewed authorization. Preserve existing order recovery, refunds, reconciliation and payout obligations. Courier and other resale expansion are also on hold.
+
 Rescue Resale is a separate page on the tenant website. Eligibility requires that tenant's configured Twilio SMS, not a Haseya-specific hardcoded allowlist. The user identified Haseya as the only currently eligible rescue.
 
 The separately approved Facebook-first community workflow does not require Twilio. It uses manual Facebook posts, Messenger coordination, email-verified sellers, and approved existing rescue tenants. Preserve the original SMS workflow.

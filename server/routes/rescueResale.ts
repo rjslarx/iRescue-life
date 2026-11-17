@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { pauseResaleApi } from "../middleware/resale-pause";
 import { randomUUID, randomInt, randomBytes } from "node:crypto";
 import { z } from "zod";
 import rateLimit from "express-rate-limit";
@@ -17,6 +18,7 @@ import { createPayoutAccount, payoutAccount, payoutAccountView, requirePayoutAcc
 import { settleResaleSplit } from "../services/resale-split-settlement";
 
 const router = Router();
+router.use(pauseResaleApi);
 const uuid = z.string().uuid();
 const route = (fn: any) => async (req: any, res: any, next: any) => {
   try { await fn(req, res); } catch (e: any) {

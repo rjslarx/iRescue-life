@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { RESALE_PUBLIC_ENABLED } from "@shared/resale-availability";
 import { useLocation, useSearch } from "wouter";
 import { tenantApiRequest } from "@/lib/tenantApi";
 import ResaleShare from "@/components/resale/ResaleShare";
@@ -21,7 +22,7 @@ export default function RescueResalePage() {
   const params = new URLSearchParams(useSearch());
   const orderParam = params.get("order");
   const orderId = orderParam && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orderParam) ? orderParam : null;
-  const [tab, setTab] = useState<"shop" | "donate" | "activity">(params.get("payoutSetup") === "return" ? "activity" : "shop");
+  const [tab, setTab] = useState<"shop" | "donate" | "activity">(!RESALE_PUBLIC_ENABLED || params.get("payoutSetup") === "return" ? "activity" : "shop");
   const api = useRescueResale({ orderId, activityOpen: tab === "activity" });
   const { data: tenantData } = useQuery<{ tenant: Tenant }>({ queryKey: ["/api/tenant", tenantId], staleTime: 300000 });
   const [search, setSearch] = useState("");
@@ -46,7 +47,8 @@ export default function RescueResalePage() {
   return <div className="resale">
     <PublicHeader rescueName={name} logoUrl={tenantData?.tenant.logoUrl || undefined} />
     <main className="resale-wrap">
-      <section className="resale-hero">
+      {!RESALE_PUBLIC_ENABLED && <section className="resale-panel"><h1>Rescue Resale is paused</h1><p>Existing orders and payout support remain available below. New listings and purchases are closed.</p></section>}
+      <section className="resale-hero" hidden={!RESALE_PUBLIC_ENABLED}>
         <div><span className="resale-kicker">Rescue Resale · Neighbors helping animals</span><h1>Good finds.<br />Fresh starts.</h1><p className="resale-lede">A second chapter for your belongings. A better next chapter for animals. Shop local, pre-loved things that support <strong>{name}</strong>. Full donation is the default; any optional 50/50 net proceeds split is clearly marked.</p></div>
         <aside className="resale-note"><HeartHandshake size={30} strokeWidth={1.4} aria-hidden="true" /><h2 className="mt-4">A neighborhood effort.</h2><ol><li><strong>Find something worth keeping.</strong><br />Ask a question or make an offer privately.</li><li><strong>Choose a pickup. Pay securely.</strong><br />Local meetups, arranged through the rescue.</li><li><strong>Make room for a little good.</strong><br />Donors keep items at home until pickup.</li></ol></aside>
       </section>
@@ -58,7 +60,7 @@ export default function RescueResalePage() {
             api.order.isError ? <><ResaleError error={api.order.error} /><button className="resale-btn secondary" onClick={() => void api.order.refetch()}>Retry payment check</button><div className="mt-4"><PhoneVerification api={api} /></div></> :
               api.order.data ? <><PickupSummary order={api.order.data} /><OrderActions order={api.order.data} api={api} /><button className="resale-btn secondary mt-4" disabled={api.order.isFetching} onClick={() => void api.order.refetch()}>{api.order.isFetching ? "Checking payment…" : "Refresh payment status"}</button></> : null}
       </section>}
-      <nav className="resale-tabs" aria-label="Rescue Resale sections">{([{ key: "shop", label: "Shop the finds" }, { key: "donate", label: "Donate an item" }, { key: "activity", label: "My activity" }] as const).map(t => <button key={t.key} className={`resale-btn ${tab === t.key ? "" : "secondary"}`} aria-current={tab === t.key ? "page" : undefined} onClick={() => setTab(t.key)}>{t.label}</button>)}</nav>
+      <nav className="resale-tabs" aria-label="Rescue Resale sections">{([{ key: "shop", label: "Shop the finds" }, { key: "donate", label: "Donate an item" }, { key: "activity", label: "My activity" }] as const).filter(t => RESALE_PUBLIC_ENABLED || t.key === "activity").map(t => <button key={t.key} className={`resale-btn ${tab === t.key ? "" : "secondary"}`} aria-current={tab === t.key ? "page" : undefined} onClick={() => setTab(t.key)}>{t.label}</button>)}</nav>
       {api.config.isLoading ? <div className="resale-skeleton" aria-label="Loading Rescue Resale" /> : api.config.isError ? <><ResaleError error={api.config.error} /><button className="resale-btn" onClick={() => void api.config.refetch()}>Retry connection</button></> :
         tab === "activity" ? <ResaleActivity api={api} /> :
           !api.config.data?.enabled ? <div className="resale-empty"><PackageOpen size={36} /><h2>The resale board is resting.</h2><p>New listings and purchases are not available right now. Existing participants can still check My activity.</p><button className="resale-btn secondary mt-4" onClick={() => void api.config.refetch()}>Check availability</button></div> :

@@ -1,4 +1,5 @@
 import { randomUUID, createHash } from "node:crypto";
+import { RESALE_PUBLIC_ENABLED } from "@shared/resale-availability";
 import { pool } from "../db";
 import { db } from "../db";
 import { tenants } from "@shared/schema";
@@ -103,6 +104,8 @@ export async function handleResaleSms(from: string, to: string, body: string, si
   if (!c) return true;
   try {
     const command = parseResaleCommand(match[2]);
+    // Preserve order coordination texts, but no new SMS offer negotiation.
+    if (command && !RESALE_PUBLIC_ENABLED) return true;
     if (command) {
       if ("error" in command) {
         // Deduplicate malformed commands too, without relaying them to the other party.

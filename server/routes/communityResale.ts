@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { pauseResaleApi } from "../middleware/resale-pause";
 import { randomBytes, randomInt, randomUUID } from "node:crypto";
 import { z } from "zod";
 import rateLimit from "express-rate-limit";
@@ -34,6 +35,7 @@ export function communitySafety(req: any, res: any, next: any) {
   next();
 }
 const router = Router();
+router.use(pauseResaleApi);
 router.use(communitySafety);
 const uuid = z.string().uuid();
 const emailSchema = z.string().trim().email().max(200).transform(s => s.toLowerCase());

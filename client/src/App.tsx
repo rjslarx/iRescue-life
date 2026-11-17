@@ -9,6 +9,8 @@ import { TenantProvider, useTenant } from "@/contexts/TenantContext";
 import { usePWAManifest } from "@/hooks/usePWAManifest";
 import { useTenantBranding } from "@/hooks/useTenantBranding";
 import NotFound from "@/pages/not-found";
+import ResalePausedPage from "@/pages/ResalePausedPage";
+import { isPausedResalePage, RESALE_PUBLIC_ENABLED } from "@shared/resale-availability";
 import Home from "@/pages/Home";
 import AvailableAnimalsPage from "@/pages/AvailableAnimalsPage";
 import Dashboard from "@/pages/Dashboard";
@@ -275,11 +277,11 @@ function RouterSwitch() {
       <Route path="/fundraisers" component={PublicFundraisersPage} />
       <Route path="/rescue-vend" component={RescueVendPage} />
       <Route path="/puzzle" component={PublicPuzzlePage} />
-      <Route path="/rescue-resale" component={RescueResalePage} />
-      <Route path="/resale" component={CommunityResalePage} />
-      <Route path="/resale/create" component={CommunityCreatePage} />
+      <Route path="/rescue-resale">{() => isPausedResalePage("/rescue-resale", window.location.search) ? <ResalePausedPage /> : <RescueResalePage />}</Route>
+      <Route path="/resale" component={RESALE_PUBLIC_ENABLED ? CommunityResalePage : ResalePausedPage} />
+      <Route path="/resale/create" component={RESALE_PUBLIC_ENABLED ? CommunityCreatePage : ResalePausedPage} />
       <Route path="/resale/manage" component={CommunityManagePage} />
-      <Route path="/resale/item/:id" component={CommunityItemPage} />
+      <Route path="/resale/item/:id" component={RESALE_PUBLIC_ENABLED ? CommunityItemPage : ResalePausedPage} />
       <Route path="/resale/order/:id" component={CommunityOrderPage} />
       <Route path="/donate/event/:eventId" component={FundraiserEventPage} />
       <Route path="/donate/:linkId" component={DonationLinkRedirectPage} />

@@ -43,7 +43,11 @@ export function SellerContact({ url, context = "item", orderId }: { url?: string
 export function Check({ children, checked, onChange, disabled = false }: { children: ReactNode; checked: boolean; onChange: (checked: boolean) => void; disabled?: boolean }) {
   return <label className="cr-check"><input type="checkbox" checked={checked} disabled={disabled} onChange={e => onChange(e.target.checked)} /><span>{children}</span></label>;
 }
+import { RESALE_PUBLIC_ENABLED } from "@shared/resale-availability";
+
 export function Shell({ children }: { children: ReactNode }) {
+  // Recovery pages stay accessible while public discovery and new sales are paused.
+  if (!RESALE_PUBLIC_ENABLED) return <div className="cr"><header className="cr-header"><strong>Rescue Resale · Existing orders</strong><a href="/resale/manage">My activity</a></header><main className="cr-wrap"><p role="status">Rescue Resale is paused. New listings and purchases are closed.</p>{children}</main></div>;
   return <div className="cr"><header className="cr-header"><a className="cr-brand" href="/resale"><span className="cr-mark"><HeartHandshake size={25} strokeWidth={1.5} /></span><span>Acadiana Rescue Resale<small>Good neighbors. Second chances.</small></span></a><nav className="cr-nav" aria-label="Community resale"><a href="/resale">Find something good</a><a href="/resale#partners">Our rescues</a><a href="/resale/manage">My activity</a><a className="cr-btn" href="/resale/create">Sell for a rescue <ArrowUpRight size={15} /></a></nav></header><main className="cr-wrap cr-enter">{children}</main><footer className="cr-footer"><span>Acadiana Rescue Resale · Local goods. Local good.</span><span>Belongings only. Never animals or services.</span><a href="/resale#how-it-works">How it works & safety</a></footer></div>;
 }
 export function GroundRules() {

@@ -10,6 +10,7 @@ import { communityResaleSchemaSql } from "./lib/community-resale-schema";
 import { rescueHelpSchemaSql } from "./lib/rescue-help-schema";
 import { smsSuppressionSchemaSql } from "./lib/sms-suppression-schema";
 import { registerRoutes } from "./routes";
+import { pauseResalePages } from "./middleware/resale-pause";
 import { setupVite, serveStatic, log } from "./vite";
 import { sessionMiddleware, authenticateUser } from "./middleware/auth";
 import { resolveTenant, redactTrainingTokenFromUrl } from "./middleware/tenant";
@@ -260,6 +261,7 @@ app.use(authenticateUser);
 app.use(ogImageRouter);
 
 // Open Graph tags injection for social media crawlers
+app.use(pauseResalePages);
 app.use(injectOGTags);
 
 app.use((req, res, next) => {
