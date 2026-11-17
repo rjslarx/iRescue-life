@@ -7,7 +7,7 @@ export async function runEmailRetryScenarios(browser: Browser, origin: string) {
   let passed = 0;
   for (const scope of ["tenant", "platform"] as const) {
     for (const width of [1280, 390]) {
-      for (const mode of ["native", "rapid", "read-only"] as const) {
+      for (const mode of ["native", "rapid", "read-only", "refresh-failure"] as const) {
         const canManage = mode !== "read-only";
         for (const recipient of ["buyer", "donor"] as const) {
           const label = recipient === "donor" ? "seller" : "buyer";
@@ -35,6 +35,9 @@ export async function runEmailRetryScenarios(browser: Browser, origin: string) {
             };
             const otherInitialStatuses = { ...otherOrder.notificationStatus };
             let ledgerReads = 0;
+            let failLedgerRefresh = false;
+            let failedLedgerReads = 0;
+            const refreshError = "Fixture ledger refresh unavailable after accepted email retry";
             const errors: string[] = [], unexpected: string[] = [];
             const posts: { path: string; body: unknown }[] = [];
             const dialogs: { type: string; message: string; accepted: boolean }[] = [];
@@ -65,6 +68,11 @@ export async function runEmailRetryScenarios(browser: Browser, origin: string) {
               }
               if (req.method() === "GET" && path === `${root}/ledger`) {
                 ledgerReads++;
+                if (failLedgerRefresh) {
+                  failedLedgerReads++;
+                  await req.respond({ status: 503, contentType: "application/json",
+                    body: JSON.stringify({ error: refreshError }) }); return;
+                }
                 // Put the target second so an accidental first-row lookup fails.
                 await req.respond({ contentType: "application/json", body: JSON.stringify({ orders: [otherOrder, order] }) }); return;
               }
@@ -78,6 +86,9 @@ export async function runEmailRetryScenarios(browser: Browser, origin: string) {
                 if (requested === "buyer" || requested === "donor") {
                   order.notificationStatus[requested as "buyer" | "donor"] = "accepted";
                 }
+                // This is a successful POST, not failed-POST recovery. Keep
+                // subsequent reads failing until an explicit ledger-only retry.
+                failLedgerRefresh = mode === "refresh-failure";
                 await req.respond({ contentType: "application/json", body: JSON.stringify({ success: true }) }); return;
               }
               unexpected.push(`${req.method()} ${path}`); await req.abort();
@@ -166,7 +177,7 @@ export async function runEmailRetryScenarios(browser: Browser, origin: string) {
                   }
                 } finally { window.confirm = original; }
               }, label);
-              if (mode === "native") {
+              if (mode === "native" || mode === "refresh-failure") {
                 acceptNext = true;
                 await control.click();
               } else await rapidClicks();
@@ -196,23 +207,76 @@ export async function runEmailRetryScenarios(browser: Browser, origin: string) {
               await assertStatuses(otherOrder.id, otherInitialStatuses);
               assert.equal(ledgerReads, readsBeforeRetry, "Pending retry must not refresh statuses before success");
               assert.deepEqual(posts, expectedPosts, "Repeated pending clicks send only the selected-recipient POST");
-              assert.deepEqual(dialogs, mode === "native"
+              assert.deepEqual(dialogs, mode !== "rapid"
                 ? [confirmation, { ...confirmation, accepted: true }] : [confirmation],
                 "Both recipient controls must suppress confirmation while pending");
               assert.equal(await page.evaluate(() => document.body.textContent?.includes(
                 "Email retry requested. Review the returned notification status.")), false,
               "Success feedback must wait for the response");
+              const retryResponse = page.waitForResponse(response =>
+                response.request().method() === "POST" &&
+                new URL(response.url()).pathname.endsWith(`/orders/${order.id}/retry-email`));
               releaseRetry();
-              await page.waitForFunction(() => document.body.textContent?.includes(
-                "Email retry requested. Review the returned notification status."));
-              await assertRetryControls(false);
-              await settle();
-              await assertStatuses(order.id, { ...initialStatuses, [recipient]: "accepted" });
-              await assertStatuses(otherOrder.id, otherInitialStatuses);
-              assert.ok(ledgerReads > readsBeforeRetry, "Retry must refetch the ledger, not just show success feedback");
-              assert.deepEqual(dialogs, mode === "native"
-                ? [confirmation, { ...confirmation, accepted: true }] : [confirmation]);
-              assert.deepEqual(posts, expectedPosts, "Response arrival must leave exactly one request to the selected order and recipient");
+              assert.equal((await retryResponse).status(), 200, "The email retry POST was accepted");
+              if (mode === "refresh-failure") {
+                await page.waitForFunction(message => Array.from(document.querySelectorAll('[role="alert"]'))
+                  .some(e => e.textContent?.includes(message)), {}, refreshError);
+                await settle();
+                assert.equal(ledgerReads, readsBeforeRetry + 1, "Accepted POST must attempt a ledger refresh");
+                assert.equal(failedLedgerReads, 1, "The following GET, not the POST, must fail");
+                assert.equal(order.notificationStatus[recipient], "accepted", "Server fixture accepted the selected retry");
+                assert.equal(await page.$$eval("tbody tr", rows => rows.length), 0,
+                  "Failed refresh must hide stale ledger rows, not present them as current");
+                assert.equal(await page.evaluate(() => /(?:Buyer|Seller): (?:accepted|delivered)/.test(
+                  document.body.textContent || "")), false, "A successful POST alone cannot invent recipient status");
+                assert.deepEqual(posts, expectedPosts, "Refresh failure must not automatically resend email");
+                assert.deepEqual(dialogs, [confirmation, { ...confirmation, accepted: true }],
+                  "Refresh failure must not ask to resend email");
+
+                // The provider's recorded outcome may differ from acceptance.
+                // Return a non-success status to catch optimistic accepted/delivered
+                // fallbacks, while preserving the other recipient and other order.
+                order.notificationStatus[recipient] = recipient === "buyer" ? "bounced" : "failed";
+                failLedgerRefresh = false;
+                const refresh = await page.$("button::-p-text(Refresh ledger)");
+                assert.ok(refresh);
+                await refresh.scrollIntoView();
+                await refresh.click();
+                await page.waitForSelector("tbody tr");
+                for (const id of [otherOrder.id, order.id]) {
+                  const element = await row(id);
+                  const summary = await element.$("summary::-p-text(Notification audit & manual retry)");
+                  assert.ok(summary);
+                  await summary.scrollIntoView();
+                  await summary.click();
+                  await element.dispose();
+                }
+                await assertStatuses(order.id, { ...initialStatuses, [recipient]: order.notificationStatus[recipient] });
+                await assertStatuses(otherOrder.id, otherInitialStatuses);
+                await settle();
+                assert.equal(ledgerReads, readsBeforeRetry + 2, "Recovery requires one explicit ledger GET");
+                assert.equal(failedLedgerReads, 1);
+                assert.equal(await page.evaluate(message => document.body.textContent?.includes(message), refreshError), false,
+                  "Successful refresh must clear the ledger error");
+                const recoveredRow = await row(order.id);
+                assert.deepEqual(await recoveredRow.$$eval("button", buttons => buttons
+                  .filter(b => /^Retry (buyer|seller) email$/.test(b.textContent || ""))
+                  .map(b => b.disabled)), [false, false], "Recovered ledger restores both manual controls");
+                await recoveredRow.dispose();
+                assert.deepEqual(posts, expectedPosts, "Ledger recovery must never resend the accepted email retry");
+                assert.deepEqual(dialogs, [confirmation, { ...confirmation, accepted: true }]);
+              } else {
+                await page.waitForFunction(() => document.body.textContent?.includes(
+                  "Email retry requested. Review the returned notification status."));
+                await assertRetryControls(false);
+                await settle();
+                await assertStatuses(order.id, { ...initialStatuses, [recipient]: "accepted" });
+                await assertStatuses(otherOrder.id, otherInitialStatuses);
+                assert.ok(ledgerReads > readsBeforeRetry, "Retry must refetch the ledger, not just show success feedback");
+                assert.deepEqual(dialogs, mode === "native"
+                  ? [confirmation, { ...confirmation, accepted: true }] : [confirmation]);
+                assert.deepEqual(posts, expectedPosts, "Response arrival must leave exactly one request to the selected order and recipient");
+              }
             } else {
               assert.deepEqual(dialogs, [], "Read-only staff cannot open retry confirmation");
               assert.deepEqual(posts, []);
