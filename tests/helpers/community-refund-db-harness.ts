@@ -10,7 +10,7 @@ import { communityResaleSchemaSql } from "../../server/lib/community-resale-sche
 // avoid application startup) and provider factory. Every SQL query is real.
 const compiled = build({
   stdin: {
-    contents: `export * from './community-resale-refunds'; export {settleResaleSplit} from './resale-split-settlement';`,
+    contents: `export * from './community-resale-refunds'; export {withCommunityOrderLock} from './community-resale-lock'; export {settleResaleSplit} from './resale-split-settlement';`,
     resolveDir: `${process.cwd()}/server/services`, loader: "ts",
   },
   bundle: true, platform: "node", format: "cjs", write: false, packages: "external",
@@ -46,6 +46,9 @@ export async function fixture() {
     application_name: schema,
   });
   const tenant = randomUUID(), otherTenant = randomUUID(), order = randomUUID(), item = randomUUID();
+  const ownedClients = new Set<pg.PoolClient>();
+  pool.on("connect", client => ownedClients.add(client));
+  pool.on("remove", client => ownedClients.delete(client));
   const requestId = randomUUID();
   const raw = JSON.stringify({ requestId, amountCents: "damaged", evidence: "retain exactly" });
   const module = { exports: {} as any };
@@ -71,6 +74,7 @@ export async function fixture() {
     beforePayment: undefined as undefined | (() => Promise<void>),
     refundRead: undefined as undefined | (() => any),
     refundList: undefined as undefined | (() => any[]),
+    afterRefundCreate: undefined as undefined | ((result: any, options: any) => Promise<void>),
   };
   const stripe = {
     paymentIntents: { retrieve: async () => {
@@ -86,10 +90,11 @@ export async function fixture() {
         return structuredClone(createdRefunds.get(id) ?? (state.refundRead ? state.refundRead() : refund));
       },
       list: () => ({ autoPagingToArray: async () => structuredClone(state.refundList ? state.refundList() : [refund]) }),
-      create: async (input: any) => {
+      create: async (input: any, options: any) => {
         calls.creates++;
         const result = { id: "re_new", ...input, status: "pending" };
         createdRefunds.set(result.id, result);
+        await state.afterRefundCreate?.(structuredClone(result), options);
         return structuredClone(result);
       },
     },
@@ -105,6 +110,18 @@ export async function fixture() {
     await pool.end();
     try { await admin.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`); }
     finally { await admin.end(); }
+  }
+  async function terminateOwnedSession(pid: number) {
+    // Never accept a PID obtained merely by scanning application sessions.
+    const client = [...ownedClients].find(c => (c as any).processID === pid);
+    assert.ok(client, "Termination target must be a live client created by this fixture");
+    // pg emits an error on an idle socket when its backend is terminated.
+    client.on("error", () => {});
+    const result = await admin.query(`SELECT pg_terminate_backend(pid) AS terminated
+      FROM pg_stat_activity WHERE pid=$1 AND application_name=$2
+        AND datname=current_database() AND pid<>pg_backend_pid()`, [pid, schema]);
+    assert.equal(result.rows.length, 1, "Only this disposable fixture's session may be terminated");
+    assert.equal(result.rows[0].terminated, true);
   }
   try {
     await admin.query(`CREATE SCHEMA ${schema}`);
@@ -122,7 +139,7 @@ export async function fixture() {
     await pool.query("INSERT INTO community_resale_splits(order_id,tenant_id,status,data) VALUES($1,$2,'needs_review',$3)", [order, tenant, legs]);
   } catch (e) { await close(); throw e; }
   return {
-    pool, admin, schema, api, tenant, otherTenant, order, requestId, raw, stripe, state, calls, charge, refund, transfers, close,
+    pool, admin, schema, api, tenant, otherTenant, order, requestId, raw, stripe, state, calls, charge, refund, transfers, close, terminateOwnedSession,
     recover: (tid = tenant) => api.recoverCommunityRefundIntent(order, tid, "staff", raw, stripe),
     request: (tid = tenant) => api.requestCommunityRefund(order, tid, "staff", {
       requestId, amountCents: 2500, expectedRefundedCents: 2500, reason: "Original refund",
@@ -146,7 +163,7 @@ export async function blocked(f: Fixture) {
         AND w.wait_event='advisory'`, [f.schema]);
     if (rows.length) {
       assert.notEqual(rows[0].waiter, rows[0].holder);
-      return;
+      return rows[0] as { waiter: number; holder: number };
     }
     await new Promise(r => setTimeout(r, 20));
   }
