@@ -238,10 +238,17 @@ function AdminHandoffReview({ order, scope, canManage }: { order: any; scope: Sc
 
 export function AdminOrderSafeguards({ order, scope, canManageFinancialActions = false }: { order: any; scope: Scope; canManageFinancialActions?: boolean }) {
   const notificationAction = useCommunityAction(scope);
+  const notificationInFlight = useRef(false);
   const canManage = canManageFinancialActions === true && order.canManageFinancialActions !== false;
   return <div className="cr-safeguards"><OrderSafeguardStatus order={order} financial /><AdminRefund key={`${scope}:${order.id}`} order={order} scope={scope} canManage={canManage} /><AdminHandoffReview order={order} scope={scope} canManage={canManage} />
-    <details><summary>Notification audit & manual retry</summary><p>Buyer: {human(order.notificationStatus?.buyer)}</p><p>Seller: {human(order.notificationStatus?.donor)}</p><p className="cr-muted">Provider acceptance is not proof of delivery. Manual retry may duplicate email.</p><div className="cr-row">{(["buyer", "donor"] as const).map(recipient => <button key={recipient} className="cr-btn secondary" disabled={notificationAction.busy || !canManage} onClick={() => {
-      if (window.confirm(`Retry ${recipient === "donor" ? "seller" : "buyer"} email? Check recorded status first to avoid duplicates.`)) void notificationAction.run(`/orders/${encodeURIComponent(order.id)}/retry-email`, "POST", { recipient }, "Email retry requested. Review the returned notification status.");
+    <details><summary>Notification audit & manual retry</summary><p>Buyer: {human(order.notificationStatus?.buyer)}</p><p>Seller: {human(order.notificationStatus?.donor)}</p><p className="cr-muted">Provider acceptance is not proof of delivery. Manual retry may duplicate email.</p><div className="cr-row">{(["buyer", "donor"] as const).map(recipient => <button key={recipient} className="cr-btn secondary" disabled={notificationAction.busy || !canManage} onClick={async () => {
+      if (!canManage || notificationAction.busy || notificationInFlight.current) return;
+      // React's disabled state is committed after this turn; share an immediate
+      // guard across both recipients, including confirmation and query refresh.
+      notificationInFlight.current = true;
+      try {
+        if (window.confirm(`Retry ${recipient === "donor" ? "seller" : "buyer"} email? Check recorded status first to avoid duplicates.`)) await notificationAction.run(`/orders/${encodeURIComponent(order.id)}/retry-email`, "POST", { recipient }, "Email retry requested. Review the returned notification status.");
+      } finally { notificationInFlight.current = false; }
     }}>Retry {recipient === "donor" ? "seller" : "buyer"} email</button>)}</div><Feedback action={notificationAction} /></details>
     <StaffDecisionAudit entries={order.audit} />
   </div>;

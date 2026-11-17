@@ -79,7 +79,7 @@ unrelated session data. Navigation and reload must not submit or sync anything.
 The existing `tests/community-resale-safeguards.test.ts` complements this suite
 with server-side idempotency and recovery checks; it is not replaced.
 
-Sixteen manual email retry scenarios also run through the same fixture: buyer
+Twenty-four manual email retry scenarios also run through the same fixture: buyer
 and seller, authorized and read-only staff, tenant and platform, desktop and
 mobile. Authorized cases dismiss the real native confirmation and assert zero
 mutation requests, then explicitly accept a later attempt and assert exactly one
@@ -93,3 +93,8 @@ Canceled and read-only attempts preserve both initial statuses.
 Read-only cases click each disabled retry control
 and assert no confirmation or request. All responses are intercepted; these
 checks do not test email delivery, backend authorization, or dashboard login.
+Authorized cases defer the retry response and repeatedly click both recipients,
+checking that both controls remain disabled and only one POST is sent, including
+after the response arrives. Separate same-turn bursts temporarily accept
+confirmation synchronously to expose pre-render races; native confirmation
+acceptance/cancellation remains covered independently.
