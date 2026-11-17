@@ -16,7 +16,8 @@ import { updateCommunityPickup } from "../server/services/community-resale-picku
 import { withCommunityOrderLock } from "../server/services/community-resale-lock";
 import { settleResaleSplit } from "../server/services/resale-split-settlement";
 import { communityFinanceSnapshot } from "../server/services/community-resale-finance";
-import { sendCommunityPickupReminders, notifyCommunityProceeds } from "../server/services/community-resale-notifications";
+import { sendCommunityPickupReminders, notifyCommunityProceeds, notifyCommunityStaff, communityAttentionOrders } from "../server/services/community-resale-notifications";
+import { communityAttentionEvents } from "../shared/community-resale-attention";
 import { communityOrderView, syncCommunityOrder } from "../server/services/community-resale";
 import router from "../server/routes/communityResale";
 import { tenantCommunityRouter } from "../server/routes/communityResaleAdmin";
@@ -141,7 +142,7 @@ test("refund, recovery, pickup issue serialization, reminder and summary safegua
     app.use((req: any, _res, next) => {
       Object.defineProperty(req, "ip", { value: `127.0.0.${Math.floor(Math.random() * 200) + 1}` });
       req.tenant = { id: req.get("other") ? other : tid };
-      if (req.get("admin")) req.user = { id: "test-admin", tenantId: req.tenant.id, roles: [req.get("role") || "admin"], activeRole: req.get("role") || "admin" };
+      if (req.get("admin")) req.user = { id: req.get("test-user") || "test-admin", tenantId: req.tenant.id, roles: [req.get("role") || "admin"], activeRole: req.get("role") || "admin" };
       next();
     });
     app.use("/public", router); app.use("/admin", tenantCommunityRouter);
@@ -281,6 +282,79 @@ test("refund, recovery, pickup issue serialization, reminder and summary safegua
     const beforeRecent = sent.length;
     await sendCommunityPickupReminders(send, true, tid);
     assert.equal(sent.length, beforeRecent);
+    // Staff attention is tenant-scoped, opt-in, and durable across concurrent sweeps.
+    const adminId = randomUUID(), inactiveId = randomUUID(), staffId = randomUUID(), otherAdmin = randomUUID();
+    for (const [userId, tenantId, role, active] of [
+      [adminId, tid, "admin", true], [inactiveId, tid, "admin", false],
+      [staffId, tid, "staff", true], [otherAdmin, other, "admin", true],
+    ] as const) await pool.query(`INSERT INTO users(id,tenant_id,email,password_hash,full_name,roles,is_active)
+      VALUES($1,$2,$3,'unused','Attention test',ARRAY[$4]::text[],$5)`,
+      [userId, tenantId, `${userId}@example.test`, role, active]);
+    await pool.query(`INSERT INTO community_resale_partners(tenant_id,data) VALUES($1,$2),($3,$4)`,
+      [tid, { staffAlerts: { [adminId]: true, [inactiveId]: true, [staffId]: true, [otherAdmin]: true } },
+        other, { staffAlerts: { [otherAdmin]: true } }]);
+    const attentionOrder = await seed();
+    await updateCommunityPickup(attentionOrder, tid, "buyer", "issue", { description: "Item damaged on collection" });
+    const deliveries: any[] = [];
+    const unknownSend = async (...args: any[]) => { deliveries.push(args); throw new Error("Response lost after acceptance"); };
+    await Promise.all([notifyCommunityStaff(tid, attentionOrder, unknownSend), notifyCommunityStaff(tid, attentionOrder, unknownSend)]);
+    assert.equal(deliveries.length, 1);
+    assert.equal(deliveries[0][1], `${adminId}@example.test`);
+    await notifyCommunityStaff(other, attentionOrder, unknownSend);
+    assert.equal(deliveries.length, 1, "wrong tenant never sends");
+    assert.ok((await communityAttentionOrders(tid)).some(o => o.id === attentionOrder));
+    assert.ok(!(await communityAttentionOrders(other)).some(o => o.id === attentionOrder));
+    const firstIssue = (await row(attentionOrder)).data.issue;
+    await updateCommunityPickup(attentionOrder, tid, "admin", "resolve_issue", { issueId: firstIssue.id });
+    assert.ok(!(await communityAttentionOrders(tid)).some(o => o.id === attentionOrder));
+    await updateCommunityPickup(attentionOrder, tid, "seller", "pickup_help", { description: "Forgot pickup code" });
+    await pool.query(`UPDATE community_resale_partners SET data='{}' WHERE tenant_id=$1`, [tid]);
+    await notifyCommunityStaff(tid, attentionOrder, unknownSend);
+    assert.equal(deliveries.length, 1, "opt-out blocks a new event");
+    await pool.query(`UPDATE community_resale_partners SET data=$2 WHERE tenant_id=$1`,
+      [tid, { staffAlerts: { [adminId]: true } }]);
+    await notifyCommunityStaff(tid, attentionOrder, unknownSend);
+    assert.equal(deliveries.length, 2, "new request gets its own alert");
+    const attentionApi = (method = "GET", path = "/attention", body?: any, role = "admin") =>
+      fetch(`http://127.0.0.1:${server.address().port}/admin${path}`, {
+        method, headers: { "content-type": "application/json", admin: "1", "test-user": adminId, role },
+        ...(body ? { body: JSON.stringify(body) } : {}),
+      });
+    let attentionResponse = await attentionApi();
+    assert.equal(attentionResponse.status, 200);
+    const attentionBody: any = await attentionResponse.json();
+    assert.equal(attentionBody.enabled, true);
+    assert.ok(attentionBody.orders.some((o: any) => o.id === attentionOrder && o.attention.length));
+    assert.equal((await attentionApi("PUT", "/attention/preference", { enabled: false }, "staff")).status, 403);
+    assert.equal((await attentionApi("PUT", "/attention/preference", { enabled: false })).status, 200);
+    assert.equal((await (await attentionApi()).json()).enabled, false);
+    assert.equal((await attentionApi("PUT", "/attention/preference", { enabled: true, tenantId: other })).status, 400);
+    const now = Date.now();
+    const aged = { id: randomUUID(), status: "succeeded", recoveryStatus: "needs_review", createdAt: new Date(now - 86400000).toISOString() };
+    assert.equal(communityAttentionEvents({ data: { refunds: [aged] } }, now).length, 1);
+    assert.equal(communityAttentionEvents({ data: { refunds: [aged] } }, now - 1).length, 0);
+    assert.equal(communityAttentionEvents({ data: { refunds: [{ ...aged, recoveryStatus: "recovered" }] } }, now).length, 0);
+    assert.equal(communityAttentionEvents({ data: { refunds: [{ ...aged, recoveryStatus: "split_reconciliation" }], finance: { recoveryStatus: "recovered" } } }, now).length, 0);
+    assert.equal(communityAttentionEvents({ data: { refunds: [{ ...aged, status: "failed" }] } }, now).length, 0);
+    // A recovered local refund must not hide a later Stripe-dashboard refund.
+    const externalAfterLocal = await seed();
+    await refund(externalAfterLocal, 4000);
+    await snapshot(externalAfterLocal);
+    assert.equal((await row(externalAfterLocal)).data.refunds[0].recoveryStatus, "recovered");
+    charges.get(`ch_${externalAfterLocal}`).amount_refunded = 6000;
+    await snapshot(externalAfterLocal);
+    await pool.query(`UPDATE community_resale_orders SET refunded_cents=6000,
+      data=jsonb_set(data,'{refundRecoverySince}',to_jsonb($2::text)) WHERE id=$1`,
+      [externalAfterLocal, new Date(now - 86400001).toISOString()]);
+    const externalAttention = (await communityAttentionOrders(tid)).find(o => o.id === externalAfterLocal);
+    assert.equal(externalAttention?.attention.length, 1);
+    assert.ok(externalAttention?.attention[0].key.startsWith("recovery:"));
+    await pool.query(`UPDATE community_resale_partners SET data=$2 WHERE tenant_id=$1`,
+      [tid, { staffAlerts: { [adminId]: true } }]);
+    const beforeExternal = deliveries.length;
+    await notifyCommunityStaff(tid, externalAfterLocal, unknownSend);
+    await notifyCommunityStaff(tid, externalAfterLocal, unknownSend);
+    assert.equal(deliveries.length, beforeExternal + 1, "external recovery alerts remain deduplicated");
     if (process.env.REPLIT_DEPLOYMENT !== "1")
       await assert.rejects(requestCommunityRefund(recent, tid, "admin", { requestId: randomUUID(), amountCents: 100,
         expectedRefundedCents: 0, reason: "Testing dev guard" }), /published app/);
@@ -290,6 +364,7 @@ test("refund, recovery, pickup issue serialization, reminder and summary safegua
     for (const table of ["community_resale_splits", "community_resale_orders", "community_resale_items", "community_resale_audit", "community_resale_partners"])
       await pool.query(`DELETE FROM ${table} WHERE tenant_id=ANY($1::uuid[])`, [[tid, other]]);
     await pool.query("DELETE FROM community_resale_auth WHERE email=$1", [seller]);
+    await pool.query("DELETE FROM users WHERE tenant_id=ANY($1::uuid[])", [[tid, other]]);
     await db.delete(tenants).where(eq(tenants.id, tid)); await db.delete(tenants).where(eq(tenants.id, other));
     await pool.end();
   }

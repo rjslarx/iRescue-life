@@ -12,6 +12,7 @@ import { requirePayoutAccount } from "../services/resale-payout-accounts";
 import { hashResale } from "../services/rescue-resale";
 import { requestCommunityRefund } from "../services/community-resale-refunds";
 import { updateCommunityPickup } from "../services/community-resale-pickup";
+import { communityAttentionOrders } from "../services/community-resale-notifications";
 const uuid = z.string().uuid();
 export const tenantCommunityRouter = Router();
 export const platformCommunityRouter = Router();
@@ -22,6 +23,24 @@ tenantCommunityRouter.use(communitySafety, requireTenant, requireAuth,
   });
 platformCommunityRouter.use(communitySafety, requireAuth, requirePlatformAdmin);
 function canManage(req: any) { return req.user?.roles?.some((r: string) => ["owner", "admin"].includes(r)); }
+tenantCommunityRouter.get("/attention", route(async (req: any, res: any) => {
+  const rows = await communityAttentionOrders(req.tenant.id);
+  const preference = (await pool.query("SELECT data->'staffAlerts'->>$2 AS enabled FROM community_resale_partners WHERE tenant_id=$1",
+    [req.tenant.id, req.user.id])).rows[0];
+  res.json({ enabled: preference?.enabled === "true", canSubscribe: !!canManage(req),
+    orders: rows.map(o => ({ ...communityOrderView(o, false, true), attention: o.attention,
+      canManageFinancialActions: !!canManage(req) })) });
+}));
+tenantCommunityRouter.put("/attention/preference", route(async (req: any, res: any) => {
+  if (!canManage(req)) fail("Only rescue owners and admins can subscribe to alerts.", 403);
+  const { enabled } = z.object({ enabled: z.boolean() }).strict().parse(req.body);
+  await pool.query(`INSERT INTO community_resale_partners(tenant_id,data) VALUES($1,
+    jsonb_build_object('staffAlerts',jsonb_build_object($2::text,$3::boolean)))
+    ON CONFLICT(tenant_id) DO UPDATE SET data=jsonb_set(community_resale_partners.data,'{staffAlerts}',
+      COALESCE(community_resale_partners.data->'staffAlerts','{}') || jsonb_build_object($2::text,$3::boolean)),
+      updated_at=now()`, [req.tenant.id, req.user.id, enabled]);
+  res.json({ ok: true });
+}));
 tenantCommunityRouter.get("/", route(async (req: any, res: any) => {
   const { partner } = await communityPartner(req.tenant.id);
   const items = (await pool.query("SELECT * FROM community_resale_items WHERE tenant_id=$1 ORDER BY created_at DESC LIMIT 500", [req.tenant.id])).rows;

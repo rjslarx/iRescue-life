@@ -201,4 +201,5 @@ export async function reconcileCommunityOrders() {
     finally { await pool.query("UPDATE community_resale_orders SET reconciled_at=now() WHERE id=$1", [r.id]); }
   }
   await (await import("./community-resale-notifications")).sendCommunityPickupReminders();
+  await (await import("./community-resale-notifications")).sendCommunityStaffAlerts();
 }

@@ -44,6 +44,40 @@ function PartnerReview({ partner }: { partner: any }) {
 function OrderActions({ order, scope }: { order: any; scope: Scope }) {
   return <AdminOrderSafeguards order={order} scope={scope} canManageFinancialActions={order.canManageFinancialActions === true} />;
 }
+function CommunityAttentionQueue() {
+  const query = useCommunityQuery("/attention", "tenant");
+  const action = useCommunityAction("tenant");
+  const [filter, setFilter] = useState("all");
+  const orders = (query.data?.orders || []).filter((o: any) => filter === "all" ||
+    o.attention.some((event: any) => event.key.startsWith(filter)));
+  return <section className="cr-panel" aria-label="Resale attention queue">
+    <div className="cr-toolbar"><div><span className="cr-kicker">Needs attention</span>
+      <h2>Buyer issues, pickup help & refund recovery</h2></div>
+      <button className="cr-btn secondary" disabled={query.isFetching} onClick={() => void query.refetch()}>Refresh attention queue</button></div>
+    <p className="cr-muted">Open requests appear immediately. Unresolved refund recovery appears after 24 hours.
+      Time passing never releases a payout. Resolving a request removes it from this queue.</p>
+    <QueryState query={query} label="Loading attention queue">
+      {query.data?.canSubscribe && <fieldset disabled={action.busy}>
+        <Check checked={query.data.enabled} onChange={enabled => void action.run("/attention/preference", "PUT", { enabled }, "Your email alert preference was saved.")}>
+          Email me when resale needs attention
+        </Check><p className="cr-muted">Off by default. Alerts go only to your account email while you remain an active rescue owner or admin.
+          Each request is emailed once; uncertain email outcomes are not automatically resent. Enabling includes currently unresolved requests.</p>
+      </fieldset>}
+      <Feedback action={action} />
+      <Field label="Attention type"><select value={filter} onChange={e => setFilter(e.target.value)}>
+        <option value="all">All requests</option><option value="issue:">Buyer issues</option>
+        <option value="pickupHelp:">Pickup assistance</option><option value="refund">Refund recovery</option>
+        <option value="recovery:">External refund recovery</option>
+      </select></Field>
+      <p>{orders.length} orders need attention in this view.</p>
+      {orders.length ? orders.map((o: any) => <article className="cr-panel" key={o.id}>
+        <h3>{o.itemTitle}</h3><p style={{ overflowWrap: "anywhere" }}>{o.id}</p>
+        {o.attention.map((event: any) => <p key={event.key}><strong>{event.label}</strong> · Since {date(event.since)}</p>)}
+        <OrderActions order={o} scope="tenant" />
+      </article>) : <Empty title="No unresolved requests in this view.">Use Refresh to check for new requests.</Empty>}
+    </QueryState>
+  </section>;
+}
 export function CommunityLedger({ scope, partners = [] }: { scope: Scope; partners?: any[] }) {
   const [filters, setFilters] = useState({ tenantId: "", from: "", to: "", mode: "all", status: "all", settlement: "all" });
   const [error, setError] = useState<unknown>(null); const [exporting, setExporting] = useState(false);
@@ -68,7 +102,7 @@ export function CommunityLedger({ scope, partners = [] }: { scope: Scope; partne
 export default function CommunityResaleAdminPage() {
   const query = useCommunityQuery("/", "tenant"); const [tab, setTab] = useState("review"); const [pending, setPending] = useState(true);
   const data = query.data; const items = (data?.items || []).filter((i: any) => !pending || ["pending", "pending_review"].includes(i.status));
-  return <DashboardLayout title="Community Resale" description="Neighbor-to-neighbor sales supporting your rescue."><div className="cr rounded-xl" style={{ minHeight: 0 }}><main className="cr-wrap"><div className="cr-toolbar" style={{ marginTop: 0 }}><div><span className="cr-kicker">Rescue finance workspace</span><h1 style={{ fontSize: "clamp(2.6rem,4vw,4rem)" }}>A little local good,<br />carefully looked after.</h1></div><a className="cr-btn secondary" href="/resale" target="_blank" rel="noopener noreferrer">Visit marketplace <ArrowUpRight size={15} /></a></div><nav className="cr-tabs" aria-label="Community resale management">{[["review", "Listing review"], ["settings", "Participation & settings"], ["ledger", "Sales ledger"]].map(([value, label]) => <button key={value} className={`cr-btn ${tab === value ? "" : "secondary"}`} onClick={() => setTab(value)}>{label}</button>)}</nav><QueryState query={query} label="Loading resale workspace">{data && <>{tab === "settings" && <PartnerSettings key={JSON.stringify(data.partner)} partner={data.partner} canManage={data.canManageSettings} />}{tab === "ledger" && <CommunityLedger scope="tenant" />}{tab === "review" && <><div className="cr-note">Review listings manually before publication. Check for prohibited animal sales, services, unsafe content, ownership concerns, misleading photos, and private contact information. Approval does not post to Facebook.</div><div className="cr-toolbar"><Check checked={pending} onChange={setPending}>Only pending review</Check><button className="cr-btn secondary" disabled={query.isFetching} onClick={() => void query.refetch()}>Refresh review queue</button></div>{items.length ? items.map((i: any) => <ReviewItem key={`${i.id}:${i.version}:${i.reviewNote}`} item={i} />) : <Empty title={pending ? "The review queue is clear." : "The neighborhood is just getting started."}>{pending ? "New seller submissions will arrive here. Switch off the pending filter to see all listings." : "Opt in, confirm your platform approval, and share the marketplace with your neighbors."}</Empty>}</>}</>}</QueryState></main></div></DashboardLayout>;
+  return <DashboardLayout title="Community Resale" description="Neighbor-to-neighbor sales supporting your rescue."><div className="cr rounded-xl" style={{ minHeight: 0 }}><main className="cr-wrap"><div className="cr-toolbar" style={{ marginTop: 0 }}><div><span className="cr-kicker">Rescue finance workspace</span><h1 style={{ fontSize: "clamp(2.6rem,4vw,4rem)" }}>A little local good,<br />carefully looked after.</h1></div><a className="cr-btn secondary" href="/resale" target="_blank" rel="noopener noreferrer">Visit marketplace <ArrowUpRight size={15} /></a></div><CommunityAttentionQueue /><nav className="cr-tabs" aria-label="Community resale management">{[["review", "Listing review"], ["settings", "Participation & settings"], ["ledger", "Sales ledger"]].map(([value, label]) => <button key={value} className={`cr-btn ${tab === value ? "" : "secondary"}`} onClick={() => setTab(value)}>{label}</button>)}</nav><QueryState query={query} label="Loading resale workspace">{data && <>{tab === "settings" && <PartnerSettings key={JSON.stringify(data.partner)} partner={data.partner} canManage={data.canManageSettings} />}{tab === "ledger" && <CommunityLedger scope="tenant" />}{tab === "review" && <><div className="cr-note">Review listings manually before publication. Check for prohibited animal sales, services, unsafe content, ownership concerns, misleading photos, and private contact information. Approval does not post to Facebook.</div><div className="cr-toolbar"><Check checked={pending} onChange={setPending}>Only pending review</Check><button className="cr-btn secondary" disabled={query.isFetching} onClick={() => void query.refetch()}>Refresh review queue</button></div>{items.length ? items.map((i: any) => <ReviewItem key={`${i.id}:${i.version}:${i.reviewNote}`} item={i} />) : <Empty title={pending ? "The review queue is clear." : "The neighborhood is just getting started."}>{pending ? "New seller submissions will arrive here. Switch off the pending filter to see all listings." : "Opt in, confirm your platform approval, and share the marketplace with your neighbors."}</Empty>}</>}</>}</QueryState></main></div></DashboardLayout>;
 }
 export function PlatformCommunityResalePage() {
   const { user } = useAuth(); const { isPlatformAdmin, isLoading } = usePlatformAdmin(); const [tab, setTab] = useState("partners");

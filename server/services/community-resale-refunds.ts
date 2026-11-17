@@ -139,6 +139,14 @@ export async function reconcileCommunityRefunds(c: any, o: any, stripe: any, exe
   }
 }
 
+/** Track when external refund recovery first needs attention; never initiate money movement. */
+export async function trackCommunityRefundRecovery(c: any, o: any, finance: any) {
+  const needsReview = finance.buyerRefundedCents > 0 && finance.recoveryStatus === "needs_review";
+  await c.query(`UPDATE community_resale_orders SET data=data || jsonb_build_object('refundRecoverySince',
+    CASE WHEN $2 THEN COALESCE(data->>'refundRecoverySince',$3) ELSE NULL END) WHERE id=$1 AND tenant_id=$4`,
+    [o.id, needsReview, new Date().toISOString(), o.tenant_id]);
+}
+
 export async function requestCommunityRefund(id: string, tenantId: string, actor: string,
   input: { requestId: string; amountCents: number; expectedRefundedCents: number; reason: string }, testStripe?: any) {
   const stripe = testStripe || stripeService.getPlatformStripeClient();

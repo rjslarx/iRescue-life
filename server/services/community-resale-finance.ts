@@ -1,3 +1,4 @@
+import { trackCommunityRefundRecovery } from "./community-resale-refunds";
 /** Cash-flow snapshot, not a claim about bank payout or charitable deductions. */
 export async function communityFinanceSnapshot(c: any, o: any, stripe: any, charge: any) {
   if (!charge?.id || !charge.balance_transaction || typeof charge.balance_transaction !== "object") return null;
@@ -54,5 +55,6 @@ export async function communityFinanceSnapshot(c: any, o: any, stripe: any, char
       ? outstanding - retainedApplicationFee : o.rescue_proceeds_cents,
   };
   await c.query("UPDATE community_resale_orders SET data=jsonb_set(data,'{finance}',$2::jsonb) WHERE id=$1", [o.id, JSON.stringify(result)]);
+  await trackCommunityRefundRecovery(c, o, result);
   return result;
 }

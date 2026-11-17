@@ -1,9 +1,49 @@
 import { pool } from "../db";
+import { createHash } from "node:crypto";
+import { communityAttentionEvents } from "../../shared/community-resale-attention";
 import { decrypt } from "../lib/encryption";
 import { withCommunityOrderLock, communityReleaseBlocked } from "./community-resale-lock";
 import { communityBase, sendCommunityEmail, syncCommunityOrder } from "./community-resale";
 
 const dollars = (n: number | null) => n == null ? "Pending confirmation" : `$${(n / 100).toFixed(2)}`;
+
+export async function communityAttentionOrders(tenantId: string) {
+  const rows = (await pool.query(`SELECT * FROM community_resale_orders WHERE tenant_id=$1
+    AND (data->'issue'->>'status'='open' OR data->'pickupHelp'->>'status'='open'
+      OR jsonb_array_length(COALESCE(data->'refunds','[]'))>0 OR data->>'refundRecoverySince' IS NOT NULL)
+    ORDER BY created_at ASC`, [tenantId])).rows;
+  return rows.map(o => ({ ...o, attention: communityAttentionEvents(o) })).filter(o => o.attention.length);
+}
+
+export async function notifyCommunityStaff(tenantId: string, orderId?: string, testSend?: typeof sendCommunityEmail) {
+  if (!testSend && process.env.REPLIT_DEPLOYMENT !== "1") return;
+  const orders = orderId ? [{ id: orderId }] : await communityAttentionOrders(tenantId);
+  for (const order of orders) {
+    await withCommunityOrderLock(order.id, async c => {
+      const o = (await c.query("SELECT * FROM community_resale_orders WHERE id=$1 AND tenant_id=$2", [order.id, tenantId])).rows[0];
+      if (!o) return;
+      const recipients = (await c.query(`SELECT u.id,u.email,t.subdomain FROM users u
+        JOIN tenants t ON t.id=u.tenant_id JOIN community_resale_partners p ON p.tenant_id=u.tenant_id
+        WHERE u.tenant_id=$1 AND u.is_active AND u.roles && ARRAY['owner','admin']::text[]
+        AND p.data->'staffAlerts'->>u.id::text='true'`, [tenantId])).rows;
+      for (const event of communityAttentionEvents(o)) for (const recipient of recipients) {
+        const key = `staffAlert_${createHash("sha256").update(`${event.key}:${recipient.id}`).digest("hex")}`;
+        await deliver(c, o, key, recipient.email, `Resale needs attention: ${event.label}`,
+          `${event.label}\nOrder: ${o.id}\nOpen your rescue's attention queue to review the request:\n${communityBase()}/${encodeURIComponent(recipient.subdomain)}/dashboard/community-resale\n\nNo payout is released because time passes. Manage your personal email opt-in in the attention queue.`,
+          testSend || sendCommunityEmail);
+      }
+    });
+  }
+}
+
+export async function sendCommunityStaffAlerts() {
+  if (process.env.REPLIT_DEPLOYMENT !== "1") return;
+  const partners = (await pool.query("SELECT tenant_id FROM community_resale_partners WHERE data ? 'staffAlerts'")).rows;
+  for (const p of partners) {
+    try { await notifyCommunityStaff(p.tenant_id); }
+    catch { console.warn("[Community resale] Staff attention notification deferred"); }
+  }
+}
 async function deliver(c: any, row: any, key: string, to: string, subject: string, text: string, send: typeof sendCommunityEmail) {
   const claim = await c.query(`UPDATE community_resale_orders SET data=jsonb_set(data,ARRAY[$2],'"sending"')
     WHERE id=$1 AND data->>$2 IS NULL RETURNING id`, [row.id, key]);

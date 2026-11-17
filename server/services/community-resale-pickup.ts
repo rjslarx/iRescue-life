@@ -7,7 +7,7 @@ import { verifiedCommunityCharge } from "./community-resale-refunds";
 export async function updateCommunityPickup(id: string, tenantId: string, actor: string,
   action: "issue" | "pickup_help" | "resolve_issue" | "staff_handoff" | "code_handoff",
   input: { description?: string; reason?: string; evidence?: string; issueId?: string; requestId?: string; code?: string }) {
-  return withCommunityOrderLock(id, async c => {
+  await withCommunityOrderLock(id, async c => {
     const o = (await c.query("SELECT * FROM community_resale_orders WHERE id=$1 AND tenant_id=$2", [id, tenantId])).rows[0];
     if (!o) fail("Order not found.", 404);
     const now = new Date().toISOString(), d = o.data;
@@ -51,5 +51,9 @@ export async function updateCommunityPickup(id: string, tenantId: string, actor:
       await c.query("COMMIT");
     } catch (e) { await c.query("ROLLBACK"); throw e; }
   });
+  if (action === "issue" || action === "pickup_help") {
+    try { await (await import("./community-resale-notifications")).notifyCommunityStaff(tenantId, id); }
+    catch { console.warn("[Community resale] Staff notification deferred to scheduled sweep"); }
+  }
 }
 
