@@ -7,9 +7,10 @@ export async function runEmailRetryScenarios(browser: Browser, origin: string) {
   let passed = 0;
   for (const scope of ["tenant", "platform"] as const) {
     for (const width of [1280, 390]) {
-      for (const mode of ["native", "rapid", "read-only", "refresh-failure", "http-failure", "network-failure", "refresh-pending", "concurrent"] as const) {
+      for (const mode of ["native", "rapid", "read-only", "refresh-failure", "http-failure", "network-failure", "refresh-pending", "concurrent", "malformed-json", "html-response"] as const) {
         const canManage = mode !== "read-only";
-        const failureMode = mode === "http-failure" || mode === "network-failure";
+        const parsingFailure = mode === "malformed-json" || mode === "html-response";
+        const failureMode = mode === "http-failure" || mode === "network-failure" || parsingFailure;
         for (const recipient of ["buyer", "donor"] as const) {
           const label = recipient === "donor" ? "seller" : "buyer";
           const scenario = `${scope} ${width}px: ${mode} ${label} cross-order email retry`;
@@ -98,6 +99,13 @@ export async function runEmailRetryScenarios(browser: Browser, origin: string) {
                 await (retryOrder === order ? retryPending : otherRetryPending);
                 if (failureMode && attempt === 1) {
                   if (mode === "network-failure") await req.abort("failed");
+                  // HTTP success with an unreadable body must fail during JSON
+                  // parsing in both request paths, not their HTTP error checks.
+                  else if (parsingFailure) await req.respond({
+                    status: 200,
+                    contentType: mode === "malformed-json" ? "application/json" : "text/html",
+                    body: mode === "malformed-json" ? '{"success":' : "<!doctype html><html><body>Fixture proxy response</body></html>",
+                  });
                   else await req.respond({
                     status: 503, contentType: "application/json",
                     body: JSON.stringify({ error: "Email retry temporarily unavailable." }),
@@ -283,7 +291,9 @@ export async function runEmailRetryScenarios(browser: Browser, origin: string) {
                 path: `${root}/orders/${order.id}/retry-email`, body: { recipient },
               };
               const successText = "Email retry requested. Review the returned notification status.";
-              const failureText = mode === "http-failure"
+              const failureText = parsingFailure
+                ? "The marketplace service is not responding with usable data. Please try again shortly."
+                : mode === "http-failure"
                 ? "Email retry temporarily unavailable." : "Failed to fetch";
               acceptNext = true;
               await control.click();
@@ -295,8 +305,21 @@ export async function runEmailRetryScenarios(browser: Browser, origin: string) {
               assert.equal(ledgerReads, readsBeforeRetry);
               assert.equal(await targetRow.evaluate((row, text) => row.textContent?.includes(text), failureText), false,
                 "Failure feedback must wait for the deferred response");
+              const unreadableResponse = parsingFailure ? page.waitForResponse(response =>
+                response.request().method() === "POST" &&
+                new URL(response.url()).pathname.endsWith(`/orders/${order.id}/retry-email`)) : null;
               releaseRetry();
+              if (unreadableResponse) {
+                const response = await unreadableResponse;
+                assert.equal(response.status(), 200, "Unreadable response must not be an HTTP rejection");
+                assert.equal(response.headers()["content-type"], mode === "malformed-json" ? "application/json" : "text/html");
+              }
               await page.waitForFunction((row, text) => row.textContent?.includes(text), {}, targetRow, failureText);
+              if (parsingFailure) {
+                assert.deepEqual(await targetRow.$$eval('[role="alert"]', alerts => alerts.map(e => e.textContent)),
+                  [failureText], "Parsing failure must show usable feedback, not raw JSON errors or proxy HTML");
+                assert.equal(failedLedgerReads, 0, "Parsing failure must not be confused with a failed ledger refresh");
+              }
               await assertRetryControls(false);
               // Observe beyond the usual first retry delay, without any click.
               await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 1500)));
