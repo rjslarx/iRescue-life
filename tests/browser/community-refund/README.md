@@ -25,6 +25,12 @@ query invalidation, and fetch errors exercise:
   UUID, and preserves the saved intent exactly. A later explicitly confirmed
   action succeeds with the expected payload and original retry ID.
 - Balance changes or newly discovered records blocking the final retry.
+- Dismissing native issue-resolution and manual-handoff confirmations preserves
+  the exact reason/evidence and selected action, sends no mutation, and triggers
+  no ledger refresh. A later explicit acceptance sends exactly one scoped POST
+  with the correct issue/pickup-help reference and trimmed inputs, refreshes the
+  ledger, and clears inputs only on success. Both actions run in both admin
+  scopes at desktop and mobile widths (eight cases).
 - Failed/canceled outcomes clearing intent without reporting refunded funds.
 - Read-only staff lacking refund/retry controls even with a stored intent.
 - UUID allocation counts surviving reload: no replacement on uncertain outcomes.

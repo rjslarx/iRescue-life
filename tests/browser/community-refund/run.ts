@@ -5,6 +5,7 @@ import { build } from "esbuild";
 import puppeteer, { type Page } from "puppeteer";
 import { runIsolationScenarios } from "./isolation";
 import { runEmailRetryScenarios } from "./email-retry";
+import { runHandoffScenarios } from "./handoff";
 
 const bundle = await build({
   entryPoints: ["tests/browser/community-refund/fixture.tsx"],
@@ -664,6 +665,7 @@ try {
   }
   passed += await runIsolationScenarios(browser, origin);
   passed += await runEmailRetryScenarios(browser, origin);
+  passed += await runHandoffScenarios(browser, origin);
   console.log(`Passed ${passed} mocked safeguard browser scenarios; no database, Stripe, or email provider access.`);
 } finally {
   await browser.close();
