@@ -15,6 +15,9 @@ function SettingsContent() {
   const [status, setStatus] = useState<"loading" | "hidden" | "ready" | "error">("loading");
   const [enabled, setEnabled] = useState(false);
   const [facebookPostUrl, setFacebookPostUrl] = useState("");
+  const [startsAt, setStartsAt] = useState("");
+  const [endsAt, setEndsAt] = useState("");
+  const [timezone, setTimezone] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [saving, setSaving] = useState(false);
@@ -36,6 +39,9 @@ function SettingsContent() {
       if (controller.signal.aborted) return;
       setEnabled(config.enabled);
       setFacebookPostUrl(config.facebookPostUrl);
+      setStartsAt(config.startsAt || "");
+      setEndsAt(config.endsAt || "");
+      setTimezone(config.timezone);
       setStatus("ready");
     }).catch((reason: Error & { status?: number }) => {
       if (controller.signal.aborted) return;
@@ -58,7 +64,7 @@ function SettingsContent() {
     const controller = new AbortController();
     savingController.current = controller;
     try {
-      await publicPuzzleRequest<PublicPuzzleConfig>("settings", "PUT", { enabled, facebookPostUrl: value }, controller.signal);
+      await publicPuzzleRequest<PublicPuzzleConfig>("settings", "PUT", { enabled, facebookPostUrl: value, startsAt: startsAt || null, endsAt: endsAt || null }, controller.signal);
       if (mounted.current && !controller.signal.aborted) setNotice("Public puzzle settings saved.");
     } catch (reason) {
       if (mounted.current && !controller.signal.aborted) setError(reason instanceof Error ? reason.message : "Settings could not be saved. Your edits are still here.");
@@ -86,9 +92,17 @@ function SettingsContent() {
           <form className="space-y-5" onSubmit={event => { event.preventDefault(); void save(); }}>
             <p className="puzzle-settings-intro text-sm text-muted-foreground">This public challenge is independent of the private game pilot. Turning it off stops public play and solved-image exports, without changing team or donor games.</p>
             <div className="flex items-center justify-between gap-5 rounded-md border p-4">
-              <div><Label htmlFor="public-puzzle-enabled">Enable public puzzle</Label><p className="mt-1 text-xs text-muted-foreground">Anyone with the link can play for free.</p></div>
+              <div><Label htmlFor="public-puzzle-enabled">Enable public puzzle</Label><p className="mt-1 text-xs text-muted-foreground">Off always pauses play. On allows free play within the optional schedule.</p></div>
               <Switch id="public-puzzle-enabled" checked={enabled} onCheckedChange={value => { setEnabled(value); setNotice(""); }} disabled={saving} />
             </div>
+            <fieldset className="space-y-3" disabled={saving}>
+              <legend className="text-sm font-medium">Optional schedule · {timezone}</legend>
+              <p className="text-xs text-muted-foreground">Use the rescue’s local time shown above, not your device’s timezone. Leave a field blank for no limit. Closing stops active play and solved-image exports. Times in skipped or repeated daylight-saving hours cannot be used.</p>
+              <Label htmlFor="public-puzzle-start">Opens at</Label>
+              <Input id="public-puzzle-start" type="datetime-local" value={startsAt} onChange={event => { setStartsAt(event.target.value); setNotice(""); }} />
+              <Label htmlFor="public-puzzle-end">Closes at</Label>
+              <Input id="public-puzzle-end" type="datetime-local" value={endsAt} onChange={event => { setEndsAt(event.target.value); setNotice(""); }} />
+            </fieldset>
             <div className="space-y-2">
               <Label htmlFor="public-puzzle-facebook">Facebook challenge post <span className="font-normal text-muted-foreground">(optional)</span></Label>
               <Input id="public-puzzle-facebook" type="url" placeholder="https://www.facebook.com/…" value={facebookPostUrl} onChange={event => { setFacebookPostUrl(event.target.value); setNotice(""); }} disabled={saving} aria-describedby="public-puzzle-facebook-help" />

@@ -1,15 +1,23 @@
 import { Router, type RequestHandler } from 'express';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
-import { publicPuzzleSettingsSchema, publicPuzzleTenant, type PublicPuzzleSettings } from './public-puzzle-policy';
+import { publicPuzzleSettingsSchema, publicPuzzleTenant, puzzleTimezone, puzzleSchedule, puzzleAvailability, type PublicPuzzleSettings } from './public-puzzle-policy';
 
 export function createPublicPuzzleRouter(deps: {
   requireAuth: RequestHandler;
   read: (tenantId: string) => Promise<PublicPuzzleSettings>;
   save: (tenantId: string, value: PublicPuzzleSettings, userId: string) => Promise<void>;
+  timezone: (tenantId: string) => Promise<string | null>;
   launch: (tenantId: string, resume?: { petId: string | null; photoVersion: string | null }) => Promise<{ html: string; pet: unknown; photoVersion?: string | null }>;
+  now?: () => number;
 }) {
   const router = Router();
+  const state = async (tenantId: string) => {
+    const [config, zone] = await Promise.all([deps.read(tenantId), deps.timezone(tenantId)]);
+    const timezone = puzzleTimezone(zone);
+    const serverNow = deps.now?.() ?? Date.now();
+    return { ...config, timezone, ...puzzleAvailability(config, timezone, serverNow), serverNow };
+  };
   router.use((_req, res, next) => {
     res.set('Cache-Control', 'no-store');
     res.set('X-Robots-Tag', 'noindex, nofollow');
@@ -24,7 +32,7 @@ export function createPublicPuzzleRouter(deps: {
   });
   router.use(rateLimit({ windowMs: 60_000, limit: 60, standardHeaders: 'draft-7', legacyHeaders: false }));
   router.get('/access', async (req, res, next) => {
-    try { res.json({ ...await deps.read(req.tenant!.id), rescueName: req.tenant!.name }); }
+    try { res.json({ ...await state(req.tenant!.id), rescueName: req.tenant!.name }); }
     catch (error) { next(error); }
   });
   router.post('/launch', rateLimit({ windowMs: 60_000, limit: 10, standardHeaders: 'draft-7', legacyHeaders: false }), async (req, res, next) => {
@@ -35,15 +43,16 @@ export function createPublicPuzzleRouter(deps: {
         photoVersion: z.string().regex(/^[a-f0-9]{64}$/).nullable(),
       }).strict().optional() }).strict().safeParse(req.body ?? {});
       if (Object.keys(req.query).length || !input.success) return res.status(400).json({ error: 'Unexpected puzzle parameters.' });
-      const config = await deps.read(req.tenant!.id);
-      if (!config.enabled) return res.status(403).json({ error: 'The public puzzle is paused. Please check back later.' });
+      const config = await state(req.tenant!.id);
+      if (!config.available) return res.status(403).json({ error: config.availabilityMessage });
       const game = await deps.launch(req.tenant!.id, input.data.resume);
+      const current = await state(req.tenant!.id);
+      if (!current.available) return res.status(403).json({ error: current.availabilityMessage });
       if (input.data.resume && ((game.pet as { id?: string } | null)?.id ?? null) !== input.data.resume.petId ||
           input.data.resume && (game.photoVersion ?? null) !== input.data.resume.photoVersion) {
         return res.status(409).json({ error: 'That saved puzzle photo is no longer available. Please start a new puzzle.' });
       }
-      if (!(await deps.read(req.tenant!.id)).enabled) return res.status(403).json({ error: 'The public puzzle is paused.' });
-      res.json({ ...config, ...game, rescueName: req.tenant!.name });
+      res.json({ ...current, ...game, rescueName: req.tenant!.name });
     } catch (error) { next(error); }
   });
   router.use('/settings', deps.requireAuth, (req, res, next) => {
@@ -53,14 +62,17 @@ export function createPublicPuzzleRouter(deps: {
     next();
   });
   router.get('/settings', async (req, res, next) => {
-    try { res.json({ ...await deps.read(req.tenant!.id), rescueName: req.tenant!.name }); }
+    try { res.json({ ...await state(req.tenant!.id), rescueName: req.tenant!.name }); }
     catch (error) { next(error); }
   });
   router.put('/settings', async (req, res, next) => {
     try {
       const config = publicPuzzleSettingsSchema.parse(req.body);
+      const timezone = puzzleTimezone(await deps.timezone(req.tenant!.id));
+      try { puzzleSchedule(config, timezone); }
+      catch (error) { return res.status(400).json({ error: (error as Error).message }); }
       await deps.save(req.tenant!.id, config, req.user!.id);
-      res.json({ ...config, rescueName: req.tenant!.name });
+      res.json({ ...await state(req.tenant!.id), rescueName: req.tenant!.name });
     } catch (error) {
       if (error instanceof z.ZodError) return res.status(400).json({ error: error.issues[0]?.message || 'Invalid settings.' });
       next(error);

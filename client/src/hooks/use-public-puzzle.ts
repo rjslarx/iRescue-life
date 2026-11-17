@@ -4,6 +4,14 @@ export interface PublicPuzzleConfig {
   enabled: boolean;
   facebookPostUrl: string;
   rescueName: string;
+  startsAt?: string | null;
+  endsAt?: string | null;
+  timezone: string;
+  available: boolean;
+  availability: "open" | "paused" | "upcoming" | "closed";
+  availabilityMessage: string;
+  nextChangeAt: string | null;
+  serverNow: number;
 }
 export interface PublicPuzzleLaunch extends PublicPuzzleConfig {
   photoVersion: string | null;

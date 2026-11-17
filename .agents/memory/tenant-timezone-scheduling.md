@@ -26,3 +26,14 @@ defaults `America/Chicago`, validated at load).
 `tenant.timezone` is null. Default to a valid IANA zone and gate on local hour via the
 DST-aware `Intl.DateTimeFormat` parts. If per-tenant accuracy matters platform-wide,
 the real follow-up is capturing tenant timezone in settings + backfilling.
+
+## One-time public challenge deadlines
+
+Reject local deadlines in skipped or repeated daylight-saving hours instead of
+silently choosing an offset or moving the time.
+
+**Why:** a public challenge needs an unambiguous opening and closing instant;
+silently shifting the rescue's entered deadline would mislead staff and players.
+
+**How to apply:** explain the restriction beside local schedule controls and
+validate against the resolved rescue timezone, never the staff device timezone.

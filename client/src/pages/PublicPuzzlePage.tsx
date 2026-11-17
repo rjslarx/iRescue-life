@@ -68,6 +68,7 @@ function PuzzleContent() {
   useEffect(() => {
     let active = true;
     let inFlight = false;
+    let boundary: number | undefined;
     const controllers = new Set<AbortController>();
     const closeGame = () => {
       allowed.current = false;
@@ -84,10 +85,10 @@ function PuzzleContent() {
       try {
         const result = await publicPuzzleRequest<PublicPuzzleConfig>("access", "GET", undefined, controller.signal);
         if (!active) return;
-        if (typeof result.enabled !== "boolean") throw new Error("Puzzle availability could not be checked.");
+        if (typeof result.available !== "boolean") throw new Error("Puzzle availability could not be checked.");
         setConfig(result); setAccessError("");
-        allowed.current = result.enabled;
-        if (!result.enabled) { closeGame(); clearProgress(); }
+        allowed.current = result.available;
+        if (!result.available) { closeGame(); clearProgress(); }
         else {
           try {
             const raw = localStorage.getItem(PUZZLE_SAVE_KEY);
@@ -95,6 +96,17 @@ function PuzzleContent() {
             setSaved(progress);
             if (raw && !progress) localStorage.removeItem(PUZZLE_SAVE_KEY);
           } catch { setSaveNotice("Saving is unavailable in this browser. You can still play."); }
+        }
+        window.clearTimeout(boundary);
+        if (result.nextChangeAt) {
+          const delay = Math.max(0, Date.parse(result.nextChangeAt) - result.serverNow);
+          boundary = window.setTimeout(() => {
+            // Fail closed at the known boundary, even while the next request is pending.
+            closeGame();
+            clearProgress();
+            setChecking(true);
+            void check();
+          }, Math.min(delay, 2147483647));
         }
       } catch {
         if (!active) return;
@@ -113,7 +125,7 @@ function PuzzleContent() {
     window.addEventListener("focus", onVisible);
     document.addEventListener("visibilitychange", onVisible);
     return () => {
-      active = false; controllers.forEach(c => c.abort()); window.clearInterval(interval);
+      active = false; controllers.forEach(c => c.abort()); window.clearInterval(interval); window.clearTimeout(boundary);
       window.removeEventListener("focus", onVisible); document.removeEventListener("visibilitychange", onVisible);
     };
   }, [accessAttempt]);
@@ -136,7 +148,7 @@ function PuzzleContent() {
       const result = await publicPuzzleRequest<PublicPuzzleLaunch>("launch", "POST",
         progress ? { resume: { petId: progress.petId, photoVersion: progress.photoVersion } } : undefined, controller.signal);
       if (!mounted.current || version !== generation.current || !allowed.current) return;
-      if (!result.enabled || typeof result.html !== "string" || !result.html) throw new Error("The puzzle is not available right now. Please check availability again.");
+      if (!result.available || typeof result.html !== "string" || !result.html) throw new Error("The puzzle is not available right now. Please check availability again.");
       if (progress && ((result.pet?.id ?? null) !== progress.petId || result.photoVersion !== progress.photoVersion)) throw Object.assign(new Error("That saved photo is no longer available. Please start a new puzzle."), { status: 409 });
       setLaunch(result);
     } catch (reason) {
@@ -226,7 +238,7 @@ function PuzzleContent() {
     });
   };
 
-  const available = config?.enabled === true && !accessError;
+  const available = config?.available === true && !accessError;
   return <div className="public-puzzle">
     <div className="puzzle-shell">
       <header className="puzzle-header">
@@ -251,8 +263,8 @@ function PuzzleContent() {
             </div>}
             {checking && !launch ? <div className="puzzle-welcome" role="status" aria-label="Checking puzzle availability"><Skeleton className="h-36 w-36 rounded-xl" /><Skeleton className="h-7 w-52" /><p>Checking puzzle availability…</p></div> :
               !available ? <div className="puzzle-welcome">
-                <AlertCircle size={35} strokeWidth={1.4} aria-hidden="true" /><h2>{accessError ? "Let’s check that connection." : "A little pause in play."}</h2>
-                <p role={accessError ? "alert" : "status"}>{accessError || "The public puzzle is taking a break. Please check back soon."}</p>
+                <AlertCircle size={35} strokeWidth={1.4} aria-hidden="true" /><h2>{accessError ? "Let’s check that connection." : config?.availability === "upcoming" ? "The challenge opens soon." : config?.availability === "closed" ? "This challenge has closed." : "A little pause in play."}</h2>
+                <p role={accessError ? "alert" : "status"}>{accessError || config?.availabilityMessage || "The public puzzle is taking a break. Please check back soon."}</p>
                 <Button className="puzzle-primary" onClick={() => setAccessAttempt(v => v + 1)} disabled={checking}>Check availability</Button>
               </div> : completion ? <div className="puzzle-result">
                 <span className="puzzle-eyebrow"><Check className="mr-1 inline h-4 w-4" aria-hidden="true" />All the pieces, together</span>

@@ -64,6 +64,10 @@ async function launch(tenantId: string, resume?: { petId: string | null; photoVe
 
 export const publicPuzzleRouter = createPublicPuzzleRouter({
   requireAuth, read, launch,
+  timezone: async tenantId => {
+    const [tenant] = await db.select({ timezone: tenants.timezone }).from(tenants).where(eq(tenants.id, tenantId)).limit(1);
+    return tenant?.timezone ?? null;
+  },
   save: async (tenantId, value, userId) => {
     await db.insert(platformSettings).values({
       key: publicPuzzleKey(tenantId), value, isPublic: false, category: 'features',
