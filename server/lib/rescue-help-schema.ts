@@ -5,14 +5,14 @@ CREATE TABLE IF NOT EXISTS rescue_help_settings (
 );
 CREATE TABLE IF NOT EXISTS rescue_help_threads (
  id uuid PRIMARY KEY, tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
- phone text NOT NULL, status text NOT NULL DEFAULT 'waiting', topic text,
+ phone text NOT NULL, status text NOT NULL DEFAULT 'waiting', topic text, foster_welcome boolean NOT NULL DEFAULT false,
  assignee_id uuid REFERENCES users(id) ON DELETE SET NULL,
  updated_at timestamptz NOT NULL DEFAULT now(), UNIQUE(tenant_id,phone)
 );
 CREATE TABLE IF NOT EXISTS rescue_help_messages (
  id uuid PRIMARY KEY, thread_id uuid NOT NULL REFERENCES rescue_help_threads(id) ON DELETE CASCADE,
  kind text NOT NULL, body text NOT NULL DEFAULT '', status text NOT NULL DEFAULT 'received',
- provider_sid text UNIQUE, request_id uuid UNIQUE, recording_sid text UNIQUE,
+ provider_sid text UNIQUE, request_id uuid UNIQUE, recording_sid text UNIQUE, media_count integer NOT NULL DEFAULT 0,
  author_id uuid REFERENCES users(id) ON DELETE SET NULL, created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS help_messages_thread ON rescue_help_messages(thread_id,created_at);

@@ -11,6 +11,7 @@ import { helpSettingsSchema, helpIsOpen, helpVoiceOptions } from "@shared/rescue
 import { helpSettings, helpInbound } from "../services/rescue-help";
 import { getAppBaseUrl } from "../lib/app-base-url";
 import { deleteHelpVoicemail } from "../services/rescue-help-voicemail";
+import { fetchHelpImage, helpImageType } from "../services/rescue-help-media";
 
 const router = Router();
 export const helpWebhooks = Router();
@@ -90,7 +91,7 @@ async function owned(req:any) {
 router.get("/threads/:id",wrap(async(req:any,res:any)=>{
   const t=await owned(req);
   const messages=(await pool.query(`SELECT m.id,m.kind,m.body,m.status,m.created_at AS "createdAt",u.full_name AS "authorName",
-    (m.recording_sid IS NOT NULL) AS "hasRecording" FROM rescue_help_messages m LEFT JOIN users u ON u.id=m.author_id
+    (m.recording_sid IS NOT NULL) AS "hasRecording",m.media_count AS "mediaCount" FROM rescue_help_messages m LEFT JOIN users u ON u.id=m.author_id
     WHERE thread_id=$1 ORDER BY m.created_at DESC LIMIT 500`,[t.id])).rows.reverse();
   res.json({thread:threadView(t),messages});
 }));
@@ -133,6 +134,22 @@ router.post("/threads/:id/messages",rateLimit({windowMs:60000,max:20}),wrap(asyn
     }
   }
   res.json({ok:true});
+}));
+router.get("/messages/:id/images/:index",wrap(async(req:any,res:any)=>{
+  const id=z.string().uuid().parse(req.params.id);
+  const index=z.coerce.number().int().min(0).max(9).parse(req.params.index);
+  const row=(await pool.query(`SELECT m.provider_sid,m.media_count FROM rescue_help_messages m
+    JOIN rescue_help_threads t ON t.id=m.thread_id WHERE m.id=$1 AND t.tenant_id=$2 AND m.kind='inbound'`,
+    [id,req.tenant.id])).rows[0];
+  if(!row || index>=row.media_count || !/^(SM|MM)[a-f0-9]{32}$/i.test(row.provider_sid || "")) fail("Attachment not found",404);
+  const config=await getTwilioConfigForTenant(req.tenant.id);
+  if(!config) fail("Messaging service unavailable",503);
+  const media=await twilio(config.accountSid,config.authToken).messages(row.provider_sid).media.list({limit:10});
+  const image=media[index];
+  if(!image || !/^ME[a-f0-9]{32}$/i.test(image.sid) || !helpImageType(image.contentType)) fail("This attachment is not a supported image. Ask the sender for a JPG or PNG screenshot.",415);
+  const result=await fetchHelpImage(`https://api.twilio.com/2010-04-01/Accounts/${config.accountSid}/Messages/${row.provider_sid}/Media/${image.sid}`,
+    `Basic ${Buffer.from(`${config.accountSid}:${config.authToken}`).toString("base64")}`);
+  res.set("X-Content-Type-Options","nosniff").type(result.type).send(result.bytes);
 }));
 router.delete("/messages/:id/audio",wrap(async(req:any,res:any)=>{
   await deleteHelpVoicemail(req.tenant.id,z.string().uuid().parse(req.params.id),!!admin(req),{
@@ -177,14 +194,14 @@ helpWebhooks.use(wrap(async(req:any,res:any,next:any)=>{
 helpWebhooks.post("/sms",wrap(async(req:any,res:any)=>{
   const response=new twilio.twiml.MessagingResponse();
   const from=z.string().regex(/^\+\d{8,15}$/).parse(req.body.From);
-  const sid=z.string().regex(/^SM[a-f0-9]{32}$/i).parse(req.body.MessageSid);
+  const sid=z.string().regex(/^(SM|MM)[a-f0-9]{32}$/i).parse(req.body.MessageSid);
   const command=smsOptOutCommand(req.body.Body,req.body.OptOutType);
   if(command){
     if(command!=="HELP") await recordVerifiedSmsOptOut(req.helpTenant,from,sid,command);
     res.type("text/xml").send(response.toString()); return;
   }
-  const media=Number(req.body.NumMedia||0)>0 ? " [Attachment received; please describe it in text.]" : "";
-  const reply=await helpInbound(req.helpTenant,from,sid,String(req.body.Body||"")+media);
+  const mediaCount=z.coerce.number().int().min(0).max(10).parse(req.body.NumMedia || 0);
+  const reply=await helpInbound(req.helpTenant,from,sid,String(req.body.Body||""),undefined,mediaCount);
   if(reply) response.message(reply);
   res.type("text/xml").send(response.toString());
 }));

@@ -315,6 +315,11 @@ app.use((req, res, next) => {
   console.log("[Startup] Registering application routes");
   const server = await registerRoutes(app);
   if (process.env.REPLIT_DEPLOYMENT === "1") {
+    const welcomeTimer = setInterval(() => {
+      void import("./services/foster-welcome").then(m => m.dispatchFosterWelcomes())
+        .catch(() => console.error("[Foster welcome] Pending delivery check failed"));
+    }, 5 * 60 * 1000);
+    welcomeTimer.unref();
     let resaleSweepRunning = false;
     const resaleTimer = setInterval(async () => {
       if (resaleSweepRunning) return;

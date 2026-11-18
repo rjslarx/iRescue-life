@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { pool } from "../db";
 import { defaultHelpSettings, helpIsOpen, helpMatch, type HelpSettings } from "@shared/rescue-help";
 import { isSmsPhoneSuppressed, smsPhoneKey } from "../lib/sms-suppression";
+import { fosterTopic } from "@shared/foster-welcome";
 
 export async function helpSettings(tenantId: string) {
   const row = (await pool.query("SELECT * FROM rescue_help_settings WHERE tenant_id=$1", [tenantId])).rows[0];
@@ -13,7 +14,7 @@ export async function helpCanSend(tenantId: string, phone: string) {
   const opted = (await pool.query("SELECT phone FROM users WHERE tenant_id=$1 AND sms_opt_out_at IS NOT NULL", [tenantId])).rows;
   return !opted.some(u => u.phone && smsPhoneKey(u.phone) === smsPhoneKey(phone));
 }
-export async function helpInbound(tenantId: string, from: string, sid: string, body: string, recordingSid?: string) {
+export async function helpInbound(tenantId: string, from: string, sid: string, body: string, recordingSid?: string, mediaCount = 0) {
   const { enabled, settings: s } = await helpSettings(tenantId);
   // Preserve a voicemail already recorded while an admin was disabling service.
   if (!enabled && !recordingSid) return "";
@@ -27,13 +28,20 @@ export async function helpInbound(tenantId: string, from: string, sid: string, b
       ON CONFLICT(tenant_id,phone) DO NOTHING`, [randomUUID(), tenantId, from]);
     const thread = (await client.query("SELECT * FROM rescue_help_threads WHERE tenant_id=$1 AND phone=$2 FOR UPDATE", [tenantId, from])).rows[0];
     const before = (await client.query("SELECT count(*)::int n FROM rescue_help_messages WHERE thread_id=$1", [thread.id])).rows[0].n;
-    await client.query(`INSERT INTO rescue_help_messages(id,thread_id,kind,body,provider_sid,recording_sid)
-      VALUES($1,$2,$3,$4,$5,$6)`, [randomUUID(), thread.id, recordingSid ? "voicemail" : "inbound", body.slice(0,4000), sid, recordingSid || null]);
+    await client.query(`INSERT INTO rescue_help_messages(id,thread_id,kind,body,provider_sid,recording_sid,media_count)
+      VALUES($1,$2,$3,$4,$5,$6,$7)`, [randomUUID(), thread.id, recordingSid ? "voicemail" : "inbound", body.slice(0,4000), sid, recordingSid || null, mediaCount]);
     const matched = helpMatch(s, body);
     const paused = before > 0 && ["waiting", "human"].includes(thread.status);
     let reply = "", status = thread.status === "resolved" ? "bot" : thread.status;
     let assignee = thread.assignee_id, topic = thread.topic;
-    if (recordingSid) { status = "waiting"; }
+    if (thread.foster_welcome && !recordingSid && matched.kind !== "emergency") {
+      const foster = fosterTopic(s);
+      topic = foster?.label || "Foster";
+      assignee = foster?.assigneeId || null;
+      status = "waiting";
+      // A screenshot (often with no text) must go to the foster team, not the FAQ bot.
+    }
+    else if (recordingSid) { status = "waiting"; }
     else if (!paused || matched.kind === "emergency") {
       if (matched.kind === "answer") {
         reply = matched.topic.answer;

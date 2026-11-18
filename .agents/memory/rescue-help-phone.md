@@ -19,3 +19,9 @@ Voice choices must not introduce extra text-to-speech charges; preserve the curr
 **Why:** The user approved a simple shared service that limits routine manager involvement without promising emergency response.
 
 **How to apply:** Team members reply from the rescue number in the dashboard. Pause bot answers during human handling; never claim accepted texts are confirmed delivered. Treat recording access and internal notes as authenticated, tenant-scoped data.
+
+Haseya's newly approved fosters should receive the user-supplied welcome text from the public Rescue Inbox number, with replies and Facebook-profile screenshots assigned using the current Foster category.
+
+**Why:** The rescue uses those screenshots to invite fosters into its private Facebook group. Assignments must follow the category, not a hardcoded volunteer identity.
+
+**How to apply:** Keep this welcome limited to Haseya's and future activations, preserve existing welcome emails, respect SMS suppression, and avoid duplicate or uncertain-send retries. Do not bulk-text existing fosters without approval.

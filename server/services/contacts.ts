@@ -564,6 +564,12 @@ export async function activateFosterInDirectory(params: {
     throw userError;
   }
 
+  try {
+    const { queueFosterWelcome } = await import("./foster-welcome");
+    await queueFosterWelcome(params);
+  } catch (error) {
+    console.error("[Foster welcome] Could not queue welcome text", error);
+  }
   return contact;
 }
 

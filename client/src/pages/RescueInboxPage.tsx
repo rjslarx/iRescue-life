@@ -6,6 +6,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useTenant } from "@/contexts/TenantContext";
 import { tenantApiRequest } from "@/lib/tenantApi";
 import { RescueInboxSettings } from "@/components/rescue-inbox/RescueInboxSettings";
+import { RescueInboxImage } from "@/components/rescue-inbox/RescueInboxImage";
 import { RescueHelpError, rescueHelpError, useRescueInbox, type RescueInboxApi, type RescueMessage, type RescueThread } from "@/hooks/use-rescue-inbox";
 import "@/components/rescue-inbox/rescue-inbox.css";
 
@@ -76,6 +77,7 @@ function Conversation({ api, enabled }: { api: RescueInboxApi; enabled: boolean 
     <div className="ri-messages" aria-label="Conversation messages">{messages.length ? messages.map(message => <article key={message.id} className={`ri-message ${message.kind}`}>
       {message.kind === "note" && <span className="ri-badge mb-2"><LockKeyhole size={11} />Internal note · team only</span>}
       <p>{message.body || (message.kind === "voicemail" ? "Voicemail received" : "")}</p>
+      {Array.from({length: Math.min(message.mediaCount || 0,10)},(_,index) => <RescueInboxImage key={index} messageId={message.id} index={index} />)}
       {message.kind === "voicemail" && (message.hasRecording ? <Voicemail message={message} onDelete={admin ? () => api.deleteVoicemail.mutateAsync(message.id) : undefined} /> : <small>{message.status === "deleted" ? "Recording permanently removed" : "No recording available"}</small>)}
       <small>{message.authorName || (message.kind === "inbound" || message.kind === "voicemail" ? "Caller" : "Rescue team")} · {time(message.createdAt)}{message.status ? ` · ${message.status}` : ""}</small>
     </article>) : <div className="ri-empty"><MessageSquare size={28} /><h3>No messages yet</h3><p className="ri-muted">Messages and internal notes will appear here.</p></div>}</div>
