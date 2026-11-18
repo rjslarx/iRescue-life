@@ -715,10 +715,10 @@ function AnimalForm({
                       </Button>
                     </FormControl>
                   </PopoverTrigger>
-                  <PopoverContent className="w-[300px] p-0" align="start">
+                  <PopoverContent portalled={false} className="w-[300px] max-w-[calc(100vw-3rem)] p-0" align="start">
                     <Command>
                       <CommandInput placeholder="Search breeds..." />
-                      <CommandList>
+                      <CommandList className="max-h-[min(300px,40dvh)] touch-pan-y overscroll-contain">
                         <CommandEmpty>No breed found.</CommandEmpty>
                         <CommandGroup className="max-h-[200px] overflow-y-auto">
                           {availableBreeds.map((breed) => (
@@ -775,10 +775,10 @@ function AnimalForm({
                       </Button>
                     </FormControl>
                   </PopoverTrigger>
-                  <PopoverContent className="w-[300px] p-0" align="start">
+                  <PopoverContent portalled={false} className="w-[300px] max-w-[calc(100vw-3rem)] p-0" align="start">
                     <Command>
                       <CommandInput placeholder="Search breeds..." />
-                      <CommandList>
+                      <CommandList className="max-h-[min(300px,40dvh)] touch-pan-y overscroll-contain">
                         <CommandEmpty>No breed found.</CommandEmpty>
                         <CommandGroup className="max-h-[200px] overflow-y-auto">
                           <CommandItem
