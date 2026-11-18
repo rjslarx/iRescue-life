@@ -5,7 +5,7 @@ import { tenantApiRequest } from "@/lib/tenantApi";
 
 export type RescueTeamMember = { id: string; name: string };
 export type RescueTopic = { id: string; label: string; keywords: string[]; answer: string; assigneeId: string | null };
-export type RescueHelpSettings = { phone: string; timezone: string; openHour: number; closeHour: number; days: number[]; greeting: string; afterHours: string; handoff: string; emergency: string; teamIds: string[]; topics: RescueTopic[] };
+export type RescueHelpSettings = { voice?: "default" | "man" | "woman"; phone: string; timezone: string; openHour: number; closeHour: number; days: number[]; greeting: string; afterHours: string; handoff: string; emergency: string; teamIds: string[]; topics: RescueTopic[] };
 export type RescueSettingsResponse = { admin: boolean; enabled: boolean; number: string | null; settings: RescueHelpSettings; team: RescueTeamMember[]; webhookBase: string };
 export type RescueThread = { id: string; phone: string; status: "bot" | "waiting" | "human" | "resolved"; topic: string | null; assigneeId: string | null; updatedAt: string; preview: string };
 export type RescueMessage = { id: string; kind: "inbound" | "outbound" | "note" | "voicemail"; body: string; status: string; createdAt: string; authorName: string | null; hasRecording: boolean };

@@ -7,7 +7,7 @@ import { pool } from "../db";
 import { requireAuth } from "../middleware/auth";
 import { getTwilioConfigForTenant, sendSms } from "../lib/twilio-service";
 import { smsOptOutCommand, recordVerifiedSmsOptOut } from "../lib/sms-suppression";
-import { helpSettingsSchema, helpIsOpen } from "@shared/rescue-help";
+import { helpSettingsSchema, helpIsOpen, helpVoiceOptions } from "@shared/rescue-help";
 import { helpSettings, helpInbound } from "../services/rescue-help";
 import { getAppBaseUrl } from "../lib/app-base-url";
 
@@ -43,6 +43,8 @@ router.get("/settings",wrap(async(req:any,res:any)=>{
 router.put("/settings",wrap(async(req:any,res:any)=>{
   if(!admin(req)) fail("Only rescue admins can edit settings",403);
   const s=helpSettingsSchema.parse(req.body);
+  // Older open settings forms must not reset a voice they do not know about.
+  s.voice ??= req.help.settings.voice || "default";
   if(req.help.enabled && s.phone!==req.help.number) fail("Disable the line before changing its number.",409);
   const selected=await team(req.tenant.id,s.teamIds);
   if(selected.length!==new Set(s.teamIds).size) fail("Select active team members from this rescue.");
@@ -176,16 +178,17 @@ helpWebhooks.post("/sms",wrap(async(req:any,res:any)=>{
 }));
 helpWebhooks.post("/voice",wrap(async(req:any,res:any)=>{
   const voice=new twilio.twiml.VoiceResponse();
-  if(!req.help.enabled) { voice.say("This help line is not currently available. Please visit the rescue website."); voice.hangup(); }
+  const options=helpVoiceOptions(req.help.settings.voice);
+  if(!req.help.enabled) { voice.say(options,"This help line is not currently available. Please visit the rescue website."); voice.hangup(); }
   else {
-    voice.say(`${req.help.settings.greeting} ${helpIsOpen(req.help.settings) ? "" : req.help.settings.afterHours} For the quickest response, please text this number. After the tone you may leave a voicemail. Your message will be recorded and shared with the rescue team. Hang up now if you do not wish to be recorded.`);
+    voice.say(options,`${req.help.settings.greeting} ${helpIsOpen(req.help.settings) ? "" : req.help.settings.afterHours} For the quickest response, please text this number. After the tone you may leave a voicemail. Your message will be recorded and shared with the rescue team. Hang up now if you do not wish to be recorded.`);
     voice.record({maxLength:120,playBeep:true,recordingStatusCallback:`${base()}/recording?tenantId=${req.helpTenant}`,recordingStatusCallbackMethod:"POST",
       action:`${base()}/voice-end`,method:"POST"});
   }
   res.type("text/xml").send(voice.toString());
 }));
-helpWebhooks.post("/voice-end",(_req,res)=>{
-  const voice=new twilio.twiml.VoiceResponse();voice.say("Thank you. Goodbye.");voice.hangup();res.type("text/xml").send(voice.toString());
+helpWebhooks.post("/voice-end",(req:any,res)=>{
+  const voice=new twilio.twiml.VoiceResponse();voice.say(helpVoiceOptions(req.help.settings.voice),"Thank you. Goodbye.");voice.hangup();res.type("text/xml").send(voice.toString());
 });
 helpWebhooks.post("/recording",wrap(async(req:any,res:any)=>{
   const sid=z.string().regex(/^RE[a-f0-9]{32}$/i).parse(req.body.RecordingSid);

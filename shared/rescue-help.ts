@@ -1,5 +1,6 @@
 import { z } from "zod";
 export const helpSettingsSchema = z.object({
+  voice: z.enum(["default", "man", "woman"]).optional(),
   phone: z.string().regex(/^$|^\+1\d{10}$/, "Use a US number in +1 format"),
   timezone: z.string().refine(s => { try { new Intl.DateTimeFormat("en", { timeZone: s }); return true; } catch { return false; } }, "Choose a valid timezone"),
   openHour: z.number().int().min(0).max(23), closeHour: z.number().int().min(1).max(24),
@@ -16,12 +17,18 @@ export const helpSettingsSchema = z.object({
   .refine(s => s.topics.every(t => !t.assigneeId || s.teamIds.includes(t.assigneeId)), "Topic assignees must be on the inbox team");
 export type HelpSettings = z.infer<typeof helpSettingsSchema>;
 export const defaultHelpSettings: HelpSettings = {
+  voice: "default",
   phone: "", timezone: "America/Chicago", openHour: 9, closeHour: 17, days: [1,2,3,4,5], teamIds: [], topics: [],
   greeting: "Thank you for contacting the rescue. Please text your question, or reply TEAM to request a person. This line is not monitored for emergencies.",
   afterHours: "The team is currently outside its response hours. Your message is saved for follow-up. This line is not monitored for emergencies.",
   handoff: "Your message is in the rescue team's inbox. A team member will follow up when available.",
   emergency: "This line cannot provide emergency assistance or veterinary advice. For an animal medical emergency, contact a local emergency veterinarian. For immediate danger to people, contact emergency services.",
 };
+// Only explicitly selected Basic voices may override the account default.
+// Twilio Basic TTS has no additional synthesis charge; premium IDs are never passed through.
+export function helpVoiceOptions(voice: unknown): { voice?: "man" | "woman"; language?: "en-US" } {
+  return voice === "man" || voice === "woman" ? { voice, language: "en-US" } : {};
+}
 export function helpIsOpen(s: HelpSettings, now = new Date()) {
   const parts = new Intl.DateTimeFormat("en-US", { timeZone: s.timezone, weekday: "short", hour: "2-digit", hourCycle: "h23" }).formatToParts(now);
   const day = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].indexOf(parts.find(p => p.type === "weekday")!.value);

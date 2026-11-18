@@ -37,6 +37,17 @@ export function RescueInboxSettings({ api, initial }: { api: RescueInboxApi; ini
       } catch (err) { setError(err); }
     }}>
       <fieldset disabled={busy}>
+        <section className="ri-panel">
+          <h2>Phone greeting voice</h2>
+          <label className="ri-field"><span>Voice</span>
+            <select value={draft.voice || "default"} onChange={e => patch({ voice: e.target.value as NonNullable<RescueHelpSettings["voice"]> })}>
+              <option value="default">Current default (unchanged)</option>
+              <option value="man">Basic male — US English</option>
+              <option value="woman">Basic female — US English</option>
+            </select>
+          </label>
+          <p className="ri-muted mt-3">The two basic voices have no additional text-to-speech charge and may sound more robotic than premium voices. Normal Twilio number, call, and recording charges still apply. Save to use your selection on future calls.</p>
+        </section>
         <section className="ri-panel"><h2>Service hours & number</h2><p className="ri-muted">These hours use the rescue’s time zone, not the reader’s device time.</p><div className="ri-fields">
           <label className="ri-field"><span>Separate Twilio phone number</span><input type="tel" placeholder="+1…" value={draft.phone} onChange={e => patch({ phone: e.target.value })} /><small className="ri-muted">Can stay blank while preparing. Required for activation.</small></label>
           <label className="ri-field"><span>IANA time zone</span><input required value={draft.timezone} onChange={e => patch({ timezone: e.target.value })} /></label>
