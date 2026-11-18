@@ -11731,6 +11731,24 @@ Crawl-delay: 1
         gclidCapturedAt: gclid ? new Date() : null,
       });
 
+      // Never trust a browser-supplied species/classification to choose a form.
+      if (data.animalId) {
+        const { animals } = await import('@shared/schema');
+        const { usesWildHorseApplication, validateWildHorseResponses } = await import('@shared/wild-horse-application');
+        const [animal] = await db.select().from(animals).where(and(eq(animals.id, data.animalId), eq(animals.tenantId, req.tenant!.id))).limit(1);
+        if (!animal) return res.status(404).json({ error: "Animal not found for this rescue." });
+        if (usesWildHorseApplication(req.tenant!.subdomain, animal) && !isBypass) {
+          const errors = validateWildHorseResponses(data.customResponses || {});
+          if (errors.length) return res.status(400).json({ error: `Please complete the wild horse placement application: ${errors.join("; ")}` });
+          // Retain only this version's answers; stale standard-form answers must not leak into it.
+          const { wildHorseFields } = await import('@shared/wild-horse-application');
+          const keys = new Set(wildHorseFields(req.tenant!.id).map(f => f.id));
+          data.customResponses = Object.fromEntries(Object.entries(data.customResponses || {}).filter(([key]) => keys.has(key)));
+        } else if (Object.keys(data.customResponses || {}).some(key => key.startsWith("wild_horse_v1_"))) {
+          return res.status(409).json({ error: "This animal's application has changed. Please reopen the application before submitting." });
+        }
+      }
+
       // Task #230: Enforce a complete applicant address (Street/City/State/ZIP)
       // on all adoption applications for every tenant, regardless of the
       // requireCompleteAddress flag. Internal bypass submissions are exempt.
@@ -17081,6 +17099,17 @@ ${renderedHtml}
     try {
       const { adoptionFormFields } = await import('@shared/schema');
       const { or } = await import('drizzle-orm');
+      const { wildHorseFields, usesWildHorseApplication, WILD_HORSE_INTRO } = await import('@shared/wild-horse-application');
+      if (req.query.animalId) {
+        const animalId = z.string().uuid().parse(req.query.animalId);
+        const { animals } = await import('@shared/schema');
+        const [animal] = await db.select().from(animals).where(and(eq(animals.id, animalId), eq(animals.tenantId, req.tenant!.id))).limit(1);
+        if (!animal) return res.status(404).json({ error: "Animal not found for this rescue." });
+        if (usesWildHorseApplication(req.tenant!.subdomain, animal)) {
+          return res.json({ fields: wildHorseFields(req.tenant!.id), applicationVariant: "wild_horse", introText: WILD_HORSE_INTRO });
+        }
+        req.query.species = animal.petfinderType || animal.species;
+      }
       
       const speciesParam = req.query.species as string | undefined;
       
@@ -17117,7 +17146,7 @@ ${renderedHtml}
         .where(and(...conditions))
         .orderBy(adoptionFormFields.order);
       
-      res.json({ fields });
+      res.json({ fields, applicationVariant: "standard" });
     } catch (error) {
       next(error);
     }

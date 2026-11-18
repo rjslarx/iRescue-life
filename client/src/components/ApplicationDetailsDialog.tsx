@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { wildHorseFields } from "@shared/wild-horse-application";
 import {
   Dialog,
   DialogContent,
@@ -191,6 +192,7 @@ export function ApplicationDetailsDialog({ application, open, onOpenChange }: Ap
   const notes = formData.notes || null;
   
   const fieldLabelMap = new Map<string, { label: string; order: number }>();
+  wildHorseFields("").forEach(field => fieldLabelMap.set(field.id, { label: field.label, order: field.order }));
   if (formFieldsData?.fields) {
     formFieldsData.fields.forEach((field) => {
       fieldLabelMap.set(field.id, { label: field.label, order: field.order });

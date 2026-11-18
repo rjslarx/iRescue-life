@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { wildHorseFields } from "@shared/wild-horse-application";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import EmailComposerDialog from "@/components/EmailComposerDialog";
@@ -416,7 +417,7 @@ export default function ApplicationDetailSheet({
 
   // Combine fields from both sources, preferring lookup results for cross-tenant scenarios
   const allFields = useMemo(() => {
-    const tenantFields = formFieldsData?.fields || [];
+    const tenantFields = [...(formFieldsData?.fields || []), ...wildHorseFields("")];
     const lookupFields = lookupFieldsData?.fields || [];
     
     // Merge: use lookup fields for any IDs not found in tenant fields

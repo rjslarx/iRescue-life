@@ -22,6 +22,7 @@ import { z } from "zod";
 import { cn } from "@/lib/utils";
 import { ObjectUploader } from "@/components/ObjectUploader";
 import { AiBioGeneratorDialog } from "@/components/AiBioGeneratorDialog";
+import { useTenant } from "@/contexts/TenantContext";
 
 const MAX_PHOTOS = 6;
 const MAX_PHOTO_SIZE_MB = 25;
@@ -40,6 +41,7 @@ const animalFormSchema = insertAnimalSchema.omit({ tenantId: true }).extend({
   age: z.string().optional().default(""),
   breed: z.string().optional().default(""),
   species: z.string().optional().default(""),
+  horseType: z.enum(["wild", "domesticated"]).default("domesticated"),
   name: z.string().min(1, "Name is required"),
   bio: z.string().optional(),
   neuterStatus: z.enum(["intact", "neutered", "spayed", "unknown"]).optional(),
@@ -146,6 +148,12 @@ interface AnimalDataFormProps {
 
 export function AnimalDataForm({ animalId, initialData, onSuccess, onCancel }: AnimalDataFormProps) {
   const { toast } = useToast();
+  const { tenantId } = useTenant();
+  const { data: tenantData } = useQuery<{ tenant: { subdomain: string } }>({
+    queryKey: ["/api/tenant", { tenantId }],
+    queryFn: async () => (await apiRequest("GET", "/api/tenant")).json(),
+  });
+  const isHaseyas = tenantData?.tenant?.subdomain === "haseyas";
   const [uploadedPhotos, setUploadedPhotos] = useState<string[]>([]);
   const [bioGeneratorOpen, setBioGeneratorOpen] = useState(false);
   
@@ -237,6 +245,7 @@ export function AnimalDataForm({ animalId, initialData, onSuccess, onCancel }: A
       petfinderSize: undefined,
       petfinderGender: undefined,
       species: "",
+      horseType: "domesticated",
       breed: "",
       age: "",
       bio: "",
@@ -285,6 +294,7 @@ export function AnimalDataForm({ animalId, initialData, onSuccess, onCancel }: A
         petfinderSize: animalData.petfinderSize || undefined,
         petfinderGender: animalData.petfinderGender || undefined,
         species: animalData.species || "",
+        horseType: (animalData as Partial<Animal> & { horseType?: "wild" | "domesticated" }).horseType || "domesticated",
         breed: animalData.breed || "",
         age: animalData.age || "",
         neuterStatus: animalData.neuterStatus || undefined,
@@ -327,8 +337,10 @@ export function AnimalDataForm({ animalId, initialData, onSuccess, onCancel }: A
       if (animalData.photoUrls) {
         setUploadedPhotos(animalData.photoUrls);
       }
+    } else if (mode === "add") {
+      form.setValue("horseType", "domesticated");
     }
-  }, [animalData, form]);
+  }, [animalData, form, mode]);
 
   const fosterAutoMode = useMemo(() => {
     if (mode !== 'edit' || !animalData) return false;
@@ -497,6 +509,7 @@ export function AnimalDataForm({ animalId, initialData, onSuccess, onCancel }: A
     
     const submitData = {
       ...data,
+      horseType: data.petfinderType === "Horse" ? data.horseType : "domesticated",
       species: derivedSpecies,
       breed: derivedBreed,
       age: derivedAge,
@@ -595,6 +608,9 @@ export function AnimalDataForm({ animalId, initialData, onSuccess, onCancel }: A
                     field.onChange(value);
                     form.setValue('petfinderBreed', "");
                     form.setValue('petfinderBreedSecondary', null);
+                    if (value !== 'Horse') {
+                      form.setValue('horseType', 'domesticated');
+                    }
                     if (value !== 'Cat') {
                       form.setValue('declawed', null);
                     }
@@ -619,6 +635,31 @@ export function AnimalDataForm({ animalId, initialData, onSuccess, onCancel }: A
             )}
           />
         </div>
+
+        {isHaseyas && selectedPetfinderType === "Horse" && (
+          <FormField
+            control={form.control}
+            name="horseType"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Horse type</FormLabel>
+                <Select value={field.value} onValueChange={field.onChange} disabled={isFormDisabled}>
+                  <FormControl>
+                    <SelectTrigger data-testid="select-horse-type">
+                      <SelectValue placeholder="Select horse type" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="domesticated">Domesticated</SelectItem>
+                    <SelectItem value="wild">Wild</SelectItem>
+                  </SelectContent>
+                </Select>
+                <FormDescription>Wild horses use the wild horse placement application.</FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <FormField

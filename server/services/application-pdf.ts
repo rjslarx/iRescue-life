@@ -1,4 +1,5 @@
 import puppeteer from 'puppeteer';
+import { wildHorseFields } from '@shared/wild-horse-application';
 import DOMPurify from 'isomorphic-dompurify';
 import { objectStorageClient } from '../objectStorage';
 import { db } from '../db';
@@ -149,10 +150,12 @@ function formatCustomResponses(responses: Record<string, any> | null | undefined
   }
   
   let html = '<div class="section"><h2>Additional Information</h2><div class="info-grid">';
+  const wildLabels = new Map(wildHorseFields("").map(field => [field.id, field.label]));
+  const escape = (text: string) => text.replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]!));
   for (const [key, value] of Object.entries(responses)) {
-    const formattedKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    const formattedKey = wildLabels.get(key) || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
     const formattedValue = Array.isArray(value) ? value.join(', ') : String(value || 'N/A');
-    html += `<div class="info-label">${formattedKey}:</div><div class="info-value">${formattedValue}</div>`;
+    html += `<div class="info-label">${escape(formattedKey)}:</div><div class="info-value">${escape(formattedValue)}</div>`;
   }
   html += '</div></div>';
   return html;

@@ -1,3 +1,4 @@
+import { wildHorseFields } from "@shared/wild-horse-application";
 import {
   Dialog,
   DialogContent,
@@ -329,6 +330,7 @@ export function ViewApplicationDialog({
   const notes = customResponses.notes || (fullApplication as Record<string, unknown>).notes || null;
 
   const fieldLabelMap = new Map<string, { label: string; order: number; fieldType: string }>();
+  wildHorseFields("").forEach(field => fieldLabelMap.set(field.id, { label: field.label, order: field.order, fieldType: field.fieldType }));
   if (formFieldsData?.fields) {
     formFieldsData.fields.forEach((field) => {
       fieldLabelMap.set(field.id, { label: field.label, order: field.order, fieldType: field.fieldType });

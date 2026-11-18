@@ -37,12 +37,24 @@ const publicAdoptionSchema = z.object({
   city: z.string().trim().min(1, "City is required"),
   state: z.string().trim().min(1, "State is required"),
   zip: z.string().trim().min(1, "ZIP is required"),
-  smsConsent: z.literal(true, { errorMap: () => ({ message: "You must consent to receive SMS messages to submit this form" }) }),
-  notes: z.string().min(100, "Please tell us a bit more about yourself (minimum 100 characters)"),
+   smsConsent: z.boolean(),
+   notes: z.string(),
   customResponses: z.record(z.any()).optional(),
 });
 
 type PublicAdoptionFormData = z.infer<typeof publicAdoptionSchema>;
+
+type ApplicationFieldsResponse = {
+  fields: AdoptionFormField[];
+  applicationVariant: "wild_horse" | "standard";
+  introText?: string | null;
+};
+
+const emptyApplication = (): PublicAdoptionFormData => ({
+  applicantName: "", applicantEmail: "", applicantPhone: "",
+  address: "", city: "", state: "", zip: "",
+  smsConsent: false, notes: "", customResponses: {},
+});
 
 interface PublicAdoptionDialogProps {
   animal: {
@@ -57,31 +69,54 @@ interface PublicAdoptionDialogProps {
 
 export function PublicAdoptionDialog({ animal, open, onOpenChange }: PublicAdoptionDialogProps) {
   const { toast } = useToast();
-  const { tenant } = useTenant();
+  const { tenantId } = useTenant();
+  const { data: tenantData } = useQuery<{ tenant: { name: string } }>({
+    queryKey: ["/api/tenant", { tenantId }],
+    queryFn: async () => (await apiRequest("GET", "/api/tenant")).json(),
+    enabled: open,
+  });
+  const tenant = tenantData?.tenant;
   const { gclid, clearGclid } = useGoogleClickId();
 
   const speciesParam = animal?.species || '';
-  const { data: customFieldsData } = useQuery<{ fields: AdoptionFormField[] }>({
-    queryKey: ['/api/adoption-form-fields', { species: speciesParam }],
+  const { data: customFieldsData, isPending: fieldsLoading, isFetching: fieldsFetching, isError: fieldsError, refetch: retryFields } = useQuery<ApplicationFieldsResponse>({
+    queryKey: ['/api/adoption-form-fields', { tenantId, animalId: animal?.id, species: speciesParam }],
     queryFn: async () => {
-      const baseUrl = speciesParam
-        ? `/api/adoption-form-fields?species=${encodeURIComponent(speciesParam)}`
-        : '/api/adoption-form-fields';
+      const params = new URLSearchParams({ animalId: animal!.id, species: speciesParam });
+      const baseUrl = `/api/adoption-form-fields?${params}`;
       const url = buildTenantUrl(baseUrl);
       const headers = getTenantHeaders();
       const res = await fetch(url, { credentials: 'include', headers });
       if (!res.ok) throw new Error('Failed to load form fields');
-      return res.json();
+      const data = await res.json();
+      if (!Array.isArray(data.fields) || !["standard", "wild_horse"].includes(data.applicationVariant)) {
+        throw new Error("Invalid application form");
+      }
+      return data;
     },
+    enabled: open && !!animal?.id,
   });
+  const isWildHorse = customFieldsData?.applicationVariant === "wild_horse";
+  const fieldsReady = !!animal && !!customFieldsData && !fieldsLoading && !fieldsError && !fieldsFetching;
 
   // Load form intro text
   const { data: formSettingsData } = useQuery<{ setting: { introText: string | null } }>({
-    queryKey: ['/api/form-settings', 'adoption'],
+    queryKey: ['/api/form-settings', { tenantId, formType: 'adoption' }],
+    queryFn: async () => (await apiRequest("GET", "/api/form-settings/adoption")).json(),
+    enabled: open && fieldsReady && !isWildHorse,
   });
 
   const form = useForm<PublicAdoptionFormData>({
-    resolver: zodResolver(publicAdoptionSchema),
+    resolver: zodResolver(publicAdoptionSchema.superRefine((data, ctx) => {
+      if (!isWildHorse) {
+        if (data.notes.length < 100) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["notes"], message: "Please tell us a bit more about yourself (minimum 100 characters)" });
+        }
+        if (!data.smsConsent) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["smsConsent"], message: "You must consent to receive SMS messages to submit this form" });
+        }
+      }
+    })),
     defaultValues: {
       applicantName: "",
       applicantEmail: "",
@@ -107,23 +142,42 @@ export function PublicAdoptionDialog({ animal, open, onOpenChange }: PublicAdopt
   // draft to localStorage as they type so nothing is lost, restore it when
   // the dialog reopens, and clear it after a successful submission.
   // ---------------------------------------------------------------------
-  const draftKey = animal ? `adoption-app-draft-${animal.id}` : null;
-  const draftRestoredRef = useRef(false);
+  const variant = customFieldsData?.applicationVariant;
+  const draftKey = animal && variant
+    ? `adoption-app-draft-${tenantId}-${animal.id}-${variant}` : null;
+  const draftRestoredRef = useRef<string | null>(null);
+  const [restoredDraftKey, setRestoredDraftKey] = useState<string | null>(null);
+  const activeDraftKeyRef = useRef(draftKey);
+  activeDraftKeyRef.current = open ? draftKey : null;
   const draftSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const clearDraft = () => {
     if (!draftKey) return;
+    if (draftSaveTimerRef.current) clearTimeout(draftSaveTimerRef.current);
+    draftRestoredRef.current = null;
     try { localStorage.removeItem(draftKey); } catch {}
+    if (animal && variant === "standard") {
+      try { localStorage.removeItem(`adoption-app-draft-${animal.id}`); } catch {}
+    }
   };
 
   // Restore a saved draft when the dialog opens.
   useEffect(() => {
-    if (!open || !draftKey || draftRestoredRef.current) return;
+    if (!open || !fieldsReady || !draftKey || draftRestoredRef.current === draftKey) return;
+    form.reset(emptyApplication());
+    setPhotoUploads({});
+    setMissingFieldLabels([]);
+    draftRestoredRef.current = draftKey;
+    setRestoredDraftKey(draftKey);
     try {
-      const raw = localStorage.getItem(draftKey);
+      // Old drafts were standard applications scoped to the animal. Keep them
+      // available without ever importing their answers into the wild form.
+      const legacyKey = animal && variant === "standard" ? `adoption-app-draft-${animal.id}` : null;
+      const raw = localStorage.getItem(draftKey) || (legacyKey ? localStorage.getItem(legacyKey) : null);
       if (!raw) return;
       const draft = JSON.parse(raw);
       if (!draft || typeof draft !== 'object' || !draft.values) return;
+      if (draft.applicationVariant && draft.applicationVariant !== variant) return;
       const hasContent = Object.entries(draft.values).some(([key, val]) => {
         if (key === 'smsConsent' || key === 'customResponses') return false;
         return typeof val === 'string' && val.trim().length > 0;
@@ -137,8 +191,8 @@ export function PublicAdoptionDialog({ animal, open, onOpenChange }: PublicAdopt
         city: draft.values.city || "",
         state: draft.values.state || "",
         zip: draft.values.zip || "",
-        smsConsent: draft.values.smsConsent === true ? true : (false as any),
-        notes: draft.values.notes || "",
+        smsConsent: draft.values.smsConsent === true,
+        notes: isWildHorse ? "" : (draft.values.notes || ""),
         customResponses: draft.values.customResponses || {},
       });
       if (draft.photoUploads && typeof draft.photoUploads === 'object') {
@@ -150,7 +204,6 @@ export function PublicAdoptionDialog({ animal, open, onOpenChange }: PublicAdopt
         }
         setPhotoUploads(restoredUploads);
       }
-      draftRestoredRef.current = true;
       toast({
         title: "Welcome back!",
         description: "We restored the application you started earlier. Your progress is saved on this device as you type.",
@@ -159,37 +212,37 @@ export function PublicAdoptionDialog({ animal, open, onOpenChange }: PublicAdopt
       // Ignore storage errors (private browsing, etc.)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, draftKey]);
+  }, [open, draftKey, fieldsReady]);
 
   // Save the draft (debounced) whenever any field changes while the dialog is open.
   useEffect(() => {
-    if (!open || !draftKey) return;
-    const subscription = form.watch((values) => {
+    if (!open || !fieldsReady || !draftKey || restoredDraftKey !== draftKey || draftRestoredRef.current !== draftKey) return;
+    const saveDraft = () => {
+      if (draftRestoredRef.current !== draftKey) return;
+      try {
+        localStorage.setItem(draftKey, JSON.stringify({
+          values: form.getValues(), photoUploads, applicationVariant: variant, savedAt: Date.now(),
+        }));
+      } catch {}
+    };
+    const subscription = form.watch(() => {
       if (draftSaveTimerRef.current) clearTimeout(draftSaveTimerRef.current);
-      draftSaveTimerRef.current = setTimeout(() => {
-        try {
-          localStorage.setItem(draftKey, JSON.stringify({ values, photoUploads, savedAt: Date.now() }));
-        } catch {}
-      }, 400);
+      draftSaveTimerRef.current = setTimeout(saveDraft, 400);
     });
+    saveDraft();
     return () => {
       subscription.unsubscribe();
       if (draftSaveTimerRef.current) clearTimeout(draftSaveTimerRef.current);
+      saveDraft();
     };
-  }, [open, draftKey, form, photoUploads]);
-
-  // Also persist immediately when photo uploads change (they aren't form fields).
-  useEffect(() => {
-    if (!open || !draftKey) return;
-    try {
-      localStorage.setItem(draftKey, JSON.stringify({ values: form.getValues(), photoUploads, savedAt: Date.now() }));
-    } catch {}
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [photoUploads]);
+  }, [open, draftKey, restoredDraftKey, fieldsReady, form, photoUploads, variant]);
 
   // Allow the restore effect to run again the next time the dialog opens.
   useEffect(() => {
-    if (!open) draftRestoredRef.current = false;
+    if (!open) {
+      draftRestoredRef.current = null;
+      setRestoredDraftKey(null);
+    }
   }, [open]);
 
   // Map built-in form field names -> friendly labels and DOM data-testids so we can
@@ -304,6 +357,7 @@ export function PublicAdoptionDialog({ animal, open, onOpenChange }: PublicAdopt
   }, [open]);
 
   const handlePhotoUpload = async (fieldId: string, file: File) => {
+    const uploadDraftKey = activeDraftKeyRef.current;
     setPhotoUploads(prev => ({ ...prev, [fieldId]: { url: '', name: file.name, uploading: true } }));
     
     try {
@@ -327,9 +381,11 @@ export function PublicAdoptionDialog({ animal, open, onOpenChange }: PublicAdopt
       }
 
       const result = await response.json();
+      if (activeDraftKeyRef.current !== uploadDraftKey) return;
       setPhotoUploads(prev => ({ ...prev, [fieldId]: { url: result.fileUrl, name: file.name, uploading: false } }));
       form.setValue(`customResponses.${fieldId}` as any, result.fileUrl);
     } catch (error: any) {
+      if (activeDraftKeyRef.current !== uploadDraftKey) return;
       setPhotoUploads(prev => {
         const newState = { ...prev };
         delete newState[fieldId];
@@ -358,6 +414,7 @@ export function PublicAdoptionDialog({ animal, open, onOpenChange }: PublicAdopt
   const applicationMutation = useMutation({
     mutationFn: async (data: PublicAdoptionFormData) => {
       if (!animal) throw new Error("No animal selected");
+      if (!fieldsReady || restoredDraftKey !== draftKey) throw new Error("Please wait for the complete application to load.");
       
       const response = await apiRequest('POST', '/api/applications', {
         animalId: animal.id,
@@ -369,7 +426,7 @@ export function PublicAdoptionDialog({ animal, open, onOpenChange }: PublicAdopt
         state: data.state || null,
         zip: data.zip || null,
         smsConsent: data.smsConsent || false,
-        notes: data.notes || null,
+        notes: isWildHorse ? null : (data.notes || null),
         customResponses: data.customResponses || {},
         gclid: gclid || undefined,
       });
@@ -378,7 +435,7 @@ export function PublicAdoptionDialog({ animal, open, onOpenChange }: PublicAdopt
     onSuccess: () => {
       toast({
         title: "Application submitted!",
-        description: `Thank you for your interest in adopting ${animal?.name}! We'll review your application and be in touch soon.`,
+        description: `Thank you for your interest in ${isWildHorse ? "providing a placement for" : "adopting"} ${animal?.name}! We'll review your application and be in touch soon.`,
       });
       
       clearGclid();
@@ -397,6 +454,7 @@ export function PublicAdoptionDialog({ animal, open, onOpenChange }: PublicAdopt
   });
 
   const handleSubmit = (data: PublicAdoptionFormData) => {
+    if (!fieldsReady || restoredDraftKey !== draftKey || Object.values(photoUploads).some(upload => upload.uploading)) return;
     const customCheck = collectMissingCustomFields(data.customResponses);
     if (customCheck.labels.length > 0) {
       showMissingFieldsFeedback(customCheck.labels, customCheck.firstTestId);
@@ -415,21 +473,41 @@ export function PublicAdoptionDialog({ animal, open, onOpenChange }: PublicAdopt
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Heart className="h-5 w-5 text-primary" />
-            Apply to Adopt {animal?.name}
+            {isWildHorse ? "Wild horse placement application" : `Apply to Adopt ${animal?.name}`}
           </DialogTitle>
           <DialogDescription>
-            Fill out this application to express your interest in adopting {animal?.name}, 
-            a {animal?.breed} {animal?.species}. Our team will review your application and contact you soon.
+            {isWildHorse
+              ? `Apply to provide a safe placement for ${animal?.name}. Our team will review your experience and facilities and contact you about next steps.`
+              : `Fill out this application to express your interest in adopting ${animal?.name}, a ${animal?.breed} ${animal?.species}. Our team will review your application and contact you soon.`}
           </DialogDescription>
         </DialogHeader>
 
-        {formSettingsData?.setting?.introText && (
+        {(isWildHorse ? customFieldsData?.introText : fieldsReady && formSettingsData?.setting?.introText) && (
           <div className="p-4 bg-muted/50 rounded-lg text-sm text-muted-foreground whitespace-pre-wrap" data-testid="text-form-intro">
-            {formSettingsData.setting.introText}
+            {isWildHorse ? customFieldsData?.introText : formSettingsData?.setting?.introText}
           </div>
         )}
 
-        <Form {...form}>
+        {!fieldsReady || restoredDraftKey !== draftKey ? (
+          fieldsError ? (
+            <Alert variant="destructive" data-testid="alert-application-fields-error">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                We couldn't load the complete application. Your saved progress is safe. Please retry before continuing.
+                <Button type="button" variant="outline" className="mt-3" onClick={() => void retryFields()} disabled={fieldsFetching}>
+                  Retry
+                </Button>
+              </AlertDescription>
+            </Alert>
+          ) : (
+            <div className="space-y-4" role="status" aria-label="Loading application questions">
+              <p className="text-sm text-muted-foreground">Loading the complete application...</p>
+              <div className="h-10 rounded-md bg-muted animate-pulse" />
+              <div className="h-10 rounded-md bg-muted animate-pulse" />
+              <div className="h-24 rounded-md bg-muted animate-pulse" />
+            </div>
+          )
+        ) : <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit, onInvalid)} className="space-y-4">
             <FormField
               control={form.control}
@@ -486,7 +564,11 @@ export function PublicAdoptionDialog({ animal, open, onOpenChange }: PublicAdopt
                     />
                   </FormControl>
                   <FormMessage />
-                  <p className="text-xs text-muted-foreground mt-1">By entering your number, you agree to receive mobile messages from {tenant?.name || "Animal Rescue"}. Message frequency varies. Carrier rates may apply. Reply STOP to opt out.</p>
+                   <p className="text-xs text-muted-foreground mt-1">
+                     {isWildHorse
+                       ? "We'll use this number to contact you about your placement application. Text message consent below is optional."
+                       : `By entering your number, you agree to receive mobile messages from ${tenant?.name || "Animal Rescue"}. Message frequency varies. Carrier rates may apply. Reply STOP to opt out.`}
+                   </p>
                 </FormItem>
               )}
             />
@@ -568,7 +650,7 @@ export function PublicAdoptionDialog({ animal, open, onOpenChange }: PublicAdopt
                 </div>
             </>
 
-            <FormField
+            {!isWildHorse && <FormField
               control={form.control}
               name="notes"
               render={({ field }) => (
@@ -590,7 +672,7 @@ export function PublicAdoptionDialog({ animal, open, onOpenChange }: PublicAdopt
                   <FormMessage />
                 </FormItem>
               )}
-            />
+            />}
 
             {/* Render custom form fields */}
             {customFieldsData?.fields && customFieldsData.fields.length > 0 && (
@@ -813,7 +895,7 @@ export function PublicAdoptionDialog({ animal, open, onOpenChange }: PublicAdopt
                   </FormControl>
                   <div className="space-y-1 leading-none">
                     <FormLabel className="text-sm font-normal">
-                      I agree to receive text messages from {tenant?.name || "Animal Rescue"} regarding my adoption application. Message frequency varies. Message & data rates may apply. Reply STOP to unsubscribe, HELP for help.
+                      I agree to receive text messages from {tenant?.name || "Animal Rescue"} regarding my {isWildHorse ? "placement" : "adoption"} application.{isWildHorse && " Optional."} Message frequency varies. Message & data rates may apply. Reply STOP to unsubscribe, HELP for help.
                     </FormLabel>
                     <FormMessage />
                   </div>
@@ -865,7 +947,7 @@ export function PublicAdoptionDialog({ animal, open, onOpenChange }: PublicAdopt
               </Button>
               <Button
                 type="submit"
-                disabled={applicationMutation.isPending}
+                disabled={applicationMutation.isPending || !fieldsReady || Object.values(photoUploads).some(upload => upload.uploading)}
                 className="flex-1"
                 data-testid="button-submit-application"
               >
@@ -874,7 +956,7 @@ export function PublicAdoptionDialog({ animal, open, onOpenChange }: PublicAdopt
               </Button>
             </div>
           </form>
-        </Form>
+        </Form>}
       </DialogContent>
     </Dialog>
   );

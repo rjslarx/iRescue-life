@@ -587,6 +587,7 @@ export const animals = pgTable("animals", {
   animalId: text("animal_id").notNull().unique(), // Human-readable ID like "A12345"
   name: text("name").notNull(),
   species: text("species").notNull(), // Internal species field
+  horseType: text("horse_type").$type<"wild" | "domesticated">().notNull().default("domesticated"),
   breed: text("breed").notNull(),
   age: text("age").notNull(), // Internal age field (can be free text like "2 years")
   sex: text("sex").$type<"male" | "female" | "unknown">(),
@@ -733,7 +734,7 @@ export const insertAnimalSchema = createInsertSchema(animals).omit({
   localShelterId: true,  // Auto-generated on backend
   createdAt: true,
   updatedAt: true,
-});
+}).extend({ horseType: z.enum(["wild", "domesticated"]).optional() });
 export type InsertAnimal = z.infer<typeof insertAnimalSchema>;
 export type Animal = typeof animals.$inferSelect;
 
