@@ -23,7 +23,11 @@ function Voicemail({ message }: { message: RescueMessage }) {
   const objectUrl = useRef("");
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; if (objectUrl.current) URL.revokeObjectURL(objectUrl.current); }; }, []);
-  return <div>{url ? <audio className="ri-audio" controls autoPlay src={url} aria-label="Voicemail recording" /> : <button type="button" className="ri-btn mt-2" disabled={busy} onClick={async () => {
+  return <div>{url ? <audio className="ri-audio" controls autoPlay src={url} aria-label="Voicemail recording" onError={() => {
+    if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
+    objectUrl.current = ""; setUrl("");
+    setError("Your browser could not play this recording. Refresh the page and try again.");
+  }} /> : <button type="button" className="ri-btn mt-2" disabled={busy} onClick={async () => {
     setError(""); setBusy(true);
     try { const response = await tenantApiRequest("GET", `/api/rescue-help/messages/${encodeURIComponent(message.id)}/audio`); const blob = await response.blob(); if (!mounted.current) return; objectUrl.current = URL.createObjectURL(blob); setUrl(objectUrl.current); }
     catch { if (mounted.current) setError("Recording could not load. Please try again."); }

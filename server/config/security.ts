@@ -173,7 +173,8 @@ export const helmetConfig = helmet({
       connectSrc: ["'self'", "https://api.resend.com", "https://*.stripe.com", "https://connect-js.stripe.com", "https://www.google-analytics.com", "https://analytics.google.com", "https://storage.googleapis.com", "https://www.googleapis.com", "https://maps.googleapis.com", "https://accounts.google.com", "https://www.google.com", "https://googleads.g.doubleclick.net", "https://*.googleapis.com", "https://*.gstatic.com"],
       fontSrc: ["'self'", "data:", "https://fonts.gstatic.com"],
       objectSrc: ["'none'"],
-      mediaSrc: ["'self'"],
+      // Authenticated voicemail downloads are played through local object URLs.
+      mediaSrc: ["'self'", "blob:"],
       frameSrc: ["'self'", "https://*.stripe.com", "https://connect-js.stripe.com", "https://docs.google.com", "https://drive.google.com", "https://www.googletagmanager.com", "https://www.youtube.com", "https://www.youtube-nocookie.com", "https://player.vimeo.com", "https://www.loom.com"],
       workerSrc: ["'self'", "blob:"],
       upgradeInsecureRequests: [],
