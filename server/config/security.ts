@@ -83,22 +83,7 @@ async function getVerifiedCustomDomains(): Promise<Set<string>> {
 // role switching that re-fetches everything, etc.). Per-route limiters
 // (authLimiter, signupLimiter, passwordResetLimiter, emailLimiter) still
 // apply to the sensitive endpoints regardless of auth state.
-export const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each anonymous IP to 100 requests per windowMs
-  message: {
-    error: 'Too many requests',
-    message: 'Too many requests from this IP, please try again later.',
-  },
-  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
-  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
-  skip: (req) => {
-    if (process.env.NODE_ENV === 'development') return true;
-    // Exempt any request that comes in with a logged-in session
-    const session = (req as Request & { session?: { userId?: string } }).session;
-    return !!session?.userId;
-  },
-});
+export { apiLimiter } from "./api-rate-limit";
 
 // Stricter rate limiter for authentication endpoints
 // Counts only failed login attempts (skipSuccessfulRequests). 10 misses per

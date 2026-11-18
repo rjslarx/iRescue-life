@@ -219,9 +219,6 @@ app.use((req, res, next) => {
 // CORS configuration
 app.use(getCorsConfig());
 
-// Rate limiting for all API routes
-app.use('/api', apiLimiter);
-
 declare module 'http' {
   interface IncomingMessage {
     rawBody: unknown
@@ -243,6 +240,10 @@ app.use(sessionMiddleware);
 
 // Tenant resolution middleware
 app.use(resolveTenant);
+
+// Load the server-validated session and normalize tenant-prefixed paths first.
+// Otherwise staff polling consumes the anonymous API budget.
+app.use('/api', apiLimiter);
 
 // These community boards are shared by direct link, not search discovery.
 // Set this before HTML/OG middleware so crawlers see it without running JS.
