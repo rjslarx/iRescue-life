@@ -7,11 +7,13 @@ import { pool } from "../db";
 import { requireAuth } from "../middleware/auth";
 import { getTwilioConfigForTenant, sendSms } from "../lib/twilio-service";
 import { smsOptOutCommand, recordVerifiedSmsOptOut } from "../lib/sms-suppression";
-import { helpSettingsSchema, helpIsOpen, helpVoiceOptions } from "@shared/rescue-help";
+import { helpSettingsSchema, helpIsOpen, helpVoiceOptions, topicTeam, canClaimHelp } from "@shared/rescue-help";
 import { helpSettings, helpInbound } from "../services/rescue-help";
 import { getAppBaseUrl } from "../lib/app-base-url";
 import { deleteHelpVoicemail } from "../services/rescue-help-voicemail";
 import { fetchHelpImage, helpImageType } from "../services/rescue-help-media";
+import { withHelpThread } from "../services/rescue-help-thread-lock";
+import { queueHelpAlerts } from "../services/rescue-help-alerts";
 
 const router = Router();
 export const helpWebhooks = Router();
@@ -47,13 +49,35 @@ router.put("/settings",wrap(async(req:any,res:any)=>{
   const s=helpSettingsSchema.parse(req.body);
   // Older open settings forms must not reset a voice they do not know about.
   s.voice ??= req.help.settings.voice || "default";
+  s.smsAlerts ??= req.help.settings.smsAlerts !== false;
+  for (const topic of s.topics) {
+    const previous=req.help.settings.topics.find((t:any)=>t.id===topic.id);
+    if(topic.assigneeIds===undefined && previous?.assigneeIds?.length>1)
+      fail("Reload settings before changing category teams. This form predates multiple-volunteer assignments.",409);
+    topic.assigneeIds=topicTeam(topic);
+    topic.assigneeId=topic.assigneeIds.length===1 ? topic.assigneeIds[0] : null;
+  }
   if(req.help.enabled && s.phone!==req.help.number) fail("Disable the line before changing its number.",409);
   const selected=await team(req.tenant.id,s.teamIds);
   if(selected.length!==new Set(s.teamIds).size) fail("Select active team members from this rescue.");
   if(s.phone && (await pool.query("SELECT id FROM tenants WHERE twilio_phone_number=$1",[s.phone])).rows.length) fail("Use a separate public-help number, not an operational texting number.");
-  await pool.query(`INSERT INTO rescue_help_settings(tenant_id,phone,data) VALUES($1,$2,$3)
-    ON CONFLICT(tenant_id) DO UPDATE SET phone=excluded.phone,data=excluded.data`,[req.tenant.id,s.phone||null,s]);
-  await pool.query("UPDATE rescue_help_threads SET assignee_id=NULL WHERE tenant_id=$1 AND NOT(assignee_id=ANY($2::uuid[]))",[req.tenant.id,s.teamIds]);
+  const settingsClient=await pool.connect();
+  try{
+    await settingsClient.query("BEGIN");
+    await settingsClient.query("SELECT id FROM rescue_help_threads WHERE tenant_id=$1 ORDER BY id FOR UPDATE",[req.tenant.id]);
+    const renames=s.topics.flatMap(t=>{
+      const old=req.help.settings.topics.find((p:any)=>p.id===t.id);
+      return old && old.label!==t.label ? [{old_label:old.label,new_label:t.label}] : [];
+    });
+    await settingsClient.query(`UPDATE rescue_help_threads t SET topic=r.new_label FROM
+      jsonb_to_recordset($2::jsonb) AS r(old_label text,new_label text) WHERE t.tenant_id=$1 AND t.topic=r.old_label`,
+      [req.tenant.id,JSON.stringify(renames)]);
+    await settingsClient.query(`INSERT INTO rescue_help_settings(tenant_id,phone,data) VALUES($1,$2,$3)
+      ON CONFLICT(tenant_id) DO UPDATE SET phone=excluded.phone,data=excluded.data`,[req.tenant.id,s.phone||null,s]);
+    await settingsClient.query("UPDATE rescue_help_threads SET assignee_id=NULL WHERE tenant_id=$1 AND NOT(assignee_id=ANY($2::uuid[]))",[req.tenant.id,s.teamIds]);
+    await settingsClient.query("COMMIT");
+  }catch(err){await settingsClient.query("ROLLBACK");throw err;}
+  finally{settingsClient.release();}
   res.json({ok:true});
 }));
 router.post("/activate",wrap(async(req:any,res:any)=>{
@@ -96,29 +120,51 @@ router.get("/threads/:id",wrap(async(req:any,res:any)=>{
   res.json({thread:threadView(t),messages});
 }));
 router.post("/threads/:id/claim",wrap(async(req:any,res:any)=>{
-  const t=await owned(req);
-  const r=await pool.query(`UPDATE rescue_help_threads SET assignee_id=$2,status='human',updated_at=now()
-    WHERE id=$1 AND (assignee_id IS NULL OR assignee_id=$2) RETURNING id`,[t.id,req.user.id]);
-  if(!r.rows.length) fail("Another volunteer has claimed this conversation.",409);
+  await withHelpThread(req.tenant.id,z.string().uuid().parse(req.params.id),async(client,t)=>{
+    const currentHelp=await helpSettings(req.tenant.id);
+    if(t.assignee_id && t.assignee_id!==req.user.id) fail("Another volunteer has claimed this conversation.",409);
+    if(!canClaimHelp(currentHelp.settings,t,req.user.id,!!admin(req))) fail("This category is assigned to another team.",403);
+    if((await client.query("SELECT id FROM rescue_help_messages WHERE thread_id=$1 AND status='sending' LIMIT 1",[t.id])).rows.length)
+      fail("A reply is being sent. Wait before claiming this conversation.",409);
+    await client.query("UPDATE rescue_help_threads SET assignee_id=$2,status='human',updated_at=now() WHERE id=$1",[t.id,req.user.id]);
+  });
   res.json({ok:true});
 }));
 router.post("/threads/:id/update",wrap(async(req:any,res:any)=>{
-  const t=await owned(req),input=z.object({status:z.enum(["waiting","human","resolved"]).optional(),assigneeId:z.string().uuid().nullable().optional()}).strict().parse(req.body);
-  if(!admin(req) && (input.assigneeId!==undefined || t.assignee_id!==req.user.id)) fail("Only the assigned volunteer or an admin can change this conversation.",403);
-  if(input.assigneeId && !req.help.settings.teamIds.includes(input.assigneeId)) fail("Choose a member of the inbox team.");
-  await pool.query(`UPDATE rescue_help_threads SET status=COALESCE($2,status),assignee_id=CASE WHEN $3 THEN $4 ELSE assignee_id END,updated_at=now()
-    WHERE id=$1`,[t.id,input.status||null,input.assigneeId!==undefined,input.assigneeId||null]);
+  const input=z.object({status:z.enum(["waiting","human","resolved"]).optional(),assigneeId:z.string().uuid().nullable().optional()}).strict().parse(req.body);
+  await withHelpThread(req.tenant.id,z.string().uuid().parse(req.params.id),async(client,t)=>{
+    const currentHelp=await helpSettings(req.tenant.id);
+    if(!admin(req) && !currentHelp.settings.teamIds.includes(req.user.id)) fail("Inbox team access was removed.",403);
+    if(!admin(req) && (t.assignee_id!==req.user.id || (input.assigneeId!==undefined && input.assigneeId!==null))) fail("Only the assigned volunteer or an admin can change this conversation.",403);
+    if(input.assigneeId && !(await team(req.tenant.id,currentHelp.settings.teamIds)).some(u=>u.id===input.assigneeId)) fail("Choose an active member of the inbox team.");
+    const sending=await client.query("SELECT id FROM rescue_help_messages WHERE thread_id=$1 AND status='sending' LIMIT 1",[t.id]);
+    if(sending.rows.length) fail("A reply is being sent. Wait for its result before changing ownership.",409);
+    const assignee=input.assigneeId===undefined ? t.assignee_id : input.assigneeId;
+    const status=input.status || (assignee ? "human" : "waiting");
+    await client.query("UPDATE rescue_help_threads SET status=$2,assignee_id=$3,updated_at=now() WHERE id=$1",[t.id,status,assignee]);
+    if(input.assigneeId!==undefined && status!=="resolved")
+      await queueHelpAlerts(client,req.tenant.id,{...t,status,assignee_id:assignee},currentHelp.settings);
+  });
   res.json({ok:true});
 }));
 router.post("/threads/:id/messages",rateLimit({windowMs:60000,max:20}),wrap(async(req:any,res:any)=>{
   const t=await owned(req),input=z.object({body:z.string().trim().min(1).max(1000),kind:z.enum(["note","outbound"]),requestId:z.string().uuid()}).strict().parse(req.body);
-  if(input.kind==="outbound" && !admin(req) && t.assignee_id!==req.user.id) fail("Claim the conversation before replying.",403);
   if(input.kind==="outbound" && !req.help.enabled) fail("The help line is not active.",409);
   if(input.kind==="outbound" && !/^\+\d{8,15}$/.test(t.phone)) fail("This caller withheld their number. SMS replies are unavailable.",409);
   const id=randomUUID();
-  const inserted=await pool.query(`INSERT INTO rescue_help_messages(id,thread_id,kind,body,status,request_id,author_id)
-    VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(request_id) DO NOTHING RETURNING id`,
-    [id,t.id,input.kind,input.body,input.kind==="note"?"saved":"sending",input.requestId,req.user.id]);
+  const inserted=await withHelpThread(req.tenant.id,t.id,async(client,current)=>{
+    const currentHelp=await helpSettings(req.tenant.id);
+    if(!admin(req) && !currentHelp.settings.teamIds.includes(req.user.id)) fail("Inbox team access was removed.",403);
+    if(input.kind==="outbound"){
+      if(!currentHelp.enabled) fail("The help line is not active.",409);
+      if(!admin(req) && current.assignee_id!==req.user.id) fail("Claim the conversation before replying.",403);
+      if((await client.query("SELECT id FROM rescue_help_messages WHERE thread_id=$1 AND status='sending' LIMIT 1",[t.id])).rows.length)
+        fail("A reply is already being sent. Refresh before sending another.",409);
+    }
+    return client.query(`INSERT INTO rescue_help_messages(id,thread_id,kind,body,status,request_id,author_id)
+      VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(request_id) DO NOTHING RETURNING id`,
+      [id,t.id,input.kind,input.body,input.kind==="note"?"saved":"sending",input.requestId,req.user.id]);
+  });
   if(!inserted.rows.length) { res.json({ok:true,duplicate:true}); return; }
   await pool.query("UPDATE rescue_help_threads SET updated_at=now(),status=CASE WHEN $2='outbound' THEN 'human' ELSE status END WHERE id=$1",[t.id,input.kind]);
   if(input.kind==="outbound"){

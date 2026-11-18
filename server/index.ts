@@ -315,6 +315,11 @@ app.use((req, res, next) => {
   console.log("[Startup] Registering application routes");
   const server = await registerRoutes(app);
   if (process.env.REPLIT_DEPLOYMENT === "1") {
+    const inboxAlertTimer = setInterval(() => {
+      void import("./services/rescue-help-alerts").then(m=>m.dispatchHelpAlerts())
+        .catch(()=>console.error("[Rescue Inbox] Alert delivery check failed"));
+    }, 30 * 1000);
+    inboxAlertTimer.unref();
     const welcomeTimer = setInterval(() => {
       void import("./services/foster-welcome").then(m => m.dispatchFosterWelcomes())
         .catch(() => console.error("[Foster welcome] Pending delivery check failed"));

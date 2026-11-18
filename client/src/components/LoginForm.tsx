@@ -12,9 +12,10 @@ import { MfaVerificationDialog } from "@/components/MfaVerificationDialog";
 
 interface LoginFormProps {
   rescueName?: string;
+  stayOnPage?: boolean;
 }
 
-export default function LoginForm({ rescueName }: LoginFormProps) {
+export default function LoginForm({ rescueName, stayOnPage = false }: LoginFormProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -56,7 +57,9 @@ export default function LoginForm({ rescueName }: LoginFormProps) {
             description: "Welcome back!",
           });
           // Redirect based on whether user is platform admin
-          if (result.user?.roles?.includes('platform_admin')) {
+          if (stayOnPage) {
+            // Embedded inbox sign-in keeps the authenticated deep link intact.
+          } else if (result.user?.roles?.includes('platform_admin')) {
             window.location.href = "/platform/dashboard";
           } else {
             navigate("/dashboard");
@@ -80,7 +83,9 @@ export default function LoginForm({ rescueName }: LoginFormProps) {
       description: "Welcome back!",
     });
     // Redirect based on whether user is platform admin
-    if (user?.roles?.includes('platform_admin')) {
+    if (stayOnPage) {
+      // The parent will render the requested conversation after auth updates.
+    } else if (user?.roles?.includes('platform_admin')) {
       window.location.href = "/platform/dashboard";
     } else {
       navigate("/dashboard");

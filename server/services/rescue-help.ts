@@ -3,6 +3,7 @@ import { pool } from "../db";
 import { defaultHelpSettings, helpIsOpen, helpMatch, type HelpSettings } from "@shared/rescue-help";
 import { isSmsPhoneSuppressed, smsPhoneKey } from "../lib/sms-suppression";
 import { fosterTopic } from "@shared/foster-welcome";
+import { queueHelpAlerts } from "./rescue-help-alerts";
 
 export async function helpSettings(tenantId: string) {
   const row = (await pool.query("SELECT * FROM rescue_help_settings WHERE tenant_id=$1", [tenantId])).rows[0];
@@ -15,7 +16,7 @@ export async function helpCanSend(tenantId: string, phone: string) {
   return !opted.some(u => u.phone && smsPhoneKey(u.phone) === smsPhoneKey(phone));
 }
 export async function helpInbound(tenantId: string, from: string, sid: string, body: string, recordingSid?: string, mediaCount = 0) {
-  const { enabled, settings: s } = await helpSettings(tenantId);
+  let { enabled, settings: s } = await helpSettings(tenantId);
   // Preserve a voicemail already recorded while an admin was disabling service.
   if (!enabled && !recordingSid) return "";
   const canSend = !recordingSid && await helpCanSend(tenantId, from);
@@ -27,6 +28,7 @@ export async function helpInbound(tenantId: string, from: string, sid: string, b
     await client.query(`INSERT INTO rescue_help_threads(id,tenant_id,phone) VALUES($1,$2,$3)
       ON CONFLICT(tenant_id,phone) DO NOTHING`, [randomUUID(), tenantId, from]);
     const thread = (await client.query("SELECT * FROM rescue_help_threads WHERE tenant_id=$1 AND phone=$2 FOR UPDATE", [tenantId, from])).rows[0];
+    s = (await helpSettings(tenantId)).settings;
     const before = (await client.query("SELECT count(*)::int n FROM rescue_help_messages WHERE thread_id=$1", [thread.id])).rows[0].n;
     await client.query(`INSERT INTO rescue_help_messages(id,thread_id,kind,body,provider_sid,recording_sid,media_count)
       VALUES($1,$2,$3,$4,$5,$6,$7)`, [randomUUID(), thread.id, recordingSid ? "voicemail" : "inbound", body.slice(0,4000), sid, recordingSid || null, mediaCount]);
@@ -37,16 +39,16 @@ export async function helpInbound(tenantId: string, from: string, sid: string, b
     if (thread.foster_welcome && !recordingSid && matched.kind !== "emergency") {
       const foster = fosterTopic(s);
       topic = foster?.label || "Foster";
-      assignee = foster?.assigneeId || null;
-      status = "waiting";
+      assignee = thread.assignee_id;
+      status = assignee ? "human" : "waiting";
       // A screenshot (often with no text) must go to the foster team, not the FAQ bot.
     }
-    else if (recordingSid) { status = "waiting"; }
+    else if (recordingSid) { status = assignee ? "human" : "waiting"; }
     else if (!paused || matched.kind === "emergency") {
       if (matched.kind === "answer") {
         reply = matched.topic.answer;
         topic = matched.topic.label;
-        assignee = matched.topic.assigneeId;
+        // A category's team receives alerts; only a human claim owns the conversation.
         status = "bot";
       } else {
         reply = matched.kind === "emergency" ? s.emergency : s.handoff;
@@ -64,6 +66,7 @@ export async function helpInbound(tenantId: string, from: string, sid: string, b
         [randomUUID(), thread.id, reply]);
     }
     await client.query("UPDATE rescue_help_threads SET status=$2,topic=$3,assignee_id=$4,updated_at=now() WHERE id=$1", [thread.id,status,topic,assignee]);
+    await queueHelpAlerts(client, tenantId, { id: thread.id, status, topic, assignee_id: assignee }, s);
     await client.query("COMMIT");
     return reply;
   } catch(e) { await client.query("ROLLBACK"); throw e; } finally { client.release(); }

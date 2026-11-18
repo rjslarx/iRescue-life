@@ -1,5 +1,6 @@
 import { z } from "zod";
 export const helpSettingsSchema = z.object({
+  smsAlerts: z.boolean().optional(),
   voice: z.enum(["default", "man", "woman"]).optional(),
   phone: z.string().regex(/^$|^\+1\d{10}$/, "Use a US number in +1 format"),
   timezone: z.string().refine(s => { try { new Intl.DateTimeFormat("en", { timeZone: s }); return true; } catch { return false; } }, "Choose a valid timezone"),
@@ -11,19 +12,34 @@ export const helpSettingsSchema = z.object({
   topics: z.array(z.object({ id: z.string().uuid(), label: z.string().trim().min(1).max(70),
     keywords: z.array(z.string().trim().min(2).max(60)).max(20),
     answer: z.string().trim().min(1).max(1000), assigneeId: z.string().uuid().nullable(),
+    assigneeIds: z.array(z.string().uuid()).max(100).optional(),
   }).strict()).max(30),
 }).strict().refine(s => s.openHour < s.closeHour, "Closing hour must be after opening hour")
   .refine(s => new Set(s.topics.map(t => t.id)).size === s.topics.length, "Topic IDs must be unique")
-  .refine(s => s.topics.every(t => !t.assigneeId || s.teamIds.includes(t.assigneeId)), "Topic assignees must be on the inbox team");
+  .refine(s => new Set(s.topics.map(t => t.label.toLowerCase())).size === s.topics.length, "Category names must be unique")
+  .refine(s => s.topics.every(t => topicTeam(t).every(id => s.teamIds.includes(id))), "Topic assignees must be on the inbox team");
 export type HelpSettings = z.infer<typeof helpSettingsSchema>;
 export const defaultHelpSettings: HelpSettings = {
-  voice: "default",
+  voice: "default", smsAlerts: true,
   phone: "", timezone: "America/Chicago", openHour: 9, closeHour: 17, days: [1,2,3,4,5], teamIds: [], topics: [],
   greeting: "Thank you for contacting the rescue. Please text your question, or reply TEAM to request a person. This line is not monitored for emergencies.",
   afterHours: "The team is currently outside its response hours. Your message is saved for follow-up. This line is not monitored for emergencies.",
   handoff: "Your message is in the rescue team's inbox. A team member will follow up when available.",
   emergency: "This line cannot provide emergency assistance or veterinary advice. For an animal medical emergency, contact a local emergency veterinarian. For immediate danger to people, contact emergency services.",
 };
+export function topicTeam(topic?: { assigneeId?: string | null; assigneeIds?: string[] }) {
+  return [...new Set(topic?.assigneeIds ?? (topic?.assigneeId ? [topic.assigneeId] : []))];
+}
+export function helpRecipients(s: HelpSettings, thread: { assignee_id?: string | null; topic?: string | null; status: string }) {
+  if (thread.status === "resolved") return [];
+  if (thread.assignee_id) return s.teamIds.includes(thread.assignee_id) ? [thread.assignee_id] : [];
+  const category = s.topics.find(t => t.label === thread.topic);
+  const members = topicTeam(category);
+  return (members.length ? members : s.teamIds).filter(id => s.teamIds.includes(id));
+}
+export function canClaimHelp(s: HelpSettings, thread: { assignee_id?: string | null; topic?: string | null; status: string }, userId: string, admin: boolean) {
+  return admin || helpRecipients(s, { ...thread, status: "waiting" }).includes(userId);
+}
 // Only explicitly selected Basic voices may override the account default.
 // Twilio Basic TTS has no additional synthesis charge; premium IDs are never passed through.
 export function helpVoiceOptions(voice: unknown): { voice?: "man" | "woman"; language?: "en-US" } {

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "wouter";
+import { Link, useSearch } from "wouter";
 import { Inbox, MessageSquare, LockKeyhole, Play, ArrowLeft, CheckCheck } from "lucide-react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { useAuth } from "@/contexts/AuthContext";
@@ -7,6 +7,8 @@ import { useTenant } from "@/contexts/TenantContext";
 import { tenantApiRequest } from "@/lib/tenantApi";
 import { RescueInboxSettings } from "@/components/rescue-inbox/RescueInboxSettings";
 import { RescueInboxImage } from "@/components/rescue-inbox/RescueInboxImage";
+import LoginForm from "@/components/LoginForm";
+import { canClaimHelp } from "@shared/rescue-help";
 import { RescueHelpError, rescueHelpError, useRescueInbox, type RescueInboxApi, type RescueMessage, type RescueThread } from "@/hooks/use-rescue-inbox";
 import "@/components/rescue-inbox/rescue-inbox.css";
 
@@ -69,10 +71,10 @@ function Conversation({ api, enabled }: { api: RescueInboxApi; enabled: boolean 
   return <div className="ri-detail">
     <div className="ri-detail-head"><div className="ri-toolbar"><div><h2>{thread.phone}</h2><p className="ri-muted mt-1">{thread.topic || "General conversation"} · {list?.team.find(m => m.id === thread.assigneeId)?.name || (thread.assigneeId ? "Assigned team member" : "Unassigned")}</p></div><span className={`ri-badge ${thread.status}`}>{labels[thread.status]}</span></div>
       <div className="ri-toolbar mt-4">
-        {!thread.assigneeId && <button className="ri-btn primary" disabled={pending} onClick={() => void action(() => api.claim.mutateAsync(thread.id))}>Claim conversation</button>}
+        {!thread.assigneeId && <button className="ri-btn primary" disabled={pending || !api.settings.data || !canClaimHelp(api.settings.data.settings,{status:thread.status,topic:thread.topic,assignee_id:null},list?.userId || "",admin)} onClick={() => void action(() => api.claim.mutateAsync(thread.id))}>Claim conversation</button>}
         {admin && <label className="ri-field"><span>Assign to</span><select aria-label="Assign conversation" disabled={pending} value={thread.assigneeId || ""} onChange={e => void action(() => api.update.mutateAsync({ id: thread.id, assigneeId: e.target.value || null }))}><option value="">Unassigned</option>{thread.assigneeId && !list?.team.some(m => m.id === thread.assigneeId) && <option value={thread.assigneeId}>Assigned team member</option>}{list?.team.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select></label>}
-        {canManage && <div className="flex gap-2 flex-wrap">{thread.status !== "human" && <button className="ri-btn" disabled={pending} onClick={() => void action(() => api.update.mutateAsync({ id: thread.id, status: "human" }))}>Human handling</button>}{thread.status !== "waiting" && <button className="ri-btn" disabled={pending} onClick={() => { if (window.confirm("Return this conversation to waiting? No message is sent now. Approved answers can resume only after a future incoming message.")) void action(() => api.update.mutateAsync({ id: thread.id, status: "waiting" })); }}>Return to waiting</button>}{thread.status !== "resolved" && <button className="ri-btn" disabled={pending} onClick={() => void action(() => api.update.mutateAsync({ id: thread.id, status: "resolved" }))}><CheckCheck size={15} />Resolve</button>}</div>}
-      </div><p className="ri-muted mt-3">Human handling pauses the bot. Returning to waiting sends nothing now; approved answers may resume on a future incoming message. A new message after resolution may also use approved answers.</p>
+        {canManage && <div className="flex gap-2 flex-wrap">{thread.assigneeId && <button className="ri-btn" disabled={pending} onClick={() => { if (window.confirm("Release this conversation so another category volunteer can claim it? The category team may receive an alert.")) void action(() => api.update.mutateAsync({ id: thread.id, status: "waiting", assigneeId:null })); }}>Release to category team</button>}{thread.status !== "resolved" && <button className="ri-btn" disabled={pending} onClick={() => void action(() => api.update.mutateAsync({ id: thread.id, status: "resolved" }))}><CheckCheck size={15} />Resolve</button>}</div>}
+      </div><p className="ri-muted mt-3">One volunteer claims and replies; administrators can override or reassign. Other category volunteers can still read the conversation. Release it to let someone else take over.</p>
     </div>
     <div className="ri-messages" aria-label="Conversation messages">{messages.length ? messages.map(message => <article key={message.id} className={`ri-message ${message.kind}`}>
       {message.kind === "note" && <span className="ri-badge mb-2"><LockKeyhole size={11} />Internal note · team only</span>}
@@ -101,7 +103,11 @@ function Conversation({ api, enabled }: { api: RescueInboxApi; enabled: boolean 
   </div>;
 }
 function InboxWorkspace() {
-  const [selected, setSelected] = useState<string | null>(null);
+  const search=useSearch();
+  const linkedThread=new URLSearchParams(search).get("thread");
+  const validThread=linkedThread && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(linkedThread) ? linkedThread : null;
+  const [selected, setSelected] = useState<string | null>(validThread);
+  useEffect(()=>{ if(validThread) setSelected(validThread); },[validThread]);
   const [tab, setTab] = useState<"inbox" | "settings">("inbox");
   const [filter, setFilter] = useState("all");
   const api = useRescueInbox(selected);
@@ -130,7 +136,7 @@ export default function RescueInboxPage() {
   const { user, isLoading } = useAuth();
   const { tenantId, basePath } = useTenant();
   if (isLoading) return <div className="rescue-inbox p-6"><Loading /></div>;
-  if (!user) return <div className="rescue-inbox"><div className="ri-empty"><LockKeyhole size={32} /><h2>Your rescue’s shared inbox</h2><p className="ri-muted">Sign in with your rescue account to check team access.</p><Link className="ri-btn primary" href="/login"><ArrowLeft size={15} />Sign in</Link></div></div>;
+  if (!user) return <LoginForm stayOnPage rescueName="your rescue’s shared inbox" />;
   if (!tenantId) return <div className="rescue-inbox"><div className="ri-empty"><h2>Open your rescue workspace</h2><p className="ri-muted">A rescue must be selected before opening its shared inbox.</p><Link className="ri-btn" href="/dashboard">Return to dashboard</Link></div></div>;
   return <InboxWorkspace key={`${tenantId}:${basePath}:${user.id}:${user.activeRole}`} />;
 }

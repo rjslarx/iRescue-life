@@ -14,6 +14,18 @@ export const smsPhoneSuppressions = pgTable("sms_phone_suppressions", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, table => [uniqueIndex("sms_phone_suppressions_key").on(table.tenantId, table.phoneKey)]);
 
+// Durable, coalesced staff notifications. No message content or caller details here.
+export const rescueHelpAlerts = pgTable("rescue_help_alerts", {
+  threadId: uuid("thread_id").notNull(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  eventAt: timestamp("event_at", { withTimezone: true }).notNull(),
+  dueAt: timestamp("due_at", { withTimezone: true }).notNull(),
+  attemptedAt: timestamp("attempted_at", { withTimezone: true }),
+  status: text("status").notNull().default("pending"),
+}, table => [uniqueIndex("rescue_help_alerts_recipient").on(table.threadId, table.userId),
+  index("rescue_help_alerts_due").on(table.status, table.dueAt)]);
+
 export const smsOptOutEvents = pgTable("sms_opt_out_events", {
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   messageSid: text("message_sid").notNull(),

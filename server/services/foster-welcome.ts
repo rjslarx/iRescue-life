@@ -31,12 +31,12 @@ export async function queueFosterWelcome(params: {
     await client.query("BEGIN");
     const thread = (await client.query(`INSERT INTO rescue_help_threads(id,tenant_id,phone,status,topic,assignee_id,foster_welcome)
       VALUES($1,$2,$3,'waiting',$4,$5,true) ON CONFLICT(tenant_id,phone) DO UPDATE SET phone=EXCLUDED.phone RETURNING id`,
-      [randomUUID(),params.tenantId,phone,topic?.label || "Foster",topic?.assigneeId || null])).rows[0];
+      [randomUUID(),params.tenantId,phone,topic?.label || "Foster",null])).rows[0];
     const inserted = await client.query(`INSERT INTO rescue_help_messages(id,thread_id,kind,body,status,request_id)
       VALUES($1,$2,'outbound',$3,'welcome_pending',$4) ON CONFLICT(request_id) DO NOTHING RETURNING id`,
       [randomUUID(),thread.id,`${fosterWelcomeText}\n\nReply STOP to unsubscribe.`,welcomeRequestId(params.tenantId,params.applicantEmail)]);
     if (inserted.rows.length) await client.query(`UPDATE rescue_help_threads SET foster_welcome=true,status='waiting',
-      topic=$2,assignee_id=$3,updated_at=now() WHERE id=$1`, [thread.id,topic?.label || "Foster",topic?.assigneeId || null]);
+      topic=$2,updated_at=now() WHERE id=$1`, [thread.id,topic?.label || "Foster"]);
     await client.query("COMMIT");
   } catch (err) { await client.query("ROLLBACK"); throw err; }
   finally { client.release(); }

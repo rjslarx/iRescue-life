@@ -25,3 +25,9 @@ Haseya's newly approved fosters should receive the user-supplied welcome text fr
 **Why:** The rescue uses those screenshots to invite fosters into its private Facebook group. Assignments must follow the category, not a hardcoded volunteer identity.
 
 **How to apply:** Keep this welcome limited to Haseya's and future activations, preserve existing welcome emails, respect SMS suppression, and avoid duplicate or uncertain-send retries. Do not bulk-text existing fosters without approval.
+
+Inbox categories may have multiple volunteers. Category membership is not conversation ownership: staff claim a conversation in the dashboard, and only that owner (or an administrator) replies.
+
+**Why:** The user approved shared coverage with personal-phone text alerts, without duplicate replies. This extends the original no-forwarding scope only to privacy-safe alerts, not message contents or screenshots.
+
+**How to apply:** Alert the category team before a claim and only the owner afterward. Group rapid arrivals, preserve ownership on foster screenshot replies, and require dashboard claiming rather than interpreting personal-phone “CLAIM” texts.
