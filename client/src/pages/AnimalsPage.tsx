@@ -72,6 +72,7 @@ const animalFormSchema = insertAnimalSchema.omit({ tenantId: true }).extend({
   age: z.string().optional().default(""),
   breed: z.string().optional().default(""),
   species: z.string().optional().default(""),
+  horseType: z.enum(["wild", "domesticated"]).default("domesticated"),
   
   // Core fields
   name: z.string().min(1, "Name is required"),
@@ -230,6 +231,9 @@ function AnimalForm({
   surrenderPrefill?: any;
 }) {
   const { toast } = useToast();
+  const { data: horseTenantData } = useQuery<{ tenant: Tenant }>({
+    queryKey: ['/api/tenant'],
+  });
   
   const { data: enrichedAnimalData } = useQuery<any>({
     queryKey: ['/api/animals', initialData?.id],
@@ -337,6 +341,7 @@ function AnimalForm({
       name: initialData.name,
       // Petfinder-compliant primary fields
       petfinderType: initialData.petfinderType || mapSpeciesToPetfinderType(initialData.species) || undefined,
+      horseType: initialData.horseType || "domesticated",
       petfinderBreed: initialData.petfinderBreed || initialData.breed || "",
       petfinderBreedSecondary: initialData.petfinderBreedSecondary || null,
       petfinderAge: initialData.petfinderAge || mapAgeToPetfinderAge(initialData.age) || undefined,
@@ -383,6 +388,7 @@ function AnimalForm({
       name: "",
       // Petfinder-compliant primary fields (user must fill these)
       petfinderType: undefined,
+      horseType: "domesticated",
       petfinderBreed: "",
       petfinderBreedSecondary: null,
       petfinderAge: undefined,
@@ -472,6 +478,7 @@ function AnimalForm({
       form.reset({
         name: a.name || "",
         petfinderType: a.petfinderType || undefined,
+        horseType: a.horseType || "domesticated",
         petfinderBreed: a.petfinderBreed || a.breed || "",
         petfinderBreedSecondary: null,
         petfinderAge: a.petfinderAge || undefined,
@@ -558,6 +565,7 @@ function AnimalForm({
       petfinderSyncedAt: data.petfinderSyncedAt ? data.petfinderSyncedAt.toISOString() : null,
       dateOfBirth: data.dateOfBirth ? data.dateOfBirth.toISOString() : null,
       petfinderType: data.petfinderType || null,
+      horseType: data.petfinderType === "Horse" ? data.horseType : "domesticated",
       petfinderBreed: data.petfinderBreed || null,
       petfinderBreedSecondary: data.petfinderBreedSecondary || null,
       petfinderAge: data.petfinderAge || null,
@@ -633,6 +641,7 @@ function AnimalForm({
                     field.onChange(value);
                     form.setValue('petfinderBreed', "");
                     form.setValue('petfinderBreedSecondary', null);
+                    if (value !== 'Horse') form.setValue('horseType', 'domesticated');
                     if (value !== 'Cat') {
                       form.setValue('declawed', null);
                     }
@@ -659,6 +668,28 @@ function AnimalForm({
         </div>
 
         {/* Breed Selection */}
+        {horseTenantData?.tenant?.subdomain === "haseyas" && selectedPetfinderType === "Horse" && (
+          <FormField
+            control={form.control}
+            name="horseType"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Horse type</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value || "domesticated"}>
+                  <FormControl>
+                    <SelectTrigger data-testid="select-horse-type"><SelectValue /></SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="domesticated">Domesticated</SelectItem>
+                    <SelectItem value="wild">Wild</SelectItem>
+                  </SelectContent>
+                </Select>
+                <FormDescription>Wild horses use the wild horse placement application. Domesticated horses use the existing adoption application.</FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <FormField
             control={form.control}
