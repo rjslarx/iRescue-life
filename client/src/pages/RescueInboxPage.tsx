@@ -16,13 +16,16 @@ function ErrorState({ error, retry }: { error: unknown; retry: () => void }) {
 }
 const labels: Record<RescueThread["status"], string> = { bot: "Approved answers", waiting: "Needs a person", human: "With team", resolved: "Resolved" };
 function time(value: string) { const date = new Date(value); return Number.isNaN(date.getTime()) ? "" : date.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }); }
-function Voicemail({ message }: { message: RescueMessage }) {
+function Voicemail({ message, onDelete }: { message: RescueMessage; onDelete?: () => Promise<unknown> }) {
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const objectUrl = useRef("");
   const mounted = useRef(true);
+  const deleting = useRef(false);
+  const [deleted, setDeleted] = useState(false);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; if (objectUrl.current) URL.revokeObjectURL(objectUrl.current); }; }, []);
+  if (deleted) return <p role="status">Voicemail deleted.</p>;
   return <div>{url ? <audio className="ri-audio" controls autoPlay src={url} aria-label="Voicemail recording" onError={() => {
     if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
     objectUrl.current = ""; setUrl("");
@@ -32,7 +35,18 @@ function Voicemail({ message }: { message: RescueMessage }) {
     try { const response = await tenantApiRequest("GET", `/api/rescue-help/messages/${encodeURIComponent(message.id)}/audio`); const blob = await response.blob(); if (!mounted.current) return; objectUrl.current = URL.createObjectURL(blob); setUrl(objectUrl.current); }
     catch { if (mounted.current) setError("Recording could not load. Please try again."); }
     finally { if (mounted.current) setBusy(false); }
-  }}><Play size={14} />{busy ? "Loading recording…" : "Play voicemail"}</button>}{error && <p className="ri-error" role="alert">{error}</p>}<small>Voice recording · no transcription</small></div>;
+  }}><Play size={14} />{busy ? "Please wait…" : "Play voicemail"}</button>}
+    {onDelete && <button type="button" className="ri-btn danger mt-2" disabled={busy} onClick={async () => {
+      if (deleting.current || !window.confirm("Permanently delete this voicemail recording from Twilio? This cannot be undone. The conversation and a deleted-voicemail entry will be kept.")) return;
+      deleting.current = true; setBusy(true); setError("");
+      // Stop playback and release locally loaded audio before deleting.
+      if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
+      objectUrl.current = ""; setUrl("");
+      try { await onDelete(); if (mounted.current) setDeleted(true); }
+      catch (err) { if (mounted.current) setError(rescueHelpError(err)); }
+      finally { deleting.current = false; if (mounted.current) setBusy(false); }
+    }}>Delete voicemail</button>}
+    {error && <p className="ri-error" role="alert">{error}</p>}<small>Voice recording · no transcription</small></div>;
 }
 function Conversation({ api, enabled }: { api: RescueInboxApi; enabled: boolean }) {
   const [body, setBody] = useState("");
@@ -62,7 +76,7 @@ function Conversation({ api, enabled }: { api: RescueInboxApi; enabled: boolean 
     <div className="ri-messages" aria-label="Conversation messages">{messages.length ? messages.map(message => <article key={message.id} className={`ri-message ${message.kind}`}>
       {message.kind === "note" && <span className="ri-badge mb-2"><LockKeyhole size={11} />Internal note · team only</span>}
       <p>{message.body || (message.kind === "voicemail" ? "Voicemail received" : "")}</p>
-      {message.kind === "voicemail" && (message.hasRecording ? <Voicemail message={message} /> : <small>No recording available</small>)}
+      {message.kind === "voicemail" && (message.hasRecording ? <Voicemail message={message} onDelete={admin ? () => api.deleteVoicemail.mutateAsync(message.id) : undefined} /> : <small>{message.status === "deleted" ? "Recording permanently removed" : "No recording available"}</small>)}
       <small>{message.authorName || (message.kind === "inbound" || message.kind === "voicemail" ? "Caller" : "Rescue team")} · {time(message.createdAt)}{message.status ? ` · ${message.status}` : ""}</small>
     </article>) : <div className="ri-empty"><MessageSquare size={28} /><h3>No messages yet</h3><p className="ri-muted">Messages and internal notes will appear here.</p></div>}</div>
     <form className="ri-composer" onSubmit={async e => {

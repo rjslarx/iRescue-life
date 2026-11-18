@@ -10,6 +10,7 @@ import { smsOptOutCommand, recordVerifiedSmsOptOut } from "../lib/sms-suppressio
 import { helpSettingsSchema, helpIsOpen, helpVoiceOptions } from "@shared/rescue-help";
 import { helpSettings, helpInbound } from "../services/rescue-help";
 import { getAppBaseUrl } from "../lib/app-base-url";
+import { deleteHelpVoicemail } from "../services/rescue-help-voicemail";
 
 const router = Router();
 export const helpWebhooks = Router();
@@ -131,6 +132,17 @@ router.post("/threads/:id/messages",rateLimit({windowMs:60000,max:20}),wrap(asyn
       throw e;
     }
   }
+  res.json({ok:true});
+}));
+router.delete("/messages/:id/audio",wrap(async(req:any,res:any)=>{
+  await deleteHelpVoicemail(req.tenant.id,z.string().uuid().parse(req.params.id),!!admin(req),{
+    query: (sql,params) => pool.query(sql,params),
+    removeRecording: async(tenantId,sid) => {
+      const config=await getTwilioConfigForTenant(tenantId);
+      if(!config) fail("Twilio unavailable",409);
+      return twilio(config.accountSid,config.authToken).recordings(sid).remove();
+    },
+  });
   res.json({ok:true});
 }));
 router.get("/messages/:id/audio",wrap(async(req:any,res:any)=>{

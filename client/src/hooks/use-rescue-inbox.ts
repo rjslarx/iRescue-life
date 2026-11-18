@@ -54,6 +54,7 @@ export function useRescueInbox(selectedId: string | null) {
   const claim = useMutation({ mutationFn: (id: string) => request("POST", `/threads/${encodeURIComponent(id)}/claim`, {}), retry: false, onSuccess: refresh, onError: refresh });
   const update = useMutation({ mutationFn: ({ id, ...data }: { id: string; status?: "waiting" | "human" | "resolved"; assigneeId?: string | null }) => request("POST", `/threads/${encodeURIComponent(id)}/update`, data), retry: false, onSuccess: refresh });
   const send = useMutation({ mutationFn: ({ id, ...data }: { id: string; body: string; requestId: string; kind: "outbound" | "note" }) => request("POST", `/threads/${encodeURIComponent(id)}/messages`, data), retry: false, onSuccess: refresh });
-  return { scope: key.join(":"), access, settings, threads, detail, saveSettings, activate, disable, claim, update, send };
+  const deleteVoicemail = useMutation({ mutationFn: (id: string) => request("DELETE", `/messages/${encodeURIComponent(id)}/audio`), retry: false, onSuccess: refresh, onError: refresh });
+  return { scope: key.join(":"), access, settings, threads, detail, saveSettings, activate, disable, claim, update, send, deleteVoicemail };
 }
 export type RescueInboxApi = ReturnType<typeof useRescueInbox>;
