@@ -63,8 +63,9 @@ export async function renderPuzzleImage(launch: PublicPuzzleLaunch, completion: 
   ctx.font = "30px sans-serif";
   ctx.fillText(`${completion.moves} moves  /  ${puzzleTime(completion.seconds)}`, 65, 1170, 950);
   ctx.fillStyle = "#536876";
-  ctx.font = "22px sans-serif";
-  ctx.fillText(uri ? "Completed animal-photo puzzle" : "Completed numbered puzzle · No animal photo available", 65, 1230, 950);
+  const animalName = uri ? launch.pet?.name?.trim() : undefined;
+  ctx.font = animalName ? "bold 30px sans-serif" : "22px sans-serif";
+  ctx.fillText(animalName ? `Featuring ${animalName}` : uri ? "Completed animal-photo puzzle" : "Completed numbered puzzle · No animal photo available", 65, 1230, 950);
   ctx.font = "18px sans-serif";
   ctx.fillText("A keepsake of your play. Not an automatic entry or verified result.", 65, 1287, 950);
   check();
