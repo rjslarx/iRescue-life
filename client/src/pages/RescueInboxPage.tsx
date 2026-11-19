@@ -11,6 +11,7 @@ import LoginForm from "@/components/LoginForm";
 import { canClaimHelp } from "@shared/rescue-help";
 import { RescueHelpError, rescueHelpError, useRescueInbox, type RescueInboxApi, type RescueMessage, type RescueThread } from "@/hooks/use-rescue-inbox";
 import "@/components/rescue-inbox/rescue-inbox.css";
+import "@/components/rescue-inbox/mobile-conversations.css";
 
 function Loading() { return <div role="status" aria-label="Loading rescue inbox"><div className="ri-skeleton" /><div className="ri-skeleton" /><div className="ri-skeleton" /></div>; }
 function ErrorState({ error, retry }: { error: unknown; retry: () => void }) {
@@ -107,6 +108,19 @@ function InboxWorkspace() {
   const linkedThread=new URLSearchParams(search).get("thread");
   const validThread=linkedThread && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(linkedThread) ? linkedThread : null;
   const [selected, setSelected] = useState<string | null>(validThread);
+  const [mobileConversation, setMobileConversation] = useState(!!validThread);
+  const conversationPanel = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (validThread) setMobileConversation(true);
+  }, [validThread]);
+  useEffect(() => {
+    if (!selected || !mobileConversation || !window.matchMedia("(max-width: 767px)").matches) return;
+    const frame = requestAnimationFrame(() => {
+      conversationPanel.current?.scrollIntoView({ block: "start" });
+      conversationPanel.current?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [selected, mobileConversation]);
   useEffect(()=>{ if(validThread) setSelected(validThread); },[validThread]);
   const [tab, setTab] = useState<"inbox" | "settings">("inbox");
   const [filter, setFilter] = useState("all");
@@ -124,9 +138,12 @@ function InboxWorkspace() {
       {tab === "settings" && admin ? api.settings.isError ? <ErrorState error={api.settings.error} retry={() => void api.settings.refetch()} /> : settings ? <RescueInboxSettings key={api.scope} api={api} initial={settings} /> : <Loading /> : <>
         {api.settings.isError && <div className="ri-error" role="alert">Service status unavailable. SMS sending is disabled until it can be checked. <button className="ri-btn" onClick={() => void api.settings.refetch()}>Retry</button></div>}
         <div className="ri-toolbar mb-4"><label className="ri-field"><span>Show conversations</span><select value={filter} onChange={e => setFilter(e.target.value)}><option value="all">All conversations</option>{Object.entries(labels).map(([value, label]) => <option key={value} value={value}>{label}{value === "waiting" ? ` (${waiting})` : ""}</option>)}</select></label><span className="ri-muted">Shared with the inbox team · updates every 20 seconds</span></div>
-        {api.threads.isError ? <ErrorState error={api.threads.error} retry={() => void api.threads.refetch()} /> : api.threads.isPending ? <Loading /> : <div className="ri-workspace">
-          <div className="ri-list" aria-label="Conversations">{threads.filter(t => filter === "all" || t.status === filter).map(thread => <button type="button" key={thread.id} className={`ri-thread ${thread.status}`} aria-current={selected === thread.id} onClick={() => setSelected(thread.id)}><div className="ri-toolbar"><strong className="text-sm">{thread.phone}</strong><span className={`ri-badge ${thread.status}`}>{labels[thread.status]}</span></div><p>{thread.preview || "No preview yet"}</p><div className="ri-toolbar mt-3"><small className="ri-muted">{thread.topic || "General"}</small><small className="ri-muted">{time(thread.updatedAt)}</small></div></button>)}{!threads.some(t => filter === "all" || t.status === filter) && <div className="ri-empty"><Inbox size={30} /><h3>{threads.length ? "Nothing in this view" : "A fresh start for the team"}</h3><p className="ri-muted">{threads.length ? "Try another conversation filter." : "Incoming texts and voicemail will appear here once the dedicated service is activated."}</p>{filter !== "all" && <button className="ri-btn" onClick={() => setFilter("all")}>Show all conversations</button>}</div>}</div>
-          {selected ? <Conversation key={`${api.scope}:${selected}`} api={api} enabled={settings?.enabled === true && !api.settings.isError} /> : <div className="ri-empty"><MessageSquare size={34} /><h2>A shared place to help</h2><p className="ri-muted">Select a conversation to read approved answers, claim a handoff, or leave a note for the team.</p><span className="ri-badge"><LockKeyhole size={12} />Internal notes stay with the team</span></div>}
+        {api.threads.isError ? <ErrorState error={api.threads.error} retry={() => void api.threads.refetch()} /> : api.threads.isPending ? <Loading /> : <div className={`ri-workspace ${mobileConversation && selected ? "ri-show-conversation" : "ri-show-list"}`}>
+          <div className="ri-list" aria-label="Conversations">{threads.filter(t => filter === "all" || t.status === filter).map(thread => <button type="button" key={thread.id} className={`ri-thread ${thread.status}`} aria-current={selected === thread.id} onClick={() => { setSelected(thread.id); setMobileConversation(true); }}><div className="ri-toolbar"><strong className="text-sm">{thread.phone}</strong><span className={`ri-badge ${thread.status}`}>{labels[thread.status]}</span></div><p>{thread.preview || "No preview yet"}</p><div className="ri-toolbar mt-3"><small className="ri-muted">{thread.topic || "General"}</small><small className="ri-muted">{time(thread.updatedAt)}</small></div></button>)}{!threads.some(t => filter === "all" || t.status === filter) && <div className="ri-empty"><Inbox size={30} /><h3>{threads.length ? "Nothing in this view" : "A fresh start for the team"}</h3><p className="ri-muted">{threads.length ? "Try another conversation filter." : "Incoming texts and voicemail will appear here once the dedicated service is activated."}</p>{filter !== "all" && <button className="ri-btn" onClick={() => setFilter("all")}>Show all conversations</button>}</div>}</div>
+          <div className="ri-conversation-panel" ref={conversationPanel} tabIndex={-1} aria-label="Selected conversation">
+            <button type="button" className="ri-btn ri-mobile-back" onClick={() => setMobileConversation(false)}><ArrowLeft size={16} />Back to conversations</button>
+            {selected ? <Conversation key={`${api.scope}:${selected}`} api={api} enabled={settings?.enabled === true && !api.settings.isError} /> : <div className="ri-empty"><MessageSquare size={34} /><h2>A shared place to help</h2><p className="ri-muted">Select a conversation to read approved answers, claim a handoff, or leave a note for the team.</p><span className="ri-badge"><LockKeyhole size={12} />Internal notes stay with the team</span></div>}
+          </div>
         </div>}
       </>}
     </>}
