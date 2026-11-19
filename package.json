@@ -108,6 +108,7 @@
     "jsbarcode": "^3.12.1",
     "jspdf": "^4.0.0",
     "jspdf-autotable": "^5.0.7",
+    "libphonenumber-js": "^1.13.17",
     "lucide-react": "^0.453.0",
     "memorystore": "^1.6.7",
     "multer": "^2.0.2",

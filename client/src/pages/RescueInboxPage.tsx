@@ -8,6 +8,7 @@ import { tenantApiRequest } from "@/lib/tenantApi";
 import { RescueInboxSettings } from "@/components/rescue-inbox/RescueInboxSettings";
 import { RescueInboxImage } from "@/components/rescue-inbox/RescueInboxImage";
 import { RescueInboxAlerts } from "@/components/rescue-inbox/RescueInboxAlerts";
+import { RescueInboxCalls } from "@/components/rescue-inbox/RescueInboxCalls";
 import LoginForm from "@/components/LoginForm";
 import { canClaimHelp } from "@shared/rescue-help";
 import { RescueHelpError, rescueHelpError, useRescueInbox, type RescueInboxApi, type RescueMessage, type RescueThread } from "@/hooks/use-rescue-inbox";
@@ -78,6 +79,7 @@ function Conversation({ api, enabled }: { api: RescueInboxApi; enabled: boolean 
         {admin && <label className="ri-field"><span>Assign to</span><select aria-label="Assign conversation" disabled={pending} value={thread.assigneeId || ""} onChange={e => void action(() => api.update.mutateAsync({ id: thread.id, assigneeId: e.target.value || null }))}><option value="">Unassigned</option>{thread.assigneeId && !list?.team.some(m => m.id === thread.assigneeId) && <option value={thread.assigneeId}>Assigned team member</option>}{list?.team.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select></label>}
         {canManage && <div className="flex gap-2 flex-wrap">{thread.assigneeId && <button className="ri-btn" disabled={pending} onClick={() => { if (window.confirm("Release this conversation so another category volunteer can claim it? The category team may receive an alert.")) void action(() => api.update.mutateAsync({ id: thread.id, status: "waiting", assigneeId:null })); }}>Release to category team</button>}{thread.status !== "resolved" && <button className="ri-btn" disabled={pending} onClick={() => void action(() => api.update.mutateAsync({ id: thread.id, status: "resolved" }))}><CheckCheck size={15} />Resolve</button>}</div>}
       </div><p className="ri-muted mt-3">One volunteer claims and replies; administrators can override or reassign. Other category volunteers can still read the conversation. Release it to let someone else take over.</p>
+      <RescueInboxCalls api={api} threadId={thread.id} canManage={canManage} />
     </div>
     <div className="ri-messages" aria-label="Conversation messages">{messages.length ? messages.map(message => <article key={message.id} className={`ri-message ${message.kind}`}>
       {message.kind === "note" && <span className="ri-badge mb-2"><LockKeyhole size={11} />Internal note · team only</span>}

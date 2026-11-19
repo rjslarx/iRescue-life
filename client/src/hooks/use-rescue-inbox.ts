@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTenant } from "@/contexts/TenantContext";
 import { tenantApiRequest } from "@/lib/tenantApi";
+import type { HelpCallsResponse } from "@shared/rescue-help-calls";
 
 export type RescueTeamMember = { id: string; name: string };
 export type RescueTopic = { id: string; label: string; keywords: string[]; answer: string; assigneeId: string | null; assigneeIds?: string[]; notificationMode?: "always" | "answer_first" };
@@ -50,6 +51,14 @@ export function useRescueInbox(selectedId: string | null) {
   const detail = useQuery<RescueThreadDetail, RescueHelpError>({ queryKey: [...key, "thread", selectedId], queryFn: () => request("GET", `/threads/${encodeURIComponent(selectedId!)}`), enabled: enabled && !!selectedId, retry: false, refetchInterval: 20000 });
   const alerts = useQuery<{ alerts: RescueAlert[] }, RescueHelpError>({ queryKey: [...key, "alerts", selectedId], queryFn: () => request("GET", `/threads/${encodeURIComponent(selectedId!)}/alerts`), enabled: enabled && access.data?.admin === true && !!selectedId, retry: false, refetchInterval: 20000 });
   const refresh = () => { void cache.invalidateQueries({ queryKey: key }); };
+  const calls = useQuery<HelpCallsResponse, RescueHelpError>({
+    queryKey:[...key,"calls",selectedId], queryFn:()=>request("GET",`/threads/${encodeURIComponent(selectedId!)}/calls`),
+    enabled:enabled && !!selectedId,retry:false,refetchInterval:10000,
+  });
+  const startCall = useMutation({
+    mutationFn:({id,requestId}:{id:string;requestId:string})=>request<{id:string;status:string}>("POST",`/threads/${encodeURIComponent(id)}/calls`,{requestId}),
+    retry:false,onSuccess:refresh,onError:refresh,
+  });
   const saveSettings = useMutation({ mutationFn: (data: RescueHelpSettings) => request("PUT", "/settings", data), retry: false, onSuccess: refresh });
   const activate = useMutation({ mutationFn: () => request("POST", "/activate", {}), retry: false, onSuccess: refresh });
   const disable = useMutation({ mutationFn: () => request("POST", "/disable", {}), retry: false, onSuccess: refresh });
@@ -57,6 +66,6 @@ export function useRescueInbox(selectedId: string | null) {
   const update = useMutation({ mutationFn: ({ id, ...data }: { id: string; status?: "waiting" | "human" | "resolved"; assigneeId?: string | null }) => request("POST", `/threads/${encodeURIComponent(id)}/update`, data), retry: false, onSuccess: refresh });
   const send = useMutation({ mutationFn: ({ id, ...data }: { id: string; body: string; requestId: string; kind: "outbound" | "note" }) => request("POST", `/threads/${encodeURIComponent(id)}/messages`, data), retry: false, onSuccess: refresh });
   const deleteVoicemail = useMutation({ mutationFn: (id: string) => request("DELETE", `/messages/${encodeURIComponent(id)}/audio`), retry: false, onSuccess: refresh, onError: refresh });
-  return { scope: key.join(":"), access, settings, threads, detail, alerts, saveSettings, activate, disable, claim, update, send, deleteVoicemail };
+  return { scope: key.join(":"), access, settings, threads, detail, alerts, calls, startCall, saveSettings, activate, disable, claim, update, send, deleteVoicemail };
 }
 export type RescueInboxApi = ReturnType<typeof useRescueInbox>;

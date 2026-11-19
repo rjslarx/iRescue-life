@@ -14,6 +14,7 @@ import { deleteHelpVoicemail } from "../services/rescue-help-voicemail";
 import { fetchHelpImage, helpImageType } from "../services/rescue-help-media";
 import { withHelpThread } from "../services/rescue-help-thread-lock";
 import { queueHelpAlerts } from "../services/rescue-help-alerts";
+import { helpCallRoutes, helpCallWebhooks } from "./rescueHelpCalls";
 
 const router = Router();
 export const helpWebhooks = Router();
@@ -37,6 +38,7 @@ router.use(wrap(async(req:any,res:any,next:any) => {
 }));
 router.get("/access",(req:any,res)=>res.json({allowed:req.helpAllowed,admin:admin(req)}));
 router.use((req:any,res,next)=>req.helpAllowed?next():res.status(403).json({error:"Ask a rescue admin to add you to the Rescue Inbox team."}));
+router.use(helpCallRoutes());
 async function team(tenantId:string, ids?:string[]) {
   return (await pool.query(`SELECT id,full_name AS name FROM users WHERE tenant_id=$1 AND is_active=true
     AND ($2::uuid[] IS NULL OR id=ANY($2::uuid[])) ORDER BY full_name`,[tenantId,ids||null])).rows;
@@ -237,6 +239,7 @@ router.get("/messages/:id/audio",wrap(async(req:any,res:any)=>{
 }));
 
 // Separate webhook path and dedicated-number lookup leave operational SMS untouched.
+helpWebhooks.use("/calls",helpCallWebhooks());
 helpWebhooks.use(wrap(async(req:any,res:any,next:any)=>{
   const to=String(req.body.To||"");
   const callbackTenant=req.path==="/recording" ? z.string().uuid().parse(req.query.tenantId) : null;

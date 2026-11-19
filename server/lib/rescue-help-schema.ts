@@ -1,3 +1,26 @@
+// Shared by the project's existing Inbox provisioning and post-merge setup.
+export const rescueHelpCallsSchemaSql = `
+CREATE TABLE IF NOT EXISTS rescue_help_calls (
+ id uuid PRIMARY KEY,
+ tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+ thread_id uuid NOT NULL,
+ user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ request_id uuid NOT NULL,
+ account_sid text NOT NULL, from_phone text NOT NULL, staff_phone text NOT NULL, caller_phone text NOT NULL,
+ staff_sid text, caller_sid text,
+ status text NOT NULL DEFAULT 'starting',
+ active boolean NOT NULL DEFAULT true,
+ confirmed boolean NOT NULL DEFAULT false,
+ prompted boolean NOT NULL DEFAULT false,
+ created_at timestamptz NOT NULL DEFAULT now(),
+ updated_at timestamptz NOT NULL DEFAULT now(),
+ expires_at timestamptz NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS rescue_help_calls_request ON rescue_help_calls(tenant_id,request_id);
+CREATE UNIQUE INDEX IF NOT EXISTS rescue_help_calls_active ON rescue_help_calls(thread_id) WHERE active=true;
+CREATE INDEX IF NOT EXISTS rescue_help_calls_tenant_created ON rescue_help_calls(tenant_id,created_at);
+`;
+
 export const rescueHelpSchemaSql = `
 CREATE TABLE IF NOT EXISTS rescue_help_settings (
  tenant_id uuid PRIMARY KEY REFERENCES tenants(id) ON DELETE CASCADE,
@@ -30,4 +53,5 @@ CREATE TABLE IF NOT EXISTS rescue_help_events (
  sid text PRIMARY KEY, tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
  created_at timestamptz NOT NULL DEFAULT now()
 );
+${rescueHelpCallsSchemaSql}
 `;

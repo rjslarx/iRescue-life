@@ -49,3 +49,9 @@ A blank team-account phone does not prove a volunteer lacks a saved phone: their
 **Why:** A real inbox recipient had a mobile on the linked contact but no account phone, so an account-only check incorrectly reported it missing.
 
 **How to apply:** Check same-tenant contacts linked by user ID before reporting a missing phone. Do not infer identity from a similar name, bypass opt-outs, or guess between conflicting numbers.
+
+User-approved return calls are staff-initiated, staff-first bridges, not automatic inbound forwarding.
+
+**Why:** Volunteers must be able to return calls without exposing their personal numbers or accidentally connecting their voicemail to the public caller. Both legs incur normal voice charges.
+
+**How to apply:** Require a fresh press-1 confirmation before the caller leg, recheck service/ownership/suppression then, and use only the dedicated rescue number. Keep tests provider-mocked; never place live calls as verification without approval. Uncertain creation must remain blocked rather than automatically retrying; account-level SMS opt-outs and provider suppression are conservatively honored for these callbacks too.

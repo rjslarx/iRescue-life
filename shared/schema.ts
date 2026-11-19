@@ -26,6 +26,31 @@ export const rescueHelpAlerts = pgTable("rescue_help_alerts", {
 }, table => [uniqueIndex("rescue_help_alerts_recipient").on(table.threadId, table.userId),
   index("rescue_help_alerts_due").on(table.status, table.dueAt)]);
 
+export const rescueHelpCalls = pgTable("rescue_help_calls", {
+  id: uuid("id").primaryKey(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  threadId: uuid("thread_id").notNull(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  requestId: uuid("request_id").notNull(),
+  accountSid: text("account_sid").notNull(),
+  fromPhone: text("from_phone").notNull(),
+  staffPhone: text("staff_phone").notNull(),
+  callerPhone: text("caller_phone").notNull(),
+  staffSid: text("staff_sid"),
+  callerSid: text("caller_sid"),
+  status: text("status").notNull().default("starting"),
+  active: boolean("active").notNull().default(true),
+  confirmed: boolean("confirmed").notNull().default(false),
+  prompted: boolean("prompted").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+}, t => [
+  uniqueIndex("rescue_help_calls_request").on(t.tenantId, t.requestId),
+  uniqueIndex("rescue_help_calls_active").on(t.threadId).where(sql`${t.active}=true`),
+  index("rescue_help_calls_tenant_created").on(t.tenantId, t.createdAt),
+]);
+
 export const smsOptOutEvents = pgTable("sms_opt_out_events", {
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   messageSid: text("message_sid").notNull(),
