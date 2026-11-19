@@ -43,3 +43,9 @@ Haseya's alerts must stay within the assigned category, with general and uncateg
 **Why:** The user requested category-specific texts to avoid unrelated notifications.
 
 **How to apply:** Preserve explicit fallback configuration and do not broaden recipients when its recipient lacks a phone or opts out. Inbox visibility is separate from SMS routing.
+
+A blank team-account phone does not prove a volunteer lacks a saved phone: their explicitly linked contact profile may hold it.
+
+**Why:** A real inbox recipient had a mobile on the linked contact but no account phone, so an account-only check incorrectly reported it missing.
+
+**How to apply:** Check same-tenant contacts linked by user ID before reporting a missing phone. Do not infer identity from a similar name, bypass opt-outs, or guess between conflicting numbers.

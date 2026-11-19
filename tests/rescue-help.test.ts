@@ -257,6 +257,27 @@ test("help inbox isolates tenants, pauses bot on handoff, dedupes inbound and ve
     sent.length=0;
     await processHelpAlerts(scopedDb,fakeSend,()=> "https://example.test");
     assert.equal(sent.length,0,"missing fallback phone must not broadcast to category volunteers");
+    await pool.query(`INSERT INTO contacts(tenant_id,user_id,name,email,phone)
+      VALUES($1,$2,'Other tenant contact',$3,'2025550199')`,[other,uid,`${randomUUID()}@example.test`]);
+    await inbound(categoryPhone,"general follow-up before linked contact");
+    await pool.query("UPDATE rescue_help_alerts SET due_at=now()-interval '1 minute' WHERE thread_id=$1",[categoryThread.id]);
+    sent.length=0;
+    await processHelpAlerts(scopedDb,fakeSend,()=> "https://example.test");
+    assert.equal(sent.length,0,"another tenant's linked contact cannot supply a recipient phone");
+    await pool.query(`INSERT INTO contacts(tenant_id,user_id,name,email,phone)
+      VALUES($1,$2,'Test linked volunteer',$3,'2025550100')`,[tid,uid,`${randomUUID()}@example.test`]);
+    await inbound(categoryPhone,"follow up for general recipient");
+    await pool.query("UPDATE rescue_help_alerts SET due_at=now()-interval '1 minute' WHERE thread_id=$1",[categoryThread.id]);
+    sent.length=0;
+    await processHelpAlerts(scopedDb,fakeSend,()=> "https://example.test");
+    assert.equal(sent.length,1,"linked contact phone supports an account with no phone");
+    assert.equal(sent[0][1],"+12025550100");
+    await pool.query("UPDATE users SET sms_opt_out_at=now() WHERE id=$1",[uid]);
+    await inbound(categoryPhone,"another general reply");
+    await pool.query("UPDATE rescue_help_alerts SET due_at=now()-interval '1 minute' WHERE thread_id=$1",[categoryThread.id]);
+    sent.length=0;
+    await processHelpAlerts(scopedDb,fakeSend,()=> "https://example.test");
+    assert.equal(sent.length,0,"contact phone must not bypass account opt-out");
     const {generalAssigneeId:omitted,...oldEditor}=strictSettings;
     assert.equal((await call("/settings","PUT",oldEditor,{"test-admin":"1"})).status,200);
     assert.equal((await call("/settings").then(r=>r.json())).settings.generalAssigneeId,uid,"older editors preserve fallback");

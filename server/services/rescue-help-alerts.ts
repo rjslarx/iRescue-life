@@ -3,7 +3,7 @@ import { pool } from "../db";
 import { helpRecipients, type HelpSettings } from "@shared/rescue-help";
 import { effectiveHelpSettings } from "./rescue-help-settings";
 import { sendSms } from "../lib/twilio-service";
-import { fosterPhone } from "@shared/foster-welcome";
+import { helpRecipientPhone } from "./rescue-help-recipient-phone";
 import { getAppBaseUrl } from "../lib/app-base-url";
 
 export async function queueHelpAlerts(client: Pick<PoolClient,"query">, tenantId: string,
@@ -45,9 +45,12 @@ export async function processHelpAlerts(db: Pick<typeof pool,"query"|"connect">,
         const config = (await client.query(`SELECT h.enabled,h.data,t.name,t.subdomain,t.custom_domain,t.comms_paused
           FROM rescue_help_settings h JOIN tenants t ON t.id=h.tenant_id WHERE h.tenant_id=$1`,[thread.tenant_id])).rows[0];
         const settings = effectiveHelpSettings(thread.tenant_id, config?.data);
-        const user = (await client.query(`SELECT phone,sms_opt_out_at FROM users
-          WHERE id=$1 AND tenant_id=$2 AND is_active=true`,[job.user_id,thread.tenant_id])).rows[0];
-        const phone = fosterPhone(user?.phone);
+        const user = (await client.query(`SELECT u.phone,u.sms_opt_out_at,
+          ARRAY(SELECT c.phone FROM contacts c WHERE c.user_id=u.id AND c.tenant_id=u.tenant_id
+            AND c.phone IS NOT NULL) AS contact_phones
+          FROM users u WHERE u.id=$1 AND u.tenant_id=$2 AND u.is_active=true`,
+          [job.user_id,thread.tenant_id])).rows[0];
+        const phone = helpRecipientPhone(user?.phone,user?.contact_phones);
         if (!config || settings.smsAlerts === false || !helpRecipients(settings,thread).includes(job.user_id) || !phone || user.sms_opt_out_at) {
           await client.query("UPDATE rescue_help_alerts SET status='skipped' WHERE thread_id=$1 AND user_id=$2",[job.thread_id,job.user_id]);
         } else if (!config.enabled || config.comms_paused) {
