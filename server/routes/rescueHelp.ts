@@ -47,6 +47,8 @@ router.get("/settings",wrap(async(req:any,res:any)=>{
 router.put("/settings",wrap(async(req:any,res:any)=>{
   if(!admin(req)) fail("Only rescue admins can edit settings",403);
   const s=helpSettingsSchema.parse(req.body);
+  if (!s.weeklyHours && req.help.settings.weeklyHours)
+    fail("Reload settings before saving. This form predates different hours for each day.",409);
   // Older open settings forms must not reset a voice they do not know about.
   s.voice ??= req.help.settings.voice || "default";
   s.smsAlerts ??= req.help.settings.smsAlerts !== false;

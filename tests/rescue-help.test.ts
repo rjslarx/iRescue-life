@@ -217,6 +217,15 @@ test("help inbox isolates tenants, pauses bot on handoff, dedupes inbound and ve
     assert.match(await inbound("+12025550137","adopt"),/Approved/);
     assert.equal(await alertCount((await getThread("+12025550137")).id),2,"always-notify can be restored");
 
+    const weeklyHours=Array.from({length:7},(_,day)=>({openHour:8,closeHour:[0,5,6].includes(day)?12:17}));
+    const weeklySettings={...answerFirst,weeklyHours};
+    assert.equal((await call("/settings","PUT",weeklySettings,{"test-admin":"1"})).status,200);
+    assert.deepEqual((await call("/settings").then(r=>r.json())).settings.weeklyHours,weeklyHours);
+    assert.equal((await call("/settings","PUT",answerFirst,{"test-admin":"1"})).status,409,"old editors must not erase per-day hours");
+    assert.deepEqual((await call("/settings").then(r=>r.json())).settings.weeklyHours,weeklyHours);
+    assert.equal((await call("/settings","PUT",{...weeklySettings,weeklyHours:[null]},{"test-admin":"1"})).status,400);
+    assert.equal((await call("/settings","PUT",{...weeklySettings,weeklyHours:Array(7).fill(null)},{"test-admin":"1"})).status,200);
+
     assert.equal((await call("/disable","POST",{},{"test-admin":"1"})).status,200);
     assert.equal(await helpInbound(tid,phone,"SM"+randomUUID().replaceAll("-",""),"adopt"),"");
   }finally{

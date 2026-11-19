@@ -6,6 +6,10 @@ export const helpSettingsSchema = z.object({
   timezone: z.string().refine(s => { try { new Intl.DateTimeFormat("en", { timeZone: s }); return true; } catch { return false; } }, "Choose a valid timezone"),
   openHour: z.number().int().min(0).max(23), closeHour: z.number().int().min(1).max(24),
   days: z.array(z.number().int().min(0).max(6)).max(7),
+  weeklyHours: z.array(z.object({
+    openHour: z.number().int().min(0).max(23),
+    closeHour: z.number().int().min(1).max(24),
+  }).strict().refine(h => h.openHour < h.closeHour, "Closing hour must be after opening hour").nullable()).length(7).optional(),
   greeting: z.string().trim().min(1).max(700), afterHours: z.string().trim().min(1).max(700),
   handoff: z.string().trim().min(1).max(700), emergency: z.string().trim().min(1).max(700),
   teamIds: z.array(z.string().uuid()).max(100),
@@ -47,11 +51,17 @@ export function canClaimHelp(s: HelpSettings, thread: { assignee_id?: string | n
 export function helpVoiceOptions(voice: unknown): { voice?: "man" | "woman"; language?: "en-US" } {
   return voice === "man" || voice === "woman" ? { voice, language: "en-US" } : {};
 }
+// Sunday first. Missing weekly hours retain the existing shared-hours schedule.
+export function helpWeeklyHours(s: Pick<HelpSettings, "weeklyHours" | "days" | "openHour" | "closeHour">) {
+  return s.weeklyHours ?? Array.from({ length: 7 }, (_, day) =>
+    s.days.includes(day) ? { openHour: s.openHour, closeHour: s.closeHour } : null);
+}
 export function helpIsOpen(s: HelpSettings, now = new Date()) {
   const parts = new Intl.DateTimeFormat("en-US", { timeZone: s.timezone, weekday: "short", hour: "2-digit", hourCycle: "h23" }).formatToParts(now);
   const day = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].indexOf(parts.find(p => p.type === "weekday")!.value);
   const hour = Number(parts.find(p => p.type === "hour")!.value);
-  return s.days.includes(day) && hour >= s.openHour && hour < s.closeHour;
+  const hours = helpWeeklyHours(s)[day];
+  return !!hours && hour >= hours.openHour && hour < hours.closeHour;
 }
 export function helpMatch(s: HelpSettings, body: string) {
   const normalized = body.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();

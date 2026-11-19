@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Plus, Trash2, ShieldCheck } from "lucide-react";
 import { rescueHelpError, type RescueInboxApi, type RescueHelpSettings, type RescueSettingsResponse } from "@/hooks/use-rescue-inbox";
-import { topicTeam } from "@shared/rescue-help";
+import { topicTeam, helpWeeklyHours } from "@shared/rescue-help";
+import { RescueInboxHours } from "./RescueInboxHours";
 
 export function RescueInboxSettings({ api, initial }: { api: RescueInboxApi; initial: RescueSettingsResponse }) {
   const [draft, setDraft] = useState<RescueHelpSettings>(() => ({
@@ -32,11 +33,14 @@ export function RescueInboxSettings({ api, initial }: { api: RescueInboxApi; ini
       event.preventDefault(); setError(null); setSaved(false);
       try {
         for (const value of [draft.timezone, draft.greeting, draft.afterHours, draft.handoff, draft.emergency]) if (!value.trim()) throw new Error("Complete every response and the time zone.");
-        if (draft.openHour >= draft.closeHour) throw new Error("Closing hour must be later than opening hour.");
-        if (!draft.days.length) throw new Error("Select at least one response day.");
+        const weeklyHours = helpWeeklyHours(draft);
+        for (const [day, hours] of weeklyHours.entries()) {
+          if (hours && hours.openHour >= hours.closeHour)
+            throw new Error(`${["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"][day]}: closing hour must be later than opening hour.`);
+        }
         new Intl.DateTimeFormat("en-US", { timeZone: draft.timezone });
         for (const topic of draft.topics) if (!topic.label.trim() || !topic.answer.trim() || !topic.keywords.length || topic.keywords.some(k => !k.trim())) throw new Error("Every topic needs a name, at least one keyword, and an approved answer.");
-        await api.saveSettings.mutateAsync(draft); setSaved(true);
+        await api.saveSettings.mutateAsync({ ...draft, weeklyHours }); setDraft(old => ({ ...old, weeklyHours })); setSaved(true);
       } catch (err) { setError(err); }
     }}>
       <fieldset disabled={busy}>
@@ -59,9 +63,7 @@ export function RescueInboxSettings({ api, initial }: { api: RescueInboxApi; ini
         <section className="ri-panel"><h2>Service hours & number</h2><p className="ri-muted">These hours use the rescue’s time zone, not the reader’s device time.</p><div className="ri-fields">
           <label className="ri-field"><span>Separate Twilio phone number</span><input type="tel" placeholder="+1…" value={draft.phone} onChange={e => patch({ phone: e.target.value })} /><small className="ri-muted">Can stay blank while preparing. Required for activation.</small></label>
           <label className="ri-field"><span>IANA time zone</span><input required value={draft.timezone} onChange={e => patch({ timezone: e.target.value })} /></label>
-          <label className="ri-field"><span>Opening hour</span><select value={draft.openHour} onChange={e => patch({ openHour: Number(e.target.value) })}>{Array.from({ length: 24 }, (_, i) => <option key={i} value={i}>{String(i).padStart(2, "0")}:00</option>)}</select></label>
-          <label className="ri-field"><span>Closing hour</span><select value={draft.closeHour} onChange={e => patch({ closeHour: Number(e.target.value) })}>{Array.from({ length: 25 }, (_, i) => <option key={i} value={i}>{String(i).padStart(2, "0")}:00</option>)}</select></label>
-        </div><div className="ri-checks" role="group" aria-label="Response days">{["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"].map((day, i) => <label key={day}><input type="checkbox" checked={draft.days.includes(i)} onChange={e => patch({ days: e.target.checked ? [...draft.days, i].sort() : draft.days.filter(d => d !== i) })} />{day}</label>)}</div></section>
+        </div><RescueInboxHours settings={draft} onChange={patch} /></section>
         <section className="ri-panel"><h2>The rescue’s approved words</h2><p className="ri-muted">Review the server-provided defaults. Only your approved wording is sent; this editor does not invent rescue policies.</p><div className="ri-fields">{([["greeting", "Greeting"], ["afterHours", "After-hours response"], ["handoff", "Human handoff"], ["emergency", "Emergency guidance"]] as const).map(([key, label]) => <label className="ri-field" key={key}><span>{label}</span><textarea required value={draft[key]} onChange={e => patch({ [key]: e.target.value })} /></label>)}</div></section>
         <section className="ri-panel"><h2>Shared inbox team</h2><p className="ri-muted">Selected members can see every conversation and internal note. General volunteer access does not grant inbox access.</p><div className="ri-checks">{initial.team.map(member => <label key={member.id}><input type="checkbox" checked={draft.teamIds.includes(member.id)} onChange={e => patch({ teamIds: e.target.checked ? [...draft.teamIds, member.id] : draft.teamIds.filter(id => id !== member.id) })} />{member.name}</label>)}</div>{!initial.team.length && <p className="ri-muted mt-3">No team choices were returned. Add team members through team management first.</p>}</section>
         <section className="ri-panel"><div className="ri-toolbar"><div><h2>Approved answers</h2><p className="ri-muted">Choose one or more volunteers for each category. One person claims each conversation before replying.</p></div><button className="ri-btn" type="button" onClick={() => patch({ topics: [...draft.topics, { id: crypto.randomUUID(), label: "", keywords: [], answer: "", assigneeId: null, assigneeIds: [] }] })}><Plus size={16} />Add topic</button></div>
