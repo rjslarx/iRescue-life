@@ -10,6 +10,7 @@ export type RescueSettingsResponse = { admin: boolean; enabled: boolean; number:
 export type RescueThread = { id: string; phone: string; status: "bot" | "waiting" | "human" | "resolved"; topic: string | null; assigneeId: string | null; updatedAt: string; preview: string };
 export type RescueMessage = { id: string; kind: "inbound" | "outbound" | "note" | "voicemail"; body: string; status: string; createdAt: string; authorName: string | null; hasRecording: boolean; mediaCount?: number };
 export type RescueThreadDetail = { thread: RescueThread; messages: RescueMessage[] };
+export type RescueAlert = { userId: string; recipientName: string | null; status: string; reason: string | null; eventAt: string; dueAt: string; attemptedAt: string | null };
 export class RescueHelpError extends Error {
   status: number;
   constructor(status: number, message: string) { super(message); this.status = status; }
@@ -47,6 +48,7 @@ export function useRescueInbox(selectedId: string | null) {
   const settings = useQuery<RescueSettingsResponse, RescueHelpError>({ queryKey: [...key, "settings"], queryFn: () => request("GET", "/settings"), enabled, retry: false, refetchInterval: 20000 });
   const threads = useQuery<{ threads: RescueThread[]; team: RescueTeamMember[]; userId: string; admin: boolean }, RescueHelpError>({ queryKey: [...key, "threads"], queryFn: () => request("GET", "/threads"), enabled, retry: false, refetchInterval: 20000 });
   const detail = useQuery<RescueThreadDetail, RescueHelpError>({ queryKey: [...key, "thread", selectedId], queryFn: () => request("GET", `/threads/${encodeURIComponent(selectedId!)}`), enabled: enabled && !!selectedId, retry: false, refetchInterval: 20000 });
+  const alerts = useQuery<{ alerts: RescueAlert[] }, RescueHelpError>({ queryKey: [...key, "alerts", selectedId], queryFn: () => request("GET", `/threads/${encodeURIComponent(selectedId!)}/alerts`), enabled: enabled && access.data?.admin === true && !!selectedId, retry: false, refetchInterval: 20000 });
   const refresh = () => { void cache.invalidateQueries({ queryKey: key }); };
   const saveSettings = useMutation({ mutationFn: (data: RescueHelpSettings) => request("PUT", "/settings", data), retry: false, onSuccess: refresh });
   const activate = useMutation({ mutationFn: () => request("POST", "/activate", {}), retry: false, onSuccess: refresh });
@@ -55,6 +57,6 @@ export function useRescueInbox(selectedId: string | null) {
   const update = useMutation({ mutationFn: ({ id, ...data }: { id: string; status?: "waiting" | "human" | "resolved"; assigneeId?: string | null }) => request("POST", `/threads/${encodeURIComponent(id)}/update`, data), retry: false, onSuccess: refresh });
   const send = useMutation({ mutationFn: ({ id, ...data }: { id: string; body: string; requestId: string; kind: "outbound" | "note" }) => request("POST", `/threads/${encodeURIComponent(id)}/messages`, data), retry: false, onSuccess: refresh });
   const deleteVoicemail = useMutation({ mutationFn: (id: string) => request("DELETE", `/messages/${encodeURIComponent(id)}/audio`), retry: false, onSuccess: refresh, onError: refresh });
-  return { scope: key.join(":"), access, settings, threads, detail, saveSettings, activate, disable, claim, update, send, deleteVoicemail };
+  return { scope: key.join(":"), access, settings, threads, detail, alerts, saveSettings, activate, disable, claim, update, send, deleteVoicemail };
 }
 export type RescueInboxApi = ReturnType<typeof useRescueInbox>;

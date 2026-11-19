@@ -14,7 +14,8 @@ export async function queueHelpAlerts(client: Pick<PoolClient,"query">, tenantId
       VALUES($1,$2,$3,clock_timestamp(),now()+interval '30 seconds','pending')
       ON CONFLICT(thread_id,user_id) DO UPDATE SET event_at=clock_timestamp(),
       due_at=GREATEST(now()+interval '30 seconds',rescue_help_alerts.attempted_at+interval '5 minutes'),
-      status='pending'`, [thread.id,userId,tenantId]);
+      status='pending',reason=NULL
+      WHERE rescue_help_alerts.status NOT IN ('sending','unknown')`, [thread.id,userId,tenantId]);
   }
 }
 
@@ -52,12 +53,15 @@ export async function processHelpAlerts(db: Pick<typeof pool,"query"|"connect">,
           [job.user_id,thread.tenant_id])).rows[0];
         const phone = helpRecipientPhone(user?.phone,user?.contact_phones);
         if (!config || settings.smsAlerts === false || !helpRecipients(settings,thread).includes(job.user_id) || !phone || user.sms_opt_out_at) {
-          await client.query("UPDATE rescue_help_alerts SET status='skipped' WHERE thread_id=$1 AND user_id=$2",[job.thread_id,job.user_id]);
+          const reason = !config || settings.smsAlerts === false ? "alerts_disabled" :
+            !helpRecipients(settings,thread).includes(job.user_id) ? "not_recipient" :
+            !user ? "inactive_user" : user.sms_opt_out_at ? "opt_out" : "missing_number";
+          await client.query("UPDATE rescue_help_alerts SET status='skipped',reason=$3 WHERE thread_id=$1 AND user_id=$2",[job.thread_id,job.user_id,reason]);
         } else if (!config.enabled || config.comms_paused) {
-          await client.query("UPDATE rescue_help_alerts SET due_at=now()+interval '5 minutes' WHERE thread_id=$1 AND user_id=$2",[job.thread_id,job.user_id]);
+          await client.query("UPDATE rescue_help_alerts SET reason=$3,due_at=now()+interval '5 minutes' WHERE thread_id=$1 AND user_id=$2",[job.thread_id,job.user_id,!config.enabled ? "line_inactive" : "communications_paused"]);
         } else {
           // Commit the attempt before touching Twilio. An interrupted attempt is never retried.
-          await client.query(`UPDATE rescue_help_alerts SET status='sending',attempted_at=now()
+          await client.query(`UPDATE rescue_help_alerts SET status='sending',reason=NULL,attempted_at=now()
             WHERE thread_id=$1 AND user_id=$2`,[job.thread_id,job.user_id]);
           work = { ...alert, phone, config, topic: thread.topic, claimed: !!thread.assignee_id };
         }
@@ -70,14 +74,20 @@ export async function processHelpAlerts(db: Pick<typeof pool,"query"|"connect">,
       // No caller details, message text, or screenshots in personal-phone notifications.
       const body = `Rescue Inbox: ${work.claimed ? "A new reply needs your attention." : "A new message needs attention. Open the inbox to view and claim it."} ${link}`;
       let status = "unknown";
+      let reason: string | null = null;
       try {
         const result = await send(work.tenant_id,work.phone,body,"other",{publicHelpNumber:true});
         status = result.sid ? "accepted" : result.uncertain ? "unknown" :
           /quiet hours|communications are paused|help line is not active/i.test(result.error || "") ? "pending" : "failed";
+        if (status === "pending") reason = /quiet hours/i.test(result.error || "") ? "quiet_hours" :
+          /communications are paused/i.test(result.error || "") ? "communications_paused" : "line_inactive";
+        if (status === "failed" && /opted out/i.test(result.error || "")) {
+          status = "skipped"; reason = "opt_out";
+        }
       } catch { /* Do not retry an uncertain provider attempt. */ }
-      await db.query(`UPDATE rescue_help_alerts SET status=$4,
+      await db.query(`UPDATE rescue_help_alerts SET status=$4,reason=$5,
         due_at=CASE WHEN $4='pending' THEN now()+interval '5 minutes' ELSE due_at END
         WHERE thread_id=$1 AND user_id=$2 AND event_at=$3::timestamptz AND status='sending'`,
-        [work.thread_id,work.user_id,work.version,status]);
+        [work.thread_id,work.user_id,work.version,status,reason]);
     }
 }

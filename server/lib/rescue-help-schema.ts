@@ -16,6 +16,16 @@ CREATE TABLE IF NOT EXISTS rescue_help_messages (
  author_id uuid REFERENCES users(id) ON DELETE SET NULL, created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS help_messages_thread ON rescue_help_messages(thread_id,created_at);
+CREATE TABLE IF NOT EXISTS rescue_help_alerts (
+ thread_id uuid NOT NULL REFERENCES rescue_help_threads(id) ON DELETE CASCADE,
+ user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+ event_at timestamptz NOT NULL DEFAULT now(), due_at timestamptz NOT NULL DEFAULT now(),
+ attempted_at timestamptz, status text NOT NULL DEFAULT 'pending',
+ PRIMARY KEY(thread_id,user_id)
+);
+ALTER TABLE rescue_help_alerts ADD COLUMN IF NOT EXISTS reason text;
+CREATE INDEX IF NOT EXISTS help_alerts_due ON rescue_help_alerts(due_at) WHERE status='pending';
 CREATE TABLE IF NOT EXISTS rescue_help_events (
  sid text PRIMARY KEY, tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
  created_at timestamptz NOT NULL DEFAULT now()

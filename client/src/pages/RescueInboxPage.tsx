@@ -7,6 +7,7 @@ import { useTenant } from "@/contexts/TenantContext";
 import { tenantApiRequest } from "@/lib/tenantApi";
 import { RescueInboxSettings } from "@/components/rescue-inbox/RescueInboxSettings";
 import { RescueInboxImage } from "@/components/rescue-inbox/RescueInboxImage";
+import { RescueInboxAlerts } from "@/components/rescue-inbox/RescueInboxAlerts";
 import LoginForm from "@/components/LoginForm";
 import { canClaimHelp } from "@shared/rescue-help";
 import { RescueHelpError, rescueHelpError, useRescueInbox, type RescueInboxApi, type RescueMessage, type RescueThread } from "@/hooks/use-rescue-inbox";
@@ -70,6 +71,7 @@ function Conversation({ api, enabled }: { api: RescueInboxApi; enabled: boolean 
   const pending = api.claim.isPending || api.update.isPending || api.send.isPending;
   async function action(run: () => Promise<unknown>) { setError(null); try { await run(); } catch (err) { setError(err); } }
   return <div className="ri-detail">
+    {admin && <RescueInboxAlerts api={api} />}
     <div className="ri-detail-head"><div className="ri-toolbar"><div><h2>{thread.phone}</h2><p className="ri-muted mt-1">{thread.topic || "General conversation"} · {list?.team.find(m => m.id === thread.assigneeId)?.name || (thread.assigneeId ? "Assigned team member" : "Unassigned")}</p></div><span className={`ri-badge ${thread.status}`}>{labels[thread.status]}</span></div>
       <div className="ri-toolbar mt-4">
         {!thread.assigneeId && <button className="ri-btn primary" disabled={pending || !api.settings.data || !canClaimHelp(api.settings.data.settings,{status:thread.status,topic:thread.topic,assignee_id:null},list?.userId || "",admin)} onClick={() => void action(() => api.claim.mutateAsync(thread.id))}>Claim conversation</button>}

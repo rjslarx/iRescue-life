@@ -126,6 +126,16 @@ router.get("/threads/:id",wrap(async(req:any,res:any)=>{
     WHERE thread_id=$1 ORDER BY m.created_at DESC LIMIT 500`,[t.id])).rows.reverse();
   res.json({thread:threadView(t),messages});
 }));
+router.get("/threads/:id/alerts",wrap(async(req:any,res:any)=>{
+  if(!admin(req)) fail("Only rescue admins can view volunteer alert status",403);
+  const t=await owned(req);
+  const alerts=(await pool.query(`SELECT a.user_id AS "userId",u.full_name AS "recipientName",
+    a.status,a.reason,a.event_at AS "eventAt",a.due_at AS "dueAt",a.attempted_at AS "attemptedAt"
+    FROM rescue_help_alerts a LEFT JOIN users u ON u.id=a.user_id AND u.tenant_id=a.tenant_id
+    WHERE a.thread_id=$1 AND a.tenant_id=$2 ORDER BY a.event_at DESC,a.user_id`,
+    [t.id,req.tenant.id])).rows;
+  res.json({alerts});
+}));
 router.post("/threads/:id/claim",wrap(async(req:any,res:any)=>{
   await withHelpThread(req.tenant.id,z.string().uuid().parse(req.params.id),async(client,t)=>{
     const currentHelp=await helpSettings(req.tenant.id);

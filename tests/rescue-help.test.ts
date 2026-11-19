@@ -120,6 +120,12 @@ test("help inbox isolates tenants, pauses bot on handoff, dedupes inbound and ve
     assert.match(sent[0][2],new RegExp(`thread=${thread.id}`));
     assert.doesNotMatch(sent[0][2],/12025550123|Approved adoption answer/);
     assert.deepEqual(sent[0][4],{publicHelpNumber:true},"quiet hours and suppression are not bypassed");
+    assert.equal((await call(`/threads/${thread.id}/alerts`)).status,403);
+    assert.equal((await call(`/threads/${thread.id}/alerts`,"GET",undefined,{"test-other":"1","test-admin":"1"})).status,404);
+    const alertView=await call(`/threads/${thread.id}/alerts`,"GET",undefined,{"test-admin":"1"}).then(r=>r.json());
+    assert.equal(alertView.alerts.length,2);
+    assert.equal(alertView.alerts[0].status,"accepted");
+    assert.deepEqual(Object.keys(alertView.alerts[0]).sort(),["userId","recipientName","status","reason","eventAt","dueAt","attemptedAt"].sort());
     await helpInbound(tid,phone,"SM"+randomUUID().replaceAll("-",""),"another message");
     assert.equal((await pool.query("SELECT bool_and(due_at>now()+interval '4 minutes') AS grouped FROM rescue_help_alerts WHERE thread_id=$1",[thread.id])).rows[0].grouped,true);
 
@@ -147,14 +153,34 @@ test("help inbox isolates tenants, pauses bot on handoff, dedupes inbound and ve
     sent.length=0;
     await processHelpAlerts(scopedDb,(async()=>({status:"failed",error:"SMS blocked: quiet hours"})) as any,()=> "https://example.test");
     assert.equal((await pool.query("SELECT bool_and(status='pending' AND due_at>now()) AS deferred FROM rescue_help_alerts WHERE thread_id=$1",[thread.id])).rows[0].deferred,true);
+    assert.equal((await pool.query("SELECT bool_and(reason='quiet_hours') AS explained FROM rescue_help_alerts WHERE thread_id=$1",[thread.id])).rows[0].explained,true);
     await pool.query("UPDATE rescue_help_alerts SET due_at=now()-interval '1 minute' WHERE thread_id=$1",[thread.id]);
     await pool.query("UPDATE users SET sms_opt_out_at=now() WHERE id=$1",[second]);
     await processHelpAlerts(scopedDb,(async()=>{sent.push(true);return {uncertain:true,error:"timeout"};}) as any,()=> "https://example.test");
     assert.equal(sent.length,1,"opted-out volunteer is not contacted");
     assert.equal((await pool.query("SELECT status FROM rescue_help_alerts WHERE thread_id=$1 AND user_id=$2",[thread.id,uid])).rows[0].status,"unknown");
+    await helpInbound(tid,phone,"SM"+randomUUID().replaceAll("-",""),"another message after uncertainty");
+    assert.equal((await pool.query("SELECT status FROM rescue_help_alerts WHERE thread_id=$1 AND user_id=$2",[thread.id,uid])).rows[0].status,"unknown","new arrivals must not retry uncertain attempts");
     sent.length=0;
     await processHelpAlerts(scopedDb,fakeSend,()=> "https://example.test");
     assert.equal(sent.length,0,"uncertain sends are not retried");
+    const alertState=async(userId:string)=>(await pool.query("SELECT status,reason FROM rescue_help_alerts WHERE thread_id=$1 AND user_id=$2",[thread.id,userId])).rows[0];
+    const ready=()=>pool.query("UPDATE rescue_help_alerts SET status='pending',due_at=now()-interval '1 minute' WHERE thread_id=$1",[thread.id]);
+    await ready();
+    await pool.query("UPDATE users SET phone=NULL WHERE id=$1",[uid]);
+    await processHelpAlerts(scopedDb,fakeSend,()=> "https://example.test");
+    assert.deepEqual(await alertState(uid),{status:"skipped",reason:"missing_number"});
+    assert.deepEqual(await alertState(second),{status:"skipped",reason:"opt_out"});
+    await pool.query("UPDATE users SET phone='+12025550100' WHERE id=$1",[uid]);
+    await ready();
+    await processHelpAlerts(scopedDb,(async()=>({status:"failed",error:"provider rejected"})) as any,()=> "https://example.test");
+    assert.deepEqual(await alertState(uid),{status:"failed",reason:null});
+    await ready();
+    await processHelpAlerts(scopedDb,(async()=>({status:"failed",error:"Recipient has opted out of SMS for this organization"})) as any,()=> "https://example.test");
+    assert.deepEqual(await alertState(uid),{status:"skipped",reason:"opt_out"});
+    await pool.query("UPDATE rescue_help_alerts SET status='sending' WHERE thread_id=$1 AND user_id=$2",[thread.id,uid]);
+    await helpInbound(tid,phone,"SM"+randomUUID().replaceAll("-",""),"message during interrupted attempt");
+    assert.equal((await alertState(uid)).status,"sending");
 
     // Answer-first is opt-in; old editors preserve the new setting.
     const answerFirst={...multi,topics:[{...multi.topics[0],notificationMode:"answer_first"}]};
