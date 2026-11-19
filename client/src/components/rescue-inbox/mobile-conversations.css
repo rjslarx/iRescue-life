@@ -1,6 +1,14 @@
 .ri-conversation-panel { min-width: 0; scroll-margin-top: 80px; }
 .ri-mobile-back { display: none; }
 @media (max-width: 767px) {
+  /* Mobile shows one panel at a time. Let the page scroll the entire list,
+     rather than clipping it inside the old 310px list / 570px workspace. */
+  .ri-workspace { min-height: 0; }
+  .ri-workspace > .ri-list {
+    max-height: none;
+    overflow: visible;
+    border-bottom: 0;
+  }
   .ri-show-conversation > .ri-list,
   .ri-show-list > .ri-conversation-panel { display: none; }
   .ri-mobile-back { display: inline-flex; margin: 12px 16px; }
