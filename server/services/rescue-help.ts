@@ -1,13 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { pool } from "../db";
-import { defaultHelpSettings, helpIsOpen, helpMatch, type HelpSettings } from "@shared/rescue-help";
+import { helpIsOpen, helpMatch } from "@shared/rescue-help";
+import { effectiveHelpSettings } from "./rescue-help-settings";
 import { isSmsPhoneSuppressed, smsPhoneKey } from "../lib/sms-suppression";
 import { fosterTopic } from "@shared/foster-welcome";
 import { queueHelpAlerts } from "./rescue-help-alerts";
 
 export async function helpSettings(tenantId: string) {
   const row = (await pool.query("SELECT * FROM rescue_help_settings WHERE tenant_id=$1", [tenantId])).rows[0];
-  return { enabled: row?.enabled === true, number: row?.phone || "", settings: { ...defaultHelpSettings, ...row?.data } as HelpSettings };
+  return { enabled: row?.enabled === true, number: row?.phone || "", settings: effectiveHelpSettings(tenantId, row?.data) };
 }
 export async function helpCanSend(tenantId: string, phone: string) {
   const t = (await pool.query("SELECT comms_paused FROM tenants WHERE id=$1", [tenantId])).rows[0];
@@ -36,6 +37,10 @@ export async function helpInbound(tenantId: string, from: string, sid: string, b
     const paused = before > 0 && ["waiting", "human"].includes(thread.status);
     let reply = "", status = thread.status === "resolved" ? "bot" : thread.status;
     let assignee = thread.assignee_id, topic = thread.topic;
+    if (s.generalAssigneeId !== undefined && thread.status === "resolved") {
+      assignee = null;
+      topic = null;
+    }
     if (thread.foster_welcome && !recordingSid && matched.kind !== "emergency") {
       const foster = fosterTopic(s);
       topic = foster?.label || "Foster";

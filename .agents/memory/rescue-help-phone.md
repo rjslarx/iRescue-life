@@ -37,3 +37,9 @@ Notification reduction should use category controls and human follow-up escalati
 **Why:** The user approved the simpler improvement without introducing AI or transcription costs. Existing categories should keep their notification behavior unless a rescue changes it.
 
 **How to apply:** Keep approved answers and all messages visible. Never suppress foster welcome screenshots or human-help requests merely because a category uses answer-first notifications.
+
+Haseya's alerts must stay within the assigned category, with general and uncategorized messages routed to a designated fallback recipient rather than broadcast to all volunteers.
+
+**Why:** The user requested category-specific texts to avoid unrelated notifications.
+
+**How to apply:** Preserve explicit fallback configuration and do not broaden recipients when its recipient lacks a phone or opts out. Inbox visibility is separate from SMS routing.

@@ -1,6 +1,7 @@
 import type { PoolClient } from "pg";
 import { pool } from "../db";
-import { defaultHelpSettings, helpRecipients, type HelpSettings } from "@shared/rescue-help";
+import { helpRecipients, type HelpSettings } from "@shared/rescue-help";
+import { effectiveHelpSettings } from "./rescue-help-settings";
 import { sendSms } from "../lib/twilio-service";
 import { fosterPhone } from "@shared/foster-welcome";
 import { getAppBaseUrl } from "../lib/app-base-url";
@@ -43,7 +44,7 @@ export async function processHelpAlerts(db: Pick<typeof pool,"query"|"connect">,
         if (!thread || !alert) { await client.query("COMMIT"); continue; }
         const config = (await client.query(`SELECT h.enabled,h.data,t.name,t.subdomain,t.custom_domain,t.comms_paused
           FROM rescue_help_settings h JOIN tenants t ON t.id=h.tenant_id WHERE h.tenant_id=$1`,[thread.tenant_id])).rows[0];
-        const settings = { ...defaultHelpSettings, ...config?.data } as HelpSettings;
+        const settings = effectiveHelpSettings(thread.tenant_id, config?.data);
         const user = (await client.query(`SELECT phone,sms_opt_out_at FROM users
           WHERE id=$1 AND tenant_id=$2 AND is_active=true`,[job.user_id,thread.tenant_id])).rows[0];
         const phone = fosterPhone(user?.phone);

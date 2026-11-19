@@ -226,6 +226,40 @@ test("help inbox isolates tenants, pauses bot on handoff, dedupes inbound and ve
     assert.equal((await call("/settings","PUT",{...weeklySettings,weeklyHours:[null]},{"test-admin":"1"})).status,400);
     assert.equal((await call("/settings","PUT",{...weeklySettings,weeklyHours:Array(7).fill(null)},{"test-admin":"1"})).status,200);
 
+    const strictSettings={...weeklySettings,generalAssigneeId:uid,
+      topics:[{...weeklySettings.topics[0],assigneeId:second,assigneeIds:[second],notificationMode:"always"}]};
+    await pool.query("UPDATE rescue_help_alerts SET status='skipped' WHERE tenant_id=$1",[tid]);
+    await pool.query("UPDATE users SET sms_opt_out_at=NULL WHERE id=$1",[second]);
+    assert.equal((await call("/settings","PUT",strictSettings,{"test-admin":"1"})).status,200);
+    assert.equal((await call("/settings","PUT",{...strictSettings,generalAssigneeId:cid},{"test-admin":"1"})).status,400);
+    const generalPhone="+12025550140";
+    await inbound(generalPhone,"general question");
+    const generalThread=await getThread(generalPhone);
+    assert.deepEqual((await pool.query("SELECT user_id FROM rescue_help_alerts WHERE thread_id=$1",[generalThread.id])).rows.map(r=>r.user_id),[uid]);
+    // Simulate an older queued broadcast; the worker must re-check current routing.
+    await pool.query("INSERT INTO rescue_help_alerts(thread_id,user_id,tenant_id,event_at,due_at,status) VALUES($1,$2,$3,now(),now(),'pending')",[generalThread.id,second,tid]);
+    await pool.query("UPDATE rescue_help_alerts SET due_at=now()-interval '1 minute' WHERE thread_id=$1",[generalThread.id]);
+    sent.length=0;
+    await processHelpAlerts(scopedDb,fakeSend,()=> "https://example.test");
+    assert.equal(sent.length,1,"only the dedicated general recipient gets the message");
+    assert.equal(sent[0][1],"+12025550100");
+    assert.equal((await pool.query("SELECT status FROM rescue_help_alerts WHERE thread_id=$1 AND user_id=$2",[generalThread.id,second])).rows[0].status,"skipped");
+    const categoryPhone="+12025550141";
+    await inbound(categoryPhone,"adopt");
+    const categoryThread=await getThread(categoryPhone);
+    assert.deepEqual((await pool.query("SELECT user_id FROM rescue_help_alerts WHERE thread_id=$1",[categoryThread.id])).rows.map(r=>r.user_id),[second]);
+    await pool.query("UPDATE rescue_help_threads SET status='resolved',assignee_id=$2 WHERE id=$1",[categoryThread.id,second]);
+    await inbound(categoryPhone,"unrelated new question");
+    assert.equal((await getThread(categoryPhone)).topic,null,"resolved topics do not capture new general inquiries");
+    assert.equal((await getThread(categoryPhone)).assignee_id,null);
+    await pool.query("UPDATE rescue_help_alerts SET due_at=now()-interval '1 minute' WHERE thread_id=$1",[categoryThread.id]);
+    await pool.query("UPDATE users SET phone=NULL WHERE id=$1",[uid]);
+    sent.length=0;
+    await processHelpAlerts(scopedDb,fakeSend,()=> "https://example.test");
+    assert.equal(sent.length,0,"missing fallback phone must not broadcast to category volunteers");
+    const {generalAssigneeId:omitted,...oldEditor}=strictSettings;
+    assert.equal((await call("/settings","PUT",oldEditor,{"test-admin":"1"})).status,200);
+    assert.equal((await call("/settings").then(r=>r.json())).settings.generalAssigneeId,uid,"older editors preserve fallback");
     assert.equal((await call("/disable","POST",{},{"test-admin":"1"})).status,200);
     assert.equal(await helpInbound(tid,phone,"SM"+randomUUID().replaceAll("-",""),"adopt"),"");
   }finally{

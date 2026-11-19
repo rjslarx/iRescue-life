@@ -46,7 +46,15 @@ export function RescueInboxSettings({ api, initial }: { api: RescueInboxApi; ini
       <fieldset disabled={busy}>
         <section className="ri-panel"><h2>Volunteer text alerts</h2>
           <label className="flex gap-2 items-start"><input type="checkbox" checked={draft.smsAlerts !== false} onChange={e=>patch({smsAlerts:e.target.checked})} />Text volunteers when messages need attention</label>
-          <p className="ri-muted mt-3">Unclaimed conversations alert the category team. Once claimed, only the owner is alerted. Categories without a selected team and general questions alert the shared inbox team. Messages are grouped, with at most one alert per conversation per volunteer every five minutes. A saved mobile number is required. SMS opt-outs, communication pauses, and quiet hours apply. Normal Twilio fees apply.</p>
+          <p className="ri-muted mt-3">Unclaimed conversations alert the category team. With a dedicated general-message recipient, claims only receive texts when the owner belongs to that category; otherwise the category recipients are alerted. Messages are grouped, with at most one alert per conversation per volunteer every five minutes. A saved mobile number is required. SMS opt-outs, communication pauses, and quiet hours apply. Normal Twilio fees apply.</p>
+          <label className="ri-field mt-4"><span>General and uncategorized messages</span>
+            <select value={draft.generalAssigneeId === undefined ? "shared" : draft.generalAssigneeId || "none"} onChange={e => patch({generalAssigneeId:e.target.value === "none" ? null : e.target.value})}>
+              {draft.generalAssigneeId === undefined && <option value="shared">Shared inbox team (existing setting)</option>}
+              <option value="none">No fallback text alerts</option>
+              {initial.team.filter(m=>draft.teamIds.includes(m.id)).map(m=><option key={m.id} value={m.id}>{m.name}</option>)}
+            </select>
+            <small className="ri-muted">Also handles categories with no volunteers selected. Choosing a person prevents broadcast alerts to unrelated category volunteers. If that person has no mobile number or cannot receive texts, messages remain in the inbox; they are not broadcast to others.</small>
+          </label>
           <p className="ri-muted mt-3">Alerts contain a sign-in link, not private message details. Claim and reply in the dashboard; texting CLAIM is not supported.</p>
         </section>
         <section className="ri-panel">
@@ -79,7 +87,7 @@ export function RescueInboxSettings({ api, initial }: { api: RescueInboxApi; ini
               <fieldset className="ri-field"><legend>Category volunteers</legend><div className="ri-checks max-h-64 overflow-y-auto overscroll-contain touch-pan-y">{initial.team.filter(m=>draft.teamIds.includes(m.id)).map(m=><label key={m.id}><input type="checkbox" checked={topicTeam(topic).includes(m.id)} onChange={e=>{
                 const ids=e.target.checked ? [...topicTeam(topic),m.id] : topicTeam(topic).filter(id=>id!==m.id);
                 update({assigneeIds:ids,assigneeId:ids.length===1 ? ids[0] : null});
-              }} />{m.name}</label>)}</div><small className="ri-muted">No selection: alert the shared inbox team.</small></fieldset>
+              }} />{m.name}</label>)}</div><small className="ri-muted">No selection: use the general-message recipient setting above.</small></fieldset>
               <label className="ri-field"><span>Keywords (comma separated)</span><input required value={topic.keywords.join(",")} onChange={e => update({ keywords: e.target.value.split(",") })} /></label>
               <label className="ri-field"><span>Approved answer</span><textarea required value={topic.answer} onChange={e => update({ answer: e.target.value })} /></label>
             </div></div>;
