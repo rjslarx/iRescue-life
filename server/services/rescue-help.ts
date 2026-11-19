@@ -45,7 +45,19 @@ export async function helpInbound(tenantId: string, from: string, sid: string, b
     }
     else if (recordingSid) { status = assignee ? "human" : "waiting"; }
     else if (!paused || matched.kind === "emergency") {
-      if (matched.kind === "answer") {
+      // A bot-handled conversation gets one FAQ answer, not a loop of repeated
+      // answers. Resolving the conversation explicitly starts a fresh inquiry.
+      const followUp = before > 0 && thread.status === "bot";
+      if (matched.kind === "emergency") {
+        reply = s.emergency;
+        status = assignee ? "human" : "waiting";
+        if (!assignee) topic = null;
+      } else if (followUp || mediaCount > 0) {
+        reply = s.handoff;
+        status = assignee ? "human" : "waiting";
+        // Keep the original category for follow-ups, including bare TEAM replies.
+        if (!topic && matched.kind === "answer") topic = matched.topic.label;
+      } else if (matched.kind === "answer") {
         reply = matched.topic.answer;
         topic = matched.topic.label;
         // A category's team receives alerts; only a human claim owns the conversation.
@@ -60,6 +72,8 @@ export async function helpInbound(tenantId: string, from: string, sid: string, b
     const count = (await client.query(`SELECT count(*)::int n FROM rescue_help_messages
       WHERE thread_id=$1 AND kind='outbound' AND created_at>now()-interval '1 hour'`, [thread.id])).rows[0].n;
     if (!canSend || count >= 6) reply = "";
+    // Never silently treat an inquiry as answered when sending was blocked.
+    if (!reply && status === "bot") status = assignee ? "human" : "waiting";
     if (reply) {
       reply += "\nReply TEAM for a person. STOP to unsubscribe.";
       await client.query(`INSERT INTO rescue_help_messages(id,thread_id,kind,body,status) VALUES($1,$2,'outbound',$3,'auto_response')`,

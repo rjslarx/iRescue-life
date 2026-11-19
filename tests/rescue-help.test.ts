@@ -19,6 +19,7 @@ test("approved FAQ matching never guesses between categories; hours use tenant t
   assert.equal(helpMatch(settings,"I want to adopt!").kind,"answer");
   assert.equal(helpMatch(settings,"adopted").kind,"handoff");
   assert.equal(helpMatch(settings,"TEAM").kind,"handoff");
+  assert.equal(helpMatch(settings,"Can I speak to a volunteer about how to adopt?").kind,"handoff");
   assert.equal(helpMatch(settings,"animal not breathing").kind,"emergency");
   assert.equal(helpMatch({...settings,topics:[...settings.topics,{...settings.topics[0],id:randomUUID()}]},"adopt").kind,"handoff");
   assert.equal(helpIsOpen(settings,new Date("2026-11-16T16:00:00Z")),true);
@@ -39,6 +40,13 @@ test("category teams preserve legacy owners and only notify the current claimant
   assert.equal(canClaimHelp(s,{topic:"Foster",status:"waiting"},c,false),false);
   assert.equal(canClaimHelp(s,{topic:"Foster",status:"waiting"},c,true),true);
   assert.deepEqual(helpRecipients(s,{topic:"General",status:"waiting"}),[a,b,c]);
+  const quiet={...s,topics:[{...s.topics[0],notificationMode:"answer_first" as const}]};
+  assert.equal(helpSettingsSchema.safeParse(quiet).success,true);
+  assert.equal(helpSettingsSchema.safeParse({...s,topics:[{...s.topics[0],notificationMode:"invalid"}]}).success,false);
+  assert.deepEqual(helpRecipients(quiet,{topic:"Foster",status:"bot"}),[]);
+  assert.deepEqual(helpRecipients(quiet,{topic:"Foster",status:"waiting"}),[a,b]);
+  assert.deepEqual(helpRecipients(quiet,{topic:"Foster",status:"bot",assignee_id:b}),[b]);
+  assert.equal(canClaimHelp(quiet,{topic:"Foster",status:"bot"},a,false),true);
 });
 
 test("help inbox isolates tenants, pauses bot on handoff, dedupes inbound and verifies signatures", {skip:process.env.RUN_RESALE_DB_TEST!=="1"},async()=>{
@@ -147,6 +155,67 @@ test("help inbox isolates tenants, pauses bot on handoff, dedupes inbound and ve
     sent.length=0;
     await processHelpAlerts(scopedDb,fakeSend,()=> "https://example.test");
     assert.equal(sent.length,0,"uncertain sends are not retried");
+
+    // Answer-first is opt-in; old editors preserve the new setting.
+    const answerFirst={...multi,topics:[{...multi.topics[0],notificationMode:"answer_first"}]};
+    assert.equal((await call("/settings","PUT",answerFirst,{"test-admin":"1"})).status,200);
+    assert.equal((await call("/settings","PUT",multi,{"test-admin":"1"})).status,200);
+    assert.equal((await call("/settings").then(r=>r.json())).settings.topics[0].notificationMode,"answer_first");
+    const inbound=(number:string,text:string,media=0)=>helpInbound(tid,number,"SM"+randomUUID().replaceAll("-",""),text,undefined,media);
+    const getThread=async(number:string)=>(await pool.query("SELECT * FROM rescue_help_threads WHERE tenant_id=$1 AND phone=$2",[tid,number])).rows[0];
+    const alertCount=async(id:string)=>(await pool.query("SELECT count(*)::int n FROM rescue_help_alerts WHERE thread_id=$1",[id])).rows[0].n;
+    const quietPhone="+12025550130";
+    assert.match(await inbound(quietPhone,"adopt"),/Approved adoption answer/);
+    const quietThread=await getThread(quietPhone);
+    assert.equal(quietThread.status,"bot");
+    assert.equal(await alertCount(quietThread.id),0,"first FAQ reply is saved but does not alert");
+    assert.equal((await pool.query("SELECT count(*)::int n FROM rescue_help_messages WHERE thread_id=$1",[quietThread.id])).rows[0].n,2);
+    assert.match(await inbound(quietPhone,"adopt another pet?"),/inbox/,"keyword follow-up escalates instead of repeating FAQ");
+    assert.equal((await getThread(quietPhone)).topic,"Adoption");
+    assert.equal((await getThread(quietPhone)).status,"waiting");
+    assert.equal(await alertCount(quietThread.id),2);
+    assert.equal(await inbound(quietPhone,"adopt"),"","further replies remain with volunteers");
+    await pool.query("UPDATE rescue_help_threads SET status='resolved' WHERE id=$1",[quietThread.id]);
+    await pool.query("DELETE FROM rescue_help_alerts WHERE thread_id=$1",[quietThread.id]);
+    assert.match(await inbound(quietPhone,"adopt"),/Approved/,"resolved conversation can receive a fresh FAQ answer");
+    assert.equal(await alertCount(quietThread.id),0);
+    assert.match(await inbound(quietPhone,"TEAM"),/inbox/);
+    assert.equal(await alertCount(quietThread.id),2,"TEAM escalates the existing category");
+
+    const mediaPhone="+12025550131";
+    assert.match(await inbound(mediaPhone,"adopt",1),/inbox/);
+    assert.equal(await alertCount((await getThread(mediaPhone)).id),2,"attachments bypass answer-first");
+    const fosterPhone="+12025550132";
+    await inbound(fosterPhone,"adopt");
+    const fosterThread=await getThread(fosterPhone);
+    await pool.query("UPDATE rescue_help_threads SET foster_welcome=true WHERE id=$1",[fosterThread.id]);
+    assert.equal(await inbound(fosterPhone,"",1),"");
+    assert.equal((await getThread(fosterPhone)).topic,"Foster");
+    assert.equal(await alertCount(fosterThread.id),2,"welcome screenshot still alerts shared team when Foster is not configured");
+
+    const voicemailPhone="+12025550133";
+    await inbound(voicemailPhone,"adopt");
+    const voicemailThread=await getThread(voicemailPhone);
+    const recording="RE"+randomUUID().replaceAll("-","");
+    await helpInbound(tid,voicemailPhone,recording,"Voicemail",recording);
+    assert.equal(await alertCount(voicemailThread.id),2,"voicemail bypasses answer-first");
+    const blockedPhone="+12025550134";
+    await pool.query("UPDATE tenants SET comms_paused=true WHERE id=$1",[tid]);
+    assert.equal(await inbound(blockedPhone,"adopt"),"");
+    assert.equal((await getThread(blockedPhone)).status,"waiting","blocked FAQ must not be considered answered");
+    assert.equal(await alertCount((await getThread(blockedPhone)).id),2);
+    await pool.query("UPDATE tenants SET comms_paused=false WHERE id=$1",[tid]);
+    const urgentPhone="+12025550135";
+    await inbound(urgentPhone,"adopt");
+    assert.match(await inbound(urgentPhone,"animal not breathing"),/emergency/);
+    assert.equal((await getThread(urgentPhone)).topic,null);
+    assert.equal(await alertCount((await getThread(urgentPhone)).id),2);
+    const unknownPhone="+12025550136";
+    assert.match(await inbound(unknownPhone,"something else"),/inbox/);
+    assert.equal(await alertCount((await getThread(unknownPhone)).id),2,"unknown inquiry alerts shared team");
+    assert.equal((await call("/settings","PUT",{...answerFirst,topics:[{...answerFirst.topics[0],notificationMode:"always"}]},{"test-admin":"1"})).status,200);
+    assert.match(await inbound("+12025550137","adopt"),/Approved/);
+    assert.equal(await alertCount((await getThread("+12025550137")).id),2,"always-notify can be restored");
 
     assert.equal((await call("/disable","POST",{},{"test-admin":"1"})).status,200);
     assert.equal(await helpInbound(tid,phone,"SM"+randomUUID().replaceAll("-",""),"adopt"),"");

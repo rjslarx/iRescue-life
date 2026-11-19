@@ -13,6 +13,7 @@ export const helpSettingsSchema = z.object({
     keywords: z.array(z.string().trim().min(2).max(60)).max(20),
     answer: z.string().trim().min(1).max(1000), assigneeId: z.string().uuid().nullable(),
     assigneeIds: z.array(z.string().uuid()).max(100).optional(),
+    notificationMode: z.enum(["always", "answer_first"]).optional(),
   }).strict()).max(30),
 }).strict().refine(s => s.openHour < s.closeHour, "Closing hour must be after opening hour")
   .refine(s => new Set(s.topics.map(t => t.id)).size === s.topics.length, "Topic IDs must be unique")
@@ -34,6 +35,7 @@ export function helpRecipients(s: HelpSettings, thread: { assignee_id?: string |
   if (thread.status === "resolved") return [];
   if (thread.assignee_id) return s.teamIds.includes(thread.assignee_id) ? [thread.assignee_id] : [];
   const category = s.topics.find(t => t.label === thread.topic);
+  if (thread.status === "bot" && category?.notificationMode === "answer_first") return [];
   const members = topicTeam(category);
   return (members.length ? members : s.teamIds).filter(id => s.teamIds.includes(id));
 }
@@ -55,7 +57,9 @@ export function helpMatch(s: HelpSettings, body: string) {
   const normalized = body.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
   const padded = ` ${normalized} `;
   if (/\b(emergency|bleeding|poison|poisoned|dying|not breathing)\b/.test(normalized)) return { kind: "emergency" as const };
-  if (/^(team|human|person|help me)$/.test(normalized)) return { kind: "handoff" as const };
+  if (/^(team|human|person|help me)$/.test(normalized) ||
+      /\b(talk|speak|connect)( to| with)? (a |an |the |your )?(human|person|volunteer|team|someone)\b/.test(normalized))
+    return { kind: "handoff" as const };
   const matches = s.topics.filter(t => t.keywords.some(k => {
     const key = k.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
     return key && padded.includes(` ${key} `);

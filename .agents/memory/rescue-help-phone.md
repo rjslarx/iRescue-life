@@ -31,3 +31,9 @@ Inbox categories may have multiple volunteers. Category membership is not conver
 **Why:** The user approved shared coverage with personal-phone text alerts, without duplicate replies. This extends the original no-forwarding scope only to privacy-safe alerts, not message contents or screenshots.
 
 **How to apply:** Alert the category team before a claim and only the owner afterward. Group rapid arrivals, preserve ownership on foster screenshot replies, and require dashboard claiming rather than interpreting personal-phone “CLAIM” texts.
+
+Notification reduction should use category controls and human follow-up escalation before adding AI or transcription.
+
+**Why:** The user approved the simpler improvement without introducing AI or transcription costs. Existing categories should keep their notification behavior unless a rescue changes it.
+
+**How to apply:** Keep approved answers and all messages visible. Never suppress foster welcome screenshots or human-help requests merely because a category uses answer-first notifications.

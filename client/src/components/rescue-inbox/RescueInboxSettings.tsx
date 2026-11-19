@@ -70,6 +70,10 @@ export function RescueInboxSettings({ api, initial }: { api: RescueInboxApi; ini
             const update = (value: Partial<typeof topic>) => patch({ topics: draft.topics.map(t => t.id === topic.id ? { ...t, ...value } : t) });
             return <div className="ri-topic" key={topic.id}><div className="ri-toolbar"><h3>Topic {index + 1}</h3><button type="button" className="ri-btn danger" aria-label={`Remove ${topic.label || `topic ${index + 1}`}`} onClick={() => { if (window.confirm("Remove this approved topic? Save to apply the change.")) patch({ topics: draft.topics.filter(t => t.id !== topic.id) }); }}><Trash2 size={15} />Remove</button></div><div className="ri-fields">
               <label className="ri-field"><span>Category name</span><input required value={topic.label} onChange={e => update({ label: e.target.value })} /></label>
+              <label className="ri-field"><span>Volunteer notifications</span><select value={topic.notificationMode || "always"} onChange={e => update({ notificationMode: e.target.value as "always" | "answer_first" })}>
+                <option value="always">Always notify volunteers</option>
+                <option value="answer_first">Answer simple questions first</option>
+              </select><small className="ri-muted">Answer first: a first keyword match gets the approved answer without a volunteer alert. Follow-ups, attachments, and requests for help go to volunteers. Matching uses keywords, not AI. All messages stay in the inbox; foster welcome replies and voicemails always need attention. Text alerts must be enabled above.</small></label>
               <fieldset className="ri-field"><legend>Category volunteers</legend><div className="ri-checks max-h-64 overflow-y-auto overscroll-contain touch-pan-y">{initial.team.filter(m=>draft.teamIds.includes(m.id)).map(m=><label key={m.id}><input type="checkbox" checked={topicTeam(topic).includes(m.id)} onChange={e=>{
                 const ids=e.target.checked ? [...topicTeam(topic),m.id] : topicTeam(topic).filter(id=>id!==m.id);
                 update({assigneeIds:ids,assigneeId:ids.length===1 ? ids[0] : null});

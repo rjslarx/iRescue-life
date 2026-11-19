@@ -52,6 +52,7 @@ router.put("/settings",wrap(async(req:any,res:any)=>{
   s.smsAlerts ??= req.help.settings.smsAlerts !== false;
   for (const topic of s.topics) {
     const previous=req.help.settings.topics.find((t:any)=>t.id===topic.id);
+    topic.notificationMode ??= previous?.notificationMode || "always";
     if(topic.assigneeIds===undefined && previous?.assigneeIds?.length>1)
       fail("Reload settings before changing category teams. This form predates multiple-volunteer assignments.",409);
     topic.assigneeIds=topicTeam(topic);
