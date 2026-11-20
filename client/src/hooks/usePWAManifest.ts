@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTenant } from '@/contexts/TenantContext';
+import { useLocation } from 'wouter';
 
 interface TenantInfo {
   id: string;
@@ -32,6 +33,8 @@ interface TenantInfo {
  * 4. Custom domains work automatically via hostname-based tenant resolution
  */
 export function usePWAManifest() {
+  const [location] = useLocation();
+  const phoneMode = /(?:^|\/)phone\/?$/.test(location);
   const { tenantId, basePath, isPathBasedTenant } = useTenant();
   
   // Determine if we're on a custom domain
@@ -79,6 +82,11 @@ export function usePWAManifest() {
         // Default platform manifest
         manifestLink.href = '/manifest.json';
       }
+      if (phoneMode) {
+        const url = new URL(manifestLink.href, window.location.origin);
+        url.searchParams.set("view", "phone");
+        manifestLink.href = url.href;
+      }
     }
 
     // Update Apple-specific meta tags for proper home screen branding
@@ -89,7 +97,7 @@ export function usePWAManifest() {
       
       if (appleTitleMeta) {
         // Apple recommends keeping this under 12 characters
-        appleTitleMeta.content = tenant.name.substring(0, 12);
+        appleTitleMeta.content = phoneMode ? "Rescue Phone" : tenant.name.substring(0, 12);
       }
 
       if (themeColorMeta && tenant.branding?.primaryColor) {
@@ -119,10 +127,10 @@ export function usePWAManifest() {
 
       // Only update document title on tenant pages
       if (tenantId && tenantId !== 'platform') {
-        document.title = `${tenant.name} - Animal Rescue Portal`;
+        document.title = `${tenant.name} - ${phoneMode ? "Rescue Phone" : "Animal Rescue Portal"}`;
       }
     }
-  }, [isPathBasedTenant, basePath, tenantData, tenantId, isCustomDomain]);
+  }, [isPathBasedTenant, basePath, tenantData, tenantId, isCustomDomain, phoneMode]);
 
   return null;
 }

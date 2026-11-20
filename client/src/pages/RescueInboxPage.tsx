@@ -10,6 +10,7 @@ import { RescueInboxImage } from "@/components/rescue-inbox/RescueInboxImage";
 import { RescueInboxAlerts } from "@/components/rescue-inbox/RescueInboxAlerts";
 import { RescueInboxCalls } from "@/components/rescue-inbox/RescueInboxCalls";
 import { RescueInboxOutreach } from "@/components/rescue-inbox/RescueInboxOutreach";
+import { RescuePhoneLayout } from "@/components/rescue-inbox/RescuePhoneLayout";
 import LoginForm from "@/components/LoginForm";
 import { canClaimHelp } from "@shared/rescue-help";
 import { RescueHelpError, rescueHelpError, useRescueInbox, type RescueInboxApi, type RescueMessage, type RescueThread } from "@/hooks/use-rescue-inbox";
@@ -116,7 +117,7 @@ function Conversation({ api, enabled, outreach }: { api: RescueInboxApi; enabled
     </form>
   </div>;
 }
-function InboxWorkspace() {
+function InboxWorkspace({phoneMode=false}:{phoneMode?:boolean}) {
   const search=useSearch();
   const linkedThread=new URLSearchParams(search).get("thread");
   const validThread=linkedThread && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(linkedThread) ? linkedThread : null;
@@ -145,10 +146,11 @@ function InboxWorkspace() {
   const waiting = threads.filter(t => t.status === "waiting").length;
   const settings = api.settings.data;
   const admin = api.access.data?.admin === true;
-  return <DashboardLayout title="Rescue Inbox" description="Approved answers, with your team close by."><div className="rescue-inbox">
+  const Layout=phoneMode?RescuePhoneLayout:DashboardLayout;
+  return <Layout title="Rescue Inbox" description="Approved answers, with your team close by."><div className="rescue-inbox">
     {blocked ? <ErrorState error={blocked} retry={() => { void api.access.refetch(); void api.settings.refetch(); void api.threads.refetch(); if (selected) void api.detail.refetch(); }} /> : api.access.isPending ? <Loading /> : !permitted ? <ErrorState error={new RescueHelpError(403, "Team access required")} retry={() => void api.access.refetch()} /> : <>
-      <section className="ri-banner"><div className="ri-toolbar"><h2>One inbox. No one carries it alone.</h2><span className="ri-badge">{settings?.enabled ? "Service enabled" : settings ? "Service disabled" : "Checking service"}</span></div><p className="ri-muted">{settings ? settings.enabled ? `${settings.number || "Dedicated number"} · Shared SMS and voicemail for the rescue team.` : "Setup mode: approved answers can be prepared now. The bot and outgoing sending remain off until an administrator activates a separate, approved number." : "Loading the rescue’s service configuration."}</p>{waiting > 0 && <p><span className="ri-badge waiting">{waiting} {waiting === 1 ? "conversation needs" : "conversations need"} a person</span></p>}</section>
-      <div className="ri-tabs"><button className="ri-btn" aria-pressed={tab === "inbox"} onClick={() => setTab("inbox")}><Inbox size={16} />Shared inbox</button>{admin && <button className="ri-btn" aria-pressed={tab === "settings"} onClick={() => setTab("settings")}>Answers & setup</button>}</div>
+      <section className="ri-banner"><div className="ri-toolbar"><h2>{phoneMode?"Your rescue’s shared line":"One inbox. No one carries it alone."}</h2><span className="ri-badge">{settings?.enabled ? "Service enabled" : settings ? "Service disabled" : "Checking service"}</span></div><p className="ri-muted">{settings ? settings.enabled ? `${settings.number || "Dedicated number"} · Shared SMS and voicemail for the rescue team.` : "Setup mode: approved answers can be prepared now. The bot and outgoing sending remain off until an administrator activates a separate, approved number." : "Loading the rescue’s service configuration."}</p>{waiting > 0 && <p><span className="ri-badge waiting">{waiting} {waiting === 1 ? "conversation needs" : "conversations need"} a person</span></p>}</section>
+      {!phoneMode && <div className="ri-tabs"><button className="ri-btn" aria-pressed={tab === "inbox"} onClick={() => setTab("inbox")}><Inbox size={16} />Shared inbox</button>{admin && <button className="ri-btn" aria-pressed={tab === "settings"} onClick={() => setTab("settings")}>Answers & setup</button>}<Link className="ri-btn" href="/phone">Open Rescue Phone</Link></div>}
       {tab === "settings" && admin ? api.settings.isError ? <ErrorState error={api.settings.error} retry={() => void api.settings.refetch()} /> : settings ? <RescueInboxSettings key={api.scope} api={api} initial={settings} /> : <Loading /> : <>
         <RescueInboxOutreach api={api} onOpen={(id,mode)=>{setSelected(id);setMobileConversation(true);setFilter("all");setOutreach(previous=>({id,mode,sequence:(previous?.sequence||0)+1}));}}/>
         {api.settings.isError && <div className="ri-error" role="alert">Service status unavailable. SMS sending is disabled until it can be checked. <button className="ri-btn" onClick={() => void api.settings.refetch()}>Retry</button></div>}
@@ -162,13 +164,15 @@ function InboxWorkspace() {
         </div>}
       </>}
     </>}
-  </div></DashboardLayout>;
+  </div></Layout>;
 }
-export default function RescueInboxPage() {
+function RescueInboxEntry({phoneMode=false}:{phoneMode?:boolean}) {
   const { user, isLoading } = useAuth();
   const { tenantId, basePath } = useTenant();
   if (isLoading) return <div className="rescue-inbox p-6"><Loading /></div>;
-  if (!user) return <LoginForm stayOnPage rescueName="your rescue’s shared inbox" />;
+  if (!user) return phoneMode ? <RescuePhoneLayout><LoginForm stayOnPage rescueName="Rescue Phone" /></RescuePhoneLayout> : <LoginForm stayOnPage rescueName="your rescue’s shared inbox" />;
   if (!tenantId) return <div className="rescue-inbox"><div className="ri-empty"><h2>Open your rescue workspace</h2><p className="ri-muted">A rescue must be selected before opening its shared inbox.</p><Link className="ri-btn" href="/dashboard">Return to dashboard</Link></div></div>;
-  return <InboxWorkspace key={`${tenantId}:${basePath}:${user.id}:${user.activeRole}`} />;
+  return <InboxWorkspace phoneMode={phoneMode} key={`${tenantId}:${basePath}:${user.id}:${user.activeRole}`} />;
 }
+export default function RescueInboxPage() { return <RescueInboxEntry />; }
+export function RescuePhonePage() { return <RescueInboxEntry phoneMode />; }

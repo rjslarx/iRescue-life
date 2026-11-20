@@ -136,7 +136,7 @@ import RescueResalePage from "@/pages/RescueResalePage";
 import RescueResaleAdminPage from "@/pages/RescueResaleAdminPage";
 import CommunityResalePage, { CommunityCreatePage, CommunityManagePage, CommunityItemPage, CommunityOrderPage } from "@/pages/CommunityResalePage";
 import CommunityResaleAdminPage, { PlatformCommunityResalePage } from "@/pages/CommunityResaleAdminPage";
-import RescueInboxPage from "@/pages/RescueInboxPage";
+import RescueInboxPage, { RescuePhonePage } from "@/pages/RescueInboxPage";
 import EventTicketCheckoutPage from "@/pages/EventTicketCheckoutPage";
 import EventSuccessPage from "@/pages/EventSuccessPage";
 import GivePage from "@/pages/GivePage";
@@ -336,6 +336,7 @@ function RouterSwitch() {
       <Route path="/dashboard/games" component={TeamGamesPage} />
       {/* Explicit rescue-help team membership is enforced by the API. */}
       <Route path="/dashboard/rescue-inbox" component={RescueInboxPage} />
+      <Route path="/phone" component={RescuePhonePage} />
       <ProtectedRoute path="/dashboard" pageId="dashboard" component={Dashboard} />
       <ProtectedRoute path="/dashboard/animals" pageId="animals" component={AnimalsPage} />
       <ProtectedRoute path="/dashboard/profile-contributions" pageId="profile-contributions" component={ProfileContributionsPage} />

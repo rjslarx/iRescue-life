@@ -533,6 +533,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`[MANIFEST] No tenant context - using platform defaults`);
       }
 
+      if (tenant && req.query.view === "phone") {
+        const phonePath = `${basePath.replace(/\/$/, "")}/phone`;
+        manifest = { ...manifest, name: `${tenant.name} - Rescue Phone`, short_name: "Rescue Phone",
+          description: "Your rescue’s shared texting and calling workspace",
+          start_url: phonePath, scope: `${basePath.replace(/\/$/, "")}/`, shortcuts: [] };
+        res.setHeader('Content-Type', 'application/manifest+json');
+        res.setHeader('Cache-Control', 'no-cache');
+        return res.json({ ...manifest, id: phonePath });
+      }
       res.setHeader('Content-Type', 'application/manifest+json');
       res.json(manifest);
     } catch (error) {

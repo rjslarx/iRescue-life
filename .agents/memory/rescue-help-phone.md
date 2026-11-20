@@ -61,3 +61,9 @@ Team members may initiate a new text or call, not just respond to inbound conver
 **Why:** The user approved both outreach buttons using the rescue number. Starting outreach must not steal another volunteer's existing conversation.
 
 **How to apply:** Reuse the tenant's conversation for a normalized phone number, retain existing ownership restrictions, and assign genuinely new conversations to the initiating team member. Preparing a conversation must not send a message or place a call before the separate send/confirmation step.
+
+The user chose a simple Rescue Phone page/home-screen shortcut over SMS command relaying or browser-based VoIP.
+
+**Why:** Reuse existing permissions and staff-first callbacks without adding personal-phone message forwarding, microphone permissions, or another calling system.
+
+**How to apply:** Keep sign-in required, preserve the regular rescue portal shortcut, and do not promise offline messaging or background browser ringing.

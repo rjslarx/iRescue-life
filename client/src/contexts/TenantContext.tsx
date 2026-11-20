@@ -24,7 +24,7 @@ const RESERVED_PATHS = [
   'checkout', 'order', 'dashboard', 'settings', 'profile',
   'applications', 'contacts', 'finances', 'kennels', 'calendar',
   'reports', 'help', 'docs', 'assets', 'static', 'public',
-  'manifest.json', 'sw.js', 'favicon.ico', 'give', 'page', 'f',
+  'manifest.json', 'sw.js', 'favicon.ico', 'give', 'page', 'f', 'phone',
   'medical-fund', 'contract', 'collaboration', 'reset-password', 'fundraise',
   'forgot-password', 'verify-email', 'unsubscribe', 'volunteer-waiver', 'volunteer-training', 'contest',
   'vip-club', 'wall-of-heroes', 'surgery-day-request', 'matchmaker',
