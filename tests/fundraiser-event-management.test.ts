@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { transformSync } from "esbuild";
+import { randomUUID } from "node:crypto";
 
 const ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const FOREIGN = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
@@ -13,10 +14,6 @@ type Predicate = (row: Row) => boolean;
 
 // Execute the actual route registration, replacing only its schema/DB boundaries.
 function harness(method: Method) {
-  const start = routes.indexOf(`  app.${method}('/api/fundraiser-events/:id'`);
-  assert.ok(start >= 0);
-  const source = routes.slice(start, routes.indexOf("\n  });", start) + 6);
-  const compiled = transformSync(source.replace("await import('@shared/schema')", "schema"), { loader: "ts" }).code;
   const rows: Row[] = [
     { id: ID, tenantId: "own", title: "Original", isActive: true },
     { id: FOREIGN, tenantId: "other", title: "Foreign", isActive: true },
@@ -34,6 +31,20 @@ function harness(method: Method) {
       } }) };
     },
   };
+  const request = registerHandler(method, db, schema,
+    (key: string, value: unknown): Predicate => row =>
+      key === "id" ? row[key] === String(value).toLowerCase() : row[key] === value,
+    (...predicates: Predicate[]): Predicate => row => predicates.every(p => p(row)),
+  );
+  return { rows, accesses: () => accesses, request };
+}
+
+// Both suites execute the actual handler and verify its authorization guards.
+function registerHandler(method: Method, db: any, schema: any, eq: any, and: any) {
+  const start = routes.indexOf(`  app.${method}('/api/fundraiser-events/:id'`);
+  assert.ok(start >= 0);
+  const source = routes.slice(start, routes.indexOf("\n  });", start) + 6);
+  const compiled = transformSync(source.replace("await import('@shared/schema')", "schema"), { loader: "ts" }).code;
   let handler: any;
   const guards = [Symbol("tenant"), Symbol("auth"), Symbol("role")];
   const app = { [method]: (path: string, ...args: any[]) => {
@@ -45,25 +56,18 @@ function harness(method: Method) {
     app, guards[0], guards[1], (...args: string[]) => {
       assert.deepEqual(args, ["fundraiser-events", "admin", "owner"]);
       return guards[2];
-    }, db, schema,
-    (key: string, value: unknown): Predicate => row =>
-      key === "id" ? row[key] === String(value).toLowerCase() : row[key] === value,
-    (...predicates: Predicate[]): Predicate => row => predicates.every(p => p(row)),
+    }, db, schema, eq, and,
   );
-  return {
-    rows,
-    accesses: () => accesses,
-    async request(id: unknown, body: Row = { title: "Updated" }) {
+  return async (id: unknown, body: Row = { title: "Updated" }, tenantId = "own") => {
       let status = 200;
       let payload: unknown;
       const res = {
         status(code: number) { status = code; return res; },
         json(value: unknown) { payload = value; return res; },
       };
-      await handler({ params: { id }, body, tenant: { id: "own" } }, res,
+      await handler({ params: { id }, body, tenant: { id: tenantId } }, res,
         (error: unknown) => { throw error; });
       return { status, payload };
-    },
   };
 }
 
@@ -122,4 +126,87 @@ test("patch retains image display mode validation", async () => {
     status: 400, payload: { error: 'imageDisplayMode must be "hero" or "poster"' },
   });
   assert.equal(h.accesses(), 0);
+});
+
+// Development/test PostgreSQL only; never import server/db or commit fixtures.
+// RUN_FUNDRAISER_DB_TEST=1 npx tsx --test tests/fundraiser-event-management.test.ts
+test("PostgreSQL fundraiser edits and soft deletes stay tenant-scoped", {
+  skip: process.env.RUN_FUNDRAISER_DB_TEST !== "1",
+}, async () => {
+  assert.ok(process.env.DATABASE_URL, "DATABASE_URL is required when RUN_FUNDRAISER_DB_TEST=1");
+  assert.notEqual(process.env.REPLIT_DEPLOYMENT, "1", "Never run fixtures in a deployment");
+  const { default: pg } = await import("pg");
+  const { drizzle } = await import("drizzle-orm/node-postgres");
+  const { eq, and, inArray } = await import("drizzle-orm");
+  const schema = await import("../shared/schema");
+  const { tenants, fundraiserEvents } = schema;
+  const client = new pg.Client({
+    connectionString: process.env.DATABASE_URL,
+    connectionTimeoutMillis: 10000,
+    statement_timeout: 15000,
+  });
+  const tenantIds = [randomUUID(), randomUUID()];
+  // Guarantee a letter so uppercase inputs always exercise UUID case handling.
+  const eventIds = tenantIds.map(() => `a${randomUUID().slice(1)}`);
+  const unknownId = `c${randomUUID().slice(1)}`;
+  try {
+    await client.connect();
+    const db = drizzle(client);
+    const readEvents = () => db.select().from(fundraiserEvents)
+      .where(inArray(fundraiserEvents.id, eventIds)).orderBy(fundraiserEvents.id);
+    await client.query("BEGIN");
+    try {
+      await db.insert(tenants).values(tenantIds.map(id => ({
+        id, name: "Fundraiser management fixture", subdomain: `management-${id}`,
+      })));
+      await db.insert(fundraiserEvents).values(eventIds.map((id, index) => ({
+        id, tenantId: tenantIds[index], title: "Original", priceCents: 1000, isActive: true,
+      })));
+      const patch = registerHandler("patch", db, schema, eq, and);
+      const remove = registerHandler("delete", db, schema, eq, and);
+      for (const [index, tenantId] of tenantIds.entries()) {
+        const ownId = eventIds[index];
+        const foreignId = eventIds[1 - index];
+        for (const uppercase of [false, true]) {
+          const input = (id: string) => uppercase ? id.toUpperCase() : id;
+          const before = await readEvents();
+          for (const id of [foreignId, unknownId]) {
+            assert.deepEqual(await patch(input(id), { title: "Must not change" }, tenantId), {
+              status: 404, payload: { error: "Not found" },
+            });
+            assert.deepEqual(await remove(input(id), {}, tenantId), {
+              status: 200, payload: { success: true },
+            });
+            assert.deepEqual(await readEvents(), before, "Foreign and unknown IDs must not mutate either event");
+          }
+          const title = `Updated ${index} ${uppercase}`;
+          const response = await patch(input(ownId), {
+            title, isActive: true, id: foreignId, tenantId: tenantIds[1 - index],
+          }, tenantId);
+          assert.equal(response.status, 200);
+          const afterPatch = await readEvents();
+          const own = afterPatch.find(row => row.id === ownId)!;
+          assert.deepEqual(own, { ...before.find(row => row.id === ownId), title, isActive: true });
+          assert.deepEqual(response.payload, { event: own });
+          assert.deepEqual(afterPatch.find(row => row.id === foreignId), before.find(row => row.id === foreignId));
+
+          assert.deepEqual(await remove(input(ownId), {}, tenantId), {
+            status: 200, payload: { success: true },
+          });
+          const afterDelete = await readEvents();
+          assert.deepEqual(afterDelete, afterPatch.map(row =>
+            row.id === ownId ? { ...row, isActive: false } : row),
+          "Soft deletion must retain the row and change only its active flag");
+        }
+      }
+    } finally {
+      // Also rolls back failed fixture inserts and failed assertions.
+      await client.query("ROLLBACK");
+    }
+    assert.deepEqual(await readEvents(), [], "Event fixtures must not survive rollback");
+    assert.deepEqual(await db.select({ id: tenants.id }).from(tenants)
+      .where(inArray(tenants.id, tenantIds)), [], "Tenant fixtures must not survive rollback");
+  } finally {
+    await client.end();
+  }
 });
