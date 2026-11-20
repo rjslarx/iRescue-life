@@ -55,3 +55,4 @@
 - [Catalog response compatibility](catalog-response-compatibility.md) — strict older editors reject added response fields; preserve response shape and settings omitted by legacy clients.
 - [Damaged refund recovery](damaged-refund-recovery.md) — no manual matching or absence-based clearing; unverifiable original identity must remain blocked for support.
 - [Wild horse placement](wild-horse-placement.md) — Haseya’s-only screening; keep domesticated applications and historical answers unchanged.
+- [Feral cat surgery access](feral-cat-surgery.md) — Haseya’s accepts feral-cat surgery requests from unaffiliated individuals.

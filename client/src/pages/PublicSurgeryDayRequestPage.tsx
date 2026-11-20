@@ -69,15 +69,15 @@ const PRE_OP_INSTRUCTIONS = [
   "If your animal is sick, in heat, or has eaten that morning, please call to reschedule.",
 ];
 
-function buildAckText(rescueName: string) {
-  return `By submitting this Surgery Day Request to ${rescueName}, I acknowledge and agree on behalf of my rescue/organization that:
+function buildAckText(rescueName: string, feralCats = false) {
+  return `By submitting this Surgery Day Request to ${rescueName}, I acknowledge and agree ${feralCats ? "as the person responsible for these feral cats" : "on behalf of my rescue/organization"} that:
 1. The information provided for each animal is accurate to the best of my knowledge.
 2. I understand that surgery and anesthesia carry inherent risks, and I assume those risks for every animal listed on this request.
 3. ${rescueName} and its veterinarian, Dr. Stark, are not liable for outcomes related to undisclosed medical conditions, age, temperament, or pre-existing conditions.
 4. I have read the pre-operative instructions above and agree to follow them, including withholding food and water after 10:00 PM the night before surgery.
 5. I am authorized to submit this request and to provide consent for the procedures listed for each animal.
 6. I will transport each animal to and from the surgery location on the scheduled date during the posted drop-off and pick-up windows.
-7. I agree to follow all post-operative care instructions provided and to seek follow-up veterinary care for my own animals at my organization's expense if needed.`;
+7. I agree to follow all post-operative care instructions provided and to seek follow-up veterinary care for ${feralCats ? "these cats at my expense" : "my own animals at my organization's expense"} if needed.`;
 }
 
 function emptyAnimal() {
@@ -104,6 +104,7 @@ export default function PublicSurgeryDayRequestPage() {
   const [signatureError, setSignatureError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [partnerNotListed, setPartnerNotListed] = useState(false);
+  const [feralCats, setFeralCats] = useState(false);
 
   const { data: tenantData } = useQuery<{ tenant: Tenant }>({ queryKey: ["/api/tenant", tenantId] });
   const tenant = tenantData?.tenant;
@@ -185,6 +186,7 @@ export default function PublicSurgeryDayRequestPage() {
         throw new Error("Please sign your name");
       }
       const payload = {
+        feralCats,
         partnerOrganizationId: partnerNotListed ? null : values.partnerOrganizationId || null,
         organizationName: values.organizationName,
         contactName: values.contactName,
@@ -193,7 +195,7 @@ export default function PublicSurgeryDayRequestPage() {
         requestedDate: values.requestedDate,
         signatureDataUrl: signature,
         signedByName: values.signedByName,
-        acknowledgmentText: `Pre-operative instructions:\n- ${PRE_OP_INSTRUCTIONS.join("\n- ")}\n\n${buildAckText(rescueName)}`,
+        acknowledgmentText: `Pre-operative instructions:\n- ${PRE_OP_INSTRUCTIONS.join("\n- ")}\n\n${buildAckText(rescueName, feralCats)}`,
         animals: values.animals.map((a) => ({
           ...a,
           name: a.name || null,
@@ -311,11 +313,39 @@ export default function PublicSurgeryDayRequestPage() {
             {/* Partner Selection */}
             <Card>
               <CardHeader>
-                <CardTitle>Your Rescue / Organization</CardTitle>
+                <CardTitle>{feralCats ? "Feral cats — Your contact information" : "Your Rescue / Organization"}</CardTitle>
                 <CardDescription>Tell us who's submitting this request.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {!partnerNotListed && (
+                {tenant?.subdomain === "haseyas" && (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="feral-cats"
+                        checked={feralCats}
+                        data-testid="checkbox-feral-cats"
+                        onCheckedChange={(value) => {
+                          const next = value === true;
+                          setFeralCats(next);
+                          setPartnerNotListed(false);
+                          form.setValue("partnerOrganizationId", "");
+                          form.setValue("organizationName", next ? "Feral cats" : "");
+                          form.clearErrors(["organizationName", "partnerOrganizationId"]);
+                          if (next) {
+                            form.getValues("animals").forEach((_, index) => {
+                              form.setValue(`animals.${index}.species`, "cat");
+                            });
+                          }
+                          form.setValue("acknowledged", false as any);
+                          setSignature(null);
+                        }}
+                      />
+                      <Label htmlFor="feral-cats">Feral cats (no organization required)</Label>
+                    </div>
+                    {feralCats && <p className="text-sm text-muted-foreground">Enter your contact information and each cat below. No rescue affiliation is needed.</p>}
+                  </div>
+                )}
+                {!feralCats && !partnerNotListed && (
                   <FormField
                     control={form.control}
                     name="partnerOrganizationId"
@@ -344,7 +374,7 @@ export default function PublicSurgeryDayRequestPage() {
                     )}
                   />
                 )}
-                <div className="flex items-center gap-2">
+                {!feralCats && <div className="flex items-center gap-2">
                   <Checkbox
                     id="partner-not-listed"
                     checked={partnerNotListed}
@@ -359,9 +389,9 @@ export default function PublicSurgeryDayRequestPage() {
                     data-testid="checkbox-partner-not-listed"
                   />
                   <Label htmlFor="partner-not-listed" className="cursor-pointer">My rescue isn't listed</Label>
-                </div>
+                </div>}
 
-                {partnerNotListed && (
+                {!feralCats && partnerNotListed && (
                   <FormField
                     control={form.control}
                     name="organizationName"
@@ -413,7 +443,7 @@ export default function PublicSurgeryDayRequestPage() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => append(emptyAnimal())}
+                  onClick={() => append({ ...emptyAnimal(), species: feralCats ? "cat" : "dog" })}
                   data-testid="button-add-animal"
                 >
                   <Plus className="w-4 h-4 mr-1" /> Add animal
@@ -447,7 +477,7 @@ export default function PublicSurgeryDayRequestPage() {
                       <FormField control={form.control} name={`animals.${index}.species`} render={({ field }) => (
                         <FormItem>
                           <FormLabel>Species *</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
+                          <Select onValueChange={field.onChange} value={field.value} disabled={feralCats}>
                             <FormControl><SelectTrigger data-testid={`select-animal-species-${index}`}><SelectValue /></SelectTrigger></FormControl>
                             <SelectContent>
                               <SelectItem value="dog">Dog</SelectItem>
@@ -582,7 +612,7 @@ export default function PublicSurgeryDayRequestPage() {
                 <Alert>
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>
-                    <pre className="whitespace-pre-wrap font-sans text-sm" data-testid="text-acknowledgment">{buildAckText(rescueName)}</pre>
+                    <pre className="whitespace-pre-wrap font-sans text-sm" data-testid="text-acknowledgment">{buildAckText(rescueName, feralCats)}</pre>
                   </AlertDescription>
                 </Alert>
 
@@ -614,7 +644,7 @@ export default function PublicSurgeryDayRequestPage() {
                 <div>
                   <Label>Signature *</Label>
                   <div className="mt-2">
-                    <SignatureCanvas onSignatureChange={(s) => { setSignature(s); if (s) setSignatureError(null); }} />
+                    <SignatureCanvas key={String(feralCats)} onSignatureChange={(s) => { setSignature(s); if (s) setSignatureError(null); }} />
                   </div>
                   {signatureError && (
                     <p className="text-sm text-destructive mt-1" data-testid="text-signature-error">{signatureError}</p>

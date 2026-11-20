@@ -55711,7 +55711,8 @@ ${section('Metadata', metaRows)}
         acknowledgmentText: z.string().min(20, 'Acknowledgment is required'),
         animals: z.array(surgeryAnimalSchema).min(1, 'At least one animal is required').max(50),
       });
-      const data = submitSchema.parse(req.body);
+      const { normalizeSurgeryDayRequest } = await import('../shared/surgery-day-request-kind');
+      const data = submitSchema.parse(normalizeSurgeryDayRequest(req.body, req.tenant!.subdomain));
       const cleanEmail = data.contactEmail && data.contactEmail.length > 0 ? data.contactEmail : null;
 
       // XOR rule: if a partner is selected, the request is bound to that partner record
@@ -55781,7 +55782,7 @@ ${section('Metadata', metaRows)}
           applicantEmail: cleanEmail || '',
           applicantPhone: data.contactPhone,
           applicationId: created.id,
-          additionalDetails: `Surgery date (partner-supplied): ${data.requestedDate} | Organization: ${data.organizationName} | Animals (${data.animals.length}): ${animalSummary}`,
+          additionalDetails: `Surgery date (partner-supplied): ${data.requestedDate} | Organization / request type: ${resolvedOrganizationName} | Animals (${data.animals.length}): ${animalSummary}`,
         });
       } catch (notifyError) {
         console.error('Failed to send surgery day request notification:', notifyError);
