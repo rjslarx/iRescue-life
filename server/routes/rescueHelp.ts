@@ -7,7 +7,7 @@ import { pool } from "../db";
 import { requireAuth } from "../middleware/auth";
 import { getTwilioConfigForTenant, sendSms } from "../lib/twilio-service";
 import { smsOptOutCommand, recordVerifiedSmsOptOut } from "../lib/sms-suppression";
-import { helpSettingsSchema, helpIsOpen, helpVoiceOptions, topicTeam, canClaimHelp } from "@shared/rescue-help";
+import { helpSettingsSchema, helpIsOpen, helpVoiceOptions, topicTeam, generalTeam, canClaimHelp } from "@shared/rescue-help";
 import { helpSettings, helpInbound } from "../services/rescue-help";
 import { getAppBaseUrl } from "../lib/app-base-url";
 import { deleteHelpVoicemail } from "../services/rescue-help-voicemail";
@@ -54,10 +54,21 @@ router.get("/settings",wrap(async(req:any,res:any)=>{
 router.put("/settings",wrap(async(req:any,res:any)=>{
   if(!admin(req)) fail("Only rescue admins can edit settings",403);
   const s=helpSettingsSchema.parse(req.body);
+  if (s.generalAssigneeIds === undefined && (req.help.settings.generalAssigneeIds?.length || 0) > 1)
+    fail("Reload settings before saving. This form predates multiple general-message recipients.",409);
+  if (s.generalAssigneeIds === undefined && req.help.settings.generalAssigneeIds !== undefined) {
+    s.generalAssigneeIds = s.generalAssigneeId === undefined
+      ? req.help.settings.generalAssigneeIds
+      : s.generalAssigneeId ? [s.generalAssigneeId] : [];
+  }
   if (s.generalAssigneeId === undefined && req.help.settings.generalAssigneeId !== undefined)
     s.generalAssigneeId = req.help.settings.generalAssigneeId;
-  if (s.generalAssigneeId && !s.teamIds.includes(s.generalAssigneeId))
-    fail("Keep the general-message recipient on the inbox team or select another recipient.");
+  if (s.generalAssigneeIds !== undefined) {
+    s.generalAssigneeIds = generalTeam(s);
+    s.generalAssigneeId = s.generalAssigneeIds.length === 1 ? s.generalAssigneeIds[0] : null;
+  }
+  if (generalTeam(s).some(id=>!s.teamIds.includes(id)))
+    fail("Keep general-message recipients on the inbox team or select other recipients.");
   if (!s.weeklyHours && req.help.settings.weeklyHours)
     fail("Reload settings before saving. This form predates different hours for each day.",409);
   // Older open settings forms must not reset a voice they do not know about.

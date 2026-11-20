@@ -2,6 +2,7 @@ import { z } from "zod";
 export const helpSettingsSchema = z.object({
   smsAlerts: z.boolean().optional(),
   generalAssigneeId: z.string().uuid().nullable().optional(),
+  generalAssigneeIds: z.array(z.string().uuid()).max(100).optional(),
   voice: z.enum(["default", "man", "woman"]).optional(),
   phone: z.string().regex(/^$|^\+1\d{10}$/, "Use a US number in +1 format"),
   timezone: z.string().refine(s => { try { new Intl.DateTimeFormat("en", { timeZone: s }); return true; } catch { return false; } }, "Choose a valid timezone"),
@@ -21,7 +22,7 @@ export const helpSettingsSchema = z.object({
     notificationMode: z.enum(["always", "answer_first"]).optional(),
   }).strict()).max(30),
 }).strict().refine(s => s.openHour < s.closeHour, "Closing hour must be after opening hour")
-  .refine(s => !s.generalAssigneeId || s.teamIds.includes(s.generalAssigneeId), "The general-message recipient must be on the inbox team")
+  .refine(s => generalTeam(s).every(id => s.teamIds.includes(id)), "General-message recipients must be on the inbox team")
   .refine(s => new Set(s.topics.map(t => t.id)).size === s.topics.length, "Topic IDs must be unique")
   .refine(s => new Set(s.topics.map(t => t.label.toLowerCase())).size === s.topics.length, "Category names must be unique")
   .refine(s => s.topics.every(t => topicTeam(t).every(id => s.teamIds.includes(id))), "Topic assignees must be on the inbox team");
@@ -37,13 +38,16 @@ export const defaultHelpSettings: HelpSettings = {
 export function topicTeam(topic?: { assigneeId?: string | null; assigneeIds?: string[] }) {
   return [...new Set(topic?.assigneeIds ?? (topic?.assigneeId ? [topic.assigneeId] : []))];
 }
+export function generalTeam(s: { generalAssigneeId?: string | null; generalAssigneeIds?: string[] }) {
+  return Array.from(new Set(s.generalAssigneeIds ?? (s.generalAssigneeId ? [s.generalAssigneeId] : [])));
+}
 export function helpRecipients(s: HelpSettings, thread: { assignee_id?: string | null; topic?: string | null; status: string }) {
   if (thread.status === "resolved") return [];
-  if (s.generalAssigneeId !== undefined) {
+  if (s.generalAssigneeIds !== undefined || s.generalAssigneeId !== undefined) {
     const category = s.topics.find(t => t.label === thread.topic);
     const general = !category || /^(general|uncategorized)$/i.test(category.label.trim());
     const members = general ? [] : topicTeam(category);
-    const eligible = (members.length ? members : s.generalAssigneeId ? [s.generalAssigneeId] : [])
+    const eligible = (members.length ? members : generalTeam(s))
       .filter(id => s.teamIds.includes(id));
     // Claims do not grant permission to receive unrelated category texts.
     if (thread.assignee_id && eligible.includes(thread.assignee_id)) return [thread.assignee_id];

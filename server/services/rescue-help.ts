@@ -37,7 +37,7 @@ export async function helpInbound(tenantId: string, from: string, sid: string, b
     const paused = before > 0 && ["waiting", "human"].includes(thread.status);
     let reply = "", status = thread.status === "resolved" ? "bot" : thread.status;
     let assignee = thread.assignee_id, topic = thread.topic;
-    if (s.generalAssigneeId !== undefined && thread.status === "resolved") {
+    if ((s.generalAssigneeIds !== undefined || s.generalAssigneeId !== undefined) && thread.status === "resolved") {
       assignee = null;
       topic = null;
     }

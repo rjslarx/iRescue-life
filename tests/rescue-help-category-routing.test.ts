@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { defaultHelpSettings, helpRecipients, helpSettingsSchema } from "../shared/rescue-help";
+import { defaultHelpSettings, helpRecipients, helpSettingsSchema, canClaimHelp } from "../shared/rescue-help";
 import { effectiveHelpSettings } from "../server/services/rescue-help-settings";
 
 test("dedicated fallback never broadcasts unrelated messages or follows an unrelated claimant", () => {
@@ -29,4 +29,24 @@ test("Haseya default is tenant-scoped and can be explicitly replaced or disabled
   assert.equal(effectiveHelpSettings(tenant,{generalAssigneeId:null}).generalAssigneeId,null);
   const replacement=randomUUID();
   assert.equal(effectiveHelpSettings(tenant,{generalAssigneeId:replacement}).generalAssigneeId,replacement);
+});
+
+test("multiple general recipients share unclaimed work but only the claimant receives follow-ups",()=>{
+  const first=randomUUID(),second=randomUUID(),unrelated=randomUUID();
+  const s={...defaultHelpSettings,teamIds:[first,second,unrelated],generalAssigneeId:first,
+    generalAssigneeIds:[first,second,first],
+    topics:[{id:randomUUID(),label:"General",answer:"Hello",keywords:["general"],assigneeId:unrelated},
+      {id:randomUUID(),label:"Foster",answer:"Hello",keywords:["foster"],assigneeId:unrelated}]};
+  for(const topic of [null,"General","Uncategorized","Unknown"]) {
+    const thread={status:"waiting",topic};
+    assert.deepEqual(helpRecipients(s,thread),[first,second]);
+    assert.equal(canClaimHelp(s,thread,first,false),true);
+    assert.equal(canClaimHelp(s,thread,second,false),true);
+    assert.equal(canClaimHelp(s,thread,unrelated,false),false);
+    assert.deepEqual(helpRecipients(s,{...thread,assignee_id:second}),[second]);
+    assert.deepEqual(helpRecipients(s,{...thread,status:"resolved"}),[]);
+  }
+  assert.deepEqual(helpRecipients(s,{status:"waiting",topic:"Foster"}),[unrelated]);
+  assert.deepEqual(helpRecipients({...s,generalAssigneeIds:[]},{status:"waiting"}),[]);
+  assert.equal(helpSettingsSchema.safeParse({...s,generalAssigneeIds:[randomUUID()]}).success,false);
 });

@@ -307,6 +307,13 @@ test("help inbox isolates tenants, pauses bot on handoff, dedupes inbound and ve
     const {generalAssigneeId:omitted,...oldEditor}=strictSettings;
     assert.equal((await call("/settings","PUT",oldEditor,{"test-admin":"1"})).status,200);
     assert.equal((await call("/settings").then(r=>r.json())).settings.generalAssigneeId,uid,"older editors preserve fallback");
+    const multiGeneral={...strictSettings,generalAssigneeId:null,generalAssigneeIds:[uid,second]};
+    assert.equal((await call("/settings","PUT",multiGeneral,{"test-admin":"1"})).status,200);
+    assert.deepEqual((await call("/settings").then(r=>r.json())).settings.generalAssigneeIds,[uid,second]);
+    assert.equal((await call("/settings","PUT",oldEditor,{"test-admin":"1"})).status,409,"old editors cannot erase multiple general recipients");
+    assert.equal((await call("/settings","PUT",{...multiGeneral,generalAssigneeIds:[cid]},{"test-admin":"1"})).status,400);
+    assert.equal((await call("/settings","PUT",{...multiGeneral,generalAssigneeIds:[]},{"test-admin":"1"})).status,200);
+    assert.deepEqual((await call("/settings").then(r=>r.json())).settings.generalAssigneeIds,[]);
     assert.equal((await call("/disable","POST",{},{"test-admin":"1"})).status,200);
     assert.equal(await helpInbound(tid,phone,"SM"+randomUUID().replaceAll("-",""),"adopt"),"");
   }finally{

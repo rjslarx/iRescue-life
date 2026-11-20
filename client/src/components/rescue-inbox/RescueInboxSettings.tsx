@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Plus, Trash2, ShieldCheck } from "lucide-react";
 import { rescueHelpError, type RescueInboxApi, type RescueHelpSettings, type RescueSettingsResponse } from "@/hooks/use-rescue-inbox";
-import { topicTeam, helpWeeklyHours } from "@shared/rescue-help";
+import { topicTeam, generalTeam, helpWeeklyHours } from "@shared/rescue-help";
 import { RescueInboxHours } from "./RescueInboxHours";
 
 export function RescueInboxSettings({ api, initial }: { api: RescueInboxApi; initial: RescueSettingsResponse }) {
@@ -47,14 +47,19 @@ export function RescueInboxSettings({ api, initial }: { api: RescueInboxApi; ini
         <section className="ri-panel"><h2>Volunteer text alerts</h2>
           <label className="flex gap-2 items-start"><input type="checkbox" checked={draft.smsAlerts !== false} onChange={e=>patch({smsAlerts:e.target.checked})} />Text volunteers when messages need attention</label>
           <p className="ri-muted mt-3">Unclaimed conversations alert the category team. With a dedicated general-message recipient, claims only receive texts when the owner belongs to that category; otherwise the category recipients are alerted. Messages are grouped, with at most one alert per conversation per volunteer every five minutes. A saved mobile number is required. SMS opt-outs, communication pauses, and quiet hours apply. Normal Twilio fees apply.</p>
-          <label className="ri-field mt-4"><span>General and uncategorized messages</span>
-            <select value={draft.generalAssigneeId === undefined ? "shared" : draft.generalAssigneeId || "none"} onChange={e => patch({generalAssigneeId:e.target.value === "none" ? null : e.target.value})}>
-              {draft.generalAssigneeId === undefined && <option value="shared">Shared inbox team (existing setting)</option>}
-              <option value="none">No fallback text alerts</option>
-              {initial.team.filter(m=>draft.teamIds.includes(m.id)).map(m=><option key={m.id} value={m.id}>{m.name}</option>)}
-            </select>
-            <small className="ri-muted">Also handles categories with no volunteers selected. Choosing a person prevents broadcast alerts to unrelated category volunteers. If that person has no mobile number or cannot receive texts, messages remain in the inbox; they are not broadcast to others.</small>
-          </label>
+          <fieldset className="ri-field mt-4"><legend>General and uncategorized messages</legend>
+            {draft.generalAssigneeIds === undefined && draft.generalAssigneeId === undefined && <p className="ri-muted">Currently shared with the inbox team. Select recipients below to replace this existing setting.</p>}
+            <div className="ri-checks max-h-64 overflow-y-auto overscroll-contain touch-pan-y">
+              {initial.team.filter(m=>draft.teamIds.includes(m.id)).map(m=><label key={m.id}>
+                <input type="checkbox" checked={generalTeam(draft).includes(m.id)} onChange={e=>{
+                  const ids=e.target.checked?[...generalTeam(draft),m.id]:generalTeam(draft).filter(id=>id!==m.id);
+                  patch({generalAssigneeIds:ids,generalAssigneeId:ids.length===1?ids[0]:null});
+                }}/>{m.name}
+              </label>)}
+            </div>
+            <button type="button" className="ri-btn mt-2" onClick={()=>patch({generalAssigneeIds:[],generalAssigneeId:null})}>Clear fallback recipients</button>
+            <small className="ri-muted block mt-2">Choose one or more inbox volunteers. Also handles categories with no volunteers selected. All selected recipients can receive alerts and claim unclaimed conversations; after a claim, alerts go to the eligible assignee. No recipients means no fallback alerts or volunteer claims; admins can still handle the conversation. Missing phone numbers and opt-outs never cause alerts to be sent to unrelated volunteers.</small>
+          </fieldset>
           <p className="ri-muted mt-3">Alerts contain a sign-in link, not private message details. Claim and reply in the dashboard; texting CLAIM is not supported.</p>
         </section>
         <section className="ri-panel">

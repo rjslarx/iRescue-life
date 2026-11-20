@@ -38,11 +38,11 @@ Notification reduction should use category controls and human follow-up escalati
 
 **How to apply:** Keep approved answers and all messages visible. Never suppress foster welcome screenshots or human-help requests merely because a category uses answer-first notifications.
 
-Haseya's alerts must stay within the assigned category, with general and uncategorized messages routed to a designated fallback recipient rather than broadcast to all volunteers.
+Haseya's alerts must stay within the assigned category, with general and uncategorized messages routed to explicitly selected fallback recipients rather than broadcast to all volunteers. The user approved multiple fallback recipients with one claimant per conversation.
 
 **Why:** The user requested category-specific texts to avoid unrelated notifications.
 
-**How to apply:** Preserve explicit fallback configuration and do not broaden recipients when its recipient lacks a phone or opts out. Inbox visibility is separate from SMS routing.
+**How to apply:** Preserve existing recipient selections when expanding the setting. Do not broaden recipients when a selected recipient lacks a phone or opts out. Inbox visibility is separate from SMS routing.
 
 A blank team-account phone does not prove a volunteer lacks a saved phone: their explicitly linked contact profile may hold it.
 
