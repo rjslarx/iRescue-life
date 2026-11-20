@@ -1,6 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, mkdtempSync, rmSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { randomUUID } from "node:crypto";
+import pg from "pg";
+import { drizzle } from "drizzle-orm/node-postgres";
+import * as operators from "drizzle-orm";
+import { fundraiserOrders, fundraiserEvents } from "../shared/schema";
 import { transformSync } from "esbuild";
 import { z } from "zod";
 
@@ -35,6 +43,13 @@ function server() {
       } }),
     }) }),
   };
+  const request = handlerFor(db,
+    { fundraiserOrders: { id: "id", eventId: "eventId" }, fundraiserEvents: { id: "id", tenantId: "tenantId" } },
+    { eq, and, inArray });
+  return { request, rows, writes: () => writes };
+}
+
+function handlerFor(db: unknown, schema: unknown, { eq, and, inArray }: any) {
   let handler: any;
   const tenantGuard = Symbol("tenant");
   const authGuard = Symbol("auth");
@@ -50,7 +65,7 @@ function server() {
     app, tenantGuard, authGuard, (...args: string[]) => {
       assert.deepEqual(args, ["fundraiser-events", "admin", "owner", "board_member", "staff"]);
       return roleGuard;
-    }, db, { fundraiserOrders: { id: "id", eventId: "eventId" }, fundraiserEvents: { id: "id", tenantId: "tenantId" } },
+    }, db, schema,
     eq, and, inArray, z,
   );
   async function request(body: unknown, id = "order", tenantId = "rescue") {
@@ -60,8 +75,136 @@ function server() {
     await handler({ body, params: { id }, tenant: { id: tenantId } }, res, (error: unknown) => { throw error; });
     return { status, payload };
   }
-  return { request, rows, writes: () => writes };
+  return request;
 }
+
+// RUN_FUNDRAISER_PICKUP_DB_TEST=1 npx tsx --test tests/fundraiser-pickup.test.ts
+// Requires initdb/pg_ctl on PATH. Always creates its own local PostgreSQL cluster:
+// no DATABASE_URL, application database, production orders, or network listener.
+test("PostgreSQL: overlapping pickup writes return intended states and enforce event ownership", {
+  skip: process.env.RUN_FUNDRAISER_PICKUP_DB_TEST !== "1",
+  timeout: 30000,
+}, async () => {
+  const root = mkdtempSync(join(tmpdir(), "pickup-pg-"));
+  const data = join(root, "data");
+  const clients: pg.Client[] = [];
+  let started = false;
+  const run = (program: string, args: string[]) =>
+    execFileSync(program, args, { stdio: "pipe", timeout: 15000 });
+  try {
+    run("initdb", ["-D", data, "-U", "pickup_test", "--auth=trust", "--no-locale"]);
+    run("pg_ctl", ["-D", data, "-l", join(root, "postgres.log"), "-o",
+      `-k ${root} -h '' -p 5432 -F`, "-w", "start"]);
+    started = true;
+    for (let i = 0; i < 2; i++) {
+      const connection = new pg.Client({
+        host: root, port: 5432, user: "pickup_test", database: "postgres",
+        password: "unused-local-trust", connectionTimeoutMillis: 5000,
+        options: "-c statement_timeout=8000 -c search_path=pickup_test",
+      });
+      clients.push(connection);
+      await connection.connect();
+    }
+    const [first, second] = clients;
+    const pid = async (c: pg.Client) => (await c.query("SELECT pg_backend_pid() AS pid")).rows[0].pid;
+    const [firstPid, secondPid] = await Promise.all(clients.map(pid));
+    assert.notEqual(firstPid, secondPid, "requests must use independent PostgreSQL sessions");
+    // Full order projection matches the real Drizzle model used by RETURNING.
+    await first.query(`
+      CREATE SCHEMA pickup_test;
+      CREATE TABLE fundraiser_events (id uuid PRIMARY KEY, tenant_id uuid NOT NULL);
+      CREATE TABLE fundraiser_orders (
+        id uuid PRIMARY KEY, order_number integer NOT NULL UNIQUE,
+        event_id uuid NOT NULL REFERENCES fundraiser_events(id),
+        customer_name text NOT NULL, customer_email text NOT NULL,
+        customer_phone text, quantity integer NOT NULL DEFAULT 1,
+        pickup_time text, stripe_session_id text,
+        payment_status text NOT NULL DEFAULT 'paid',
+        picked_up boolean NOT NULL DEFAULT false,
+        created_at timestamp NOT NULL DEFAULT now()
+      );
+    `);
+    const tenant = randomUUID(), foreignTenant = randomUUID();
+    const event = randomUUID(), foreignEvent = randomUUID();
+    const order = randomUUID(), foreignOrder = randomUUID();
+    await first.query("INSERT INTO fundraiser_events VALUES ($1,$2),($3,$4)",
+      [event, tenant, foreignEvent, foreignTenant]);
+    await first.query(`INSERT INTO fundraiser_orders
+      (id,order_number,event_id,customer_name,customer_email) VALUES
+      ($1,1001,$2,'Fixture buyer','fixture@example.test'),
+      ($3,1002,$4,'Other fixture','other@example.test')`,
+    [order, event, foreignOrder, foreignEvent]);
+    const requests = clients.map(c => handlerFor(drizzle(c), { fundraiserOrders, fundraiserEvents }, operators));
+    const stored = async () => (await first.query("SELECT * FROM fundraiser_orders ORDER BY order_number")).rows;
+    const original = await stored();
+
+    // The first handler finishes inside an uncommitted transaction. The second
+    // must reach the same row in PostgreSQL and wait before we release the lock.
+    // Repeat each state to cover both a transition and an already-matching row.
+    for (const pickedUp of [true, true, false, false]) {
+      await first.query("BEGIN");
+      let pending: ReturnType<typeof requests[number]> | undefined;
+      try {
+        const a = await requests[0]({ pickedUp }, order, tenant);
+        pending = requests[1]({ pickedUp }, order, tenant);
+        // Attach immediately so even a SQL error cannot become an unhandled rejection.
+        void pending.catch(() => {});
+        const deadline = Date.now() + 4000;
+        let blocked = false;
+        while (Date.now() < deadline) {
+          const result = await first.query(
+            "SELECT $1::int = ANY(pg_blocking_pids($2::int)) AS blocked", [firstPid, secondPid]);
+          if (result.rows[0].blocked) { blocked = true; break; }
+          await new Promise(resolve => setTimeout(resolve, 10));
+        }
+        assert.ok(blocked, "second pickup UPDATE must wait on the first connection's row lock");
+        await first.query("COMMIT");
+        const b = await pending;
+        for (const response of [a, b]) {
+          assert.equal(response.status, 200);
+          assert.equal(response.payload.order.id, order);
+          assert.equal(response.payload.order.eventId, event);
+          assert.equal(response.payload.order.pickedUp, pickedUp);
+        }
+        assert.deepEqual(await stored(), [{ ...original[0], picked_up: pickedUp }, original[1]],
+          "only the intended order's pickup state changes");
+      } finally {
+        await first.query("ROLLBACK");
+        await pending?.catch(() => {});
+      }
+    }
+
+    // Exercise the actual SQL tenant-event subquery in both directions and
+    // distinguish neither absent orders nor other rescues' orders to callers.
+    for (const request of requests) {
+      for (const pickedUp of [true, false]) {
+        for (const [id, tenantId] of [
+          [foreignOrder, tenant], [order, foreignTenant], [randomUUID(), tenant],
+        ]) {
+          assert.deepEqual(await request({ pickedUp }, id, tenantId),
+            { status: 404, payload: { error: "Order not found" } });
+        }
+      }
+    }
+    assert.deepEqual(await stored(), original, "denied requests must not modify either rescue's order");
+    // Prove the foreign fixture is a valid order, accessible by its actual owner.
+    const owned = await requests[1]({ pickedUp: true }, foreignOrder, foreignTenant);
+    assert.equal(owned.status, 200);
+    assert.equal(owned.payload.order.id, foreignOrder);
+    assert.equal(owned.payload.order.pickedUp, true);
+    assert.deepEqual(await stored(), [original[0], { ...original[1], picked_up: true }]);
+  } finally {
+    try {
+      await Promise.all(clients.map(c => c.end()));
+    } finally {
+      try {
+        if (started) run("pg_ctl", ["-D", data, "-m", "immediate", "-w", "stop"]);
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    }
+  }
+});
 
 test("duplicate pickup and undo requests are idempotent", async () => {
   const s = server();
