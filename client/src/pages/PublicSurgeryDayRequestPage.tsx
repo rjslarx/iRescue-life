@@ -121,7 +121,9 @@ export default function PublicSurgeryDayRequestPage() {
   const partners = partnersData?.partners || [];
 
   const form = useForm<FormValues>({
-    resolver: zodResolver(formSchema),
+    resolver: zodResolver(feralCats ? formSchema.extend({
+      contactEmail: z.string().trim().min(1, "Email is required for feral cat requests").email("Enter a valid email address").max(200),
+    }) : formSchema),
     defaultValues: {
       partnerOrganizationId: "",
       organizationName: "",
@@ -425,8 +427,8 @@ export default function PublicSurgeryDayRequestPage() {
                 </div>
                 <FormField control={form.control} name="contactEmail" render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Email (optional)</FormLabel>
-                    <FormControl><Input {...field} type="email" data-testid="input-contact-email" /></FormControl>
+                    <FormLabel>{feralCats ? "Email *" : "Email (optional)"}</FormLabel>
+                    <FormControl><Input {...field} type="email" required={feralCats} data-testid="input-contact-email" /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )} />
