@@ -3,6 +3,12 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { transformSync } from "esbuild";
 import { randomInt, randomUUID } from "node:crypto";
+import { z } from "zod";
+import express from "express";
+import type { AddressInfo } from "node:net";
+
+const EVENT_A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const EVENT_B = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 
 // Execute the registered handler, substituting only database/schema boundaries.
 const routes = readFileSync("server/routes.ts", "utf8");
@@ -13,15 +19,15 @@ const compiled = transformSync(source.replace("await import('@shared/schema')", 
 
 function server() {
   const events = [
-    { id: "event-a", tenantId: "rescue-a" },
-    { id: "event-b", tenantId: "rescue-b" },
+    { id: EVENT_A, tenantId: "rescue-a" },
+    { id: EVENT_B, tenantId: "rescue-b" },
   ];
   const orders = [
-    { id: "later", eventId: "event-a", paymentStatus: "paid", createdAt: 2, customerEmail: "later@example.test" },
-    { id: "foreign", eventId: "event-b", paymentStatus: "paid", createdAt: 1, customerEmail: "private@example.test" },
-    { id: "pending", eventId: "event-a", paymentStatus: "pending", createdAt: 0 },
-    { id: "earlier", eventId: "event-a", paymentStatus: "paid", createdAt: 1, customerEmail: "earlier@example.test" },
-    { id: "refunded", eventId: "event-a", paymentStatus: "refunded", createdAt: 3 },
+    { id: "later", eventId: EVENT_A, paymentStatus: "paid", createdAt: 2, customerEmail: "later@example.test" },
+    { id: "foreign", eventId: EVENT_B, paymentStatus: "paid", createdAt: 1, customerEmail: "private@example.test" },
+    { id: "pending", eventId: EVENT_A, paymentStatus: "pending", createdAt: 0 },
+    { id: "earlier", eventId: EVENT_A, paymentStatus: "paid", createdAt: 1, customerEmail: "earlier@example.test" },
+    { id: "refunded", eventId: EVENT_A, paymentStatus: "refunded", createdAt: 3 },
   ];
   const schema = {
     fundraiserOrders: { eventId: "eventId", paymentStatus: "paymentStatus", createdAt: "createdAt" },
@@ -52,13 +58,13 @@ function registerHandler(db: any, schema: any, eq: any, and: any, inArray: any) 
     assert.deepEqual(args.slice(0, -1), [tenantGuard, authGuard, roleGuard]);
     handler = args.at(-1);
   } };
-  new Function("app", "requireTenant", "requireAuth", "requireRoleOrPageAccess", "db", "schema", "eq", "and", "inArray", compiled)(
+  new Function("app", "requireTenant", "requireAuth", "requireRoleOrPageAccess", "db", "schema", "eq", "and", "inArray", "z", compiled)(
     app, tenantGuard, authGuard, (...roles: string[]) => {
       assert.deepEqual(roles, ["fundraiser-events", "admin", "owner", "board_member", "staff"]);
       return roleGuard;
-    }, db, schema, eq, and, inArray,
+    }, db, schema, eq, and, inArray, z,
   );
-  return async (eventId?: string, tenantId = "rescue-a") => {
+  return async (eventId?: unknown, tenantId = "rescue-a") => {
     let status = 200;
     let payload: any;
     const res = {
@@ -72,7 +78,7 @@ function registerHandler(db: any, schema: any, eq: any, and: any, inArray: any) 
 }
 
 test("staff order lists retain guards, paid-only filtering, flat shape and chronological sorting", async () => {
-  const response = await server()("event-a");
+  const response = await server()(EVENT_A);
   assert.equal(response.status, 200);
   assert.deepEqual(response.payload.orders.map((o: any) => o.id), ["earlier", "later"]);
   assert.equal(response.payload.orders[0].customerEmail, "earlier@example.test");
@@ -80,15 +86,62 @@ test("staff order lists retain guards, paid-only filtering, flat shape and chron
 
 test("staff cannot read another rescue's customers by supplying its event ID", async () => {
   const request = server();
-  assert.deepEqual(await request("event-b"), { status: 200, payload: { orders: [] } });
-  assert.deepEqual(await request("event-a", "rescue-b"), { status: 200, payload: { orders: [] } });
-  assert.deepEqual((await request("event-b", "rescue-b")).payload.orders.map((o: any) => o.id), ["foreign"]);
+  assert.deepEqual(await request(EVENT_B), { status: 200, payload: { orders: [] } });
+  assert.deepEqual(await request(EVENT_A, "rescue-b"), { status: 200, payload: { orders: [] } });
+  assert.deepEqual((await request(EVENT_B, "rescue-b")).payload.orders.map((o: any) => o.id), ["foreign"]);
 });
 
 test("unknown events disclose nothing and missing event IDs retain the validation error", async () => {
   const request = server();
-  assert.deepEqual(await request("unknown"), { status: 200, payload: { orders: [] } });
+  assert.deepEqual(await request(randomUUID()), { status: 200, payload: { orders: [] } });
+  assert.deepEqual(await request(randomUUID().toUpperCase()), { status: 200, payload: { orders: [] } });
   assert.deepEqual(await request(), { status: 400, payload: { error: "eventId query param required" } });
+  assert.deepEqual(await request(""), { status: 400, payload: { error: "eventId query param required" } });
+});
+
+test("malformed UUIDs and non-scalar values return only a safe client error without querying the database", async () => {
+  const db = { select: () => { assert.fail("Invalid eventId must not reach the database"); } };
+  const request = registerHandler(db, {}, null, null, null);
+  for (const value of [
+    "not-a-uuid", "123", " ", `${EVENT_A}x`, EVENT_A.slice(0, -1),
+    EVENT_A.replace(/a/g, "g"), ` ${EVENT_A}`, `${EVENT_A}\n`,
+    `${EVENT_A},${EVENT_B}`, "' OR 1=1 --",
+    [EVENT_A, EVENT_B], [EVENT_A, EVENT_A], [EVENT_A], [],
+    { id: EVENT_A }, { nested: { id: EVENT_A } }, {}, null, 123,
+  ]) {
+    assert.deepEqual(await request(value), {
+      status: 400, payload: { error: "eventId must be a single valid UUID" },
+    });
+  }
+});
+
+test("Express repeated and object-shaped query parameters are rejected before database access", async () => {
+  const request = registerHandler({
+    select: () => { assert.fail("Malformed query must not reach the database"); },
+  }, {}, null, null, null);
+  const app = express();
+  app.get("/api/fundraiser-orders", async (req, res, next) => {
+    try {
+      const result = await request(req.query.eventId);
+      res.status(result.status).json(result.payload);
+    } catch (error) { next(error); }
+  });
+  const listener = app.listen(0, "127.0.0.1");
+  await new Promise<void>(resolve => listener.once("listening", resolve));
+  try {
+    for (const query of [
+      `eventId=${EVENT_A}&eventId=${EVENT_B}`,
+      `eventId=${EVENT_A}&eventId=${EVENT_A}`,
+      `eventId[]=${EVENT_A}`, `eventId[id]=${EVENT_A}`,
+      `eventId[nested][id]=${EVENT_A}`, "eventId=not-a-uuid",
+    ]) {
+      const response = await fetch(`http://127.0.0.1:${(listener.address() as AddressInfo).port}/api/fundraiser-orders?${query}`);
+      assert.equal(response.status, 400);
+      assert.deepEqual(await response.json(), { error: "eventId must be a single valid UUID" });
+    }
+  } finally {
+    await new Promise<void>((resolve, reject) => listener.close(error => error ? reject(error) : resolve()));
+  }
 });
 
 // Run against a development/test PostgreSQL database:
