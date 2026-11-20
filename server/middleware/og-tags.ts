@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction, Router } from 'express';
+import { rescuePhoneHtml } from '../lib/rescue-phone-html';
 import { db } from '../db';
 import { animals, calendars, tenants, donationLinks, shopProducts, customPages, peerCampaigns, votingContests, votingContestEntrants, type PageBlock } from '@shared/schema';
 import { eq, and, desc, or, isNull, ne } from 'drizzle-orm';
@@ -1449,6 +1450,7 @@ export async function injectOGTags(req: Request, res: Response, next: NextFuncti
       html = html.replace('</body>', () => `<noscript>${tenantNoscriptBody}</noscript>\n</body>`);
     }
 
+    html = rescuePhoneHtml(html, `${res.locals.tenantPathPrefix || ""}${req.originalUrl}`);
     res.status(200).set({ 'Content-Type': 'text/html' }).end(html);
   } catch (error) {
     console.error('Error injecting OG tags:', error);

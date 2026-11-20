@@ -84,7 +84,7 @@ export function usePWAManifest() {
       }
       if (phoneMode) {
         const url = new URL(manifestLink.href, window.location.origin);
-        url.searchParams.set("view", "phone");
+        url.pathname = "/phone.webmanifest";
         manifestLink.href = url.href;
       }
     }

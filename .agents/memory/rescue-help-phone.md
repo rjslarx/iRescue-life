@@ -67,3 +67,9 @@ The user chose a simple Rescue Phone page/home-screen shortcut over SMS command 
 **Why:** Reuse existing permissions and staff-first callbacks without adding personal-phone message forwarding, microphone permissions, or another calling system.
 
 **How to apply:** Keep sign-in required, preserve the regular rescue portal shortcut, and do not promise offline messaging or background browser ringing.
+
+Phone home-screen installation must receive the phone-specific manifest in the initial HTML, not only through a React effect.
+
+**Why:** The live phone page initially advertised the homepage manifest, and an iPhone shortcut launched the rescue homepage despite the later client-side update.
+
+**How to apply:** Preserve separate phone manifest identity and initial server-rendered metadata across development, production fallback, and tenant HTML handling. Existing incorrectly installed shortcuts may need removal and reinstallation after publishing.

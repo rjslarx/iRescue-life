@@ -224,6 +224,7 @@ export async function resolveTenant(req: Request, res: Response, next: NextFunct
           
           // Store base path for PWA manifest and other URL generation
           req.basePath = `/${firstPathSegment}`;
+          res.locals.tenantPathPrefix = req.basePath;
           
           const strippedPath = req.url.replace(`/${firstPathSegment}`, '') || '/';
           req.url = strippedPath;
@@ -292,6 +293,7 @@ export async function resolveTenant(req: Request, res: Response, next: NextFunct
           
           // Store base path for PWA manifest and other URL generation
           req.basePath = `/${firstPathSegment}`;
+          res.locals.tenantPathPrefix = req.basePath;
           
           // Strip the tenant prefix from both req.url AND req.originalUrl
           // This is critical because Express uses originalUrl when delegating to mounted routers

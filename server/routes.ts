@@ -395,7 +395,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
    * iOS Safari caches manifest aggressively, so the query parameter approach
    * ensures the correct tenant manifest is fetched when user adds to home screen.
    */
-  app.get('/manifest.json', async (req, res, next) => {
+  app.get(['/manifest.json', '/phone.webmanifest'], async (req, res, next) => {
     try {
       // Default platform manifest
       let manifest = {
@@ -533,7 +533,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`[MANIFEST] No tenant context - using platform defaults`);
       }
 
-      if (tenant && req.query.view === "phone") {
+      if (tenant && (req.query.view === "phone" || req.path === "/phone.webmanifest")) {
         const phonePath = `${basePath.replace(/\/$/, "")}/phone`;
         manifest = { ...manifest, name: `${tenant.name} - Rescue Phone`, short_name: "Rescue Phone",
           description: "Your rescue’s shared texting and calling workspace",

@@ -118,6 +118,7 @@ function Conversation({ api, enabled, outreach }: { api: RescueInboxApi; enabled
   </div>;
 }
 function InboxWorkspace({phoneMode=false}:{phoneMode?:boolean}) {
+  const { basePath } = useTenant();
   const search=useSearch();
   const linkedThread=new URLSearchParams(search).get("thread");
   const validThread=linkedThread && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(linkedThread) ? linkedThread : null;
@@ -150,7 +151,7 @@ function InboxWorkspace({phoneMode=false}:{phoneMode?:boolean}) {
   return <Layout title="Rescue Inbox" description="Approved answers, with your team close by."><div className="rescue-inbox">
     {blocked ? <ErrorState error={blocked} retry={() => { void api.access.refetch(); void api.settings.refetch(); void api.threads.refetch(); if (selected) void api.detail.refetch(); }} /> : api.access.isPending ? <Loading /> : !permitted ? <ErrorState error={new RescueHelpError(403, "Team access required")} retry={() => void api.access.refetch()} /> : <>
       <section className="ri-banner"><div className="ri-toolbar"><h2>{phoneMode?"Your rescue’s shared line":"One inbox. No one carries it alone."}</h2><span className="ri-badge">{settings?.enabled ? "Service enabled" : settings ? "Service disabled" : "Checking service"}</span></div><p className="ri-muted">{settings ? settings.enabled ? `${settings.number || "Dedicated number"} · Shared SMS and voicemail for the rescue team.` : "Setup mode: approved answers can be prepared now. The bot and outgoing sending remain off until an administrator activates a separate, approved number." : "Loading the rescue’s service configuration."}</p>{waiting > 0 && <p><span className="ri-badge waiting">{waiting} {waiting === 1 ? "conversation needs" : "conversations need"} a person</span></p>}</section>
-      {!phoneMode && <div className="ri-tabs"><button className="ri-btn" aria-pressed={tab === "inbox"} onClick={() => setTab("inbox")}><Inbox size={16} />Shared inbox</button>{admin && <button className="ri-btn" aria-pressed={tab === "settings"} onClick={() => setTab("settings")}>Answers & setup</button>}<Link className="ri-btn" href="/phone">Open Rescue Phone</Link></div>}
+      {!phoneMode && <div className="ri-tabs"><button className="ri-btn" aria-pressed={tab === "inbox"} onClick={() => setTab("inbox")}><Inbox size={16} />Shared inbox</button>{admin && <button className="ri-btn" aria-pressed={tab === "settings"} onClick={() => setTab("settings")}>Answers & setup</button>}<a className="ri-btn" href={`${basePath}/phone`}>Open Rescue Phone</a></div>}
       {tab === "settings" && admin ? api.settings.isError ? <ErrorState error={api.settings.error} retry={() => void api.settings.refetch()} /> : settings ? <RescueInboxSettings key={api.scope} api={api} initial={settings} /> : <Loading /> : <>
         <RescueInboxOutreach api={api} onOpen={(id,mode)=>{setSelected(id);setMobileConversation(true);setFilter("all");setOutreach(previous=>({id,mode,sequence:(previous?.sequence||0)+1}));}}/>
         {api.settings.isError && <div className="ri-error" role="alert">Service status unavailable. SMS sending is disabled until it can be checked. <button className="ri-btn" onClick={() => void api.settings.refetch()}>Retry</button></div>}
