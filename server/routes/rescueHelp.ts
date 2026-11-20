@@ -15,6 +15,7 @@ import { fetchHelpImage, helpImageType } from "../services/rescue-help-media";
 import { withHelpThread } from "../services/rescue-help-thread-lock";
 import { queueHelpAlerts } from "../services/rescue-help-alerts";
 import { helpCallRoutes, helpCallWebhooks } from "./rescueHelpCalls";
+import { prepareHelpOutreach } from "../services/rescue-help-outreach";
 
 const router = Router();
 export const helpWebhooks = Router();
@@ -39,6 +40,10 @@ router.use(wrap(async(req:any,res:any,next:any) => {
 router.get("/access",(req:any,res)=>res.json({allowed:req.helpAllowed,admin:admin(req)}));
 router.use((req:any,res,next)=>req.helpAllowed?next():res.status(403).json({error:"Ask a rescue admin to add you to the Rescue Inbox team."}));
 router.use(helpCallRoutes());
+router.post("/outreach",rateLimit({windowMs:60000,max:10}),wrap(async(req:any,res:any)=>{
+  const input=z.object({phone:z.string().trim().min(1).max(50)}).strict().parse(req.body);
+  res.json(await prepareHelpOutreach(req.tenant.id,req.user.id,input.phone));
+}));
 async function team(tenantId:string, ids?:string[]) {
   return (await pool.query(`SELECT id,full_name AS name FROM users WHERE tenant_id=$1 AND is_active=true
     AND ($2::uuid[] IS NULL OR id=ANY($2::uuid[])) ORDER BY full_name`,[tenantId,ids||null])).rows;

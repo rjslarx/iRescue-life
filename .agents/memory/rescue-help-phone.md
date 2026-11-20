@@ -55,3 +55,9 @@ User-approved return calls are staff-initiated, staff-first bridges, not automat
 **Why:** Volunteers must be able to return calls without exposing their personal numbers or accidentally connecting their voicemail to the public caller. Both legs incur normal voice charges.
 
 **How to apply:** Require a fresh press-1 confirmation before the caller leg, recheck service/ownership/suppression then, and use only the dedicated rescue number. Keep tests provider-mocked; never place live calls as verification without approval. Uncertain creation must remain blocked rather than automatically retrying; account-level SMS opt-outs and provider suppression are conservatively honored for these callbacks too.
+
+Team members may initiate a new text or call, not just respond to inbound conversations.
+
+**Why:** The user approved both outreach buttons using the rescue number. Starting outreach must not steal another volunteer's existing conversation.
+
+**How to apply:** Reuse the tenant's conversation for a normalized phone number, retain existing ownership restrictions, and assign genuinely new conversations to the initiating team member. Preparing a conversation must not send a message or place a call before the separate send/confirmation step.

@@ -1,16 +1,22 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PhoneCall } from "lucide-react";
 import { helpCallLabels } from "@shared/rescue-help-calls";
 import { rescueHelpError, type RescueInboxApi } from "@/hooks/use-rescue-inbox";
 
-export function RescueInboxCalls({api,threadId,canManage}:{api:RescueInboxApi;threadId:string;canManage:boolean}) {
+export function RescueInboxCalls({api,threadId,canManage,openRequest=0}:{api:RescueInboxApi;threadId:string;canManage:boolean;openRequest?:number}) {
   const [confirm,setConfirm]=useState(false);
   const [error,setError]=useState("");
   const [uncertain,setUncertain]=useState(false);
   const sending=useRef(false);
   const requestId=useRef<string|null>(null);
   const data=api.calls.data;
-  return <section className="border-t pt-4 mt-4" aria-label="Voice callbacks">
+  const section=useRef<HTMLElement>(null);
+  useEffect(()=>{
+    if(!openRequest) return;
+    requestId.current=crypto.randomUUID();setConfirm(true);setError("");
+    section.current?.scrollIntoView({block:"center"});
+  },[openRequest]);
+  return <section ref={section} className="border-t pt-4 mt-4" aria-label="Voice callbacks">
     <h3>Voice callbacks</h3>
     {canManage && <button type="button" className="ri-btn mt-2" disabled={!data?.canCall || api.calls.isError || api.startCall.isPending || uncertain}
       onClick={()=>{requestId.current=crypto.randomUUID();setError("");setConfirm(true);}}><PhoneCall size={15}/>Call back</button>}

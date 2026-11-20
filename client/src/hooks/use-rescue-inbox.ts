@@ -59,6 +59,10 @@ export function useRescueInbox(selectedId: string | null) {
     mutationFn:({id,requestId}:{id:string;requestId:string})=>request<{id:string;status:string}>("POST",`/threads/${encodeURIComponent(id)}/calls`,{requestId}),
     retry:false,onSuccess:refresh,onError:refresh,
   });
+  const prepareOutreach = useMutation({
+    mutationFn:(phone:string)=>request<{id:string;phone:string}>("POST","/outreach",{phone}),
+    retry:false,onSuccess:refresh,
+  });
   const saveSettings = useMutation({ mutationFn: (data: RescueHelpSettings) => request("PUT", "/settings", data), retry: false, onSuccess: refresh });
   const activate = useMutation({ mutationFn: () => request("POST", "/activate", {}), retry: false, onSuccess: refresh });
   const disable = useMutation({ mutationFn: () => request("POST", "/disable", {}), retry: false, onSuccess: refresh });
@@ -66,6 +70,6 @@ export function useRescueInbox(selectedId: string | null) {
   const update = useMutation({ mutationFn: ({ id, ...data }: { id: string; status?: "waiting" | "human" | "resolved"; assigneeId?: string | null }) => request("POST", `/threads/${encodeURIComponent(id)}/update`, data), retry: false, onSuccess: refresh });
   const send = useMutation({ mutationFn: ({ id, ...data }: { id: string; body: string; requestId: string; kind: "outbound" | "note" }) => request("POST", `/threads/${encodeURIComponent(id)}/messages`, data), retry: false, onSuccess: refresh });
   const deleteVoicemail = useMutation({ mutationFn: (id: string) => request("DELETE", `/messages/${encodeURIComponent(id)}/audio`), retry: false, onSuccess: refresh, onError: refresh });
-  return { scope: key.join(":"), access, settings, threads, detail, alerts, calls, startCall, saveSettings, activate, disable, claim, update, send, deleteVoicemail };
+  return { scope: key.join(":"), access, settings, threads, detail, alerts, calls, startCall, prepareOutreach, saveSettings, activate, disable, claim, update, send, deleteVoicemail };
 }
 export type RescueInboxApi = ReturnType<typeof useRescueInbox>;

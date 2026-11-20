@@ -9,6 +9,7 @@ import { RescueInboxSettings } from "@/components/rescue-inbox/RescueInboxSettin
 import { RescueInboxImage } from "@/components/rescue-inbox/RescueInboxImage";
 import { RescueInboxAlerts } from "@/components/rescue-inbox/RescueInboxAlerts";
 import { RescueInboxCalls } from "@/components/rescue-inbox/RescueInboxCalls";
+import { RescueInboxOutreach } from "@/components/rescue-inbox/RescueInboxOutreach";
 import LoginForm from "@/components/LoginForm";
 import { canClaimHelp } from "@shared/rescue-help";
 import { RescueHelpError, rescueHelpError, useRescueInbox, type RescueInboxApi, type RescueMessage, type RescueThread } from "@/hooks/use-rescue-inbox";
@@ -54,7 +55,7 @@ function Voicemail({ message, onDelete }: { message: RescueMessage; onDelete?: (
     }}>Delete voicemail</button>}
     {error && <p className="ri-error" role="alert">{error}</p>}<small>Voice recording · no transcription</small></div>;
 }
-function Conversation({ api, enabled }: { api: RescueInboxApi; enabled: boolean }) {
+function Conversation({ api, enabled, outreach }: { api: RescueInboxApi; enabled: boolean; outreach?:{id:string;mode:"text"|"call";sequence:number} }) {
   const [body, setBody] = useState("");
   const [kind, setKind] = useState<"outbound" | "note">("outbound");
   const [error, setError] = useState<unknown>(null);
@@ -62,6 +63,14 @@ function Conversation({ api, enabled }: { api: RescueInboxApi; enabled: boolean 
   const [sent, setSent] = useState("");
   const submitting = useRef(false);
   const data = api.detail.data;
+  const textSection=useRef<HTMLFormElement>(null);
+  useEffect(()=>{
+    if(data && outreach?.id===data.thread.id && outreach.mode==="text") {
+      setKind("outbound");
+      textSection.current?.scrollIntoView({block:"center"});
+      textSection.current?.querySelector("textarea")?.focus();
+    }
+  },[data?.thread.id,outreach?.sequence]);
   if (api.detail.isError) return <ErrorState error={api.detail.error} retry={() => void api.detail.refetch()} />;
   if (!data) return <Loading />;
   const { thread, messages } = data;
@@ -79,7 +88,7 @@ function Conversation({ api, enabled }: { api: RescueInboxApi; enabled: boolean 
         {admin && <label className="ri-field"><span>Assign to</span><select aria-label="Assign conversation" disabled={pending} value={thread.assigneeId || ""} onChange={e => void action(() => api.update.mutateAsync({ id: thread.id, assigneeId: e.target.value || null }))}><option value="">Unassigned</option>{thread.assigneeId && !list?.team.some(m => m.id === thread.assigneeId) && <option value={thread.assigneeId}>Assigned team member</option>}{list?.team.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select></label>}
         {canManage && <div className="flex gap-2 flex-wrap">{thread.assigneeId && <button className="ri-btn" disabled={pending} onClick={() => { if (window.confirm("Release this conversation so another category volunteer can claim it? The category team may receive an alert.")) void action(() => api.update.mutateAsync({ id: thread.id, status: "waiting", assigneeId:null })); }}>Release to category team</button>}{thread.status !== "resolved" && <button className="ri-btn" disabled={pending} onClick={() => void action(() => api.update.mutateAsync({ id: thread.id, status: "resolved" }))}><CheckCheck size={15} />Resolve</button>}</div>}
       </div><p className="ri-muted mt-3">One volunteer claims and replies; administrators can override or reassign. Other category volunteers can still read the conversation. Release it to let someone else take over.</p>
-      <RescueInboxCalls api={api} threadId={thread.id} canManage={canManage} />
+      <RescueInboxCalls api={api} threadId={thread.id} canManage={canManage} openRequest={outreach?.id===thread.id && outreach.mode==="call"?outreach.sequence:0} />
     </div>
     <div className="ri-messages" aria-label="Conversation messages">{messages.length ? messages.map(message => <article key={message.id} className={`ri-message ${message.kind}`}>
       {message.kind === "note" && <span className="ri-badge mb-2"><LockKeyhole size={11} />Internal note · team only</span>}
@@ -88,7 +97,7 @@ function Conversation({ api, enabled }: { api: RescueInboxApi; enabled: boolean 
       {message.kind === "voicemail" && (message.hasRecording ? <Voicemail message={message} onDelete={admin ? () => api.deleteVoicemail.mutateAsync(message.id) : undefined} /> : <small>{message.status === "deleted" ? "Recording permanently removed" : "No recording available"}</small>)}
       <small>{message.authorName || (message.kind === "inbound" || message.kind === "voicemail" ? "Caller" : "Rescue team")} · {time(message.createdAt)}{message.status ? ` · ${message.status}` : ""}</small>
     </article>) : <div className="ri-empty"><MessageSquare size={28} /><h3>No messages yet</h3><p className="ri-muted">Messages and internal notes will appear here.</p></div>}</div>
-    <form className="ri-composer" onSubmit={async e => {
+    <form ref={textSection} className="ri-composer" onSubmit={async e => {
       e.preventDefault(); if (submitting.current || uncertain || !body.trim()) return;
       submitting.current = true; setError(null); setSent("");
       const requestId = crypto.randomUUID();
@@ -112,6 +121,7 @@ function InboxWorkspace() {
   const linkedThread=new URLSearchParams(search).get("thread");
   const validThread=linkedThread && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(linkedThread) ? linkedThread : null;
   const [selected, setSelected] = useState<string | null>(validThread);
+  const [outreach,setOutreach]=useState<{id:string;mode:"text"|"call";sequence:number}>();
   const [mobileConversation, setMobileConversation] = useState(!!validThread);
   const conversationPanel = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -140,13 +150,14 @@ function InboxWorkspace() {
       <section className="ri-banner"><div className="ri-toolbar"><h2>One inbox. No one carries it alone.</h2><span className="ri-badge">{settings?.enabled ? "Service enabled" : settings ? "Service disabled" : "Checking service"}</span></div><p className="ri-muted">{settings ? settings.enabled ? `${settings.number || "Dedicated number"} · Shared SMS and voicemail for the rescue team.` : "Setup mode: approved answers can be prepared now. The bot and outgoing sending remain off until an administrator activates a separate, approved number." : "Loading the rescue’s service configuration."}</p>{waiting > 0 && <p><span className="ri-badge waiting">{waiting} {waiting === 1 ? "conversation needs" : "conversations need"} a person</span></p>}</section>
       <div className="ri-tabs"><button className="ri-btn" aria-pressed={tab === "inbox"} onClick={() => setTab("inbox")}><Inbox size={16} />Shared inbox</button>{admin && <button className="ri-btn" aria-pressed={tab === "settings"} onClick={() => setTab("settings")}>Answers & setup</button>}</div>
       {tab === "settings" && admin ? api.settings.isError ? <ErrorState error={api.settings.error} retry={() => void api.settings.refetch()} /> : settings ? <RescueInboxSettings key={api.scope} api={api} initial={settings} /> : <Loading /> : <>
+        <RescueInboxOutreach api={api} onOpen={(id,mode)=>{setSelected(id);setMobileConversation(true);setFilter("all");setOutreach(previous=>({id,mode,sequence:(previous?.sequence||0)+1}));}}/>
         {api.settings.isError && <div className="ri-error" role="alert">Service status unavailable. SMS sending is disabled until it can be checked. <button className="ri-btn" onClick={() => void api.settings.refetch()}>Retry</button></div>}
         <div className="ri-toolbar mb-4"><label className="ri-field"><span>Show conversations</span><select value={filter} onChange={e => setFilter(e.target.value)}><option value="all">All conversations</option>{Object.entries(labels).map(([value, label]) => <option key={value} value={value}>{label}{value === "waiting" ? ` (${waiting})` : ""}</option>)}</select></label><span className="ri-muted">Shared with the inbox team · updates every 20 seconds</span></div>
         {api.threads.isError ? <ErrorState error={api.threads.error} retry={() => void api.threads.refetch()} /> : api.threads.isPending ? <Loading /> : <div className={`ri-workspace ${mobileConversation && selected ? "ri-show-conversation" : "ri-show-list"}`}>
           <div className="ri-list" aria-label="Conversations">{threads.filter(t => filter === "all" || t.status === filter).map(thread => <button type="button" key={thread.id} className={`ri-thread ${thread.status}`} aria-current={selected === thread.id} onClick={() => { setSelected(thread.id); setMobileConversation(true); }}><div className="ri-toolbar"><strong className="text-sm">{thread.phone}</strong><span className={`ri-badge ${thread.status}`}>{labels[thread.status]}</span></div><p>{thread.preview || "No preview yet"}</p><div className="ri-toolbar mt-3"><small className="ri-muted">{thread.topic || "General"}</small><small className="ri-muted">{time(thread.updatedAt)}</small></div></button>)}{!threads.some(t => filter === "all" || t.status === filter) && <div className="ri-empty"><Inbox size={30} /><h3>{threads.length ? "Nothing in this view" : "A fresh start for the team"}</h3><p className="ri-muted">{threads.length ? "Try another conversation filter." : "Incoming texts and voicemail will appear here once the dedicated service is activated."}</p>{filter !== "all" && <button className="ri-btn" onClick={() => setFilter("all")}>Show all conversations</button>}</div>}</div>
           <div className="ri-conversation-panel" ref={conversationPanel} tabIndex={-1} aria-label="Selected conversation">
             <button type="button" className="ri-btn ri-mobile-back" onClick={() => setMobileConversation(false)}><ArrowLeft size={16} />Back to conversations</button>
-            {selected ? <Conversation key={`${api.scope}:${selected}`} api={api} enabled={settings?.enabled === true && !api.settings.isError} /> : <div className="ri-empty"><MessageSquare size={34} /><h2>A shared place to help</h2><p className="ri-muted">Select a conversation to read approved answers, claim a handoff, or leave a note for the team.</p><span className="ri-badge"><LockKeyhole size={12} />Internal notes stay with the team</span></div>}
+            {selected ? <Conversation key={`${api.scope}:${selected}`} api={api} outreach={outreach} enabled={settings?.enabled === true && !api.settings.isError} /> : <div className="ri-empty"><MessageSquare size={34} /><h2>A shared place to help</h2><p className="ri-muted">Select a conversation to read approved answers, claim a handoff, or leave a note for the team.</p><span className="ri-badge"><LockKeyhole size={12} />Internal notes stay with the team</span></div>}
           </div>
         </div>}
       </>}
