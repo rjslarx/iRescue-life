@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { transformSync } from "esbuild";
 import { randomUUID } from "node:crypto";
+import { z } from "zod";
 
 const ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const FOREIGN = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
@@ -52,7 +53,7 @@ function registerHandler(method: Method, db: any, schema: any, eq: any, and: any
     assert.deepEqual(args.slice(0, -1), guards, "Authorization must precede validation");
     handler = args.at(-1);
   } };
-  new Function("app", "requireTenant", "requireAuth", "requireRoleOrPageAccess", "db", "schema", "eq", "and", compiled)(
+  new Function("app", "requireTenant", "requireAuth", "requireRoleOrPageAccess", "db", "schema", "eq", "and", "z", compiled)(
     app, guards[0], guards[1], (...args: string[]) => {
       assert.deepEqual(args, ["fundraiser-events", "admin", "owner"]);
       return guards[2];
@@ -118,15 +119,6 @@ for (const method of ["patch", "delete"] as const) {
       assert.deepEqual(response.payload, method === "patch" ? { event: h.rows[0] } : { success: true });
     }
   });
-}
-
-test("patch retains image display mode validation", async () => {
-  const h = harness("patch");
-  assert.deepEqual(await h.request(ID, { imageDisplayMode: "invalid" }), {
-    status: 400, payload: { error: 'imageDisplayMode must be "hero" or "poster"' },
-  });
-  assert.equal(h.accesses(), 0);
-});
 
 // Development/test PostgreSQL only; never import server/db or commit fixtures.
 // RUN_FUNDRAISER_DB_TEST=1 npx tsx --test tests/fundraiser-event-management.test.ts
@@ -209,4 +201,78 @@ test("PostgreSQL fundraiser edits and soft deletes stay tenant-scoped", {
   } finally {
     await client.end();
   }
+});
+}
+
+test("patch rejects invalid bodies before any database writes", async () => {
+  const h = harness("patch");
+  const original = structuredClone(h.rows);
+  const invalidBodies: unknown[] = [
+    null, [], "title", 1, true, {}, { tenantId: "other", id: FOREIGN },
+  ];
+  for (const field of ["priceCents", "inventoryCap"]) {
+    for (const value of [-1, 0, 1.5, 2147483648, NaN, Infinity, -Infinity, "100", true, [], {}]) {
+      invalidBodies.push({ title: "Must not save", [field]: value });
+    }
+  }
+  invalidBodies.push({ priceCents: null });
+  for (const field of ["title", "description", "bodyContent", "imageUrl"]) {
+    for (const value of [12, false, [], {}, "bad\0text"]) {
+      invalidBodies.push({ title: "Must not save", [field]: value });
+    }
+  }
+  for (const value of [null, "", "   ", "\n\t"]) invalidBodies.push({ title: value });
+  for (const field of ["passFeesToBuyer", "isActive"]) {
+    for (const value of [null, "false", "true", 0, 1, [], {}]) invalidBodies.push({ [field]: value });
+  }
+  for (const value of [null, "", false, "invalid", 0, [], {}]) invalidBodies.push({ imageDisplayMode: value });
+  for (const value of [null, "Noon", {}, [null], [1], [true], [[]], [{}], [""], [" \n"], ["Noon", "bad\0label"]]) {
+    invalidBodies.push({ pickupTimes: value });
+  }
+  for (const body of invalidBodies) {
+    assert.deepEqual(await h.request(ID, body), {
+      status: 400,
+      payload: {
+        error: "Invalid fundraiser event update",
+        message: "Provide valid values for at least one editable fundraiser event field.",
+      },
+    });
+  }
+  assert.equal(h.accesses(), 0);
+  assert.deepEqual(h.rows, original);
+});
+
+test("patch accepts each editable field alone without defaults or changes to omitted fields", async () => {
+  for (const body of [
+    { title: "New title" }, { description: "Details" }, { description: null }, { description: "" },
+    { bodyContent: "<p>Details</p>" }, { bodyContent: null }, { bodyContent: "" },
+    { imageUrl: "/objects/image.png" }, { imageUrl: null }, { imageUrl: "" },
+    { imageDisplayMode: "hero" }, { imageDisplayMode: "poster" },
+    { priceCents: 1 }, { priceCents: 2147483647 },
+    { inventoryCap: 1 }, { inventoryCap: 2147483647 }, { inventoryCap: null },
+    { passFeesToBuyer: false }, { passFeesToBuyer: true },
+    { isActive: false }, { isActive: true },
+    { pickupTimes: [] }, { pickupTimes: ["Saturday 11 AM – noon", "After the game"] },
+  ]) {
+    const h = harness("patch");
+    const original = structuredClone(h.rows);
+    assert.equal((await h.request(ID, body)).status, 200);
+    assert.equal(h.accesses(), 1);
+    assert.deepEqual(h.rows, [{ ...original[0], ...body }, original[1]]);
+  }
+});
+
+test("patch supports full editor payloads while ignoring protected and unknown fields", async () => {
+  const h = harness("patch");
+  const body = {
+    title: "BBQ plates", description: null, bodyContent: "<p>Lunch</p>",
+    imageUrl: null, imageDisplayMode: "poster", priceCents: 1200,
+    passFeesToBuyer: false, inventoryCap: null,
+    pickupTimes: ["11:00 AM – 11:30 AM"], isActive: true,
+  };
+  const original = structuredClone(h.rows);
+  assert.equal((await h.request(ID, {
+    ...body, id: FOREIGN, tenantId: "other", createdAt: "yesterday", soldCount: 99,
+  })).status, 200);
+  assert.deepEqual(h.rows, [{ ...original[0], ...body }, original[1]]);
 });

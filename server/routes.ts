@@ -52626,14 +52626,31 @@ ${section('Metadata', metaRows)}
         return res.status(400).json({ error: 'Invalid event ID', message: 'The provided event ID is not valid.' });
       }
       const { fundraiserEvents } = await import('@shared/schema');
-      const allowed = ['title', 'description', 'bodyContent', 'imageUrl', 'imageDisplayMode', 'priceCents', 'passFeesToBuyer', 'inventoryCap', 'pickupTimes', 'isActive'] as const;
-      const updates: Record<string, unknown> = {};
-      for (const key of allowed) {
-        if (key in req.body) updates[key] = req.body[key];
+      // No coercion or defaults: omitted fields must remain unchanged. Strip
+      // non-editable keys just as the previous allowlist did.
+      const text = z.string().refine(value => !value.includes('\0'));
+      const nonBlankText = text.refine(value => value.trim().length > 0);
+      const positiveInteger = z.number().int().min(1).max(2147483647);
+      const updateSchema = z.object({
+        title: nonBlankText,
+        description: text.nullable(),
+        bodyContent: text.nullable(),
+        imageUrl: text.nullable(),
+        imageDisplayMode: z.enum(['hero', 'poster']),
+        priceCents: positiveInteger,
+        passFeesToBuyer: z.boolean(),
+        inventoryCap: positiveInteger.nullable(),
+        pickupTimes: z.array(nonBlankText),
+        isActive: z.boolean(),
+      }).partial().refine(data => Object.values(data).some(value => value !== undefined));
+      const parsed = updateSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({
+          error: 'Invalid fundraiser event update',
+          message: 'Provide valid values for at least one editable fundraiser event field.',
+        });
       }
-      if (updates.imageDisplayMode && !['hero', 'poster'].includes(updates.imageDisplayMode as string)) {
-        return res.status(400).json({ error: 'imageDisplayMode must be "hero" or "poster"' });
-      }
+      const updates = parsed.data;
       const [event] = await db
         .update(fundraiserEvents)
         .set(updates)
