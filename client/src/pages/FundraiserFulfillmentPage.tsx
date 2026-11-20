@@ -47,7 +47,7 @@ export default function FundraiserFulfillmentPage() {
     refetchInterval: 30000,
   });
 
-  const { data: ordersData, isLoading: ordersLoading } = useQuery<{ orders: FundraiserOrder[] }>({
+  const { data: ordersData, isLoading: ordersLoading } = useQuery<{ orders: (FundraiserOrder & { confirmationStatus: string })[] }>({
     queryKey: ["/api/fundraiser-orders", eventId],
     queryFn: async () => {
       const res = await apiRequest("GET", `/api/fundraiser-orders?eventId=${eventId}`);
@@ -55,6 +55,17 @@ export default function FundraiserFulfillmentPage() {
     },
     enabled: !!eventId,
     refetchInterval: 30000,
+  });
+
+  const retryConfirmation = useMutation({
+    mutationFn: async (orderId: string) => {
+      await apiRequest("POST", `/api/fundraiser-orders/${orderId}/retry-confirmation`);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/fundraiser-orders", eventId] });
+      toast({ title: "Retry processed", description: "Check the email status for the result." });
+    },
+    onError: () => toast({ title: "Could not retry confirmation", description: "Refresh the order status and try again.", variant: "destructive" }),
   });
 
   const pickupMutation = useMutation({
@@ -231,7 +242,18 @@ export default function FundraiserFulfillmentPage() {
                         <TableCell className="text-sm text-muted-foreground">{order.customerPhone ?? "—"}</TableCell>
                         <TableCell className="text-center">{order.quantity}</TableCell>
                         <TableCell className="text-sm">{order.pickupTime ?? "—"}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{formatDate(order.createdAt)}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {formatDate(order.createdAt)}
+                          <div className="mt-1 text-xs">
+                            Email: {({ sent: "Sent", pending: "Queued", sending: "Sending", failed: "Failed — will retry", review: "Needs provider review", untracked: "No delivery history" } as Record<string, string>)[order.confirmationStatus] || "Unknown"}
+                          </div>
+                          {order.confirmationStatus === "failed" && (
+                            <Button size="sm" variant="outline" disabled={retryConfirmation.isPending}
+                              onClick={() => retryConfirmation.mutate(order.id)}>
+                              Retry email
+                            </Button>
+                          )}
+                        </TableCell>
                         <TableCell className="text-center">
                           <Checkbox
                             data-testid={`checkbox-pickup-${order.id}`}

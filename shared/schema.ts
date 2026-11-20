@@ -6225,6 +6225,22 @@ export const fundraiserOrders = pgTable("fundraiser_orders", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const fundraiserConfirmationDeliveries = pgTable("fundraiser_confirmation_deliveries", {
+  orderId: uuid("order_id").primaryKey().references(() => fundraiserOrders.id, { onDelete: "cascade" }),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  recipient: text("recipient").notNull(),
+  subject: text("subject").notNull(),
+  html: text("html").notNull(),
+  status: text("status").notNull().default("pending"),
+  attempts: integer("attempts").notNull().default(0),
+  nextAttemptAt: timestamp("next_attempt_at").notNull().defaultNow(),
+  startedAt: timestamp("started_at"),
+  sentAt: timestamp("sent_at"),
+  messageId: text("message_id"),
+  lastError: text("last_error"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const insertFundraiserOrderSchema = createInsertSchema(fundraiserOrders).omit({
   id: true,
   orderNumber: true,

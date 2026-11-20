@@ -37,6 +37,7 @@ function server() {
   const schema = {
     fundraiserOrders: { eventId: "eventId", paymentStatus: "paymentStatus", createdAt: "createdAt" },
     fundraiserEvents: { id: "id", tenantId: "tenantId" },
+    fundraiserConfirmationDeliveries: { orderId: "orderId", status: "status" },
   };
   type Predicate = (row: any) => boolean;
   const eq = (key: string, value: unknown): Predicate => row => row[key] === value;
@@ -45,6 +46,13 @@ function server() {
   let reads = 0;
   const db = {
     select: () => { reads++; return ({ from: (table: unknown) => ({
+      leftJoin: () => ({
+        where: (predicate: Predicate) => ({
+          orderBy: async (key: string) => orders.filter(predicate)
+            .sort((a: any, b: any) => a[key] - b[key])
+            .map(order => ({ order, confirmationStatus: order.id === "earlier" ? "sent" : null })),
+        }),
+      }),
       where: (predicate: Predicate) => table === schema.fundraiserEvents
         ? events.filter(predicate)
         : { orderBy: async (key: string) => orders.filter(predicate).sort((a: any, b: any) => a[key] - b[key]) },
@@ -89,6 +97,8 @@ test("staff order lists retain guards, paid-only filtering, flat shape and chron
   assert.equal(response.status, 200);
   assert.deepEqual(response.payload.orders.map((o: any) => o.id), ["earlier", "later"]);
   assert.equal(response.payload.orders[0].customerEmail, "earlier@example.test");
+  assert.equal(response.payload.orders[0].confirmationStatus, "sent");
+  assert.equal(response.payload.orders[1].confirmationStatus, "untracked");
 });
 
 test("staff cannot read another rescue's customers by supplying its event ID", async () => {

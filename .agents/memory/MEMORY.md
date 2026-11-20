@@ -56,3 +56,4 @@
 - [Damaged refund recovery](damaged-refund-recovery.md) — no manual matching or absence-based clearing; unverifiable original identity must remain blocked for support.
 - [Wild horse placement](wild-horse-placement.md) — Haseya’s-only screening; keep domesticated applications and historical answers unchanged.
 - [Feral cat surgery access](feral-cat-surgery.md) — Haseya’s accepts feral-cat surgery requests from unaffiliated individuals.
+- [Fundraiser email recovery](fundraiser-email-recovery.md) — retry definite failures only; historical paid orders and uncertain provider acceptance must not trigger duplicate confirmations.

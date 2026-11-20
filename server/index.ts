@@ -302,6 +302,8 @@ app.use((req, res, next) => {
   console.log("[Startup] Preparing donation audit schema");
   await pool.query(donationAuditSchemaSql);
   await pool.query(fundraiserOrderNumbersSql);
+  const { fundraiserConfirmationSql } = await import("./lib/fundraiser-confirmation-schema");
+  await pool.query(fundraiserConfirmationSql);
   console.log("[Startup] Preparing cat vaccine safeguards");
   await pool.query(catVaccineGuardSql);
   console.log("[Startup] Preparing vending menu settings");
@@ -317,6 +319,11 @@ app.use((req, res, next) => {
   console.log("[Startup] Registering application routes");
   const server = await registerRoutes(app);
   if (process.env.REPLIT_DEPLOYMENT === "1") {
+    const confirmationTimer = setInterval(() => {
+      void import("./services/fundraiser-confirmation").then(m => m.retryFundraiserConfirmations())
+        .catch(error => console.error("[Fundraiser confirmation] Sweep failed", error));
+    }, 60 * 1000);
+    confirmationTimer.unref();
     const inboxAlertTimer = setInterval(() => {
       void import("./services/rescue-help-alerts").then(m=>m.dispatchHelpAlerts())
         .catch(()=>console.error("[Rescue Inbox] Alert delivery check failed"));

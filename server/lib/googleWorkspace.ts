@@ -434,7 +434,7 @@ export class GmailService {
     from?: string;
     replyTo?: string;
     attachments?: EmailAttachment[];
-  }): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  }): Promise<{ success: boolean; messageId?: string; error?: string; retrySafe?: boolean }> {
     try {
       console.log(`[GmailService] sendEmail called with to=${Array.isArray(options.to) ? options.to.join(',') : options.to}, from=${options.from}, subject=${options.subject}`);
       
@@ -487,6 +487,7 @@ export class GmailService {
       return {
         success: false,
         error: error.message || 'Failed to send email via Gmail',
+        retrySafe: Number(error.response?.status) >= 400 && Number(error.response?.status) < 500 && Number(error.response?.status) !== 408,
       };
     }
   }

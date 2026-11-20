@@ -32869,63 +32869,29 @@ Submitted: ${new Date().toLocaleString()}
                 break;
               }
               const [updated] = await db
-                .update(fundraiserOrders)
-                .set({ paymentStatus: 'paid' })
+                .select()
+                .from(fundraiserOrders)
                 .where(and(
                   eq(fundraiserOrders.stripeSessionId, session.id),
-                  eq(fundraiserOrders.paymentStatus, 'pending')
+                  eq(fundraiserOrders.id, session.metadata.fundraiser_order_id)
                 ))
-                .returning();
+                .limit(1);
 
               if (!updated) {
                 console.log('[STRIPE-WEBHOOK] Fundraiser order already processed or not found for session:', session.id);
                 break;
               }
 
-              console.log('[STRIPE-WEBHOOK] Fundraiser order marked paid:', updated.id, 'qty:', updated.quantity);
-
-              // Send confirmation email to buyer
-              try {
                 const [event] = await db.select({ title: fundraiserEvents.title })
                   .from(fundraiserEvents)
-                  .where(eq(fundraiserEvents.id, updated.eventId))
+                  .where(and(eq(fundraiserEvents.id, updated.eventId), eq(fundraiserEvents.tenantId, tenantId)))
                   .limit(1);
-
-                const { EmailService } = await import('./lib/email-service');
-                const emailService = await EmailService.forTenant(tenantId);
-                if (emailService && updated.customerEmail) {
-                  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-                  const amountPaid = session.amount_total ? (session.amount_total / 100).toFixed(2) : 'N/A';
-                  const safeName = esc(updated.customerName || 'Valued Customer');
-                  const safeTitle = esc(event?.title || 'Fundraiser Event');
-                  const safeTenant = esc(tenant.name);
-                  const safePickup = updated.pickupTime ? esc(updated.pickupTime) : '';
-                  await emailService.send({
-                    to: updated.customerEmail,
-                    subject: `Order F-${updated.orderNumber} confirmed - ${safeTitle}`,
-                    html: `
-                      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                        <h2 style="color: #1a1a1a;">Thank you for your purchase, ${safeName}!</h2>
-                        <p>Your order has been confirmed.</p>
-                        <p><strong>Order #F-${updated.orderNumber}</strong> — please show this number at pickup.</p>
-                        <div style="background: #f9fafb; border-radius: 8px; padding: 16px; margin: 16px 0;">
-                          <p style="margin: 4px 0;"><strong>Event:</strong> ${safeTitle}</p>
-                          <p style="margin: 4px 0;"><strong>Quantity:</strong> ${updated.quantity}</p>
-                          <p style="margin: 4px 0;"><strong>Amount Paid:</strong> $${amountPaid}</p>
-                          ${safePickup ? `<p style="margin: 4px 0;"><strong>Pickup Time:</strong> ${safePickup}</p>` : ''}
-                        </div>
-                        <p style="color: #6b7280; font-size: 14px;">If you have any questions, please contact us directly.</p>
-                        <p style="color: #6b7280; font-size: 14px;">— ${safeTenant}</p>
-                      </div>
-                    `,
-                  });
-                  console.log('[STRIPE-WEBHOOK] Sent fundraiser order confirmation email to:', updated.customerEmail);
-                }
-              } catch (emailErr) {
-                console.error('[STRIPE-WEBHOOK] Failed to send fundraiser order confirmation email:', emailErr);
-              }
+                if (!event) throw new Error('Fundraiser event tenant mismatch');
+                const { reconcileFundraiserConfirmation } = await import('./services/fundraiser-confirmation');
+                await reconcileFundraiserConfirmation(updated.id, session.id, tenantId, event.title, session.amount_total || 0);
             } catch (err) {
               console.error('[STRIPE-WEBHOOK] Failed to mark fundraiser order paid:', err);
+              throw err;
             }
             break;
           }
@@ -52911,22 +52877,39 @@ ${section('Metadata', metaRows)}
         return res.status(400).json({ error: 'eventId must be a single valid UUID' });
       }
       const eventId = input.data;
-      const { fundraiserOrders, fundraiserEvents } = await import('@shared/schema');
+      const { fundraiserOrders, fundraiserEvents, fundraiserConfirmationDeliveries } = await import('@shared/schema');
       const tenantEvents = db.select({ id: fundraiserEvents.id }).from(fundraiserEvents)
         .where(eq(fundraiserEvents.tenantId, req.tenant!.id));
       const orders = await db
-        .select()
+        .select({ order: fundraiserOrders, confirmationStatus: fundraiserConfirmationDeliveries.status })
         .from(fundraiserOrders)
+        .leftJoin(fundraiserConfirmationDeliveries, eq(fundraiserConfirmationDeliveries.orderId, fundraiserOrders.id))
         .where(and(
           eq(fundraiserOrders.eventId, eventId),
           eq(fundraiserOrders.paymentStatus, 'paid'),
           inArray(fundraiserOrders.eventId, tenantEvents),
         ))
         .orderBy(fundraiserOrders.createdAt);
-      res.json({ orders });
+      res.json({ orders: orders.map(row => ({ ...row.order, confirmationStatus: row.confirmationStatus || 'untracked' })) });
     } catch (error) {
       next(error);
     }
+  });
+
+  app.post('/api/fundraiser-orders/:id/retry-confirmation', requireTenant, requireAuth, requireRoleOrPageAccess('fundraiser-events', 'admin', 'owner', 'board_member', 'staff'), async (req, res, next) => {
+    try {
+      const { pool } = await import('./db');
+      // Only known failed deliveries can be retried. Sent, uncertain and
+      // historical untracked emails cannot be resent via this endpoint.
+      const { rows: [job] } = await pool.query(`
+        UPDATE fundraiser_confirmation_deliveries SET next_attempt_at = now()
+        WHERE order_id = $1 AND tenant_id = $2 AND status = 'failed' RETURNING order_id`,
+      [z.string().uuid().parse(req.params.id), req.tenant!.id]);
+      if (!job) return res.status(409).json({ error: 'No safely retryable confirmation found' });
+      const { dispatchFundraiserConfirmation } = await import('./services/fundraiser-confirmation');
+      await dispatchFundraiserConfirmation(job.order_id, req.tenant!.id);
+      res.json({ message: 'Retry processed. Check confirmation status for the result.' });
+    } catch (error) { next(error); }
   });
 
   /**
@@ -53001,7 +52984,7 @@ ${section('Metadata', metaRows)}
       if (!eventId || !customerEmail) return res.status(400).json({ error: 'eventId and customerEmail required' });
 
       const tenantId = req.tenant!.id;
-      const [event] = await db.select({ id: fundraiserEvents.id })
+      const [event] = await db.select({ id: fundraiserEvents.id, title: fundraiserEvents.title })
         .from(fundraiserEvents)
         .where(and(eq(fundraiserEvents.id, eventId), eq(fundraiserEvents.tenantId, tenantId)))
         .limit(1);
@@ -53034,10 +53017,11 @@ ${section('Metadata', metaRows)}
         if (!order.stripeSessionId) continue;
         try {
           const session = await stripeClient.checkout.sessions.retrieve(order.stripeSessionId);
-          if (session.payment_status === 'paid') {
-            await db.update(fundraiserOrders)
-              .set({ paymentStatus: 'paid' })
-              .where(eq(fundraiserOrders.id, order.id));
+          if (session.payment_status === 'paid' &&
+              session.metadata?.tenantId === tenantId &&
+              session.metadata?.fundraiser_order_id === order.id) {
+            const { reconcileFundraiserConfirmation } = await import('./services/fundraiser-confirmation');
+            await reconcileFundraiserConfirmation(order.id, session.id, tenantId, event.title, session.amount_total || 0);
             verified++;
             console.log(`[FUNDRAISER-VERIFY] Reconciled pending order ${order.id} → paid`);
           }

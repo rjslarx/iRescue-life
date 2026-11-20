@@ -131,6 +131,7 @@ export interface EmailAttachment {
 }
 
 interface EmailOptions {
+  durableDelivery?: boolean;
   to: string | string[];
   subject: string;
   html: string;
@@ -791,7 +792,33 @@ export class EmailService {
    * - Custom headers support (List-Unsubscribe)
    * - DMARC compliance: hardcoded from address with reply_to for tenant email
    */
-  private async sendViaResend(options: EmailOptions): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  async sendDurable(options: EmailOptions): Promise<{ success: boolean; messageId?: string; error?: string; retrySafe?: boolean }> {
+    let filtered: string[];
+    try {
+      ({ filtered } = await this.filterSuppressedEmails(options.to));
+      if (!filtered.length) return { success: false, error: "Recipient suppressed", retrySafe: false };
+      if (this.gmailService) {
+        const quota = await this.checkGmailQuota(1);
+        if (!quota.allowed) return { success: false, error: "Gmail quota exceeded", retrySafe: true };
+      }
+    } catch {
+      return { success: false, error: "Email pre-send checks unavailable", retrySafe: true };
+    }
+    if (this.gmailService) {
+      // Never fall back after an ambiguous Gmail failure.
+      const result = await this.gmailService.sendEmail({
+        ...options, from: options.from || `${this.fromName} <${this.fromEmail}>`,
+      });
+      if (result.success) {
+        await this.logGmailSend(filtered[0], result.messageId, 'other').catch(() => {});
+      }
+      return result;
+    }
+    return this.sendViaResend({ ...options, durableDelivery: true });
+  }
+
+  private async sendViaResend(options: EmailOptions): Promise<{ success: boolean; messageId?: string; error?: string; retrySafe?: boolean }> {
+    let transmissionStarted = false;
     try {
       // Check quota before sending (only for platform key)
       const quota = await this.checkQuota(1);
@@ -799,6 +826,7 @@ export class EmailService {
         return {
           success: false,
           error: `Email quota exceeded. Limit: ${quota.limit}/month. Please upgrade your plan or configure your own Resend API key.`,
+          retrySafe: true,
         };
       }
 
@@ -855,6 +883,7 @@ export class EmailService {
         emailPayload.headers = options.headers;
       }
       
+      transmissionStarted = true;
       const response = await fetch(`${RESEND_API_URL}/emails`, {
         method: 'POST',
         headers: {
@@ -879,6 +908,7 @@ export class EmailService {
         return {
           success: false,
           error: `Email API error: ${response.status} ${response.statusText} (non-JSON response)`,
+          retrySafe: response.status >= 400 && response.status < 500 && response.status !== 408,
         };
       }
 
@@ -898,11 +928,16 @@ export class EmailService {
         return {
           success: false,
           error: `Email API error: ${response.status} ${errorName} - ${errorDetail}`,
+          retrySafe: response.status >= 400 && response.status < 500 && response.status !== 408,
         };
       }
 
       // Increment usage counter after successful send
-      await this.incrementUsage(1);
+      if (options.durableDelivery) {
+        await this.incrementUsage(1).catch(() => console.error("[EmailService] Usage accounting failed after accepted delivery"));
+      } else {
+        await this.incrementUsage(1);
+      }
 
       return {
         success: true,
@@ -912,6 +947,7 @@ export class EmailService {
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error sending email',
+        retrySafe: !transmissionStarted,
       };
     }
   }
