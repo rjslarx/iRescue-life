@@ -58,24 +58,29 @@ export default function FundraiserFulfillmentPage() {
   });
 
   const pickupMutation = useMutation({
-    mutationFn: async (orderId: string) => {
-      const res = await apiRequest("PATCH", `/api/fundraiser-orders/${orderId}/pickup`);
-      return await res.json();
+    mutationFn: async ({ orderId, pickedUp }: { orderId: string; pickedUp: boolean }) => {
+      const res = await apiRequest("PATCH", `/api/fundraiser-orders/${orderId}/pickup`, { pickedUp });
+      return await res.json() as { order: FundraiserOrder };
     },
-    onMutate: async (orderId) => {
-      const current = ordersData?.orders.find((o) => o.id === orderId);
-      setOptimisticPickups((prev) => ({ ...prev, [orderId]: !(current?.pickedUp ?? false) }));
+    onMutate: async ({ orderId, pickedUp }) => {
+      await qc.cancelQueries({ queryKey: ["/api/fundraiser-orders", eventId] });
+      setOptimisticPickups((prev) => ({ ...prev, [orderId]: pickedUp }));
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["/api/fundraiser-orders", eventId] });
+    onSuccess: ({ order }) => {
+      qc.setQueryData<{ orders: FundraiserOrder[] }>(["/api/fundraiser-orders", eventId], (data) =>
+        data ? { ...data, orders: data.orders.map((existing) => existing.id === order.id ? order : existing) } : data);
     },
-    onError: (_, orderId) => {
+    onError: () => {
+      toast({ title: "Error", description: "Could not update pickup status.", variant: "destructive" });
+    },
+    onSettled: async (_, __, { orderId }) => {
+      // Never leave an optimistic override masking another volunteer's changes.
       setOptimisticPickups((prev) => {
         const next = { ...prev };
         delete next[orderId];
         return next;
       });
-      toast({ title: "Error", description: "Could not update pickup status.", variant: "destructive" });
+      await qc.invalidateQueries({ queryKey: ["/api/fundraiser-orders", eventId] });
     },
   });
 
@@ -231,7 +236,9 @@ export default function FundraiserFulfillmentPage() {
                           <Checkbox
                             data-testid={`checkbox-pickup-${order.id}`}
                             checked={isPickedUp}
-                            onCheckedChange={() => pickupMutation.mutate(order.id)}
+                            onCheckedChange={(checked) => {
+                              if (typeof checked === "boolean") pickupMutation.mutate({ orderId: order.id, pickedUp: checked });
+                            }}
                             disabled={pickupMutation.isPending}
                           />
                         </TableCell>

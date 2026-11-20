@@ -52912,15 +52912,19 @@ ${section('Metadata', metaRows)}
 
   /**
    * PATCH /api/fundraiser-orders/:id/pickup
-   * Staff: toggle picked-up status for an order
+   * Staff: set picked-up status for an order (safe to retry)
    */
   app.patch('/api/fundraiser-orders/:id/pickup', requireTenant, requireAuth, requireRoleOrPageAccess('fundraiser-events', 'admin', 'owner', 'board_member', 'staff'), async (req, res, next) => {
     try {
-      const { fundraiserOrders } = await import('@shared/schema');
+      const input = z.object({ pickedUp: z.boolean() }).strict().safeParse(req.body);
+      if (!input.success) return res.status(400).json({ error: 'pickedUp must be a boolean' });
+      const { fundraiserOrders, fundraiserEvents } = await import('@shared/schema');
       const { id } = req.params;
-      const [current] = await db.select({ pickedUp: fundraiserOrders.pickedUp }).from(fundraiserOrders).where(eq(fundraiserOrders.id, id)).limit(1);
-      if (!current) return res.status(404).json({ error: 'Order not found' });
-      const [updated] = await db.update(fundraiserOrders).set({ pickedUp: !current.pickedUp }).where(eq(fundraiserOrders.id, id)).returning();
+      const tenantEvents = db.select({ id: fundraiserEvents.id }).from(fundraiserEvents)
+        .where(eq(fundraiserEvents.tenantId, req.tenant!.id));
+      const [updated] = await db.update(fundraiserOrders).set({ pickedUp: input.data.pickedUp })
+        .where(and(eq(fundraiserOrders.id, id), inArray(fundraiserOrders.eventId, tenantEvents))).returning();
+      if (!updated) return res.status(404).json({ error: 'Order not found' });
       res.json({ order: updated });
     } catch (error) {
       next(error);
