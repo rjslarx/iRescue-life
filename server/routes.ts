@@ -52896,13 +52896,19 @@ ${section('Metadata', metaRows)}
    */
   app.get('/api/fundraiser-orders', requireTenant, requireAuth, requireRoleOrPageAccess('fundraiser-events', 'admin', 'owner', 'board_member', 'staff'), async (req, res, next) => {
     try {
-      const { fundraiserOrders } = await import('@shared/schema');
+      const { fundraiserOrders, fundraiserEvents } = await import('@shared/schema');
       const { eventId } = req.query as { eventId?: string };
       if (!eventId) return res.status(400).json({ error: 'eventId query param required' });
+      const tenantEvents = db.select({ id: fundraiserEvents.id }).from(fundraiserEvents)
+        .where(eq(fundraiserEvents.tenantId, req.tenant!.id));
       const orders = await db
         .select()
         .from(fundraiserOrders)
-        .where(and(eq(fundraiserOrders.eventId, eventId), eq(fundraiserOrders.paymentStatus, 'paid')))
+        .where(and(
+          eq(fundraiserOrders.eventId, eventId),
+          eq(fundraiserOrders.paymentStatus, 'paid'),
+          inArray(fundraiserOrders.eventId, tenantEvents),
+        ))
         .orderBy(fundraiserOrders.createdAt);
       res.json({ orders });
     } catch (error) {
