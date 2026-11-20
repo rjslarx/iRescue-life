@@ -52655,8 +52655,11 @@ ${section('Metadata', metaRows)}
    */
   app.patch('/api/fundraiser-events/:id', requireTenant, requireAuth, requireRoleOrPageAccess('fundraiser-events', 'admin', 'owner'), async (req, res, next) => {
     try {
-      const { fundraiserEvents } = await import('@shared/schema');
       const { id } = req.params;
+      if (typeof id !== 'string' || id.length !== 36 || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+        return res.status(400).json({ error: 'Invalid event ID', message: 'The provided event ID is not valid.' });
+      }
+      const { fundraiserEvents } = await import('@shared/schema');
       const allowed = ['title', 'description', 'bodyContent', 'imageUrl', 'imageDisplayMode', 'priceCents', 'passFeesToBuyer', 'inventoryCap', 'pickupTimes', 'isActive'] as const;
       const updates: Record<string, unknown> = {};
       for (const key of allowed) {
@@ -52683,8 +52686,11 @@ ${section('Metadata', metaRows)}
    */
   app.delete('/api/fundraiser-events/:id', requireTenant, requireAuth, requireRoleOrPageAccess('fundraiser-events', 'admin', 'owner'), async (req, res, next) => {
     try {
-      const { fundraiserEvents } = await import('@shared/schema');
       const { id } = req.params;
+      if (typeof id !== 'string' || id.length !== 36 || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+        return res.status(400).json({ error: 'Invalid event ID', message: 'The provided event ID is not valid.' });
+      }
+      const { fundraiserEvents } = await import('@shared/schema');
       await db
         .update(fundraiserEvents)
         .set({ isActive: false })
