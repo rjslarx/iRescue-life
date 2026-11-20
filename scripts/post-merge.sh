@@ -633,3 +633,4 @@ npx tsx scripts/ensure-rescue-resale.ts
 npx tsx scripts/ensure-community-resale.ts
 npx tsx scripts/ensure-sms-suppression.ts
 npx tsx scripts/ensure-rescue-help.ts
+npx tsx scripts/ensure-fundraiser-order-numbers.ts

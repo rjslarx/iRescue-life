@@ -4,6 +4,7 @@ import path from "path";
 import fs from "fs";
 import { catVaccineGuardSql } from "./lib/cat-vaccine-guard";
 import { donationAuditSchemaSql } from "./lib/donation-audit";
+import { fundraiserOrderNumbersSql } from "./lib/fundraiser-order-numbers";
 import { rescueVendSchemaSql } from "./lib/rescue-vend-schema";
 import { rescueResaleSchemaSql } from "./lib/rescue-resale-schema";
 import { communityResaleSchemaSql } from "./lib/community-resale-schema";
@@ -300,6 +301,7 @@ app.use((req, res, next) => {
   const { pool } = await import("./db");
   console.log("[Startup] Preparing donation audit schema");
   await pool.query(donationAuditSchemaSql);
+  await pool.query(fundraiserOrderNumbersSql);
   console.log("[Startup] Preparing cat vaccine safeguards");
   await pool.query(catVaccineGuardSql);
   console.log("[Startup] Preparing vending menu settings");

@@ -6212,6 +6212,7 @@ export type FundraiserEvent = typeof fundraiserEvents.$inferSelect;
 // Orders placed by customers for fundraiser events
 export const fundraiserOrders = pgTable("fundraiser_orders", {
   id: uuid("id").primaryKey().defaultRandom(),
+  orderNumber: integer("order_number").notNull().default(sql`nextval('fundraiser_order_number_seq')`).unique(),
   eventId: uuid("event_id").notNull().references(() => fundraiserEvents.id, { onDelete: 'cascade' }),
   customerName: text("customer_name").notNull(),
   customerEmail: text("customer_email").notNull(),
@@ -6226,6 +6227,7 @@ export const fundraiserOrders = pgTable("fundraiser_orders", {
 
 export const insertFundraiserOrderSchema = createInsertSchema(fundraiserOrders).omit({
   id: true,
+  orderNumber: true,
   createdAt: true,
 });
 export type InsertFundraiserOrder = z.infer<typeof insertFundraiserOrderSchema>;

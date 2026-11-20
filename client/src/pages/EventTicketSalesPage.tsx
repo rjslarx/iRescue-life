@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { fundraiserOrderReference, matchesFundraiserOrder } from "@shared/fundraiser-order-reference";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -30,6 +31,8 @@ import DashboardLayout from "@/components/DashboardLayout";
 
 interface TicketSale {
   id: string;
+  orderNumber?: number;
+  pickedUp?: boolean;
   eventName: string;
   eventTicketId: string | null;
   customerName: string;
@@ -100,6 +103,7 @@ function formatDateTime(dateString: string): string {
 
 export default function EventTicketSalesPage() {
   const [eventFilter, setEventFilter] = useState<string>("all");
+  const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");
   const [showFilters, setShowFilters] = useState(false);
@@ -310,9 +314,10 @@ export default function EventTicketSalesPage() {
         )}
 
         <div data-testid="sales-list">
+          <Input className="mb-3" aria-label="Search sales by order number, name, or email" placeholder="Search order number, name, or email" value={search} onChange={e => setSearch(e.target.value)} />
           <div className="flex items-center justify-between gap-2 mb-3">
             <h2 className="text-sm font-semibold text-muted-foreground">
-              Recent Purchases ({sales.length})
+              Recent Purchases ({sales.filter(sale => matchesFundraiserOrder(sale, search)).length})
             </h2>
             <div className="flex items-center gap-1 text-xs text-muted-foreground">
               <RefreshCw className="h-3 w-3" />
@@ -320,12 +325,12 @@ export default function EventTicketSalesPage() {
             </div>
           </div>
 
-          {sales.length === 0 ? (
+          {sales.filter(sale => matchesFundraiserOrder(sale, search)).length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center gap-3 p-8">
                 <Ticket className="h-10 w-10 text-muted-foreground" />
                 <div className="text-center">
-                  <p className="text-sm font-medium">No ticket purchases yet</p>
+                  <p className="text-sm font-medium">{search ? "No matching purchases" : "No ticket purchases yet"}</p>
                   <p className="text-xs text-muted-foreground mt-1">
                     {hasActiveFilters
                       ? "No purchases match the current filters. Try adjusting your filters."
@@ -336,12 +341,14 @@ export default function EventTicketSalesPage() {
             </Card>
           ) : (
             <div className="space-y-2">
-              {sales.map(sale => (
+              {sales.filter(sale => matchesFundraiserOrder(sale, search)).map(sale => (
                 <Card key={sale.id} data-testid={`sale-card-${sale.id}`}>
                   <CardContent className="p-3">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
+                          {sale.orderNumber != null && <Badge variant="outline">#{fundraiserOrderReference(sale.orderNumber)}</Badge>}
+                          {sale.pickedUp != null && <Badge variant={sale.pickedUp ? "secondary" : "outline"}>{sale.pickedUp ? "Picked up" : "Awaiting pickup"}</Badge>}
                           <p className="text-sm font-medium" data-testid={`text-customer-name-${sale.id}`}>
                             {sale.customerName}
                           </p>

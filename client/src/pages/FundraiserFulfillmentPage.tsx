@@ -5,6 +5,8 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { fundraiserOrderReference, matchesFundraiserOrder } from "@shared/fundraiser-order-reference";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -31,6 +33,7 @@ export default function FundraiserFulfillmentPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [filter, setFilter] = useState<Filter>("all");
+  const [search, setSearch] = useState("");
   const [optimisticPickups, setOptimisticPickups] = useState<Record<string, boolean>>({});
 
   const { data: eventData, isLoading: eventLoading } = useQuery<{ event: FundraiserEvent & { soldCount: number } }>({
@@ -84,6 +87,7 @@ export default function FundraiserFulfillmentPage() {
   const pickedUpCount = orders.filter((o) => (optimisticPickups[o.id] !== undefined ? optimisticPickups[o.id] : o.pickedUp)).length;
 
   const filteredOrders = orders.filter((o) => {
+    if (!matchesFundraiserOrder(o, search)) return false;
     const isPickedUp = optimisticPickups[o.id] !== undefined ? optimisticPickups[o.id] : o.pickedUp;
     if (filter === "pending") return !isPickedUp;
     if (filter === "picked-up") return isPickedUp;
@@ -158,6 +162,7 @@ export default function FundraiserFulfillmentPage() {
         </div>
 
         {/* Filter tabs */}
+        <Input aria-label="Search orders by number, name, or email" placeholder="Search order number, name, or email" value={search} onChange={e => setSearch(e.target.value)} />
         <div className="flex gap-2 flex-wrap">
           {(["all", "pending", "picked-up"] as Filter[]).map((f) => (
             <Button
@@ -186,7 +191,7 @@ export default function FundraiserFulfillmentPage() {
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-16 text-center space-y-2">
               <PackageCheck className="h-10 w-10 text-muted-foreground" />
-              <p className="font-medium">No orders yet</p>
+              <p className="font-medium">{orders.length ? "No matching orders" : "No orders yet"}</p>
               <p className="text-sm text-muted-foreground">
                 {filter === "all" ? "Paid orders will appear here once customers complete checkout." : "No orders match this filter."}
               </p>
@@ -198,6 +203,7 @@ export default function FundraiserFulfillmentPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead>Order Number</TableHead>
                     <TableHead>Customer</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Phone</TableHead>
@@ -214,6 +220,7 @@ export default function FundraiserFulfillmentPage() {
                       : order.pickedUp;
                     return (
                       <TableRow key={order.id} className={isPickedUp ? "opacity-60" : undefined}>
+                        <TableCell className="font-semibold whitespace-nowrap">#{fundraiserOrderReference(order.orderNumber)}</TableCell>
                         <TableCell className="font-medium">{order.customerName}</TableCell>
                         <TableCell className="text-sm text-muted-foreground">{order.customerEmail}</TableCell>
                         <TableCell className="text-sm text-muted-foreground">{order.customerPhone ?? "—"}</TableCell>

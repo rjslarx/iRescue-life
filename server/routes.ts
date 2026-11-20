@@ -32007,6 +32007,8 @@ Submitted: ${new Date().toLocaleString()}
       const fundraiserPaidOrders = await db
         .select({
           orderId: fundraiserOrders.id,
+          orderNumber: fundraiserOrders.orderNumber,
+          pickedUp: fundraiserOrders.pickedUp,
           customerName: fundraiserOrders.customerName,
           customerEmail: fundraiserOrders.customerEmail,
           quantity: fundraiserOrders.quantity,
@@ -32038,6 +32040,8 @@ Submitted: ${new Date().toLocaleString()}
         const amount = fo.priceCents * fo.quantity;
         const sale = {
           id: fo.orderId,
+          orderNumber: fo.orderNumber,
+          pickedUp: fo.pickedUp,
           eventName: fo.eventTitle,
           eventTicketId: null,
           customerName: fo.customerName,
@@ -32898,11 +32902,12 @@ Submitted: ${new Date().toLocaleString()}
                   const safePickup = updated.pickupTime ? esc(updated.pickupTime) : '';
                   await emailService.send({
                     to: updated.customerEmail,
-                    subject: `Order Confirmation - ${safeTitle} (${updated.quantity} ticket${updated.quantity > 1 ? 's' : ''})`,
+                    subject: `Order F-${updated.orderNumber} confirmed - ${safeTitle}`,
                     html: `
                       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                         <h2 style="color: #1a1a1a;">Thank you for your purchase, ${safeName}!</h2>
                         <p>Your order has been confirmed.</p>
+                        <p><strong>Order #F-${updated.orderNumber}</strong> — please show this number at pickup.</p>
                         <div style="background: #f9fafb; border-radius: 8px; padding: 16px; margin: 16px 0;">
                           <p style="margin: 4px 0;"><strong>Event:</strong> ${safeTitle}</p>
                           <p style="margin: 4px 0;"><strong>Quantity:</strong> ${updated.quantity}</p>
@@ -52787,7 +52792,7 @@ ${section('Metadata', metaRows)}
       const baseUrl = `${req.protocol}://${host}`;
       const hasCustomDomain = req.tenant!.customDomain && host.includes(req.tenant!.customDomain);
       const tenantPath = hasCustomDomain ? '' : (req.tenant!.subdomain ? `/${req.tenant!.subdomain}` : '');
-      const successUrl = `${baseUrl}${tenantPath}/donate/event/${id}?status=success`;
+      const successUrl = `${baseUrl}${tenantPath}/donate/event/${id}?status=success&session_id={CHECKOUT_SESSION_ID}`;
       const cancelUrl = `${baseUrl}${tenantPath}/donate/event/${id}?status=cancelled`;
 
       // Calculate the order total once. Fee gross-up must not be rounded per
@@ -52926,6 +52931,46 @@ ${section('Metadata', metaRows)}
    * POST /api/fundraiser-orders/verify-payment
    * Public: Verify and reconcile a fundraiser order payment when webhook may have been missed
    */
+  // Session ID is the private checkout-return capability. Never look up a
+  // public confirmation by a guessable order number or customer email.
+  app.post('/api/fundraiser-orders/confirmation', requireTenant, async (req, res, next) => {
+    try {
+      const input = z.object({
+        eventId: z.string().uuid(),
+        sessionId: z.string().min(20).max(255).regex(/^cs_/),
+      }).parse(req.body);
+      const { fundraiserOrders, fundraiserEvents } = await import('@shared/schema');
+      const [row] = await db.select({ order: fundraiserOrders, title: fundraiserEvents.title })
+        .from(fundraiserOrders)
+        .innerJoin(fundraiserEvents, eq(fundraiserOrders.eventId, fundraiserEvents.id))
+        .where(and(
+          eq(fundraiserEvents.tenantId, req.tenant!.id),
+          eq(fundraiserOrders.eventId, input.eventId),
+          eq(fundraiserOrders.stripeSessionId, input.sessionId),
+        )).limit(1);
+      if (!row) return res.status(404).json({ error: 'Order not found' });
+      const { getPlatformStripeSecretKey } = await import('./config/platform');
+      const key = getPlatformStripeSecretKey();
+      if (!key) return res.status(503).json({ error: 'Payment verification unavailable' });
+      const Stripe = (await import('stripe')).default;
+      const stripe = new Stripe(key, { apiVersion: '2025-09-30.clover' as any });
+      const session = await stripe.checkout.sessions.retrieve(input.sessionId);
+      if (session.payment_status !== 'paid' ||
+          session.metadata?.tenantId !== req.tenant!.id ||
+          session.metadata?.fundraiser_order_id !== row.order.id) {
+        return res.status(409).json({ error: 'Payment has not been confirmed yet. Please try again.' });
+      }
+      const { reconcileFundraiserConfirmation } = await import('./services/fundraiser-confirmation');
+      await reconcileFundraiserConfirmation(row.order.id, input.sessionId, req.tenant!.id, row.title, session.amount_total || 0);
+      res.set('Cache-Control', 'no-store');
+      return res.json({
+        orderNumber: row.order.orderNumber,
+        quantity: row.order.quantity,
+        pickupTime: row.order.pickupTime,
+      });
+    } catch (error) { next(error); }
+  });
+
   app.post('/api/fundraiser-orders/verify-payment', requireTenant, async (req, res, next) => {
     try {
       const { fundraiserOrders, fundraiserEvents } = await import('@shared/schema');

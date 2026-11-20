@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef } from "react";
-import { useRoute, useLocation, Link } from "wouter";
+import { useState } from "react";
+import { useRoute, useSearch, Link } from "wouter";
+import { fundraiserOrderReference } from "@shared/fundraiser-order-reference";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useTenant } from "@/contexts/TenantContext";
 import { apiRequest } from "@/lib/queryClient";
@@ -35,13 +36,14 @@ function formatCents(cents: number): string {
 
 export default function FundraiserEventPage() {
   const [, params] = useRoute("/donate/event/:eventId");
-  const [location] = useLocation();
+  const search = useSearch();
   const { tenantId } = useTenant();
   const { toast } = useToast();
   const eventId = params?.eventId;
 
-  const urlParams = new URLSearchParams(location.split("?")[1] || "");
+  const urlParams = new URLSearchParams(search);
   const status = urlParams.get("status");
+  const sessionId = urlParams.get("session_id");
 
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
@@ -49,21 +51,15 @@ export default function FundraiserEventPage() {
   const [quantity, setQuantity] = useState(1);
   const [pickupTime, setPickupTime] = useState("");
   const [soldOutError, setSoldOutError] = useState(false);
-  const verifyAttempted = useRef(false);
-
-  useEffect(() => {
-    if (status === "success" && eventId && tenantId && !verifyAttempted.current) {
-      verifyAttempted.current = true;
-      const savedEmail = sessionStorage.getItem(`fundraiser_email_${eventId}`);
-      if (savedEmail) {
-        fetch("/api/fundraiser-orders/verify-payment", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "x-tenant-id": tenantId },
-          body: JSON.stringify({ eventId, customerEmail: savedEmail }),
-        }).catch(() => {});
-      }
-    }
-  }, [status, eventId, tenantId]);
+  const confirmation = useQuery<{ orderNumber: number; quantity: number; pickupTime: string | null }>({
+    queryKey: ["/api/fundraiser-orders/confirmation", tenantId, eventId, sessionId],
+    enabled: status === "success" && !!tenantId && !!eventId && !!sessionId,
+    retry: false,
+    queryFn: async () => {
+      const res = await apiRequest("POST", "/api/fundraiser-orders/confirmation", { eventId, sessionId });
+      return res.json();
+    },
+  });
 
   const { data, isLoading, error } = useQuery<{ event: FundraiserEventPublic }>({
     queryKey: ["/api/fundraiser-events", eventId, "public"],
@@ -169,16 +165,28 @@ export default function FundraiserEventPage() {
           <Card className="max-w-md w-full">
             <CardHeader className="text-center pb-2">
               <CheckCircle2 className="h-14 w-14 text-green-600 mx-auto mb-3" />
-              <CardTitle className="text-2xl">Order Confirmed!</CardTitle>
+              <CardTitle className="text-2xl">{confirmation.data ? "Order Confirmed!" : "Check Your Order"}</CardTitle>
             </CardHeader>
             <CardContent className="text-center space-y-3">
               <p className="text-muted-foreground">
-                Thank you for supporting <strong>{event.title}</strong>. A confirmation has been sent to your email.
+                Thank you for supporting <strong>{event.title}</strong>.
               </p>
-              {event.pickupTimes.length > 0 && pickupTime && (
+              {confirmation.data ? (
+                <div className="space-y-2">
+                  <p className="text-2xl font-bold">Order #{fundraiserOrderReference(confirmation.data.orderNumber)}</p>
+                  <p>{confirmation.data.quantity} item(s) — show this number at pickup.</p>
+                  <p className="text-sm text-muted-foreground">Keep this confirmation for your records.</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <p>{!sessionId ? "Please check your confirmation email for your order details." : confirmation.isError ? "We couldn't verify your payment yet. Please try again before placing another order." : "Verifying your payment…"}</p>
+                  {sessionId && confirmation.isError && <Button onClick={() => confirmation.refetch()}>Check again</Button>}
+                </div>
+              )}
+              {confirmation.data?.pickupTime && (
                 <div className="flex items-center justify-center gap-2 text-sm font-medium">
                   <Clock className="h-4 w-4" />
-                  Pickup: {pickupTime}
+                  Pickup: {confirmation.data.pickupTime}
                 </div>
               )}
               <Button variant="outline" asChild className="mt-4">
