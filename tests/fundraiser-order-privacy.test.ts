@@ -10,6 +10,11 @@ import type { AddressInfo } from "node:net";
 const EVENT_A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const EVENT_B = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 
+const eventA = EVENT_A;
+const eventB = EVENT_B;
+const unknownEvent = "33333333-3333-4333-8333-333333333333";
+const parseQuery = express().get("query parser fn");
+
 // Execute the registered handler, substituting only database/schema boundaries.
 const routes = readFileSync("server/routes.ts", "utf8");
 const start = routes.indexOf("  app.get('/api/fundraiser-orders'");
@@ -37,14 +42,16 @@ function server() {
   const eq = (key: string, value: unknown): Predicate => row => row[key] === value;
   const and = (...predicates: Predicate[]): Predicate => row => predicates.every(p => p(row));
   const inArray = (key: string, values: { id: string }[]): Predicate => row => values.some(v => v.id === row[key]);
+  let reads = 0;
   const db = {
-    select: () => ({ from: (table: unknown) => ({
+    select: () => { reads++; return ({ from: (table: unknown) => ({
       where: (predicate: Predicate) => table === schema.fundraiserEvents
         ? events.filter(predicate)
         : { orderBy: async (key: string) => orders.filter(predicate).sort((a: any, b: any) => a[key] - b[key]) },
-    }) }),
+    }) }); },
   };
-  return registerHandler(db, schema, eq, and, inArray);
+  const request = registerHandler(db, schema, eq, and, inArray);
+  return Object.assign(request, { reads: () => reads });
 }
 
 // Both suites execute the same route body and check its registered guards.
@@ -93,7 +100,7 @@ test("staff cannot read another rescue's customers by supplying its event ID", a
 
 test("unknown events disclose nothing and missing event IDs retain the validation error", async () => {
   const request = server();
-  assert.deepEqual(await request(randomUUID()), { status: 200, payload: { orders: [] } });
+  assert.deepEqual(await request(unknownEvent), { status: 200, payload: { orders: [] } });
   assert.deepEqual(await request(randomUUID().toUpperCase()), { status: 200, payload: { orders: [] } });
   assert.deepEqual(await request(), { status: 400, payload: { error: "eventId query param required" } });
   assert.deepEqual(await request(""), { status: 400, payload: { error: "eventId query param required" } });
@@ -218,3 +225,30 @@ test("PostgreSQL subquery isolates paid fundraiser customers between rescues", {
     await client.end();
   }
 });
+
+for (const query of [
+  "",
+  "eventId=",
+  "eventId=not-a-uuid",
+  `eventId=${eventA.slice(0, -1)}`,
+  `eventId=%20${eventA}`,
+  `eventId=${eventA}&eventId=${eventB}`,
+  `eventId=${eventA}&eventId=${eventA}`,
+  `eventId[]=${eventA}`,
+  `eventId[0]=${eventA}`,
+  `eventId[id]=${eventA}`,
+  `eventId[nested][id]=${eventA}`,
+  `eventId=${eventA}&eventId[id]=${eventB}`,
+]) {
+  test(`malformed query is rejected without database access: ${query || "(missing)"}`, async () => {
+    const request = server();
+    const response = await request(parseQuery(query).eventId);
+    assert.equal(response.status, 400);
+    assert.deepEqual(response.payload, {
+      error: query === "" || query === "eventId="
+        ? "eventId query param required"
+        : "eventId must be a single valid UUID",
+    });
+    assert.equal(request.reads(), 0);
+  });
+}

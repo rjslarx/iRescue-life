@@ -52896,11 +52896,15 @@ ${section('Metadata', metaRows)}
    */
   app.get('/api/fundraiser-orders', requireTenant, requireAuth, requireRoleOrPageAccess('fundraiser-events', 'admin', 'owner', 'board_member', 'staff'), async (req, res, next) => {
     try {
-      const { eventId } = req.query;
-      if (eventId === undefined || eventId === '') return res.status(400).json({ error: 'eventId query param required' });
-      if (typeof eventId !== 'string' || !z.string().uuid().safeParse(eventId).success) {
+      const rawEventId = req.query.eventId;
+      if (rawEventId === undefined || rawEventId === '') {
+        return res.status(400).json({ error: 'eventId query param required' });
+      }
+      const input = z.string().uuid().safeParse(rawEventId);
+      if (!input.success) {
         return res.status(400).json({ error: 'eventId must be a single valid UUID' });
       }
+      const eventId = input.data;
       const { fundraiserOrders, fundraiserEvents } = await import('@shared/schema');
       const tenantEvents = db.select({ id: fundraiserEvents.id }).from(fundraiserEvents)
         .where(eq(fundraiserEvents.tenantId, req.tenant!.id));
