@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import QRCode from "qrcode";
 import { useTenant } from "@/contexts/TenantContext";
 import { apiRequest } from "@/lib/queryClient";
+import { FUNDRAISER_MAX_INTEGER, validateFundraiserNumbers } from "@/lib/fundraiser-form";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePagePermissions } from "@/hooks/usePagePermissions";
@@ -77,6 +78,7 @@ export default function FundraisersPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<EventWithSold | null>(null);
   const [form, setForm] = useState<EventFormState>(defaultForm());
+  const [numberErrors, setNumberErrors] = useState<{ priceStr?: string; inventoryCapStr?: string }>({});
   const [pickupInput, setPickupInput] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<EventWithSold | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -120,6 +122,7 @@ export default function FundraisersPage() {
   });
 
   function openCreate() {
+    setNumberErrors({});
     setEditingEvent(null);
     setForm(defaultForm());
     setPickupInput("");
@@ -128,6 +131,7 @@ export default function FundraisersPage() {
   }
 
   function openEdit(evt: EventWithSold) {
+    setNumberErrors({});
     setEditingEvent(evt);
     setForm({
       title: evt.title,
@@ -180,12 +184,17 @@ export default function FundraisersPage() {
   }
 
   function handleSave() {
-    const priceCents = Math.round(parseFloat(form.priceStr) * 100);
-    if (!form.title.trim() || isNaN(priceCents) || priceCents <= 0) {
-      toast({ title: "Validation error", description: "Title and a valid price are required.", variant: "destructive" });
+    const numbers = validateFundraiserNumbers(form.priceStr, form.inventoryCapStr);
+    setNumberErrors(numbers.success ? {} : numbers.errors);
+    if (!numbers.success) {
+      toast({ title: "Check fundraiser details", description: Object.values(numbers.errors).join(" "), variant: "destructive" });
       return;
     }
-    const inventoryCap = form.inventoryCapStr.trim() ? parseInt(form.inventoryCapStr, 10) : null;
+    if (!form.title.trim()) {
+      toast({ title: "Title is required", description: "Enter a title for this fundraiser.", variant: "destructive" });
+      return;
+    }
+    const { priceCents, inventoryCap } = numbers;
     const body = {
       title: form.title.trim(),
       description: form.description.trim() || null,
@@ -477,11 +486,18 @@ export default function FundraisersPage() {
                   data-testid="input-price"
                   type="number"
                   min="0.01"
+                  max={FUNDRAISER_MAX_INTEGER / 100}
                   step="0.01"
+                  aria-invalid={!!numberErrors.priceStr}
+                  aria-describedby={numberErrors.priceStr ? "event-price-error" : undefined}
                   placeholder="12.00"
                   value={form.priceStr}
-                  onChange={(e) => setForm((f) => ({ ...f, priceStr: e.target.value }))}
+                  onChange={(e) => {
+                    setForm((f) => ({ ...f, priceStr: e.target.value }));
+                    setNumberErrors((errors) => ({ ...errors, priceStr: undefined }));
+                  }}
                 />
+                {numberErrors.priceStr && <p id="event-price-error" role="alert" className="text-sm text-destructive">{numberErrors.priceStr}</p>}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="event-cap">Inventory cap <span className="text-muted-foreground text-xs">(blank = unlimited)</span></Label>
@@ -490,10 +506,18 @@ export default function FundraisersPage() {
                   data-testid="input-inventory-cap"
                   type="number"
                   min="1"
+                  max={FUNDRAISER_MAX_INTEGER}
+                  step="1"
+                  aria-invalid={!!numberErrors.inventoryCapStr}
+                  aria-describedby={numberErrors.inventoryCapStr ? "event-cap-error" : undefined}
                   placeholder="100"
                   value={form.inventoryCapStr}
-                  onChange={(e) => setForm((f) => ({ ...f, inventoryCapStr: e.target.value }))}
+                  onChange={(e) => {
+                    setForm((f) => ({ ...f, inventoryCapStr: e.target.value }));
+                    setNumberErrors((errors) => ({ ...errors, inventoryCapStr: undefined }));
+                  }}
                 />
+                {numberErrors.inventoryCapStr && <p id="event-cap-error" role="alert" className="text-sm text-destructive">{numberErrors.inventoryCapStr}</p>}
               </div>
             </div>
 
