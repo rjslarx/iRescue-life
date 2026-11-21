@@ -52608,7 +52608,29 @@ ${section('Metadata', metaRows)}
   app.post('/api/fundraiser-events', requireTenant, requireAuth, requireRoleOrPageAccess('fundraiser-events', 'admin', 'owner'), async (req, res, next) => {
     try {
       const { fundraiserEvents, insertFundraiserEventSchema } = await import('@shared/schema');
-      const data = insertFundraiserEventSchema.parse({ ...req.body, tenantId: req.tenant!.id });
+      const text = z.string().refine(value => !value.includes('\0'));
+      const nonBlankText = text.refine(value => value.trim().length > 0);
+      const positiveInteger = z.number().int().min(1).max(2147483647);
+      // Validate the body before adding server-owned fields. Keep database
+      // defaults for omitted optional fields, without coercing client values.
+      const createSchema = insertFundraiserEventSchema.omit({ tenantId: true }).extend({
+        title: nonBlankText,
+        description: text.nullable().optional(),
+        bodyContent: text.nullable().optional(),
+        imageUrl: text.nullable().optional(),
+        imageDisplayMode: z.enum(['hero', 'poster']).optional(),
+        priceCents: positiveInteger,
+        inventoryCap: positiveInteger.nullable().optional(),
+        pickupTimes: z.array(nonBlankText).optional(),
+      });
+      const parsed = createSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({
+          error: 'Invalid fundraiser event',
+          message: 'Provide a title, a positive whole-number price, and valid fundraiser event details.',
+        });
+      }
+      const data = { ...parsed.data, tenantId: req.tenant!.id };
       const [event] = await db.insert(fundraiserEvents).values(data).returning();
       res.status(201).json({ event });
     } catch (error) {

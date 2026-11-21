@@ -4,12 +4,13 @@ import { readFileSync } from "node:fs";
 import { transformSync } from "esbuild";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { insertFundraiserEventSchema } from "../shared/schema";
 
 const ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const FOREIGN = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const UNKNOWN = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 const routes = readFileSync("server/routes.ts", "utf8");
-type Method = "patch" | "delete";
+type Method = "post" | "patch" | "delete";
 type Row = Record<string, any>;
 type Predicate = (row: Row) => boolean;
 
@@ -20,8 +21,17 @@ function harness(method: Method) {
     { id: FOREIGN, tenantId: "other", title: "Foreign", isActive: true },
   ];
   let accesses = 0;
-  const schema = { fundraiserEvents: { id: "id", tenantId: "tenantId" } };
+  const schema = { fundraiserEvents: { id: "id", tenantId: "tenantId" }, insertFundraiserEventSchema };
   const db = {
+    insert(table: unknown) {
+      accesses++;
+      assert.equal(table, schema.fundraiserEvents);
+      return { values: (data: Row) => ({ returning: async () => {
+        const event = { ...data, id: UNKNOWN };
+        rows.push(event);
+        return [event];
+      } }) };
+    },
     update(table: unknown) {
       accesses++;
       assert.equal(table, schema.fundraiserEvents);
@@ -42,14 +52,15 @@ function harness(method: Method) {
 
 // Both suites execute the actual handler and verify its authorization guards.
 function registerHandler(method: Method, db: any, schema: any, eq: any, and: any) {
-  const start = routes.indexOf(`  app.${method}('/api/fundraiser-events/:id'`);
+  const path = method === "post" ? "/api/fundraiser-events" : "/api/fundraiser-events/:id";
+  const start = routes.indexOf(`  app.${method}('${path}'`);
   assert.ok(start >= 0);
   const source = routes.slice(start, routes.indexOf("\n  });", start) + 6);
   const compiled = transformSync(source.replace("await import('@shared/schema')", "schema"), { loader: "ts" }).code;
   let handler: any;
   const guards = [Symbol("tenant"), Symbol("auth"), Symbol("role")];
-  const app = { [method]: (path: string, ...args: any[]) => {
-    assert.equal(path, "/api/fundraiser-events/:id");
+  const app = { [method]: (registeredPath: string, ...args: any[]) => {
+    assert.equal(registeredPath, path);
     assert.deepEqual(args.slice(0, -1), guards, "Authorization must precede validation");
     handler = args.at(-1);
   } };
@@ -57,7 +68,7 @@ function registerHandler(method: Method, db: any, schema: any, eq: any, and: any
     app, guards[0], guards[1], (...args: string[]) => {
       assert.deepEqual(args, ["fundraiser-events", "admin", "owner"]);
       return guards[2];
-    }, db, schema, eq, and,
+    }, db, schema, eq, and, z,
   );
   return async (id: unknown, body: Row = { title: "Updated" }, tenantId = "own") => {
       let status = 200;
@@ -275,4 +286,81 @@ test("patch supports full editor payloads while ignoring protected and unknown f
     ...body, id: FOREIGN, tenantId: "other", createdAt: "yesterday", soldCount: 99,
   })).status, 200);
   assert.deepEqual(h.rows, [{ ...original[0], ...body }, original[1]]);
+});
+
+test("post rejects invalid creation bodies with safe errors and no inserts", async () => {
+  const h = harness("post");
+  const original = structuredClone(h.rows);
+  const valid = { title: "BBQ plates", priceCents: 1200 };
+  const invalid: unknown[] = [
+    undefined, null, [], "title", 1, true, {}, { title: "Missing price" }, { priceCents: 1200 },
+  ];
+  for (const field of ["priceCents", "inventoryCap"]) {
+    for (const value of [-1, 0, 1.5, 2147483648, NaN, Infinity, -Infinity, "100", true, [], {}]) {
+      invalid.push({ ...valid, [field]: value });
+    }
+  }
+  invalid.push({ ...valid, priceCents: null });
+  for (const field of ["title", "description", "bodyContent", "imageUrl"]) {
+    for (const value of [12, false, [], {}, "bad\0text"]) invalid.push({ ...valid, [field]: value });
+  }
+  for (const value of [null, "", "   ", "\n\t"]) invalid.push({ ...valid, title: value });
+  for (const field of ["passFeesToBuyer", "isActive"]) {
+    for (const value of [null, "false", "true", 0, 1, [], {}]) invalid.push({ ...valid, [field]: value });
+  }
+  for (const value of [null, "", false, "invalid", 0, [], {}]) invalid.push({ ...valid, imageDisplayMode: value });
+  for (const value of [null, "Noon", {}, [null], [1], [true], [[]], [{}], [""], [" \n"], ["Noon", "bad\0label"]]) {
+    invalid.push({ ...valid, pickupTimes: value });
+  }
+  for (const body of invalid) {
+    // Explicitly pass undefined to the handler rather than the request helper's default.
+    const response = body === undefined
+      ? await h.request(undefined, { title: undefined, priceCents: undefined })
+      : await h.request(undefined, body as Row);
+    assert.deepEqual(response, {
+      status: 400,
+      payload: {
+        error: "Invalid fundraiser event",
+        message: "Provide a title, a positive whole-number price, and valid fundraiser event details.",
+      },
+    });
+  }
+  assert.equal(h.accesses(), 0);
+  assert.deepEqual(h.rows, original);
+});
+
+test("post accepts editor payloads and keeps ownership and generated fields server-controlled", async () => {
+  for (const imageDisplayMode of ["hero", "poster"]) {
+    for (const inventoryCap of [null, 1, 2147483647]) {
+      const h = harness("post");
+      const original = structuredClone(h.rows);
+      const body = {
+        title: "BBQ plates", description: null, bodyContent: "<p>Lunch</p>",
+        imageUrl: "/objects/poster.png", imageDisplayMode, priceCents: 1200,
+        passFeesToBuyer: false, inventoryCap, pickupTimes: ["Saturday noon"], isActive: true,
+      };
+      const response = await h.request(undefined, {
+        ...body, tenantId: "other", id: FOREIGN, createdAt: "yesterday", soldCount: 99,
+      });
+      const event = { ...body, tenantId: "own", id: UNKNOWN };
+      assert.deepEqual(response, { status: 201, payload: { event } });
+      assert.equal(h.accesses(), 1);
+      assert.deepEqual(h.rows, [...original, event]);
+    }
+  }
+});
+
+test("post preserves omitted database defaults and accepts optional clearing values", async () => {
+  for (const body of [
+    { title: "Tickets", priceCents: 1 },
+    {
+      title: "Tickets", priceCents: 2147483647, description: "", bodyContent: null,
+      imageUrl: null, pickupTimes: [], inventoryCap: null, isActive: false, passFeesToBuyer: true,
+    },
+  ]) {
+    const h = harness("post");
+    const response = await h.request(undefined, body);
+    assert.deepEqual(response, { status: 201, payload: { event: { ...body, tenantId: "own", id: UNKNOWN } } });
+    assert.equal(h.accesses(), 1);
+  }
 });
