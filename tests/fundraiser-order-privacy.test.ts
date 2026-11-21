@@ -1,5 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { transformSync } from "esbuild";
 import { randomInt, randomUUID } from "node:crypto";
 import express, { type ErrorRequestHandler } from "express";
 import { drizzle } from "drizzle-orm/node-postgres";
@@ -141,6 +143,122 @@ test("Express repeated and object-shaped query parameters are rejected before da
 // Run against a development/test PostgreSQL database:
 // RUN_FUNDRAISER_DB_TEST=1 npx tsx --test tests/fundraiser-order-privacy.test.ts
 // Use a dedicated client, not server/db (which starts a global pool/prewarming).
+test("PostgreSQL staff lists preserve paid customer history after actual soft deletion", {
+  skip: process.env.RUN_FUNDRAISER_DB_TEST !== "1",
+}, async t => {
+  assert.ok(process.env.DATABASE_URL, "DATABASE_URL is required when RUN_FUNDRAISER_DB_TEST=1");
+  assert.notEqual(process.env.REPLIT_DEPLOYMENT, "1", "Never run fixtures in a deployment");
+  const { default: pg } = await import("pg");
+  const { drizzle } = await import("drizzle-orm/node-postgres");
+  const { eq, and, inArray } = await import("drizzle-orm");
+  const schema = await import("../shared/schema");
+  const { tenants, fundraiserEvents, fundraiserOrders } = schema;
+  const client = new pg.Client({
+    connectionString: process.env.DATABASE_URL,
+    connectionTimeoutMillis: 10000,
+    statement_timeout: 15000,
+  });
+  const rescueIds = [randomUUID(), randomUUID()];
+  const eventIds = [randomUUID(), randomUUID()];
+  // Explicit negative numbers avoid advancing the non-transactional order sequence.
+  const firstOrderNumber = -randomInt(100000, 2000000000);
+  const fixtures = eventIds.flatMap((eventId, rescueIndex) =>
+    (["paid", "pending", "paid"] as const).map((paymentStatus, index) => ({
+      id: randomUUID(),
+      orderNumber: firstOrderNumber - rescueIndex * 3 - index,
+      eventId,
+      customerName: `Fixture customer ${rescueIndex}-${index}`,
+      customerEmail: `customer-${rescueIndex}-${index}@example.test`,
+      customerPhone: "+12025550100",
+      paymentStatus,
+      // Deliberately insert the later paid order before the earlier paid order.
+      createdAt: new Date(Date.UTC(2026, 0, 3 - index)),
+    })),
+  );
+  try {
+    await client.connect();
+    const db = drizzle(client);
+    await client.query("BEGIN");
+    try {
+      await db.insert(tenants).values(rescueIds.map(id => ({
+        id, name: "Fundraiser privacy fixture", subdomain: `privacy-${id}`,
+      })));
+      await db.insert(fundraiserEvents).values(eventIds.map((id, index) => ({
+        id, tenantId: rescueIds[index], title: "Privacy fixture", priceCents: 1000,
+      })));
+      await db.insert(fundraiserOrders).values(fixtures);
+      const request = await server(t, createFundraiserOrderReader(db));
+      // Execute the real DELETE registration, not a direct fixture UPDATE.
+      const routes = readFileSync("server/routes.ts", "utf8");
+      const deleteStart = routes.indexOf("  app.delete('/api/fundraiser-events/:id'");
+      assert.ok(deleteStart >= 0);
+      const deleteSource = routes.slice(deleteStart, routes.indexOf("\n  });", deleteStart) + 6);
+      const deleteCompiled = transformSync(
+        deleteSource.replace("await import('@shared/schema')", "schema"), { loader: "ts" },
+      ).code;
+      let remove: any;
+      const guards = [Symbol("tenant"), Symbol("auth"), Symbol("role")];
+      new Function("app", "requireTenant", "requireAuth", "requireRoleOrPageAccess", "db", "schema", "eq", "and", deleteCompiled)(
+        { delete(path: string, ...args: any[]) {
+          assert.equal(path, "/api/fundraiser-events/:id");
+          assert.deepEqual(args.slice(0, -1), guards);
+          remove = args.at(-1);
+        } }, guards[0], guards[1], (...roles: string[]) => {
+          assert.deepEqual(roles, ["fundraiser-events", "admin", "owner"]);
+          return guards[2];
+        }, db, schema, eq, and,
+      );
+      const readOrders = () => db.select().from(fundraiserOrders)
+        .where(inArray(fundraiserOrders.eventId, eventIds)).orderBy(fundraiserOrders.id);
+      const beforeOrders = await readOrders();
+      assert.equal(beforeOrders.length, fixtures.length);
+      for (const [index, tenantId] of rescueIds.entries()) {
+        const beforeList = await request(eventIds[index], tenantId);
+        const [beforeEvent] = await db.select().from(fundraiserEvents)
+          .where(eq(fundraiserEvents.id, eventIds[index]));
+        assert.equal(beforeEvent.isActive, true);
+        for (let attempt = 0; attempt < 2; attempt++) {
+          let status = 200;
+          let payload: unknown;
+          const res = {
+            status(code: number) { status = code; return res; },
+            json(value: unknown) { payload = value; return res; },
+          };
+          await remove({ params: { id: eventIds[index] }, tenant: { id: tenantId } },
+            res, (error: unknown) => { throw error; });
+          assert.deepEqual({ status, payload }, { status: 200, payload: { success: true } });
+          assert.deepEqual(await db.select().from(fundraiserEvents)
+            .where(eq(fundraiserEvents.id, eventIds[index])), [{ ...beforeEvent, isActive: false }]);
+          assert.deepEqual(await readOrders(), beforeOrders,
+            "Even repeated closure must preserve all paid/pending orders and customer records");
+          assert.deepEqual(await request(eventIds[index], tenantId), beforeList,
+            "Authorized staff must retain the identical paid order history after closure");
+        }
+        const own = await request(eventIds[index], tenantId);
+        assert.equal(own.status, 200);
+        const expected = [fixtures[index * 3 + 2], fixtures[index * 3]];
+        assert.deepEqual(own.payload.orders.map((order: any) => order.id), expected.map(order => order.id));
+        assert.deepEqual(own.payload.orders.map((order: any) => order.customerEmail), expected.map(order => order.customerEmail));
+        assert.ok(own.payload.orders.every((order: any) => order.paymentStatus === "paid"));
+        assert.deepEqual(await request(eventIds[1 - index], tenantId), {
+          status: 200, payload: { orders: [] },
+        }, "foreign events must disclose no customer records in either direction");
+        assert.deepEqual(await request(randomUUID(), tenantId), { status: 200, payload: { orders: [] } });
+        assert.deepEqual(await request(undefined, tenantId), {
+          status: 400, payload: { error: "eventId query param required" },
+        });
+      }
+    } finally {
+      // Runs on insertion errors and assertion failures too; nothing is committed.
+      await client.query("ROLLBACK");
+    }
+    assert.deepEqual(await db.select({ id: tenants.id }).from(tenants).where(inArray(tenants.id, rescueIds)), []);
+    assert.deepEqual(await db.select({ id: fundraiserEvents.id }).from(fundraiserEvents).where(inArray(fundraiserEvents.id, eventIds)), []);
+    assert.deepEqual(await db.select({ id: fundraiserOrders.id }).from(fundraiserOrders).where(inArray(fundraiserOrders.id, fixtures.map(order => order.id))), []);
+  } finally {
+    await client.end();
+  }
+});
 test("PostgreSQL subquery isolates paid fundraiser customers between rescues", {
   skip: process.env.RUN_FUNDRAISER_DB_TEST !== "1",
 }, async t => {

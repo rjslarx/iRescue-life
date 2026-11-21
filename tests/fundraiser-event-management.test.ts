@@ -2,9 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { transformSync } from "esbuild";
-import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { insertFundraiserEventSchema } from "../shared/schema";
+import { randomInt, randomUUID } from "node:crypto";
 
 const ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const FOREIGN = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
@@ -131,6 +131,8 @@ for (const method of ["patch", "delete"] as const) {
     }
   });
 
+}
+
 // Development/test PostgreSQL only; never import server/db or commit fixtures.
 // RUN_FUNDRAISER_DB_TEST=1 npx tsx --test tests/fundraiser-event-management.test.ts
 test("PostgreSQL fundraiser edits and soft deletes stay tenant-scoped", {
@@ -142,7 +144,7 @@ test("PostgreSQL fundraiser edits and soft deletes stay tenant-scoped", {
   const { drizzle } = await import("drizzle-orm/node-postgres");
   const { eq, and, inArray } = await import("drizzle-orm");
   const schema = await import("../shared/schema");
-  const { tenants, fundraiserEvents } = schema;
+  const { tenants, fundraiserEvents, fundraiserOrders } = schema;
   const client = new pg.Client({
     connectionString: process.env.DATABASE_URL,
     connectionTimeoutMillis: 10000,
@@ -152,11 +154,25 @@ test("PostgreSQL fundraiser edits and soft deletes stay tenant-scoped", {
   // Guarantee a letter so uppercase inputs always exercise UUID case handling.
   const eventIds = tenantIds.map(() => `a${randomUUID().slice(1)}`);
   const unknownId = `c${randomUUID().slice(1)}`;
+  // Customer details live on orders. Explicit numbers leave the sequence untouched.
+  const firstOrderNumber = -randomInt(100000, 2000000000);
+  const orders = eventIds.flatMap((eventId, index) =>
+    (["paid", "pending"] as const).map((paymentStatus, offset) => ({
+      id: randomUUID(), eventId, paymentStatus,
+      orderNumber: firstOrderNumber - index * 2 - offset,
+      customerName: `Management fixture ${index}-${offset}`,
+      customerEmail: `management-${index}-${offset}@example.test`,
+      customerPhone: "+12025550100",
+      quantity: offset + 1, pickupTime: "12:00", pickedUp: offset === 0,
+    })),
+  );
   try {
     await client.connect();
     const db = drizzle(client);
     const readEvents = () => db.select().from(fundraiserEvents)
       .where(inArray(fundraiserEvents.id, eventIds)).orderBy(fundraiserEvents.id);
+    const readOrders = () => db.select().from(fundraiserOrders)
+      .where(inArray(fundraiserOrders.eventId, eventIds)).orderBy(fundraiserOrders.id);
     await client.query("BEGIN");
     try {
       await db.insert(tenants).values(tenantIds.map(id => ({
@@ -165,6 +181,9 @@ test("PostgreSQL fundraiser edits and soft deletes stay tenant-scoped", {
       await db.insert(fundraiserEvents).values(eventIds.map((id, index) => ({
         id, tenantId: tenantIds[index], title: "Original", priceCents: 1000, isActive: true,
       })));
+      await db.insert(fundraiserOrders).values(orders);
+      const originalOrders = await readOrders();
+      assert.equal(originalOrders.length, orders.length);
       const patch = registerHandler("patch", db, schema, eq, and);
       const remove = registerHandler("delete", db, schema, eq, and);
       for (const [index, tenantId] of tenantIds.entries()) {
@@ -200,6 +219,8 @@ test("PostgreSQL fundraiser edits and soft deletes stay tenant-scoped", {
           assert.deepEqual(afterDelete, afterPatch.map(row =>
             row.id === ownId ? { ...row, isActive: false } : row),
           "Soft deletion must retain the row and change only its active flag");
+          assert.deepEqual(await readOrders(), originalOrders,
+            "Closing an event must preserve every paid and pending order, including all customer and pickup details");
         }
       }
     } finally {
@@ -207,13 +228,13 @@ test("PostgreSQL fundraiser edits and soft deletes stay tenant-scoped", {
       await client.query("ROLLBACK");
     }
     assert.deepEqual(await readEvents(), [], "Event fixtures must not survive rollback");
+    assert.deepEqual(await readOrders(), [], "Order and customer fixtures must not survive rollback");
     assert.deepEqual(await db.select({ id: tenants.id }).from(tenants)
       .where(inArray(tenants.id, tenantIds)), [], "Tenant fixtures must not survive rollback");
   } finally {
     await client.end();
   }
 });
-}
 
 test("patch rejects invalid bodies before any database writes", async () => {
   const h = harness("patch");
