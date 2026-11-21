@@ -1,28 +1,18 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { transformSync } from "esbuild";
 import { randomInt, randomUUID } from "node:crypto";
-import { z } from "zod";
-import express from "express";
+import express, { type ErrorRequestHandler } from "express";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { getTableColumns } from "drizzle-orm";
+import { fundraiserOrders } from "../shared/schema";
+import { createFundraiserOrderReader, createFundraiserOrdersHandler, type FundraiserOrderReader } from "../server/routes/fundraiserOrders";
+import type { TestContext } from "node:test";
 import type { AddressInfo } from "node:net";
 
 const EVENT_A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const EVENT_B = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 
-const eventA = EVENT_A;
-const eventB = EVENT_B;
-const unknownEvent = "33333333-3333-4333-8333-333333333333";
-const parseQuery = express().get("query parser fn");
-
-// Execute the registered handler, substituting only database/schema boundaries.
-const routes = readFileSync("server/routes.ts", "utf8");
-const start = routes.indexOf("  app.get('/api/fundraiser-orders'");
-assert.ok(start >= 0);
-const source = routes.slice(start, routes.indexOf("\n  });", start) + 6);
-const compiled = transformSync(source.replace("await import('@shared/schema')", "schema"), { loader: "ts" }).code;
-
-function server() {
+function fixtureReader() {
   const events = [
     { id: EVENT_A, tenantId: "rescue-a" },
     { id: EVENT_B, tenantId: "rescue-b" },
@@ -34,66 +24,65 @@ function server() {
     { id: "earlier", eventId: EVENT_A, paymentStatus: "paid", createdAt: 1, customerEmail: "earlier@example.test" },
     { id: "refunded", eventId: EVENT_A, paymentStatus: "refunded", createdAt: 3 },
   ];
-  const schema = {
-    fundraiserOrders: { eventId: "eventId", paymentStatus: "paymentStatus", createdAt: "createdAt" },
-    fundraiserEvents: { id: "id", tenantId: "tenantId" },
-    fundraiserConfirmationDeliveries: { orderId: "orderId", status: "status" },
-  };
-  type Predicate = (row: any) => boolean;
-  const eq = (key: string, value: unknown): Predicate => row => row[key] === value;
-  const and = (...predicates: Predicate[]): Predicate => row => predicates.every(p => p(row));
-  const inArray = (key: string, values: { id: string }[]): Predicate => row => values.some(v => v.id === row[key]);
-  let reads = 0;
-  const db = {
-    select: () => { reads++; return ({ from: (table: unknown) => ({
-      leftJoin: () => ({
-        where: (predicate: Predicate) => ({
-          orderBy: async (key: string) => orders.filter(predicate)
-            .sort((a: any, b: any) => a[key] - b[key])
-            .map(order => ({ order, confirmationStatus: order.id === "earlier" ? "sent" : null })),
-        }),
-      }),
-      where: (predicate: Predicate) => table === schema.fundraiserEvents
-        ? events.filter(predicate)
-        : { orderBy: async (key: string) => orders.filter(predicate).sort((a: any, b: any) => a[key] - b[key]) },
-    }) }); },
-  };
-  const request = registerHandler(db, schema, eq, and, inArray);
-  return Object.assign(request, { reads: () => reads });
+  // Exercise the real query builder; replace only the PostgreSQL transport.
+  // Assert the SQL contract before interpreting its parameters for fixtures.
+  const db = drizzle({
+    async query(query: { text: string }, params: unknown[]) {
+      assert.match(query.text, /where \("fundraiser_orders"\."event_id" = \$1 and "fundraiser_orders"\."payment_status" = \$2 and "fundraiser_orders"\."event_id" in \(select "id" from "fundraiser_events" where "fundraiser_events"\."tenant_id" = \$3\)\) order by "fundraiser_orders"\."created_at"$/);
+      assert.equal(params[1], "paid");
+      const rows = orders.filter(order =>
+        order.eventId === params[0] && order.paymentStatus === params[1] &&
+        events.some(event => event.id === order.eventId && event.tenantId === params[2])
+      ).sort((a, b) => a.createdAt - b.createdAt);
+      return { rows: rows.map(row => Object.keys(getTableColumns(fundraiserOrders)).map(key =>
+        key === "createdAt" ? new Date(row.createdAt).toISOString() : (row as any)[key] ?? null
+      ).concat(row.id === "earlier" ? "sent" : null)) };
+    },
+  } as any);
+  return createFundraiserOrderReader(db);
 }
 
-// Both suites execute the same route body and check its registered guards.
-function registerHandler(db: any, schema: any, eq: any, and: any, inArray: any) {
-  let handler: any;
-  const tenantGuard = Symbol("tenant");
-  const authGuard = Symbol("auth");
-  const roleGuard = Symbol("role");
-  const app = { get: (path: string, ...args: any[]) => {
-    assert.equal(path, "/api/fundraiser-orders");
-    assert.deepEqual(args.slice(0, -1), [tenantGuard, authGuard, roleGuard]);
-    handler = args.at(-1);
-  } };
-  new Function("app", "requireTenant", "requireAuth", "requireRoleOrPageAccess", "db", "schema", "eq", "and", "inArray", "z", compiled)(
-    app, tenantGuard, authGuard, (...roles: string[]) => {
-      assert.deepEqual(roles, ["fundraiser-events", "admin", "owner", "board_member", "staff"]);
-      return roleGuard;
-    }, db, schema, eq, and, inArray, z,
-  );
-  return async (eventId?: unknown, tenantId = "rescue-a") => {
-    let status = 200;
-    let payload: any;
-    const res = {
-      status: (code: number) => { status = code; return res; },
-      json: (value: unknown) => { payload = value; },
-    };
-    await handler({ query: { eventId }, tenant: { id: tenantId }, user: { roles: ["staff"] } },
-      res, (error: unknown) => { throw error; });
-    return { status, payload };
+const eventA = EVENT_A;
+const eventB = EVENT_B;
+async function server(t: TestContext, reader: FundraiserOrderReader = fixtureReader()) {
+  const app = express();
+  app.use(express.json());
+  // Supply resolved context only; authentication/permission coverage is separate.
+  app.use((req, _res, next) => {
+    req.tenant = { id: req.get("x-test-tenant") || "rescue-a" } as any;
+    // A test-only seam retains non-HTTP query shapes from the original suite.
+    if (req.body && Object.hasOwn(req.body, "eventId")) req.query.eventId = req.body.eventId;
+    next();
+  });
+  const handler = createFundraiserOrdersHandler(reader);
+  app.get("/api/fundraiser-orders", handler);
+  app.post("/api/fundraiser-orders", handler);
+  app.use(((error, _req, res, _next) => {
+    t.diagnostic(error.message);
+    res.status(500).json({ error: "Internal server error" });
+  }) as ErrorRequestHandler);
+  const listener = app.listen(0, "127.0.0.1");
+  await new Promise<void>(resolve => listener.once("listening", resolve));
+  t.after(() => new Promise<void>((resolve, reject) =>
+    listener.close(error => error ? reject(error) : resolve())));
+  const url = `http://127.0.0.1:${(listener.address() as AddressInfo).port}/api/fundraiser-orders`;
+  const raw = async (query: string, tenantId = "rescue-a", body?: unknown) => {
+    const response = await fetch(`${url}?${query}`, {
+      method: body === undefined ? "GET" : "POST",
+      headers: { "x-test-tenant": tenantId, "Content-Type": "application/json" },
+      body: body === undefined ? undefined : JSON.stringify({ eventId: body }),
+    });
+    return { status: response.status, payload: await response.json() as any };
   };
+  const request = (eventId?: unknown, tenantId = "rescue-a") =>
+    typeof eventId === "string" || eventId === undefined
+      ? raw(eventId === undefined ? "" : `eventId=${encodeURIComponent(eventId)}`, tenantId)
+      : raw("", tenantId, eventId);
+  return Object.assign(request, { raw });
 }
 
-test("staff order lists retain guards, paid-only filtering, flat shape and chronological sorting", async () => {
-  const response = await server()(EVENT_A);
+test("staff order lists retain paid-only filtering, flat shape and chronological sorting", async t => {
+  const response = await (await server(t))(EVENT_A);
   assert.equal(response.status, 200);
   assert.deepEqual(response.payload.orders.map((o: any) => o.id), ["earlier", "later"]);
   assert.equal(response.payload.orders[0].customerEmail, "earlier@example.test");
@@ -101,24 +90,24 @@ test("staff order lists retain guards, paid-only filtering, flat shape and chron
   assert.equal(response.payload.orders[1].confirmationStatus, "untracked");
 });
 
-test("staff cannot read another rescue's customers by supplying its event ID", async () => {
-  const request = server();
+test("staff cannot read another rescue's customers by supplying its event ID", async t => {
+  const request = await server(t);
   assert.deepEqual(await request(EVENT_B), { status: 200, payload: { orders: [] } });
   assert.deepEqual(await request(EVENT_A, "rescue-b"), { status: 200, payload: { orders: [] } });
   assert.deepEqual((await request(EVENT_B, "rescue-b")).payload.orders.map((o: any) => o.id), ["foreign"]);
 });
 
-test("unknown events disclose nothing and missing event IDs retain the validation error", async () => {
-  const request = server();
-  assert.deepEqual(await request(unknownEvent), { status: 200, payload: { orders: [] } });
+test("unknown events disclose nothing and missing event IDs retain the validation error", async t => {
+  const request = await server(t);
+  assert.deepEqual(await request(randomUUID()), { status: 200, payload: { orders: [] } });
   assert.deepEqual(await request(randomUUID().toUpperCase()), { status: 200, payload: { orders: [] } });
   assert.deepEqual(await request(), { status: 400, payload: { error: "eventId query param required" } });
   assert.deepEqual(await request(""), { status: 400, payload: { error: "eventId query param required" } });
 });
 
-test("malformed UUIDs and non-scalar values return only a safe client error without querying the database", async () => {
-  const db = { select: () => { assert.fail("Invalid eventId must not reach the database"); } };
-  const request = registerHandler(db, {}, null, null, null);
+test("malformed UUIDs and non-scalar values return only a safe client error without querying the database", async t => {
+  let calls = 0;
+  const request = await server(t, { listPaidOrders: async () => { calls++; return []; } });
   for (const value of [
     "not-a-uuid", "123", " ", `${EVENT_A}x`, EVENT_A.slice(0, -1),
     EVENT_A.replace(/a/g, "g"), ` ${EVENT_A}`, `${EVENT_A}\n`,
@@ -130,35 +119,23 @@ test("malformed UUIDs and non-scalar values return only a safe client error with
       status: 400, payload: { error: "eventId must be a single valid UUID" },
     });
   }
+  assert.equal(calls, 0, "Invalid eventId must not reach the database");
 });
 
-test("Express repeated and object-shaped query parameters are rejected before database access", async () => {
-  const request = registerHandler({
-    select: () => { assert.fail("Malformed query must not reach the database"); },
-  }, {}, null, null, null);
-  const app = express();
-  app.get("/api/fundraiser-orders", async (req, res, next) => {
-    try {
-      const result = await request(req.query.eventId);
-      res.status(result.status).json(result.payload);
-    } catch (error) { next(error); }
-  });
-  const listener = app.listen(0, "127.0.0.1");
-  await new Promise<void>(resolve => listener.once("listening", resolve));
-  try {
+test("Express repeated and object-shaped query parameters are rejected before database access", async t => {
+  let calls = 0;
+  const request = await server(t, { listPaidOrders: async () => { calls++; return []; } });
     for (const query of [
       `eventId=${EVENT_A}&eventId=${EVENT_B}`,
       `eventId=${EVENT_A}&eventId=${EVENT_A}`,
       `eventId[]=${EVENT_A}`, `eventId[id]=${EVENT_A}`,
       `eventId[nested][id]=${EVENT_A}`, "eventId=not-a-uuid",
     ]) {
-      const response = await fetch(`http://127.0.0.1:${(listener.address() as AddressInfo).port}/api/fundraiser-orders?${query}`);
+      const response = await request.raw(query);
       assert.equal(response.status, 400);
-      assert.deepEqual(await response.json(), { error: "eventId must be a single valid UUID" });
+      assert.deepEqual(response.payload, { error: "eventId must be a single valid UUID" });
     }
-  } finally {
-    await new Promise<void>((resolve, reject) => listener.close(error => error ? reject(error) : resolve()));
-  }
+  assert.equal(calls, 0, "Malformed query must not reach the database");
 });
 
 // Run against a development/test PostgreSQL database:
@@ -166,12 +143,12 @@ test("Express repeated and object-shaped query parameters are rejected before da
 // Use a dedicated client, not server/db (which starts a global pool/prewarming).
 test("PostgreSQL subquery isolates paid fundraiser customers between rescues", {
   skip: process.env.RUN_FUNDRAISER_DB_TEST !== "1",
-}, async () => {
+}, async t => {
   assert.ok(process.env.DATABASE_URL, "DATABASE_URL is required when RUN_FUNDRAISER_DB_TEST=1");
   assert.notEqual(process.env.REPLIT_DEPLOYMENT, "1", "Never run fixtures in a deployment");
   const { default: pg } = await import("pg");
   const { drizzle } = await import("drizzle-orm/node-postgres");
-  const { eq, and, inArray } = await import("drizzle-orm");
+  const { inArray } = await import("drizzle-orm");
   const schema = await import("../shared/schema");
   const { tenants, fundraiserEvents, fundraiserOrders } = schema;
   const client = new pg.Client({
@@ -208,7 +185,7 @@ test("PostgreSQL subquery isolates paid fundraiser customers between rescues", {
         id, tenantId: rescueIds[index], title: "Privacy fixture", priceCents: 1000,
       })));
       await db.insert(fundraiserOrders).values(fixtures);
-      const request = registerHandler(db, schema, eq, and, inArray);
+      const request = await server(t, createFundraiserOrderReader(db));
       for (const [index, tenantId] of rescueIds.entries()) {
         const own = await request(eventIds[index], tenantId);
         assert.equal(own.status, 200);
@@ -250,15 +227,16 @@ for (const query of [
   `eventId[nested][id]=${eventA}`,
   `eventId=${eventA}&eventId[id]=${eventB}`,
 ]) {
-  test(`malformed query is rejected without database access: ${query || "(missing)"}`, async () => {
-    const request = server();
-    const response = await request(parseQuery(query).eventId);
+  test(`malformed query is rejected without database access: ${query || "(missing)"}`, async t => {
+    let calls = 0;
+    const request = await server(t, { listPaidOrders: async () => { calls++; return []; } });
+    const response = await request.raw(query);
     assert.equal(response.status, 400);
     assert.deepEqual(response.payload, {
       error: query === "" || query === "eventId="
         ? "eventId query param required"
         : "eventId must be a single valid UUID",
     });
-    assert.equal(request.reads(), 0);
+    assert.equal(calls, 0);
   });
 }

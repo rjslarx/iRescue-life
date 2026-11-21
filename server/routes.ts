@@ -15,6 +15,7 @@ import { registerFreeSquaresRoutes } from "./routes/free-squares";
 import { loginUser, createTenantWithAdmin, createUser } from "./services/auth";
 import { PushNotificationService } from "./services/push-notifications";
 import { db } from "./db";
+import { createFundraiserOrderReader, createFundraiserOrdersHandler } from "./routes/fundraiserOrders";
 import { transportEvents } from "@shared/schema";
 import { tenants, users, demoRequests, insertDemoRequestSchema, smsMessageLogs, emailEvents, animals, animalProfileSubmissions, platformIntegrations, newsletterCampaigns, newsletterSubscribers, happyTails, animalMergeHistory, activityLogs, medicalExams, medicalPrescriptions, medicalBills, medicalFiles, animalNotes, applications, adoptionCheckoutSessions, adoptions, partnerOrganizations, microchipRecords, surrenderRequests, surrenderFormFields, insertSurrenderRequestSchema, insertSurrenderFormFieldSchema, inboundEmails, calendars, careInstructionSnippets, fosterApplications, volunteerApplications, adoptionContracts, fosterAgreementSessions, volunteerAgreementSessions, surrenderAgreementSessions, customFormSubmissions, customForms, placementAgreementSessions, medicationTasks, medicationPlans, fosterAnimals, messageQueue, contacts, campaignIntakeTokens, surgeryDayRequests, surgeryDayRequestAnimals, formSettings, customPages, shopProducts, peerCampaigns, expenseCampaigns, votingContests, subscriptions, payments, donors, paymentRefundAccounting, donationLinks as donationLinksTable, MAX_ANIMAL_PHOTOS } from "@shared/schema";
 import { eq, and, desc, asc, sql, inArray, lt, lte, gte, not, notInArray, or, ne, isNull, isNotNull } from "drizzle-orm";
@@ -52883,35 +52884,8 @@ ${section('Metadata', metaRows)}
    * GET /api/fundraiser-orders?eventId=X
    * Staff: list paid orders for a fundraiser event
    */
-  app.get('/api/fundraiser-orders', requireTenant, requireAuth, requireRoleOrPageAccess('fundraiser-events', 'admin', 'owner', 'board_member', 'staff'), async (req, res, next) => {
-    try {
-      const rawEventId = req.query.eventId;
-      if (rawEventId === undefined || rawEventId === '') {
-        return res.status(400).json({ error: 'eventId query param required' });
-      }
-      const input = z.string().uuid().safeParse(rawEventId);
-      if (!input.success) {
-        return res.status(400).json({ error: 'eventId must be a single valid UUID' });
-      }
-      const eventId = input.data;
-      const { fundraiserOrders, fundraiserEvents, fundraiserConfirmationDeliveries } = await import('@shared/schema');
-      const tenantEvents = db.select({ id: fundraiserEvents.id }).from(fundraiserEvents)
-        .where(eq(fundraiserEvents.tenantId, req.tenant!.id));
-      const orders = await db
-        .select({ order: fundraiserOrders, confirmationStatus: fundraiserConfirmationDeliveries.status })
-        .from(fundraiserOrders)
-        .leftJoin(fundraiserConfirmationDeliveries, eq(fundraiserConfirmationDeliveries.orderId, fundraiserOrders.id))
-        .where(and(
-          eq(fundraiserOrders.eventId, eventId),
-          eq(fundraiserOrders.paymentStatus, 'paid'),
-          inArray(fundraiserOrders.eventId, tenantEvents),
-        ))
-        .orderBy(fundraiserOrders.createdAt);
-      res.json({ orders: orders.map(row => ({ ...row.order, confirmationStatus: row.confirmationStatus || 'untracked' })) });
-    } catch (error) {
-      next(error);
-    }
-  });
+  app.get('/api/fundraiser-orders', requireTenant, requireAuth, requireRoleOrPageAccess('fundraiser-events', 'admin', 'owner', 'board_member', 'staff'),
+    createFundraiserOrdersHandler(createFundraiserOrderReader(db)));
 
   app.post('/api/fundraiser-orders/:id/retry-confirmation', requireTenant, requireAuth, requireRoleOrPageAccess('fundraiser-events', 'admin', 'owner', 'board_member', 'staff'), async (req, res, next) => {
     try {
