@@ -2621,13 +2621,13 @@ Crawl-delay: 1
       const crypto = await import('crypto');
       
       const requestSchema = z.object({
-        email: z.string().email(),
+        email: z.string().trim().email(),
       });
 
       const { email } = requestSchema.parse(req.body);
       
-      // Find user by email and tenant
-      const [user] = await db
+      // Match login's case-insensitive lookup, without crossing tenant boundaries.
+      const matches = await db
         .select({
           id: users.id,
           email: users.email,
@@ -2636,15 +2636,17 @@ Crawl-delay: 1
         })
         .from(users)
         .where(and(
-          eq(users.email, email),
+          sql`lower(${users.email}) = lower(${email})`,
           eq(users.tenantId, req.tenant!.id)
         ))
-        .limit(1);
+        .limit(2);
 
       // Always return success to prevent email enumeration
-      if (!user) {
+      // Ambiguous historical duplicate accounts must not reset an arbitrary user.
+      if (matches.length !== 1) {
         return res.json({ success: true, message: 'If an account exists with that email, a password reset link has been sent.' });
       }
+      const user = matches[0];
 
       // Generate secure random token
       const token = crypto.randomBytes(32).toString('hex');
@@ -2683,7 +2685,7 @@ Crawl-delay: 1
         // Use EmailService.forTenant which prioritizes Gmail, then falls back to platform Resend
         const emailService = await EmailService.forTenant(req.tenant!.id);
         if (emailService) {
-          await emailService.send({
+          const sendResult = await emailService.send({
             to: user.email,
             subject: 'Password Reset Request',
             html: `
@@ -2702,6 +2704,9 @@ Crawl-delay: 1
               </div>
             `,
           });
+          if (!sendResult.success) {
+            throw new Error(sendResult.error || 'Password reset email was not accepted by the email provider');
+          }
           console.log(`[FORGOT PASSWORD] Password reset email sent to ${user.email} for tenant ${req.tenant!.subdomain}`);
         } else {
           console.warn(`[FORGOT PASSWORD] No email service available for tenant ${req.tenant!.subdomain} - password reset email not sent`);
