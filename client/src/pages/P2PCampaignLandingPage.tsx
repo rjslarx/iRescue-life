@@ -1,3 +1,4 @@
+import { useFundraisingFeeQuote } from "@/hooks/use-fundraising-fee-quote";
 import { useState, useEffect, lazy, Suspense, type CSSProperties } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams } from "wouter";
@@ -387,6 +388,7 @@ function QuickPledgeLayout({
   const [showCustom, setShowCustom] = useState(false);
   const [pledgePerUnit, setPledgePerUnit] = useState("");
   const [showCheckout, setShowCheckout] = useState(false);
+  const feeQuote = useFundraisingFeeQuote(`/api/peer-campaigns/${campaign.slug}/fee-quote`, showCustom ? Math.round(Number(customAmount) * 100) : (selectedAmount ?? 0), coverFees);
 
   const isUnitBased = campaign.goalType === "units";
   const unitLabel = campaign.goalUnitLabel || "units";
@@ -611,10 +613,13 @@ function QuickPledgeLayout({
                       <Input type="number" min="1" step="0.01" placeholder="Enter amount" value={customAmount} onChange={(e) => setCustomAmount(e.target.value)} className="pl-7 text-lg h-12" data-testid="quick-input-custom" />
                     </div>
                   )}
-                  <div className="flex items-center gap-2">
+                  {campaign.feePolicy === "optional" && <div className="flex items-center gap-2">
                     <Checkbox id="quick-fees" checked={coverFees} onCheckedChange={(c) => setCoverFees(c === true)} data-testid="quick-checkbox-fees" />
-                    <label htmlFor="quick-fees" className="text-sm text-muted-foreground cursor-pointer">Cover processing fees</label>
-                  </div>
+                    <label htmlFor="quick-fees" className="text-sm text-muted-foreground cursor-pointer">Cover platform and estimated processing fees</label>
+                  </div>}
+                  <p>Total: {feeQuote.data ? `$${(feeQuote.data.totalCents / 100).toFixed(2)}` : "Calculating…"}</p>
+                  {campaign.feePolicy === "required" && <p>Fee coverage is required and included above.</p>}
+                  {feeQuote.isError && <button onClick={() => feeQuote.refetch()}>Retry fee calculation</button>}
                   {isAchEligible({
                     amountCents: showCustom
                       ? (customAmount ? Math.round(parseFloat(customAmount) * 100) : 0)
@@ -627,7 +632,7 @@ function QuickPledgeLayout({
                       <p className="text-muted-foreground">{achNudgeCopy('p2p')}</p>
                     </div>
                   )}
-                  <Button size="lg" className="w-full gap-2 h-14 text-lg" style={themeAccent ? { backgroundColor: themeAccent, borderColor: themeAccent, color: "#fff" } : undefined} onClick={handleDonate} disabled={checkoutMutation.isPending || (!showCustom && !selectedAmount) || (showCustom && (!customAmount || parseFloat(customAmount) < 1))} data-testid="quick-button-donate">
+                  <Button size="lg" className="w-full gap-2 h-14 text-lg" style={themeAccent ? { backgroundColor: themeAccent, borderColor: themeAccent, color: "#fff" } : undefined} onClick={handleDonate} disabled={!feeQuote.data || feeQuote.isFetching || feeQuote.isError || checkoutMutation.isPending || (!showCustom && !selectedAmount) || (showCustom && (!customAmount || parseFloat(customAmount) < 1))} data-testid="quick-button-donate">
                     {checkoutMutation.isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Heart className="h-5 w-5" />}
                     {checkoutMutation.isPending ? "Processing..." : "Donate Now"}
                   </Button>
@@ -1118,6 +1123,7 @@ export default function P2PCampaignLandingPage() {
 
                         <TabsContent value="one-time" className="space-y-3 mt-3">
                           <OneTimeDonationForm
+                            campaign={campaign}
                             selectedAmount={selectedAmount}
                             setSelectedAmount={setSelectedAmount}
                             customAmount={customAmount}
@@ -1134,6 +1140,7 @@ export default function P2PCampaignLandingPage() {
                       </Tabs>
                     ) : (
                       <OneTimeDonationForm
+                        campaign={campaign}
                         selectedAmount={selectedAmount}
                         setSelectedAmount={setSelectedAmount}
                         customAmount={customAmount}
@@ -1227,6 +1234,7 @@ export default function P2PCampaignLandingPage() {
 }
 
 function OneTimeDonationForm({
+  campaign,
   selectedAmount,
   setSelectedAmount,
   customAmount,
@@ -1239,6 +1247,7 @@ function OneTimeDonationForm({
   isPending,
   themeAccent,
 }: {
+  campaign: PeerCampaign;
   selectedAmount: number | null;
   setSelectedAmount: (a: number | null) => void;
   customAmount: string;
@@ -1255,6 +1264,7 @@ function OneTimeDonationForm({
     ? (customAmount ? Math.round(parseFloat(customAmount) * 100) : 0)
     : (selectedAmount ?? 0);
   const showAchNudge = isAchEligible({ amountCents: effectiveAmountCents, surface: 'p2p', isRecurring: false });
+  const feeQuote = useFundraisingFeeQuote(`/api/peer-campaigns/${campaign.slug}/fee-quote`, effectiveAmountCents, coverFees);
   return (
     <>
       <div className="grid grid-cols-2 gap-2">
@@ -1292,7 +1302,7 @@ function OneTimeDonationForm({
           />
         </div>
       )}
-      <div className="flex items-center gap-2">
+      {campaign.feePolicy === "optional" && <div className="flex items-center gap-2">
         <Checkbox
           id="cover-fees"
           checked={coverFees}
@@ -1300,9 +1310,13 @@ function OneTimeDonationForm({
           data-testid="checkbox-cover-fees"
         />
         <label htmlFor="cover-fees" className="text-sm text-muted-foreground cursor-pointer">
-          Cover processing fees so 100% goes to the rescue
+          Cover platform and estimated Stripe processing fees
         </label>
-      </div>
+      </div>}
+      <p className="text-sm">Total: {feeQuote.data ? `$${(feeQuote.data.totalCents / 100).toFixed(2)}` : "Calculating…"}</p>
+      {campaign.feePolicy === "required" && <p className="text-sm">Fee coverage is required and included above.</p>}
+      <p className="text-xs text-muted-foreground">Actual processing costs may vary; uncovered fees and differences come from rescue proceeds.</p>
+      {feeQuote.isError && <button onClick={() => feeQuote.refetch()}>Retry fee calculation</button>}
       {showAchNudge && (
         <div
           className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-50 dark:bg-amber-950/30 p-3 text-sm"
@@ -1317,7 +1331,7 @@ function OneTimeDonationForm({
         className="w-full gap-2"
         style={themeAccent ? { backgroundColor: themeAccent, borderColor: themeAccent, color: "#fff" } : undefined}
         onClick={onDonate}
-        disabled={isPending || (!showCustom && !selectedAmount) || (showCustom && (!customAmount || parseFloat(customAmount) < 1))}
+        disabled={!feeQuote.data || feeQuote.isFetching || feeQuote.isError || isPending || (!showCustom && !selectedAmount) || (showCustom && (!customAmount || parseFloat(customAmount) < 1))}
         data-testid="button-donate-now"
       >
         {isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Heart className="h-5 w-5" />}

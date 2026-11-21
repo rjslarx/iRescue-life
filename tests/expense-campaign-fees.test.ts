@@ -29,14 +29,15 @@ describe("expense campaign processing-fee choice", () => {
   it("keeps checkout direct to the rescue and separates the gift from the fee", () => {
     const route = readFileSync("server/routes/expenseCampaigns.ts", "utf8").split('publicRouter.post("/:id/checkout"')[1];
     assert.match(route, /expenseCampaignCheckoutSchema\.parse\(req\.body\)/);
-    assert.match(route, /expenseCampaignCharge\(amountCents, coverFees\)/);
+    assert.match(route, /fundraisingFeeQuote\(tenantId, amountCents, campaign.feePolicy, coverFees\)/);
     assert.match(route, /unit_amount: amountCents/);
     assert.match(route, /unit_amount: feeContributionCents/);
     assert.match(route, /baseAmount: String\(amountCents\)/);
-    assert.match(route, /donorCoveredFees: String\(coverFees\)/);
+    assert.match(route, /donorCoveredFees: String\(quote.covered\)/);
     assert.match(route, /feesCovered: String\(feeContributionCents\)/);
     assert.match(route, /stripeAccount: tenant\.stripeConnectedAccountId/);
-    assert.doesNotMatch(route, /application_fee_amount|transfer_data/);
+    assert.match(route, /application_fee_amount: platformFeeCents/);
+    assert.doesNotMatch(route, /transfer_data/);
     const webhook = readFileSync("server/routes.ts", "utf8");
     assert.match(webhook, /calculateMatch\(baseAmountCents,/);
     assert.match(webhook, /raised_amount_cents = raised_amount_cents \+ \$\{baseAmountCents\}/);

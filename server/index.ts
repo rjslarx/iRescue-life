@@ -302,6 +302,8 @@ app.use((req, res, next) => {
   console.log("[Startup] Preparing donation audit schema");
   await pool.query(donationAuditSchemaSql);
   await pool.query(fundraiserOrderNumbersSql);
+  const { fundraisingFeePolicySql } = await import("./lib/fundraising-fee-policy-schema");
+  await pool.query(fundraisingFeePolicySql);
   const { fundraiserConfirmationSql } = await import("./lib/fundraiser-confirmation-schema");
   await pool.query(fundraiserConfirmationSql);
   console.log("[Startup] Preparing cat vaccine safeguards");

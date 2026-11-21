@@ -44,7 +44,7 @@
 - [Matching milestones](matching-milestone-rules.md) — consecutive 1:1 angel-donor commitments; split boundary-crossing gifts and preserve historical sponsor obligations.
 - [Adoption vaccine placeholders](adoption-placeholder-vaccine-coverage.md) — checkout due-date placeholders are not new doses; portal coverage must consult actual vaccination history.
 - [Medical date integrity](medical-date-integrity.md) — malformed dates must remain correctable; successful API reads do not prove medical-page rendering works.
-- [Expense campaign fee policy](expense-campaign-fee-policy.md) — donor fee coverage is optional; otherwise fees come from rescue proceeds, not the platform.
+- [Fundraising fee policy](expense-campaign-fee-policy.md) — rescue-pays, optional, or required coverage; include platform fees, preserve charge ownership and Vend all-in pricing.
 - [Donation notification navigation](donation-widget-navigation.md) — scroll to the home page donation section, with tenant-aware Donate navigation as fallback.
 - [VIP game perk scope](vip-game-perk-scope.md) — existing VIP bonus only; start with a private pilot before deciding on public rollout.
 - [Virtual vending donations](virtual-vending-donations.md) — public symbolic donations; all fees deducted within the displayed amount, never added on top.

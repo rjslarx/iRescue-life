@@ -15,7 +15,9 @@ import { requireAuth, requireRole } from "../middleware/auth";
 import multer from "multer";
 import { prepareCampaignImage, CAMPAIGN_IMAGE_MAX_BYTES } from "../lib/expense-campaign-image";
 import { ObjectStorageService } from "../objectStorage";
-import { expenseCampaignCharge, expenseCampaignCheckoutSchema } from "@shared/expense-campaign-fees";
+import { expenseCampaignCheckoutSchema } from "@shared/expense-campaign-fees";
+import { fundraisingFeePolicySchema } from "@shared/fundraising-fee-policy";
+import { fundraisingFeeQuote } from "../services/fundraising-fee-quote";
 
 const router = Router();
 
@@ -109,6 +111,7 @@ const upsertCampaignSchema = z.object({
   longDescription: z.string().max(20000).nullable().optional(),
   heroImageUrl: z.string().max(1000).nullable().optional(),
   showTitleOnHero: z.boolean().optional(),
+  feePolicy: fundraisingFeePolicySchema.optional(),
   goalAmountCents: z.number().int().min(100),
   endDate: z.string().datetime().nullable().optional(),
   status: z.enum(["active", "ended", "archived"]).default("active"),
@@ -218,6 +221,7 @@ router.post(
         .values({
           tenantId,
           title: data.title,
+          feePolicy: data.feePolicy ?? "optional",
           slug,
           shortDescription: data.shortDescription ?? null,
           longDescription: data.longDescription ?? null,
@@ -300,6 +304,7 @@ router.patch(
       if (data.longDescription !== undefined) updates.longDescription = data.longDescription;
       if (data.heroImageUrl !== undefined) updates.heroImageUrl = data.heroImageUrl;
       if (data.showTitleOnHero !== undefined) updates.showTitleOnHero = data.showTitleOnHero;
+      if (data.feePolicy !== undefined) updates.feePolicy = data.feePolicy;
       if (data.goalAmountCents !== undefined) updates.goalAmountCents = data.goalAmountCents;
       if (data.endDate !== undefined)
         updates.endDate = data.endDate ? new Date(data.endDate) : null;
@@ -756,6 +761,7 @@ publicRouter.get("/:slug", async (req: Request, res: Response, next: NextFunctio
         longDescription: campaign.longDescription,
         heroImageUrl: campaign.heroImageUrl,
         showTitleOnHero: campaign.showTitleOnHero,
+        feePolicy: campaign.feePolicy,
         goalAmountCents: campaign.goalAmountCents,
         raisedAmountCents: campaign.raisedAmountCents,
         endDate: campaign.endDate,
@@ -774,12 +780,23 @@ publicRouter.get("/:slug", async (req: Request, res: Response, next: NextFunctio
 // Public checkout (Stripe) for an expense campaign
 // ---------------------------------------------------------------------------
 
+publicRouter.post("/:id/fee-quote", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { amountCents, coverFees } = expenseCampaignCheckoutSchema.parse(req.body);
+    const [campaign] = await db.select().from(expenseCampaigns).where(and(
+      eq(expenseCampaigns.id, req.params.id), eq(expenseCampaigns.tenantId, req.tenant!.id),
+      eq(expenseCampaigns.status, "active"),
+    )).limit(1);
+    if (!campaign) return res.status(404).json({ error: "Campaign unavailable" });
+    res.json(await fundraisingFeeQuote(req.tenant!.id, amountCents, campaign.feePolicy, coverFees));
+  } catch (error) { next(error); }
+});
+
 publicRouter.post("/:id/checkout", async (req: Request, res: Response, next: NextFunction) => {
   try {
     const tenantId = req.tenant!.id;
     const { id } = req.params;
     const { amountCents, coverFees } = expenseCampaignCheckoutSchema.parse(req.body);
-    const { totalCents, feeContributionCents } = expenseCampaignCharge(amountCents, coverFees);
 
     const campaign = await db
       .select()
@@ -794,6 +811,8 @@ publicRouter.post("/:id/checkout", async (req: Request, res: Response, next: Nex
       .limit(1)
       .then((r) => r[0]);
     if (!campaign) return res.status(404).json({ error: "Campaign not found or inactive" });
+    const quote = await fundraisingFeeQuote(tenantId, amountCents, campaign.feePolicy, coverFees);
+    const { totalCents, feeContributionCents, platformFeeCents } = quote;
 
     const [tenant] = await db
       .select({
@@ -836,21 +855,31 @@ publicRouter.post("/:id/checkout", async (req: Request, res: Response, next: Nex
             price_data: {
               currency: "usd",
               unit_amount: feeContributionCents,
-              product_data: { name: "Optional processing-fee contribution" },
+              product_data: { name: "Platform and estimated processing fee coverage" },
             },
             quantity: 1,
           }] : []),
         ],
         success_url: `${origin}${slugPath}?thanks=1`,
         cancel_url: `${origin}${slugPath}`,
+        payment_intent_data: {
+          application_fee_amount: platformFeeCents,
+          metadata: {
+            tenantId, expenseCampaignId: campaign.id,
+            platformFeeCents: String(platformFeeCents),
+            baseAmount: String(amountCents),
+          },
+        },
         metadata: {
           expenseCampaignId: campaign.id,
           expenseCampaignTitle: campaign.title.slice(0, 200),
           baseAmount: String(amountCents),
-          donorCoveredFees: String(coverFees),
+          donorCoveredFees: String(quote.covered),
+          feePolicy: campaign.feePolicy,
+          platformFeeCents: String(platformFeeCents),
           feesCovered: String(feeContributionCents),
           totalAmount: String(totalCents),
-          feeEstimateModel: "us-card-2.9pct-30c-v1",
+          feeEstimateModel: "configured-card-and-platform-v2",
         },
       },
       { stripeAccount: tenant.stripeConnectedAccountId },

@@ -1,3 +1,4 @@
+import { useFundraisingFeeQuote } from "@/hooks/use-fundraising-fee-quote";
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams } from "wouter";
@@ -177,6 +178,8 @@ export default function PeerCampaignPage() {
   const tenant = tenantData?.tenant;
   const rescueName = tenant?.name || "Animal Rescue";
   const campaign = data?.campaign;
+  const giftCents = showCustom ? Math.round(Number(customAmount) * 100) : (selectedAmount ?? 0);
+  const feeQuote = useFundraisingFeeQuote(campaign ? `/api/peer-campaigns/${slug}/fee-quote` : undefined, giftCents, coverFees);
   const donations = (data?.donations || []).filter(
     (d: any) => d.paymentStatus === "paid" || !("paymentStatus" in d)
   );
@@ -423,7 +426,7 @@ export default function PeerCampaignPage() {
                         )}
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      {campaign.feePolicy === "optional" && <div className="flex items-center gap-2">
                         <Checkbox
                           id="cover-fees"
                           checked={coverFees}
@@ -431,9 +434,14 @@ export default function PeerCampaignPage() {
                           data-testid="checkbox-cover-fees"
                         />
                         <label htmlFor="cover-fees" className="text-sm text-muted-foreground cursor-pointer">
-                          I'll cover transaction costs so the rescue receives my full intended gift
+                          Cover platform and estimated Stripe processing fees
                         </label>
-                      </div>
+                      </div>}
+                      {campaign.feePolicy === "required" && <p className="text-sm">Fee coverage is required.</p>}
+                      <p className="text-sm">Total: {feeQuote.data ? `$${(feeQuote.data.totalCents / 100).toFixed(2)}` : "Calculating…"}
+                        {feeQuote.data?.covered && ` (includes $${(feeQuote.data.feeContributionCents / 100).toFixed(2)} fee coverage)`}</p>
+                      <p className="text-xs text-muted-foreground">Processing is estimated. Uncovered fees and differences come from rescue proceeds.</p>
+                      {feeQuote.isError && <button type="button" onClick={() => feeQuote.refetch()}>Could not calculate fees. Try again</button>}
 
                       <Button
                         size="lg"
@@ -441,6 +449,7 @@ export default function PeerCampaignPage() {
                         style={accentButtonStyle}
                         onClick={handleDonate}
                         disabled={
+                          !feeQuote.data || feeQuote.isFetching || feeQuote.isError ||
                           checkoutMutation.isPending ||
                           (!showCustom && !selectedAmount) ||
                           (showCustom && (!customAmount || parseFloat(customAmount) < 1))

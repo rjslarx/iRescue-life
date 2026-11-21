@@ -1,3 +1,6 @@
+import { FeePolicyField } from "@/components/fundraising/FeePolicyField";
+import { SavedFeePolicy } from "@/components/fundraising/SavedFeePolicy";
+import type { FundraisingFeePolicy } from "@shared/fundraising-fee-policy";
 import { useState, useRef, useEffect } from "react";
 import RescueVendShareCard from "@/components/RescueVendShareCard";
 import ResaleToolkitCard from "@/components/resale/ResaleToolkitCard";
@@ -1996,6 +1999,7 @@ function CampaignManagerTab({ tenantSubdomain }: { tenantSubdomain?: string }) {
                         <TableCell>
                           <div className="flex items-center gap-2 flex-wrap">
                             <div className="font-medium">{campaign.campaignTitle}</div>
+                            <SavedFeePolicy value={campaign.feePolicy ?? "optional"} path={`/api/peer-campaigns/${campaign.id}`} queryKey="/api/peer-campaigns" />
                             {campaign.isPartnerSubmitted && (
                               <Badge variant="outline" className="text-xs" data-testid={`badge-partner-cm-${campaign.id}`}>
                                 <Users className="h-3 w-3 mr-1" />
@@ -2155,6 +2159,7 @@ function CampaignManagerTab({ tenantSubdomain }: { tenantSubdomain?: string }) {
 }
 
 function CreateCampaignDialog({ onClose }: { onClose: () => void }) {
+  const [feePolicy, setFeePolicy] = useState<FundraisingFeePolicy>("optional");
   const { toast } = useToast();
   const [title, setTitle] = useState("");
   const [story, setStory] = useState("");
@@ -2177,6 +2182,7 @@ function CreateCampaignDialog({ onClose }: { onClose: () => void }) {
   const createMutation = useMutation({
     mutationFn: async () => {
       const payload: Record<string, string | number | undefined> = {
+        feePolicy,
         campaignTitle: title,
         campaignStory: story || undefined,
         goalAmount: goalType === "currency" ? Math.round(parseFloat(goalAmount) * 100) : 100,
@@ -2221,6 +2227,7 @@ function CreateCampaignDialog({ onClose }: { onClose: () => void }) {
             <Label>Campaign Title</Label>
             <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Luna's 7-Pound Shed-A-Thon" data-testid="input-cm-title" />
           </div>
+          <FeePolicyField value={feePolicy} onChange={setFeePolicy} />
           <div>
             <Label>Story / Description</Label>
             <Textarea value={story} onChange={(e) => setStory(e.target.value)} placeholder="Tell supporters about this campaign..." className="resize-none min-h-[100px]" data-testid="input-cm-story" />

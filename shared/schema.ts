@@ -4,6 +4,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { medicalDateSchema } from "./medical-dates";
 import { supplyItemUnitPriceSchema } from "./supply-item-validation";
+import { fundraisingFeePolicySchema, type FundraisingFeePolicy } from "./fundraising-fee-policy";
 export * from "./free-squares-tables";
 
 
@@ -6171,6 +6172,7 @@ export const eventTickets = pgTable("event_tickets", {
   eventName: text("event_name").notNull(),
   description: text("description"),
   pricePerTicket: integer("price_per_ticket").notNull(), // Amount in cents
+  feePolicy: text("fee_policy").notNull().default("optional").$type<FundraisingFeePolicy>(),
   isRecurring: boolean("is_recurring").notNull().default(false),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -6179,7 +6181,7 @@ export const eventTickets = pgTable("event_tickets", {
 export const insertEventTicketSchema = createInsertSchema(eventTickets).omit({
   id: true,
   createdAt: true,
-});
+}).extend({ feePolicy: fundraisingFeePolicySchema.optional() });
 export type InsertEventTicket = z.infer<typeof insertEventTicketSchema>;
 export type EventTicket = typeof eventTickets.$inferSelect;
 
@@ -6195,6 +6197,7 @@ export const fundraiserEvents = pgTable("fundraiser_events", {
   imageDisplayMode: text("image_display_mode").notNull().default("hero"),
   priceCents: integer("price_cents").notNull(),
   passFeesToBuyer: boolean("pass_fees_to_buyer").notNull().default(false),
+  feePolicy: text("fee_policy").$type<FundraisingFeePolicy>(),
   inventoryCap: integer("inventory_cap"), // null = unlimited
   pickupTimes: text("pickup_times").array().notNull().default([]),
   isActive: boolean("is_active").notNull().default(true),
@@ -6204,7 +6207,7 @@ export const fundraiserEvents = pgTable("fundraiser_events", {
 export const insertFundraiserEventSchema = createInsertSchema(fundraiserEvents).omit({
   id: true,
   createdAt: true,
-});
+}).extend({ feePolicy: fundraisingFeePolicySchema.nullable().optional() });
 export type InsertFundraiserEvent = z.infer<typeof insertFundraiserEventSchema>;
 export type FundraiserEvent = typeof fundraiserEvents.$inferSelect;
 
@@ -6218,6 +6221,11 @@ export const fundraiserOrders = pgTable("fundraiser_orders", {
   customerEmail: text("customer_email").notNull(),
   customerPhone: text("customer_phone"),
   quantity: integer("quantity").notNull().default(1),
+  feePolicy: text("fee_policy").$type<FundraisingFeePolicy>(),
+  feeContributionCents: integer("fee_contribution_cents"),
+  baseAmountCents: integer("base_amount_cents"),
+  totalAmountCents: integer("total_amount_cents"),
+  platformFeeCents: integer("platform_fee_cents"),
   pickupTime: text("pickup_time"),
   stripeSessionId: text("stripe_session_id"),
   paymentStatus: text("payment_status").notNull().default("pending").$type<"pending" | "paid">(),
@@ -6318,6 +6326,7 @@ export type InsertCampaignUpdate = z.infer<typeof insertCampaignUpdateSchema>;
 export type CampaignUpdate = typeof campaignUpdates.$inferSelect;
 
 export const peerCampaigns = pgTable("peer_campaigns", {
+  feePolicy: text("fee_policy").notNull().default("optional").$type<FundraisingFeePolicy>(),
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: 'cascade' }),
   creatorName: text("creator_name").notNull(),
@@ -7414,6 +7423,7 @@ export const expenseCampaigns = pgTable("expense_campaigns", {
   longDescription: text("long_description"),
   heroImageUrl: text("hero_image_url"),
   showTitleOnHero: boolean("show_title_on_hero").notNull().default(true),
+  feePolicy: text("fee_policy").notNull().default("optional").$type<FundraisingFeePolicy>(),
   goalAmountCents: integer("goal_amount_cents").notNull(),
   raisedAmountCents: integer("raised_amount_cents").notNull().default(0),
   endDate: timestamp("end_date"),

@@ -1,3 +1,5 @@
+import { useFundraisingFeeQuote } from "@/hooks/use-fundraising-fee-quote";
+import { fundraiserEventFeePolicy, type FundraisingFeePolicy } from "@shared/fundraising-fee-policy";
 import { useState } from "react";
 import { useRoute, useSearch, Link } from "wouter";
 import { fundraiserOrderReference } from "@shared/fundraiser-order-reference";
@@ -24,6 +26,7 @@ interface FundraiserEventPublic {
   imageDisplayMode: "hero" | "poster";
   priceCents: number;
   passFeesToBuyer: boolean;
+  feePolicy: FundraisingFeePolicy | null;
   inventoryCap: number | null;
   pickupTimes: string[];
   isActive: boolean;
@@ -50,6 +53,7 @@ export default function FundraiserEventPage() {
   const [customerPhone, setCustomerPhone] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [pickupTime, setPickupTime] = useState("");
+  const [coverFees, setCoverFees] = useState(false);
   const [soldOutError, setSoldOutError] = useState(false);
   const confirmation = useQuery<{ orderNumber: number; quantity: number; pickupTime: string | null }>({
     queryKey: ["/api/fundraiser-orders/confirmation", tenantId, eventId, sessionId],
@@ -81,6 +85,7 @@ export default function FundraiserEventPage() {
         customerPhone: customerPhone || undefined,
         quantity,
         pickupTime: pickupTime || undefined,
+        coverFees,
       });
       return await res.json();
     },
@@ -104,6 +109,7 @@ export default function FundraiserEventPage() {
   const remaining = event?.inventoryCap != null ? Math.max(0, event.inventoryCap - event.soldCount) : null;
   const maxQty = remaining !== null ? Math.min(10, remaining) : 10;
   const total = event ? event.priceCents * quantity : 0;
+  const feeQuote = useFundraisingFeeQuote(event ? `/api/fundraiser-events/${event.id}/fee-quote` : undefined, total, coverFees, quantity);
 
   const canSubmit =
     !isSoldOut &&
@@ -406,18 +412,21 @@ export default function FundraiserEventPage() {
             <div className="pt-2 border-t space-y-1">
               <div className="flex items-center justify-between">
                 <span className="font-medium">Total</span>
-                <span className="text-xl font-bold" data-testid="text-order-total">{formatCents(total)}</span>
+                <span className="text-xl font-bold" data-testid="text-order-total">{feeQuote.data ? formatCents(feeQuote.data.totalCents) : "Calculating…"}</span>
               </div>
-              {event.passFeesToBuyer && (
-                <p className="text-xs text-muted-foreground" data-testid="text-fees-notice">Estimated transaction costs will be added at checkout so the rescue receives the full listed price.</p>
+              {fundraiserEventFeePolicy(event.feePolicy, event.passFeesToBuyer) === "optional" && (
+                <label className="flex gap-2 text-sm"><input type="checkbox" checked={coverFees} onChange={e => setCoverFees(e.target.checked)} />Cover platform and estimated Stripe processing fees</label>
               )}
+              {feeQuote.data?.covered && <p className="text-sm">Items: {formatCents(total)} + fee coverage: {formatCents(feeQuote.data.feeContributionCents)}</p>}
+              <p className="text-xs text-muted-foreground">{fundraiserEventFeePolicy(event.feePolicy, event.passFeesToBuyer) === "required" ? "Fee coverage is required and included in the total above." : "Uncovered fees come from rescue proceeds."} Processing is an estimate; actual costs may vary.</p>
+              {feeQuote.isError && <p role="alert">Could not calculate fees. <button onClick={() => feeQuote.refetch()}>Try again</button></p>}
             </div>
 
             <Button
               className="w-full"
               size="lg"
               data-testid="button-proceed-payment"
-              disabled={!canSubmit}
+              disabled={!canSubmit || !feeQuote.data || feeQuote.isFetching || feeQuote.isError}
               onClick={() => checkoutMutation.mutate()}
             >
               <ShoppingCart className="h-4 w-4 mr-2" />

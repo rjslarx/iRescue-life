@@ -1,3 +1,5 @@
+import { FeePolicyField } from "@/components/fundraising/FeePolicyField";
+import type { FundraisingFeePolicy } from "@shared/fundraising-fee-policy";
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -120,6 +122,7 @@ export default function DonationLinksPage() {
 
   // Event flyer state
   const [eventName, setEventName] = useState("Trivia Fundraiser");
+  const [eventFeePolicy, setEventFeePolicy] = useState<FundraisingFeePolicy>("rescue");
   const [eventAmount, setEventAmount] = useState(1500); // $15 default for trivia fundraiser // $20
   const [eventRecurring, setEventRecurring] = useState(false); // Default to one-time for events
   const [generatedQrCode, setGeneratedQrCode] = useState<string | null>(null);
@@ -146,6 +149,7 @@ export default function DonationLinksPage() {
     id: string;
     eventName: string;
     pricePerTicket: number;
+    feePolicy: FundraisingFeePolicy;
     isRecurring: boolean;
     isActive: boolean;
     createdAt: string;
@@ -311,6 +315,7 @@ export default function DonationLinksPage() {
       const createResponse = await apiRequest("POST", "/api/event-tickets", {
         eventName,
         pricePerTicket: eventAmount,
+        feePolicy: eventFeePolicy,
         isRecurring: eventRecurring,
         description: `Entry fee for ${eventName}`,
       });
@@ -656,6 +661,7 @@ export default function DonationLinksPage() {
                           data-testid="switch-event-recurring"
                         />
                       </div>
+                      <FeePolicyField value={eventFeePolicy} onChange={setEventFeePolicy} />
                       <Button 
                         className="w-full"
                         onClick={() => eventFlyerMutation.mutate()}
@@ -1389,6 +1395,17 @@ export default function DonationLinksPage() {
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {eventTicketsData?.eventTickets?.map((ticket) => (
                   <Card key={ticket.id} data-testid={`card-event-ticket-${ticket.id}`}>
+                    <div className="p-4">
+                      <FeePolicyField value={ticket.feePolicy ?? "optional"} onChange={async feePolicy => {
+                        try {
+                          await apiRequest("PATCH", `/api/event-tickets/${ticket.id}/fee-policy`, { feePolicy });
+                          queryClient.invalidateQueries({ queryKey: ["/api/event-tickets"] });
+                          toast({ title: "Fee policy saved" });
+                        } catch {
+                          toast({ title: "Could not save fee policy", variant: "destructive" });
+                        }
+                      }} />
+                    </div>
                     <CardHeader className="pb-3">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">

@@ -1,3 +1,4 @@
+import { customerCoversFundraisingFees, type FundraisingFeePolicy } from "@shared/fundraising-fee-policy";
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute } from "wouter";
@@ -20,6 +21,7 @@ interface TenantResponse {
 }
 
 interface EventTicketData {
+  feePolicy: FundraisingFeePolicy;
   eventName: string;
   pricePerTicket: number;
   isRecurring: boolean;
@@ -45,6 +47,7 @@ export default function EventTicketCheckoutPage() {
 
   const tenant = tenantData?.tenant;
   const event = eventData?.event;
+  const coversFees = customerCoversFundraisingFees(event?.feePolicy ?? "optional", donorCoversFees);
   const rescueName = tenant?.name || "Animal Rescue";
   const pricePerTicket = event?.pricePerTicket || 1500;
   const baseTotal = pricePerTicket * quantity;
@@ -74,7 +77,7 @@ export default function EventTicketCheckoutPage() {
       const response = await apiRequest('POST', '/api/event-tickets/checkout', {
         eventId,
         quantity,
-        donorCoversFees,
+        donorCoversFees: coversFees,
       });
 
       if (!response.ok) {
@@ -115,7 +118,7 @@ export default function EventTicketCheckoutPage() {
 
   const feesCoveredDisplay = feeData?.feesCovered ? (feeData.feesCovered / 100).toFixed(2) : '0.00';
   const totalWithFeesDisplay = feeData?.totalAmount ? (feeData.totalAmount / 100).toFixed(2) : (baseTotal / 100).toFixed(2);
-  const finalTotal = donorCoversFees && feeData?.totalAmount ? feeData.totalAmount : baseTotal;
+  const finalTotal = coversFees && feeData?.totalAmount ? feeData.totalAmount : baseTotal;
 
   if (tenantLoading || eventLoading) {
     return (
@@ -224,7 +227,9 @@ export default function EventTicketCheckoutPage() {
                 <span>${(baseTotal / 100).toFixed(2)}</span>
               </div>
               
-              {tenant?.stripeEnabled && (
+              {event?.feePolicy === "required" && <p className="text-sm">Required fee coverage: ${feesCoveredDisplay}. Includes platform and estimated Stripe processing fees.</p>}
+              {event?.feePolicy === "rescue" && <p className="text-sm">Fees are deducted from rescue proceeds.</p>}
+              {tenant?.stripeEnabled && event?.feePolicy === "optional" && (
                 <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
                   <Checkbox
                     id="cover-fees"
@@ -236,10 +241,10 @@ export default function EventTicketCheckoutPage() {
                   <div className="flex-1">
                     <Label htmlFor="cover-fees" className="text-sm font-medium cursor-pointer flex items-center gap-2">
                       <Heart className="h-4 w-4 text-primary" />
-                      Cover transaction fees (+${feesCoveredDisplay})
+                      Cover platform and estimated processing fees (+${feesCoveredDisplay})
                     </Label>
                     <p className="text-xs text-muted-foreground mt-1">
-                      100% of your purchase goes directly to helping animals
+                      Actual processing costs may vary; differences affect rescue proceeds.
                     </p>
                   </div>
                 </div>
@@ -259,7 +264,7 @@ export default function EventTicketCheckoutPage() {
               className="w-full"
               size="lg"
               onClick={handleCheckout}
-              disabled={checkoutMutation.isPending || !tenant?.stripeEnabled}
+              disabled={checkoutMutation.isPending || !tenant?.stripeEnabled || (coversFees && !feeData)}
               data-testid="button-checkout"
             >
               {checkoutMutation.isPending ? (

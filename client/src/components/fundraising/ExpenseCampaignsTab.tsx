@@ -1,3 +1,5 @@
+import { FeePolicyField } from "./FeePolicyField";
+import type { FundraisingFeePolicy } from "@shared/fundraising-fee-policy";
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -41,6 +43,7 @@ interface ExpenseCampaign {
   longDescription: string | null;
   heroImageUrl: string | null;
   showTitleOnHero?: boolean;
+  feePolicy: FundraisingFeePolicy;
   goalAmountCents: number;
   raisedAmountCents: number;
   endDate: string | null;
@@ -57,6 +60,7 @@ const emptyForm = {
   longDescription: "",
   heroImageUrl: "",
   showTitleOnHero: true,
+  feePolicy: "optional" as FundraisingFeePolicy,
   goalDollars: "",
   endDate: "",
   status: "active" as "active" | "ended" | "archived",
@@ -122,6 +126,7 @@ export function ExpenseCampaignsTab({ tenantSubdomain }: { tenantSubdomain?: str
         longDescription: string | null;
         heroImageUrl: string | null;
         showTitleOnHero: boolean;
+        feePolicy: FundraisingFeePolicy;
         goalAmountCents: number;
         endDate: string | null;
         status: "active" | "ended" | "archived";
@@ -134,6 +139,7 @@ export function ExpenseCampaignsTab({ tenantSubdomain }: { tenantSubdomain?: str
         longDescription: form.longDescription || null,
         heroImageUrl: form.heroImageUrl || null,
         showTitleOnHero: form.showTitleOnHero,
+        feePolicy: form.feePolicy,
         goalAmountCents: Math.round(parseFloat(form.goalDollars || "0") * 100),
         endDate: form.endDate ? new Date(form.endDate).toISOString() : null,
         status: form.status,
@@ -219,6 +225,7 @@ export function ExpenseCampaignsTab({ tenantSubdomain }: { tenantSubdomain?: str
       longDescription: c.longDescription ?? "",
       heroImageUrl: c.heroImageUrl ?? "",
       showTitleOnHero: c.showTitleOnHero ?? true,
+      feePolicy: c.feePolicy ?? "optional",
       goalDollars: (c.goalAmountCents / 100).toFixed(2),
       endDate: c.endDate ? new Date(c.endDate).toISOString().slice(0, 10) : "",
       status: c.status,
@@ -487,6 +494,7 @@ export function ExpenseCampaignsTab({ tenantSubdomain }: { tenantSubdomain?: str
                 buttonText={form.heroImageUrl ? "Replace campaign image" : "Upload campaign image"}
                 data-testid="button-upload-campaign-image"
               />
+              <FeePolicyField value={form.feePolicy} onChange={feePolicy => setForm(prior => ({ ...prior, feePolicy }))} />
               <p id="ec-image-help" className="text-xs text-muted-foreground">
                 Choose a JPEG, PNG, or WebP image from your device, up to 5 MB. Save the campaign to apply image changes.
                 Removing an image only clears it from this campaign; it does not delete the stored file.

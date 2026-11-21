@@ -32013,6 +32013,9 @@ Submitted: ${new Date().toLocaleString()}
       const fundraiserPaidOrders = await db
         .select({
           orderId: fundraiserOrders.id,
+          baseAmountCents: fundraiserOrders.baseAmountCents,
+          totalAmountCents: fundraiserOrders.totalAmountCents,
+          feeContributionCents: fundraiserOrders.feeContributionCents,
           orderNumber: fundraiserOrders.orderNumber,
           pickedUp: fundraiserOrders.pickedUp,
           customerName: fundraiserOrders.customerName,
@@ -32024,6 +32027,7 @@ Submitted: ${new Date().toLocaleString()}
           eventId: fundraiserEvents.id,
           priceCents: fundraiserEvents.priceCents,
           passFeesToBuyer: fundraiserEvents.passFeesToBuyer,
+          feePolicy: fundraiserEvents.feePolicy,
         })
         .from(fundraiserOrders)
         .innerJoin(fundraiserEvents, eq(fundraiserOrders.eventId, fundraiserEvents.id))
@@ -32043,7 +32047,8 @@ Submitted: ${new Date().toLocaleString()}
         }
         if (eventFilter && fo.eventTitle.toLowerCase() !== eventFilter.toLowerCase()) continue;
 
-        const amount = fo.priceCents * fo.quantity;
+        const baseAmount = fo.baseAmountCents ?? fo.priceCents * fo.quantity;
+        const amount = fo.totalAmountCents ?? baseAmount;
         const sale = {
           id: fo.orderId,
           orderNumber: fo.orderNumber,
@@ -32054,8 +32059,8 @@ Submitted: ${new Date().toLocaleString()}
           customerEmail: fo.customerEmail,
           quantity: fo.quantity,
           amount,
-          baseAmount: amount,
-          donorCoveredFees: !!fo.passFeesToBuyer,
+          baseAmount,
+          donorCoveredFees: fo.feeContributionCents != null ? fo.feeContributionCents > 0 : !!fo.passFeesToBuyer,
           currency: 'usd',
           created: created.toISOString(),
         };
@@ -49177,6 +49182,7 @@ Use timestamps like [00:00] to help with pacing.`;
           eventName: eventTickets.eventName,
           description: eventTickets.description,
           pricePerTicket: eventTickets.pricePerTicket,
+          feePolicy: eventTickets.feePolicy,
           isRecurring: eventTickets.isRecurring,
           isActive: eventTickets.isActive,
           createdAt: eventTickets.createdAt,
@@ -49206,6 +49212,7 @@ Use timestamps like [00:00] to help with pacing.`;
           eventName: eventTickets.eventName,
           description: eventTickets.description,
           pricePerTicket: eventTickets.pricePerTicket,
+          feePolicy: eventTickets.feePolicy,
           isRecurring: eventTickets.isRecurring,
           isActive: eventTickets.isActive,
         })
@@ -49231,6 +49238,17 @@ Use timestamps like [00:00] to help with pacing.`;
    * POST /api/event-tickets/checkout
    * Create Stripe checkout session for event tickets with quantity and fee coverage
    */
+  app.patch('/api/event-tickets/:id/fee-policy', requireTenant, requireAuth, requireRole('admin', 'owner', 'board_member', 'staff'), async (req, res, next) => {
+    try {
+      const id = z.string().uuid().parse(req.params.id);
+      const feePolicy = z.enum(["rescue", "optional", "required"]).parse(req.body.feePolicy);
+      const { eventTickets } = await import('@shared/schema');
+      const [ticket] = await db.update(eventTickets).set({ feePolicy }).where(and(eq(eventTickets.id, id), eq(eventTickets.tenantId, req.tenant!.id))).returning({ id: eventTickets.id });
+      if (!ticket) return res.status(404).json({ error: 'Event not found' });
+      res.json({ success: true });
+    } catch (error) { next(error); }
+  });
+
   app.post('/api/event-tickets/checkout', requireTenant, async (req, res, next) => {
     try {
       const { eventTickets } = await import('@shared/schema');
@@ -49242,7 +49260,7 @@ Use timestamps like [00:00] to help with pacing.`;
         donorCoversFees: z.boolean().default(false),
       });
 
-      const { eventId, quantity, donorCoversFees } = checkoutSchema.parse(req.body);
+      const { eventId, quantity, donorCoversFees: requestedCoverage } = checkoutSchema.parse(req.body);
 
       // Get event ticket details
       const [ticket] = await db
@@ -49250,6 +49268,7 @@ Use timestamps like [00:00] to help with pacing.`;
           id: eventTickets.id,
           eventName: eventTickets.eventName,
           pricePerTicket: eventTickets.pricePerTicket,
+          feePolicy: eventTickets.feePolicy,
           isRecurring: eventTickets.isRecurring,
           isActive: eventTickets.isActive,
         })
@@ -49264,6 +49283,8 @@ Use timestamps like [00:00] to help with pacing.`;
       if (!ticket) {
         return res.status(404).json({ error: 'Event not found' });
       }
+      const { customerCoversFundraisingFees } = await import('@shared/fundraising-fee-policy');
+      const donorCoversFees = customerCoversFundraisingFees(ticket.feePolicy, requestedCoverage);
 
       // Get tenant for Stripe configuration
       const [tenant] = await db
@@ -52582,6 +52603,7 @@ ${section('Metadata', metaRows)}
           imageDisplayMode: fundraiserEvents.imageDisplayMode,
           priceCents: fundraiserEvents.priceCents,
           passFeesToBuyer: fundraiserEvents.passFeesToBuyer,
+          feePolicy: fundraiserEvents.feePolicy,
           inventoryCap: fundraiserEvents.inventoryCap,
           pickupTimes: fundraiserEvents.pickupTimes,
           isActive: fundraiserEvents.isActive,
@@ -52667,6 +52689,7 @@ ${section('Metadata', metaRows)}
         imageDisplayMode: z.enum(['hero', 'poster']),
         priceCents: positiveInteger,
         passFeesToBuyer: z.boolean(),
+        feePolicy: z.enum(["rescue", "optional", "required"]),
         inventoryCap: positiveInteger.nullable(),
         pickupTimes: z.array(nonBlankText),
         isActive: z.boolean(),
@@ -52743,6 +52766,22 @@ ${section('Metadata', metaRows)}
    * POST /api/fundraiser-events/:id/checkout
    * Public (no auth): create Stripe checkout session for a fundraiser event
    */
+  app.post('/api/fundraiser-events/:id/fee-quote', requireTenant, async (req, res, next) => {
+    try {
+      const id = z.string().uuid().parse(req.params.id);
+      const body = z.object({ quantity: z.number().int().min(1).max(100), coverFees: z.boolean().default(false) }).parse(req.body);
+      const { fundraiserEvents } = await import('@shared/schema');
+      const [event] = await db.select().from(fundraiserEvents).where(and(
+        eq(fundraiserEvents.id, id), eq(fundraiserEvents.tenantId, req.tenant!.id), eq(fundraiserEvents.isActive, true),
+      )).limit(1);
+      if (!event) return res.status(404).json({ error: 'Event unavailable' });
+      const { fundraiserEventFeePolicy } = await import('@shared/fundraising-fee-policy');
+      const { fundraisingFeeQuote } = await import('./services/fundraising-fee-quote');
+      res.json(await fundraisingFeeQuote(req.tenant!.id, event.priceCents * body.quantity,
+        fundraiserEventFeePolicy(event.feePolicy, event.passFeesToBuyer), body.coverFees));
+    } catch (error) { next(error); }
+  });
+
   app.post('/api/fundraiser-events/:id/checkout', requireTenant, async (req, res, next) => {
     try {
       const { fundraiserEvents, fundraiserOrders } = await import('@shared/schema');
@@ -52763,6 +52802,7 @@ ${section('Metadata', metaRows)}
         customerPhone: z.string().optional(),
         quantity: z.number().int().min(1).max(100),
         pickupTime: z.string().optional(),
+        coverFees: z.boolean().default(false),
       });
       const body = checkoutSchema.parse(req.body);
 
@@ -52815,23 +52855,20 @@ ${section('Metadata', metaRows)}
       // Calculate the order total once. Fee gross-up must not be rounded per
       // item because that overcharges multi-quantity orders.
       const baseAmountCents = event.priceCents * body.quantity;
-      let totalCents = baseAmountCents;
-      let feesCoveredCents = 0;
-      if (event.passFeesToBuyer) {
-        const feeCalc = calculateDonorCoversFees(
-          baseAmountCents,
-          req.tenant!.subscriptionTier || 'free',
-          req.tenant!.platformFeePercent
-        );
-        totalCents = feeCalc.totalAmount;
-        feesCoveredCents = feeCalc.feesCovered;
-      }
-
-      const iRescueRevenueCents = calculatePlatformFee(
-        totalCents,
-        req.tenant!.subscriptionTier || 'free',
-        req.tenant!.platformFeePercent,
-      );
+      const { fundraiserEventFeePolicy } = await import('@shared/fundraising-fee-policy');
+      const { fundraisingFeeQuote } = await import('./services/fundraising-fee-quote');
+      const quote = await fundraisingFeeQuote(req.tenant!.id, baseAmountCents,
+        fundraiserEventFeePolicy(event.feePolicy, event.passFeesToBuyer), body.coverFees);
+      const totalCents = quote.totalCents;
+      const feesCoveredCents = quote.feeContributionCents;
+      const iRescueRevenueCents = quote.platformFeeCents;
+      await db.update(fundraiserOrders).set({
+        feePolicy: quote.policy,
+        baseAmountCents,
+        totalAmountCents: totalCents,
+        feeContributionCents: feesCoveredCents,
+        platformFeeCents: iRescueRevenueCents,
+      }).where(eq(fundraiserOrders.id, order.id));
       const economics = calculateDestinationChargeEconomics(
         totalCents,
         iRescueRevenueCents,
@@ -52881,7 +52918,8 @@ ${section('Metadata', metaRows)}
             tenantId: req.tenant!.id,
             fundraiserEventId: id,
             fundraiserOrderId: order.id,
-            buyerCoveredFees: event.passFeesToBuyer ? 'true' : 'false',
+            buyerCoveredFees: String(quote.covered),
+            feePolicy: quote.policy,
             ...economicsMetadata,
           },
         },
@@ -52891,7 +52929,8 @@ ${section('Metadata', metaRows)}
           tenantId: req.tenant!.id,
           achSurface: 'ticket',
           achOffered: 'false',
-          buyerCoveredFees: event.passFeesToBuyer ? 'true' : 'false',
+          buyerCoveredFees: String(quote.covered),
+          feePolicy: quote.policy,
           baseAmount: baseAmountCents.toString(),
           feesCovered: feesCoveredCents.toString(),
           ...economicsMetadata,
@@ -53420,6 +53459,7 @@ ${section('Metadata', metaRows)}
       const { peerCampaigns } = await import('@shared/schema');
 
       const createSchema = z.object({
+        feePolicy: z.enum(["rescue", "optional", "required"]).default("optional"),
         campaignTitle: z.string().min(1).max(200),
         campaignStory: z.string().max(5000).optional(),
         goalAmount: z.number().int().min(100),
@@ -53459,6 +53499,7 @@ ${section('Metadata', metaRows)}
         tenantId: req.tenant!.id,
         creatorName: user?.fullName || user?.email || 'Staff',
         creatorEmail: user?.email || '',
+        feePolicy: data.feePolicy,
         campaignTitle: data.campaignTitle,
         campaignStory: data.campaignStory || null,
         goalAmount: data.goalAmount,
@@ -53579,6 +53620,17 @@ ${section('Metadata', metaRows)}
    * POST /api/peer-campaigns/:slug/checkout
    * Public: Create a Stripe checkout session for donating to a P2P campaign
    */
+  app.post('/api/peer-campaigns/:slug/fee-quote', requireTenant, async (req, res, next) => {
+    try {
+      const { peerCampaigns } = await import('@shared/schema');
+      const body = z.object({ amountCents: z.number().int().min(100).max(99_999_999), coverFees: z.boolean().default(false) }).parse(req.body);
+      const [campaign] = await db.select().from(peerCampaigns).where(and(eq(peerCampaigns.slug, req.params.slug), eq(peerCampaigns.tenantId, req.tenant!.id), eq(peerCampaigns.isActive, true))).limit(1);
+      if (!campaign || campaign.status !== "active" || (campaign.endsAt && new Date(campaign.endsAt) < new Date())) return res.status(404).json({ error: 'Campaign unavailable' });
+      const { fundraisingFeeQuote } = await import('./services/fundraising-fee-quote');
+      res.json(await fundraisingFeeQuote(req.tenant!.id, body.amountCents, campaign.feePolicy, body.coverFees));
+    } catch (error) { next(error); }
+  });
+
   app.post('/api/peer-campaigns/:slug/checkout', requireTenant, async (req, res, next) => {
     try {
       const { peerCampaigns, peerCampaignDonations, campaignParticipants } = await import('@shared/schema');
@@ -53642,13 +53694,11 @@ ${section('Metadata', metaRows)}
         return res.status(400).json({ error: 'Stripe is not configured for this rescue' });
       }
 
-      let chargeAmount = data.amount;
-      let feesCovered = 0;
-      if (data.donorCoversFees) {
-        const feeCalc = calculateDonorCoversFees(data.amount, tenant.subscriptionTier || 'free', tenant.platformFeePercent);
-        chargeAmount = feeCalc.totalAmount;
-        feesCovered = feeCalc.feesCovered;
-      }
+      const { fundraisingFeeQuote } = await import('./services/fundraising-fee-quote');
+      const quote = await fundraisingFeeQuote(req.tenant!.id, data.amount, campaign.feePolicy, data.donorCoversFees);
+      data.donorCoversFees = quote.covered;
+      const chargeAmount = quote.totalCents;
+      const feesCovered = quote.feeContributionCents;
 
       const platformFeeAmount = calculatePlatformFee(chargeAmount, tenant.subscriptionTier || 'free', tenant.platformFeePercent);
 
@@ -53780,6 +53830,7 @@ ${section('Metadata', metaRows)}
       const { peerCampaigns } = await import('@shared/schema');
 
       const updateSchema = z.object({
+        feePolicy: z.enum(["rescue", "optional", "required"]).optional(),
         isActive: z.boolean().optional(),
         campaignTitle: z.string().min(1).max(200).optional(),
         campaignStory: z.string().max(5000).optional(),

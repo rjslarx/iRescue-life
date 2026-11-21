@@ -1,3 +1,5 @@
+import { FeePolicyField } from "@/components/fundraising/FeePolicyField";
+import { fundraiserEventFeePolicy, type FundraisingFeePolicy } from "@shared/fundraising-fee-policy";
 import { useRef, useState, useEffect, useCallback } from "react";
 import { Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -41,6 +43,7 @@ interface EventFormState {
   imageDisplayMode: "hero" | "poster";
   priceStr: string;
   passFeesToBuyer: boolean;
+  feePolicy: FundraisingFeePolicy;
   inventoryCapStr: string;
   pickupTimes: string[];
   isActive: boolean;
@@ -54,6 +57,7 @@ const defaultForm = (): EventFormState => ({
   imageDisplayMode: "hero",
   priceStr: "",
   passFeesToBuyer: false,
+  feePolicy: "rescue",
   inventoryCapStr: "",
   pickupTimes: [],
   isActive: true,
@@ -141,6 +145,7 @@ export default function FundraisersPage() {
       imageDisplayMode: ((evt as any).imageDisplayMode === "poster" ? "poster" : "hero") as "hero" | "poster",
       priceStr: (evt.priceCents / 100).toFixed(2),
       passFeesToBuyer: (evt as any).passFeesToBuyer ?? false,
+      feePolicy: fundraiserEventFeePolicy(evt.feePolicy, evt.passFeesToBuyer),
       inventoryCapStr: evt.inventoryCap != null ? String(evt.inventoryCap) : "",
       pickupTimes: [...evt.pickupTimes],
       isActive: evt.isActive,
@@ -203,6 +208,7 @@ export default function FundraisersPage() {
       imageDisplayMode: form.imageDisplayMode,
       priceCents,
       passFeesToBuyer: form.passFeesToBuyer,
+      feePolicy: form.feePolicy,
       inventoryCap,
       pickupTimes: form.pickupTimes,
       isActive: form.isActive,
@@ -521,18 +527,9 @@ export default function FundraisersPage() {
               </div>
             </div>
 
-            <div className="flex items-center justify-between gap-2 rounded-md border p-3">
-              <div className="space-y-0.5">
-                <Label htmlFor="pass-fees" className="text-sm font-medium">Pass transaction costs to buyer</Label>
-                <p className="text-xs text-muted-foreground">Estimated payment and service costs will be added so the rescue receives the full listed price</p>
-              </div>
-              <Switch
-                id="pass-fees"
-                checked={form.passFeesToBuyer}
-                onCheckedChange={(checked) => setForm((f) => ({ ...f, passFeesToBuyer: checked }))}
-                data-testid="switch-pass-fees"
-              />
-            </div>
+            <FeePolicyField value={form.feePolicy} onChange={feePolicy => setForm(f => ({
+              ...f, feePolicy, passFeesToBuyer: feePolicy === "required",
+            }))} />
 
             <div className="space-y-2">
               <Label>Pickup Times <span className="text-muted-foreground text-xs">(optional)</span></Label>

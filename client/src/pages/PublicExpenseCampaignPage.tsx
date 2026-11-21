@@ -1,3 +1,5 @@
+import { useFundraisingFeeQuote } from "@/hooks/use-fundraising-fee-quote";
+import type { FundraisingFeePolicy } from "@shared/fundraising-fee-policy";
 import { useEffect, useState } from "react";
 import { useParams } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -45,6 +47,7 @@ interface CampaignPublic {
   longDescription: string | null;
   heroImageUrl: string | null;
   showTitleOnHero?: boolean;
+  feePolicy: FundraisingFeePolicy;
   goalAmountCents: number;
   raisedAmountCents: number;
   endDate: string | null;
@@ -100,6 +103,9 @@ export default function PublicExpenseCampaignPage() {
     },
   });
 
+  const giftCents = Math.round(Number(amountDollars || "0") * 100);
+  const feeQuote = useFundraisingFeeQuote(data?.campaign.status === "active" ? `/api/public/expense-campaigns/${data.campaign.id}/fee-quote` : undefined, giftCents, coverFees);
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background">
@@ -129,11 +135,8 @@ export default function PublicExpenseCampaignPage() {
     : matchPool.effectiveStatus === "ended" || matchPool.effectiveStatus === "exhausted" ? matchPool.effectiveStatus
     : "active";
   const tiered = !!matchPool?.tiers?.length;
-  const giftCents = Math.round(Number(amountDollars || "0") * 100);
   const validGift = expenseCampaignCheckoutSchema.safeParse({ amountCents: giftCents, coverFees }).success;
-  const { totalCents, feeContributionCents } = validGift
-    ? expenseCampaignCharge(giftCents, coverFees)
-    : { totalCents: 0, feeContributionCents: 0 };
+  const { totalCents, feeContributionCents } = feeQuote.data ?? { totalCents: giftCents, feeContributionCents: 0 };
 
   const previewMatch = (() => {
     if (!matchPool || matchingStatus !== "active" || campaign.status !== "active") return 0;
@@ -210,31 +213,33 @@ export default function PublicExpenseCampaignPage() {
               />
               <Button
                 onClick={() => checkoutMutation.mutate()}
-                disabled={checkoutMutation.isPending || !validGift}
+                disabled={checkoutMutation.isPending || !validGift || !feeQuote.data || feeQuote.isFetching || feeQuote.isError}
                 data-testid="button-donate"
               >
                 {checkoutMutation.isPending ? "Redirecting…" : "Donate"}
               </Button>
             </div>
             <div className="space-y-2">
-              <div className="flex items-start gap-2">
+              {campaign.feePolicy === "optional" && <div className="flex items-start gap-2">
                 <Checkbox id="expense-cover-fees" checked={coverFees}
                   onCheckedChange={(checked) => setCoverFees(checked === true)}
                   disabled={checkoutMutation.isPending}
                   data-testid="checkbox-cover-fees" />
                 <label htmlFor="expense-cover-fees" className="text-sm leading-tight cursor-pointer">
-                  Add a contribution to cover estimated processing fees
+                  Cover the platform fee and estimated Stripe processing
                 </label>
-              </div>
+              </div>}
+              {campaign.feePolicy === "required" && <p className="text-sm">Fee coverage is required for this campaign.</p>}
               {validGift && <p className="text-sm" aria-live="polite" data-testid="text-checkout-total">
-                Donation: {usd(giftCents)}{coverFees && <> + fees: {usd(feeContributionCents)}</>}
-                {" · "}Total: <strong>{usd(totalCents)}</strong>
+                Donation: {usd(giftCents)}{feeQuote.data?.covered && <> + fees: {usd(feeContributionCents)}</>}
+                {" · "}Total: <strong>{feeQuote.data ? usd(totalCents) : "Calculating…"}</strong>
               </p>}
               <p className="text-xs text-muted-foreground">
-                {coverFees
-                  ? "Estimated using 2.9% + $0.30 card processing. Actual Stripe fees may vary; any difference affects the rescue’s proceeds. Fee contributions are not matched."
-                  : "Processing fees will be deducted from the rescue’s proceeds, not added to your donation."}
+                {feeQuote.data?.covered
+                  ? "Includes platform fees and estimated Stripe processing. Actual costs may vary; any difference affects rescue proceeds. Fee contributions are not matched."
+                  : "Platform and Stripe processing fees come from rescue proceeds."}
               </p>
+              {feeQuote.isError && <p role="alert" className="text-sm text-destructive">Unable to calculate fees. <button type="button" onClick={() => feeQuote.refetch()}>Try again</button></p>}
             </div>
             {previewMatch > 0 && (
               <div className="text-sm text-primary" aria-live="polite" data-testid="text-match-preview">
