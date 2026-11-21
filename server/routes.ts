@@ -52778,7 +52778,7 @@ ${section('Metadata', metaRows)}
       const { fundraiserEventFeePolicy } = await import('@shared/fundraising-fee-policy');
       const { fundraisingFeeQuote } = await import('./services/fundraising-fee-quote');
       res.json(await fundraisingFeeQuote(req.tenant!.id, event.priceCents * body.quantity,
-        fundraiserEventFeePolicy(event.feePolicy, event.passFeesToBuyer), body.coverFees));
+        fundraiserEventFeePolicy(event.feePolicy, event.passFeesToBuyer), body.coverFees, `event:${event.id}:${body.quantity}`));
     } catch (error) { next(error); }
   });
 
@@ -52826,6 +52826,16 @@ ${section('Metadata', metaRows)}
         }
       }
 
+      // Verify the reviewed quote before creating any pending order or Stripe session.
+      const baseAmountCents = event.priceCents * body.quantity;
+      const { fundraiserEventFeePolicy } = await import('@shared/fundraising-fee-policy');
+      const { fundraisingFeeQuote } = await import('./services/fundraising-fee-quote');
+      const { fundraisingQuoteConflict } = await import('./lib/fundraising-quote-version');
+      const quote = await fundraisingFeeQuote(req.tenant!.id, baseAmountCents,
+        fundraiserEventFeePolicy(event.feePolicy, event.passFeesToBuyer), body.coverFees, `event:${event.id}:${body.quantity}`);
+      const conflict = fundraisingQuoteConflict(req.body.quoteVersion, quote);
+      if (conflict) return res.status(409).json(conflict);
+
       // Create pending order
       const [order] = await db.insert(fundraiserOrders).values({
         eventId: id,
@@ -52854,11 +52864,6 @@ ${section('Metadata', metaRows)}
 
       // Calculate the order total once. Fee gross-up must not be rounded per
       // item because that overcharges multi-quantity orders.
-      const baseAmountCents = event.priceCents * body.quantity;
-      const { fundraiserEventFeePolicy } = await import('@shared/fundraising-fee-policy');
-      const { fundraisingFeeQuote } = await import('./services/fundraising-fee-quote');
-      const quote = await fundraisingFeeQuote(req.tenant!.id, baseAmountCents,
-        fundraiserEventFeePolicy(event.feePolicy, event.passFeesToBuyer), body.coverFees);
       const totalCents = quote.totalCents;
       const feesCoveredCents = quote.feeContributionCents;
       const iRescueRevenueCents = quote.platformFeeCents;
@@ -53627,7 +53632,7 @@ ${section('Metadata', metaRows)}
       const [campaign] = await db.select().from(peerCampaigns).where(and(eq(peerCampaigns.slug, req.params.slug), eq(peerCampaigns.tenantId, req.tenant!.id), eq(peerCampaigns.isActive, true))).limit(1);
       if (!campaign || campaign.status !== "active" || (campaign.endsAt && new Date(campaign.endsAt) < new Date())) return res.status(404).json({ error: 'Campaign unavailable' });
       const { fundraisingFeeQuote } = await import('./services/fundraising-fee-quote');
-      res.json(await fundraisingFeeQuote(req.tenant!.id, body.amountCents, campaign.feePolicy, body.coverFees));
+      res.json(await fundraisingFeeQuote(req.tenant!.id, body.amountCents, campaign.feePolicy, body.coverFees, `peer:${campaign.id}`));
     } catch (error) { next(error); }
   });
 
@@ -53638,7 +53643,7 @@ ${section('Metadata', metaRows)}
       const { calculatePlatformFee, calculateDonorCoversFees } = await import('./config/platform');
 
       const checkoutSchema = z.object({
-        amount: z.number().int().min(100),
+        amount: z.number().int().min(100).max(99_999_999),
         donorName: z.string().min(1),
         donorEmail: z.string().email().optional(),
         message: z.string().max(500).optional(),
@@ -53695,12 +53700,15 @@ ${section('Metadata', metaRows)}
       }
 
       const { fundraisingFeeQuote } = await import('./services/fundraising-fee-quote');
-      const quote = await fundraisingFeeQuote(req.tenant!.id, data.amount, campaign.feePolicy, data.donorCoversFees);
+      const quote = await fundraisingFeeQuote(req.tenant!.id, data.amount, campaign.feePolicy, data.donorCoversFees, `peer:${campaign.id}`);
+      const { fundraisingQuoteConflict } = await import('./lib/fundraising-quote-version');
+      const conflict = fundraisingQuoteConflict(req.body.quoteVersion, quote);
+      if (conflict) return res.status(409).json(conflict);
       data.donorCoversFees = quote.covered;
       const chargeAmount = quote.totalCents;
       const feesCovered = quote.feeContributionCents;
 
-      const platformFeeAmount = calculatePlatformFee(chargeAmount, tenant.subscriptionTier || 'free', tenant.platformFeePercent);
+      const platformFeeAmount = quote.platformFeeCents;
 
       const [donation] = await db.insert(peerCampaignDonations).values({
         tenantId: req.tenant!.id,

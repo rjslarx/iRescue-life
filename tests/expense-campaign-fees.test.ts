@@ -29,7 +29,7 @@ describe("expense campaign processing-fee choice", () => {
   it("keeps checkout direct to the rescue and separates the gift from the fee", () => {
     const route = readFileSync("server/routes/expenseCampaigns.ts", "utf8").split('publicRouter.post("/:id/checkout"')[1];
     assert.match(route, /expenseCampaignCheckoutSchema\.parse\(req\.body\)/);
-    assert.match(route, /fundraisingFeeQuote\(tenantId, amountCents, campaign.feePolicy, coverFees\)/);
+    assert.match(route, /fundraisingFeeQuote\(tenantId, amountCents, campaign.feePolicy, coverFees, `expense:\$\{campaign.id\}`\)/);
     assert.match(route, /unit_amount: amountCents/);
     assert.match(route, /unit_amount: feeContributionCents/);
     assert.match(route, /baseAmount: String\(amountCents\)/);

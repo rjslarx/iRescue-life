@@ -414,7 +414,7 @@ function QuickPledgeLayout({
   const checkoutMutation = useMutation({
     mutationFn: async (amount: number) => {
       const slug = campaign.slug || campaign.id;
-      const res = await apiRequest("POST", `/api/peer-campaigns/${slug}/checkout`, {
+      const res = await feeQuote.checkout(`/api/peer-campaigns/${slug}/checkout`, {
         amount,
         donorName: donorName.trim() || "Anonymous",
         donorEmail: donorEmail.trim() || undefined,
@@ -426,8 +426,8 @@ function QuickPledgeLayout({
     onSuccess: (result) => {
       if (result.url) window.location.href = result.url;
     },
-    onError: () => {
-      toast({ title: "Error", description: "Could not create checkout session.", variant: "destructive" });
+    onError: (error: Error) => {
+      toast({ title: "Review checkout", description: error.message, variant: "destructive" });
     },
   });
 
@@ -613,12 +613,12 @@ function QuickPledgeLayout({
                       <Input type="number" min="1" step="0.01" placeholder="Enter amount" value={customAmount} onChange={(e) => setCustomAmount(e.target.value)} className="pl-7 text-lg h-12" data-testid="quick-input-custom" />
                     </div>
                   )}
-                  {campaign.feePolicy === "optional" && <div className="flex items-center gap-2">
+                  {(feeQuote.data?.policy ?? campaign.feePolicy) === "optional" && <div className="flex items-center gap-2">
                     <Checkbox id="quick-fees" checked={coverFees} onCheckedChange={(c) => setCoverFees(c === true)} data-testid="quick-checkbox-fees" />
                     <label htmlFor="quick-fees" className="text-sm text-muted-foreground cursor-pointer">Cover platform and estimated processing fees</label>
                   </div>}
                   <p>Total: {feeQuote.data ? `$${(feeQuote.data.totalCents / 100).toFixed(2)}` : "Calculating…"}</p>
-                  {campaign.feePolicy === "required" && <p>Fee coverage is required and included above.</p>}
+                  {(feeQuote.data?.policy ?? campaign.feePolicy) === "required" && <p>Fee coverage is required and included above.</p>}
                   {feeQuote.isError && <button onClick={() => feeQuote.refetch()}>Retry fee calculation</button>}
                   {isAchEligible({
                     amountCents: showCustom
@@ -683,9 +683,12 @@ export default function P2PCampaignLandingPage() {
     enabled: !!slug,
   });
 
+  const feeQuote = useFundraisingFeeQuote(data?.campaign ? `/api/peer-campaigns/${slug}/fee-quote` : undefined,
+    showCustom ? Math.round(Number(customAmount) * 100) : (selectedAmount ?? 0), coverFees);
+
   const checkoutMutation = useMutation({
     mutationFn: async (amount: number) => {
-      const res = await apiRequest("POST", `/api/peer-campaigns/${slug}/checkout`, {
+      const res = await feeQuote.checkout(`/api/peer-campaigns/${slug}/checkout`, {
         amount,
         donorName: donorName.trim() || "Anonymous",
         donorEmail: donorEmail.trim() || undefined,
@@ -700,8 +703,8 @@ export default function P2PCampaignLandingPage() {
         window.location.href = result.url;
       }
     },
-    onError: () => {
-      toast({ title: "Error", description: "Could not create checkout session. Please try again.", variant: "destructive" });
+    onError: (error: Error) => {
+      toast({ title: "Review checkout", description: error.message, variant: "destructive" });
     },
   });
 
@@ -1123,6 +1126,7 @@ export default function P2PCampaignLandingPage() {
 
                         <TabsContent value="one-time" className="space-y-3 mt-3">
                           <OneTimeDonationForm
+                            feeQuote={feeQuote}
                             campaign={campaign}
                             selectedAmount={selectedAmount}
                             setSelectedAmount={setSelectedAmount}
@@ -1140,6 +1144,7 @@ export default function P2PCampaignLandingPage() {
                       </Tabs>
                     ) : (
                       <OneTimeDonationForm
+                        feeQuote={feeQuote}
                         campaign={campaign}
                         selectedAmount={selectedAmount}
                         setSelectedAmount={setSelectedAmount}
@@ -1234,6 +1239,7 @@ export default function P2PCampaignLandingPage() {
 }
 
 function OneTimeDonationForm({
+  feeQuote,
   campaign,
   selectedAmount,
   setSelectedAmount,
@@ -1247,6 +1253,7 @@ function OneTimeDonationForm({
   isPending,
   themeAccent,
 }: {
+  feeQuote: ReturnType<typeof useFundraisingFeeQuote>;
   campaign: PeerCampaign;
   selectedAmount: number | null;
   setSelectedAmount: (a: number | null) => void;
@@ -1264,7 +1271,6 @@ function OneTimeDonationForm({
     ? (customAmount ? Math.round(parseFloat(customAmount) * 100) : 0)
     : (selectedAmount ?? 0);
   const showAchNudge = isAchEligible({ amountCents: effectiveAmountCents, surface: 'p2p', isRecurring: false });
-  const feeQuote = useFundraisingFeeQuote(`/api/peer-campaigns/${campaign.slug}/fee-quote`, effectiveAmountCents, coverFees);
   return (
     <>
       <div className="grid grid-cols-2 gap-2">
@@ -1302,7 +1308,7 @@ function OneTimeDonationForm({
           />
         </div>
       )}
-      {campaign.feePolicy === "optional" && <div className="flex items-center gap-2">
+      {(feeQuote.data?.policy ?? campaign.feePolicy) === "optional" && <div className="flex items-center gap-2">
         <Checkbox
           id="cover-fees"
           checked={coverFees}
@@ -1314,7 +1320,7 @@ function OneTimeDonationForm({
         </label>
       </div>}
       <p className="text-sm">Total: {feeQuote.data ? `$${(feeQuote.data.totalCents / 100).toFixed(2)}` : "Calculating…"}</p>
-      {campaign.feePolicy === "required" && <p className="text-sm">Fee coverage is required and included above.</p>}
+      {(feeQuote.data?.policy ?? campaign.feePolicy) === "required" && <p className="text-sm">Fee coverage is required and included above.</p>}
       <p className="text-xs text-muted-foreground">Actual processing costs may vary; uncovered fees and differences come from rescue proceeds.</p>
       {feeQuote.isError && <button onClick={() => feeQuote.refetch()}>Retry fee calculation</button>}
       {showAchNudge && (

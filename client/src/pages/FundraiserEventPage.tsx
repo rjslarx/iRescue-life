@@ -79,7 +79,7 @@ export default function FundraiserEventPage() {
 
   const checkoutMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", `/api/fundraiser-events/${eventId}/checkout`, {
+      const res = await feeQuote.checkout(`/api/fundraiser-events/${eventId}/checkout`, {
         customerName,
         customerEmail,
         customerPhone: customerPhone || undefined,
@@ -96,7 +96,9 @@ export default function FundraiserEventPage() {
       }
     },
     onError: (err: any) => {
-      if (err.status === 409 || err.message?.includes("sold_out")) {
+      if (err.code === "FUNDRAISING_QUOTE_CHANGED") {
+        toast({ title: "Review updated total", description: err.message, variant: "destructive" });
+      } else if (err.message?.includes("sold_out")) {
         setSoldOutError(true);
       } else {
         toast({ title: "Error", description: "Unable to process your order. Please try again.", variant: "destructive" });
@@ -110,6 +112,7 @@ export default function FundraiserEventPage() {
   const maxQty = remaining !== null ? Math.min(10, remaining) : 10;
   const total = event ? event.priceCents * quantity : 0;
   const feeQuote = useFundraisingFeeQuote(event ? `/api/fundraiser-events/${event.id}/fee-quote` : undefined, total, coverFees, quantity);
+  const displayedUnitPrice = feeQuote.data ? feeQuote.data.baseAmountCents / quantity : event?.priceCents ?? 0;
 
   const canSubmit =
     !isSoldOut &&
@@ -219,7 +222,7 @@ export default function FundraiserEventPage() {
                 <p className="text-muted-foreground text-base md:text-lg">{event.description}</p>
               )}
               <div className="flex items-center justify-center gap-3 pt-1">
-                <span className="text-xl font-semibold">{formatCents(event.priceCents)} per item</span>
+                <span className="text-xl font-semibold">{formatCents(displayedUnitPrice)} per item</span>
                 {event.inventoryCap != null && !isSoldOut && (
                   <Badge variant="secondary">{remaining} remaining</Badge>
                 )}
@@ -239,7 +242,7 @@ export default function FundraiserEventPage() {
                 <p className="text-white/85 text-base md:text-lg">{event.description}</p>
               )}
               <div className="flex items-center gap-3 pt-1">
-                <span className="text-xl font-semibold text-white">{formatCents(event.priceCents)} per item</span>
+                <span className="text-xl font-semibold text-white">{formatCents(displayedUnitPrice)} per item</span>
                 {event.inventoryCap != null && !isSoldOut && (
                   <Badge variant="secondary" className="bg-white/20 text-white border-0">
                     {remaining} remaining
@@ -260,7 +263,7 @@ export default function FundraiserEventPage() {
             <h1 className="text-3xl font-bold">{event.title}</h1>
             {event.description && <p className="text-muted-foreground text-lg">{event.description}</p>}
             <div className="flex items-center gap-3 pt-1">
-              <span className="text-xl font-semibold">{formatCents(event.priceCents)} per item</span>
+              <span className="text-xl font-semibold">{formatCents(displayedUnitPrice)} per item</span>
               {event.inventoryCap != null && !isSoldOut && (
                 <Badge variant="secondary">{remaining} remaining</Badge>
               )}
@@ -414,11 +417,11 @@ export default function FundraiserEventPage() {
                 <span className="font-medium">Total</span>
                 <span className="text-xl font-bold" data-testid="text-order-total">{feeQuote.data ? formatCents(feeQuote.data.totalCents) : "Calculating…"}</span>
               </div>
-              {fundraiserEventFeePolicy(event.feePolicy, event.passFeesToBuyer) === "optional" && (
+              {(feeQuote.data?.policy ?? fundraiserEventFeePolicy(event.feePolicy, event.passFeesToBuyer)) === "optional" && (
                 <label className="flex gap-2 text-sm"><input type="checkbox" checked={coverFees} onChange={e => setCoverFees(e.target.checked)} />Cover platform and estimated Stripe processing fees</label>
               )}
-              {feeQuote.data?.covered && <p className="text-sm">Items: {formatCents(total)} + fee coverage: {formatCents(feeQuote.data.feeContributionCents)}</p>}
-              <p className="text-xs text-muted-foreground">{fundraiserEventFeePolicy(event.feePolicy, event.passFeesToBuyer) === "required" ? "Fee coverage is required and included in the total above." : "Uncovered fees come from rescue proceeds."} Processing is an estimate; actual costs may vary.</p>
+              {feeQuote.data && <p className="text-sm">Items: {formatCents(feeQuote.data.baseAmountCents)} + fee coverage: {formatCents(feeQuote.data.feeContributionCents)}</p>}
+              <p className="text-xs text-muted-foreground">{(feeQuote.data?.policy ?? fundraiserEventFeePolicy(event.feePolicy, event.passFeesToBuyer)) === "required" ? "Fee coverage is required and included in the total above." : "Uncovered fees come from rescue proceeds."} Processing is an estimate; actual costs may vary.</p>
               {feeQuote.isError && <p role="alert">Could not calculate fees. <button onClick={() => feeQuote.refetch()}>Try again</button></p>}
             </div>
 

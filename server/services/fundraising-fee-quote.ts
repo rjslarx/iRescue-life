@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import { versionFundraisingQuote } from "../lib/fundraising-quote-version";
 import { db } from "../db";
 import { tenants } from "@shared/schema";
 import { customerCoversFundraisingFees, type FundraisingFeePolicy } from "@shared/fundraising-fee-policy";
@@ -6,7 +7,7 @@ import { calculateDonorCoversFees, calculatePlatformFee, estimateStripeProcessin
 
 /** Fetch full settings: req.tenant is not the authoritative source for fee overrides. */
 export async function fundraisingFeeQuote(
-  tenantId: string, baseAmountCents: number, policy: FundraisingFeePolicy, optedIn: boolean,
+  tenantId: string, baseAmountCents: number, policy: FundraisingFeePolicy, optedIn: boolean, resource = "",
 ) {
   if (!Number.isSafeInteger(baseAmountCents) || baseAmountCents < 1 || baseAmountCents > 99_999_999) {
     throw new Error("Enter a positive amount below the payment limit.");
@@ -25,10 +26,10 @@ export async function fundraisingFeeQuote(
   if (totalCents > 99_999_999) throw new Error("Please lower the amount; the total exceeds the payment limit.");
   const platformFeeCents = calculatePlatformFee(totalCents, tenant.tier, tenant.platformFeePercent);
   const estimatedProcessingCents = estimateStripeProcessingFee(totalCents, "card");
-  return {
+  return versionFundraisingQuote(tenantId, resource, {
     policy, covered, baseAmountCents, totalCents,
     feeContributionCents: totalCents - baseAmountCents,
     platformFeeCents, estimatedProcessingCents,
     estimatedRescueProceedsCents: totalCents - platformFeeCents - estimatedProcessingCents,
-  };
+  });
 }

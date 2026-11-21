@@ -19,7 +19,7 @@ test("legacy fundraiser choices remain intact", () => {
 
 test("expense checkout collects platform fees without changing direct-charge ownership", () => {
   const code = readFileSync("server/routes/expenseCampaigns.ts", "utf8").split('publicRouter.post("/:id/checkout"')[1];
-  assert.ok(code.includes("fundraisingFeeQuote(tenantId, amountCents, campaign.feePolicy, coverFees)"));
+  assert.ok(code.includes("fundraisingFeeQuote(tenantId, amountCents, campaign.feePolicy, coverFees, `expense:${campaign.id}`)"));
   assert.ok(code.includes("application_fee_amount: platformFeeCents"));
   assert.ok(code.includes("stripeAccount: tenant.stripeConnectedAccountId"));
   assert.ok(code.includes("baseAmount: String(amountCents)"));

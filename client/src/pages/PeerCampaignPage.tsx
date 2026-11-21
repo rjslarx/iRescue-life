@@ -125,7 +125,7 @@ export default function PeerCampaignPage() {
 
   const checkoutMutation = useMutation({
     mutationFn: async (amount: number) => {
-      const res = await apiRequest("POST", `/api/peer-campaigns/${slug}/checkout`, {
+      const res = await feeQuote.checkout(`/api/peer-campaigns/${slug}/checkout`, {
         amount,
         donorName: donorName.trim() || "Anonymous",
         message: donorMessage.trim() || undefined,
@@ -139,10 +139,10 @@ export default function PeerCampaignPage() {
         window.location.href = result.url;
       }
     },
-    onError: () => {
+    onError: (error: Error) => {
       toast({
         title: "Error",
-        description: "Could not create checkout session. Please try again.",
+        description: error.message,
         variant: "destructive",
       });
     },
@@ -426,7 +426,7 @@ export default function PeerCampaignPage() {
                         )}
                       </div>
 
-                      {campaign.feePolicy === "optional" && <div className="flex items-center gap-2">
+                      {(feeQuote.data?.policy ?? campaign.feePolicy) === "optional" && <div className="flex items-center gap-2">
                         <Checkbox
                           id="cover-fees"
                           checked={coverFees}
@@ -437,7 +437,7 @@ export default function PeerCampaignPage() {
                           Cover platform and estimated Stripe processing fees
                         </label>
                       </div>}
-                      {campaign.feePolicy === "required" && <p className="text-sm">Fee coverage is required.</p>}
+                      {(feeQuote.data?.policy ?? campaign.feePolicy) === "required" && <p className="text-sm">Fee coverage is required.</p>}
                       <p className="text-sm">Total: {feeQuote.data ? `$${(feeQuote.data.totalCents / 100).toFixed(2)}` : "Calculating…"}
                         {feeQuote.data?.covered && ` (includes $${(feeQuote.data.feeContributionCents / 100).toFixed(2)} fee coverage)`}</p>
                       <p className="text-xs text-muted-foreground">Processing is estimated. Uncovered fees and differences come from rescue proceeds.</p>

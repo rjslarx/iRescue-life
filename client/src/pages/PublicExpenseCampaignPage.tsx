@@ -90,7 +90,7 @@ export default function PublicExpenseCampaignPage() {
     mutationFn: async () => {
       const cents = Math.round(parseFloat(amountDollars || "0") * 100);
       if (!expenseCampaignCheckoutSchema.safeParse({ amountCents: cents, coverFees }).success) throw new Error("Enter at least $1 and keep the total below $1,000,000.");
-      const res = await apiRequest("POST", `/api/public/expense-campaigns/${data!.campaign.id}/checkout`, {
+      const res = await feeQuote.checkout(`/api/public/expense-campaigns/${data!.campaign.id}/checkout`, {
         amountCents: cents,
         coverFees,
       });
@@ -220,7 +220,7 @@ export default function PublicExpenseCampaignPage() {
               </Button>
             </div>
             <div className="space-y-2">
-              {campaign.feePolicy === "optional" && <div className="flex items-start gap-2">
+              {(feeQuote.data?.policy ?? campaign.feePolicy) === "optional" && <div className="flex items-start gap-2">
                 <Checkbox id="expense-cover-fees" checked={coverFees}
                   onCheckedChange={(checked) => setCoverFees(checked === true)}
                   disabled={checkoutMutation.isPending}
@@ -229,7 +229,7 @@ export default function PublicExpenseCampaignPage() {
                   Cover the platform fee and estimated Stripe processing
                 </label>
               </div>}
-              {campaign.feePolicy === "required" && <p className="text-sm">Fee coverage is required for this campaign.</p>}
+              {(feeQuote.data?.policy ?? campaign.feePolicy) === "required" && <p className="text-sm">Fee coverage is required for this campaign.</p>}
               {validGift && <p className="text-sm" aria-live="polite" data-testid="text-checkout-total">
                 Donation: {usd(giftCents)}{feeQuote.data?.covered && <> + fees: {usd(feeContributionCents)}</>}
                 {" · "}Total: <strong>{feeQuote.data ? usd(totalCents) : "Calculating…"}</strong>

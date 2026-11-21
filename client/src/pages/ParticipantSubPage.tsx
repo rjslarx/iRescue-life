@@ -1,4 +1,5 @@
 import { useState, useEffect, type CSSProperties } from "react";
+import { useFundraisingFeeQuote } from "@/hooks/use-fundraising-fee-quote";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams } from "wouter";
 import { useSEO } from "@/hooks/useSEO";
@@ -81,7 +82,7 @@ export default function ParticipantSubPage() {
   const { data, isLoading } = useQuery<ParticipantPageData>({
     queryKey: ["/api/peer-campaigns", slug, "participant", participantId],
     queryFn: async () => {
-      const res = await fetch(`/api/peer-campaigns/${slug}/participant/${participantId}`, { credentials: "include" });
+      const res = await apiRequest("GET", `/api/peer-campaigns/${slug}/participant/${participantId}`);
       if (!res.ok) throw new Error("Failed to fetch participant");
       return res.json();
     },
@@ -93,9 +94,12 @@ export default function ParticipantSubPage() {
     description: data ? `Support ${data.participant.displayName} in ${data.campaign.campaignTitle}` : "",
   });
 
+  const feeQuote = useFundraisingFeeQuote(data?.campaign ? `/api/peer-campaigns/${slug}/fee-quote` : undefined,
+    showCustom ? Math.round(Number(customAmount) * 100) : (selectedAmount ?? 0), coverFees);
+
   const checkoutMutation = useMutation({
     mutationFn: async (amount: number) => {
-      const res = await apiRequest("POST", `/api/peer-campaigns/${slug}/checkout`, {
+      const res = await feeQuote.checkout(`/api/peer-campaigns/${slug}/checkout`, {
         amount,
         donorName: donorName.trim() || "Anonymous",
         donorEmail: donorEmail.trim() || undefined,
@@ -108,8 +112,8 @@ export default function ParticipantSubPage() {
     onSuccess: (result) => {
       if (result.url) window.location.href = result.url;
     },
-    onError: () => {
-      toast({ title: "Error", description: "Could not create checkout session.", variant: "destructive" });
+    onError: (error: Error) => {
+      toast({ title: "Review checkout", description: error.message, variant: "destructive" });
     },
   });
 
@@ -251,11 +255,16 @@ export default function ParticipantSubPage() {
             <Input type="number" min="1" step="0.01" placeholder="Enter amount" value={customAmount} onChange={(e) => setCustomAmount(e.target.value)} className="pl-7 text-lg" data-testid="participant-input-custom" />
           </div>
         )}
-        <div className="flex items-center gap-2">
+        {(feeQuote.data?.policy ?? campaign.feePolicy) === "optional" && <div className="flex items-center gap-2">
           <Checkbox id="p-fees" checked={coverFees} onCheckedChange={(c) => setCoverFees(c === true)} data-testid="participant-checkbox-fees" />
-          <label htmlFor="p-fees" className="text-sm text-muted-foreground cursor-pointer">Cover processing fees</label>
-        </div>
-        <Button size="lg" className="w-full gap-2" style={themeAccent ? { backgroundColor: themeAccent, borderColor: themeAccent, color: "#fff" } : undefined} onClick={handleDonate} disabled={checkoutMutation.isPending || (!showCustom && !selectedAmount) || (showCustom && (!customAmount || parseFloat(customAmount) < 1))} data-testid="participant-button-donate">
+          <label htmlFor="p-fees" className="text-sm text-muted-foreground cursor-pointer">Cover platform and estimated processing fees</label>
+        </div>}
+        <p>Total: {feeQuote.data ? `$${(feeQuote.data.totalCents / 100).toFixed(2)}` : "Calculating…"}</p>
+        {feeQuote.data?.covered && <p className="text-sm">Includes ${(feeQuote.data.feeContributionCents / 100).toFixed(2)} in fee coverage.</p>}
+        {(feeQuote.data?.policy ?? campaign.feePolicy) === "required" && <p className="text-sm">Fee coverage is required and included above.</p>}
+        <p className="text-xs text-muted-foreground">Processing is an estimate; actual costs may vary.</p>
+        {feeQuote.isError && <button type="button" onClick={() => feeQuote.refetch()}>Could not calculate fees. Try again</button>}
+        <Button size="lg" className="w-full gap-2" style={themeAccent ? { backgroundColor: themeAccent, borderColor: themeAccent, color: "#fff" } : undefined} onClick={handleDonate} disabled={!feeQuote.data || feeQuote.isFetching || feeQuote.isError || checkoutMutation.isPending || (!showCustom && !selectedAmount) || (showCustom && (!customAmount || parseFloat(customAmount) < 1))} data-testid="participant-button-donate">
           {checkoutMutation.isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Heart className="h-5 w-5" />}
           {checkoutMutation.isPending ? "Processing..." : "Donate Now"}
         </Button>

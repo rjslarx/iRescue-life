@@ -18,6 +18,7 @@ import { ObjectStorageService } from "../objectStorage";
 import { expenseCampaignCheckoutSchema } from "@shared/expense-campaign-fees";
 import { fundraisingFeePolicySchema } from "@shared/fundraising-fee-policy";
 import { fundraisingFeeQuote } from "../services/fundraising-fee-quote";
+import { fundraisingQuoteConflict } from "../lib/fundraising-quote-version";
 
 const router = Router();
 
@@ -788,7 +789,7 @@ publicRouter.post("/:id/fee-quote", async (req: Request, res: Response, next: Ne
       eq(expenseCampaigns.status, "active"),
     )).limit(1);
     if (!campaign) return res.status(404).json({ error: "Campaign unavailable" });
-    res.json(await fundraisingFeeQuote(req.tenant!.id, amountCents, campaign.feePolicy, coverFees));
+    res.json(await fundraisingFeeQuote(req.tenant!.id, amountCents, campaign.feePolicy, coverFees, `expense:${campaign.id}`));
   } catch (error) { next(error); }
 });
 
@@ -811,7 +812,9 @@ publicRouter.post("/:id/checkout", async (req: Request, res: Response, next: Nex
       .limit(1)
       .then((r) => r[0]);
     if (!campaign) return res.status(404).json({ error: "Campaign not found or inactive" });
-    const quote = await fundraisingFeeQuote(tenantId, amountCents, campaign.feePolicy, coverFees);
+    const quote = await fundraisingFeeQuote(tenantId, amountCents, campaign.feePolicy, coverFees, `expense:${campaign.id}`);
+    const conflict = fundraisingQuoteConflict(req.body.quoteVersion, quote);
+    if (conflict) return res.status(409).json(conflict);
     const { totalCents, feeContributionCents, platformFeeCents } = quote;
 
     const [tenant] = await db
