@@ -57,3 +57,4 @@
 - [Wild horse placement](wild-horse-placement.md) — Haseya’s-only screening; keep domesticated applications and historical answers unchanged.
 - [Feral cat surgery access](feral-cat-surgery.md) — Haseya’s accepts feral-cat surgery requests from unaffiliated individuals.
 - [Fundraiser email recovery](fundraiser-email-recovery.md) — retry definite failures only; historical paid orders and uncertain provider acceptance must not trigger duplicate confirmations.
+- [Isolated VM receipt tests](isolated-vm-receipts.md) — pdf-lib rejects cross-realm arrays and points; normalize inputs without replacing receipt generation.

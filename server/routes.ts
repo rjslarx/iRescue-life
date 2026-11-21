@@ -32949,6 +32949,12 @@ Submitted: ${new Date().toLocaleString()}
           // show a "Pending bank confirmation" badge until the bank clears.
           const isAchPending = session.payment_status === 'unpaid';
           const paymentStatus = isAchPending ? 'pending' : 'succeeded';
+          // Expense fundraiser coverage is a separate fee contribution, not a
+          // gift. Keep recognition and confirmations aligned with the donation
+          // ledger, while payments continue recording the full Stripe charge.
+          const recognizedAmountCents = session.metadata?.expenseCampaignId && session.metadata?.baseAmount
+            ? parseInt(session.metadata.baseAmount, 10)
+            : (session.amount_total || 0);
 
           let donor = await db
             .select()
@@ -32968,7 +32974,7 @@ Submitted: ${new Date().toLocaleString()}
               email: customerEmail,
               name: customerName,
               stripeCustomerId: session.customer,
-              totalDonated: session.amount_total || 0,
+              totalDonated: recognizedAmountCents,
               lastDonationDate: new Date(),
             }).returning();
             console.log(`[STRIPE-WEBHOOK] Created new donor ${donor.id} for ${customerEmail}`);
@@ -32976,7 +32982,7 @@ Submitted: ${new Date().toLocaleString()}
             [donor] = await db
               .update(donors)
               .set({
-                totalDonated: (donor.totalDonated || 0) + (session.amount_total || 0),
+                totalDonated: (donor.totalDonated || 0) + recognizedAmountCents,
                 lastDonationDate: new Date(),
                 stripeCustomerId: session.customer || donor.stripeCustomerId,
               })
@@ -33269,7 +33275,7 @@ Submitted: ${new Date().toLocaleString()}
           // Create or update contact record
           try {
             const { createContactFromDonation } = await import('./services/contacts');
-            if (customerEmail) { await createContactFromDonation(tenant.id, customerName, customerEmail, session.amount_total || 0); }
+            if (customerEmail) { await createContactFromDonation(tenant.id, customerName, customerEmail, recognizedAmountCents); }
             console.log(`[STRIPE-WEBHOOK] Created/updated contact for: ${customerEmail}`);
           } catch (contactError) {
             console.error('[STRIPE-WEBHOOK] Failed to create contact:', contactError);
@@ -33304,7 +33310,7 @@ Submitted: ${new Date().toLocaleString()}
               const amountFormatted = new Intl.NumberFormat('en-US', {
                 style: 'currency',
                 currency: session.currency || 'usd'
-              }).format((session.amount_total || 0) / 100);
+              }).format(recognizedAmountCents / 100);
 
               const isRecurring = session.mode === 'subscription';
               const dateFormatted = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
