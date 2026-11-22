@@ -1,4 +1,5 @@
 import { Link } from "wouter";
+import { usePlatformAcquisition } from "@/hooks/usePlatformAcquisition";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -74,6 +75,7 @@ const faqItems = [
 ];
 
 export default function PlatformPricingPage() {
+  const { pricingRef, onClickCapture } = usePlatformAcquisition("pricing");
   useSEO({
     title: "Pricing - iRescue.life",
     description:
@@ -82,7 +84,7 @@ export default function PlatformPricingPage() {
   });
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background" onClickCapture={onClickCapture}>
       <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-14 items-center justify-between max-w-6xl mx-auto px-4 sm:px-6">
           <Link href="/platform">
@@ -116,7 +118,7 @@ export default function PlatformPricingPage() {
         </div>
       </header>
 
-      <section className="py-12 sm:py-16 lg:py-20">
+      <section ref={pricingRef} className="py-12 sm:py-16 lg:py-20">
         <div className="container max-w-5xl mx-auto px-4 sm:px-6">
           <div className="text-center space-y-3 mb-12">
             <h1

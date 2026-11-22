@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { platformErrorCategory, trackPlatformEvent } from "@/lib/platformAnalytics";
 import { useMutation } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -33,10 +34,12 @@ export function DemoRequestModal({ open, onOpenChange }: DemoRequestModalProps) 
 
   const submitMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
+      trackPlatformEvent("platform_demo_request", { demo_type: "requested" });
       const response = await apiRequest("POST", "/api/demo-requests", data);
       return response;
     },
     onSuccess: () => {
+      trackPlatformEvent("platform_demo_success", { demo_type: "requested" });
       setSubmitted(true);
       toast({
         title: "Request Submitted!",
@@ -44,6 +47,7 @@ export function DemoRequestModal({ open, onOpenChange }: DemoRequestModalProps) 
       });
     },
     onError: (error: any) => {
+      trackPlatformEvent("platform_demo_error", { demo_type: "requested", category: platformErrorCategory(error) });
       toast({
         title: "Submission Failed",
         description: error.message || "Please try again later.",
@@ -87,7 +91,7 @@ export function DemoRequestModal({ open, onOpenChange }: DemoRequestModalProps) 
               </DialogDescription>
             </DialogHeader>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} onInvalid={() => trackPlatformEvent("platform_demo_error", { demo_type: "requested", category: "validation" })} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="fullName">
                   Full Name <span className="text-destructive">*</span>

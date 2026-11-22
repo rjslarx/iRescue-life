@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { platformErrorCategory, trackPlatformEvent } from "@/lib/platformAnalytics";
 import { useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -66,6 +67,12 @@ export default function TenantSignupPage() {
   const initialTier: "lite" | "professional" = (tierParam === "professional" || tierParam === "pro") ? "professional" : "lite";
 
   const [selectedTier, setSelectedTier] = useState<"lite" | "professional">(initialTier);
+  const signupStarted = useRef(false);
+  const trackSignupStart = () => {
+    if (signupStarted.current) return;
+    signupStarted.current = true;
+    trackPlatformEvent("platform_signup_start", { plan: selectedTier });
+  };
   const [formData, setFormData] = useState<OrganizationFormData>({
     rescueName: "",
     subdomain: "",
@@ -104,12 +111,19 @@ export default function TenantSignupPage() {
         },
       });
       const data = await response.json();
+      if (!response.ok || data.available === false) {
+        trackPlatformEvent("platform_signup_error", {
+          plan: selectedTier,
+          category: response.ok ? "conflict" : platformErrorCategory({ status: response.status }),
+        });
+      }
       setSubdomainCheckStatus({
         checking: false,
         available: data.available,
         message: data.message,
       });
     } catch (error) {
+      trackPlatformEvent("platform_signup_error", { plan: selectedTier, category: platformErrorCategory(error) });
       setSubdomainCheckStatus({
         checking: false,
         available: null,
@@ -144,6 +158,7 @@ export default function TenantSignupPage() {
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validateForm()) {
+      trackPlatformEvent("platform_signup_error", { plan: selectedTier, category: "validation" });
       toast({
         title: "Validation error",
         description: "Please fix the errors before continuing",
@@ -153,6 +168,7 @@ export default function TenantSignupPage() {
     }
 
     setIsLoading(true);
+    trackPlatformEvent("platform_signup_attempt", { plan: selectedTier });
     try {
       const response = await apiRequest("POST", "/api/auth/platform/signup", {
         rescueName: formData.rescueName,
@@ -165,6 +181,7 @@ export default function TenantSignupPage() {
       const data = await response.json();
 
       if (data.success && data.tenantId) {
+        trackPlatformEvent("platform_signup_success", { plan: selectedTier });
         const successMessage = selectedTier === "professional"
           ? "Your 14-day Pro trial has started! Enjoy 0% platform fees."
           : "Your Lite account is ready to use.";
@@ -182,6 +199,7 @@ export default function TenantSignupPage() {
         throw new Error(data.message || "Failed to create organization");
       }
     } catch (err: any) {
+      trackPlatformEvent("platform_signup_error", { plan: selectedTier, category: platformErrorCategory(err) });
       console.error("Signup error:", err);
       toast({
         title: "Signup failed",
@@ -263,7 +281,9 @@ export default function TenantSignupPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleFormSubmit} className="space-y-5">
+            <form onSubmit={handleFormSubmit} onChange={trackSignupStart}
+              onInvalid={() => trackPlatformEvent("platform_signup_error", { plan: selectedTier, category: "validation" })}
+              className="space-y-5">
               <div className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="rescue-name">

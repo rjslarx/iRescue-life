@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { platformErrorCategory, trackPlatformEvent } from "@/lib/platformAnalytics";
 import { useMutation } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,7 @@ export function DemoAccessDialog({ open, onOpenChange }: DemoAccessDialogProps) 
 
   const submitMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
+      trackPlatformEvent("platform_demo_request", { demo_type: "live" });
       const response = await apiRequest("POST", "/api/demo-requests", {
         leadType: "demo_access",
         email: data.email,
@@ -32,6 +34,7 @@ export function DemoAccessDialog({ open, onOpenChange }: DemoAccessDialogProps) 
       return response.json();
     },
     onSuccess: () => {
+      trackPlatformEvent("platform_demo_success", { demo_type: "live" });
       toast({
         title: "Access Granted!",
         description: "Opening demo site...",
@@ -51,6 +54,7 @@ export function DemoAccessDialog({ open, onOpenChange }: DemoAccessDialogProps) 
       }, 300);
     },
     onError: (error: any) => {
+      trackPlatformEvent("platform_demo_error", { demo_type: "live", category: platformErrorCategory(error) });
       toast({
         title: "Submission Failed",
         description: error.message || "Please try again later.",
@@ -92,7 +96,7 @@ export function DemoAccessDialog({ open, onOpenChange }: DemoAccessDialogProps) 
             Enter your email to access our live demo site and explore the platform's features.
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} onInvalid={() => trackPlatformEvent("platform_demo_error", { demo_type: "live", category: "validation" })} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="email">Email Address *</Label>
             <Input

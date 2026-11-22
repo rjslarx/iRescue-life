@@ -58,3 +58,4 @@
 - [Feral cat surgery access](feral-cat-surgery.md) — Haseya’s accepts feral-cat surgery requests from unaffiliated individuals.
 - [Fundraiser email recovery](fundraiser-email-recovery.md) — retry definite failures only; historical paid orders and uncertain provider acceptance must not trigger duplicate confirmations.
 - [Isolated VM receipt tests](isolated-vm-receipts.md) — pdf-lib rejects cross-realm arrays and points; normalize inputs without replacing receipt generation.
+- [Acquisition analytics privacy](acquisition-privacy.md) — prefer coarse funnel dimensions over raw attribution URLs; review tracker-default context as well as custom properties.

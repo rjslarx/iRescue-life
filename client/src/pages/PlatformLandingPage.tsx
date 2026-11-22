@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { usePlatformAcquisition } from "@/hooks/usePlatformAcquisition";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -47,6 +48,7 @@ const TEAL_BADGE = "#E0F2F6";
 const RED_HEART = "#E25555";
 
 export default function PlatformLandingPage() {
+  const { pricingRef, onClickCapture } = usePlatformAcquisition("landing");
   const [demoModalOpen, setDemoModalOpen] = useState(false);
   const [demoAccessDialogOpen, setDemoAccessDialogOpen] = useState(false);
   const [contactModalOpen, setContactModalOpen] = useState(false);
@@ -68,7 +70,7 @@ export default function PlatformLandingPage() {
   });
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background" onClickCapture={onClickCapture}>
       {/* Header */}
       <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-14 items-center justify-between max-w-6xl mx-auto px-4 sm:px-6">
@@ -94,6 +96,7 @@ export default function PlatformLandingPage() {
               variant="outline" 
               size="sm" 
               data-testid="button-try-demo"
+              data-acquisition-action="demo"
               onClick={() => setDemoAccessDialogOpen(true)}
             >
               <Play className="mr-1.5 h-3.5 w-3.5" />
@@ -153,6 +156,7 @@ export default function PlatformLandingPage() {
                 <Button 
                   variant="outline" 
                   size="lg" 
+                  data-acquisition-action="demo"
                   onClick={() => setDemoAccessDialogOpen(true)}
                   data-testid="button-hero-demo"
                 >
@@ -183,7 +187,7 @@ export default function PlatformLandingPage() {
       </section>
 
       {/* ======== FOLD 2: Pricing CTA ======== */}
-      <section id="pricing" className="py-12 sm:py-16 lg:py-20">
+      <section ref={pricingRef} id="pricing" className="py-12 sm:py-16 lg:py-20">
         <div className="container max-w-4xl mx-auto px-4 sm:px-6">
           <div className="text-center space-y-4">
             <p className="text-sm font-semibold uppercase tracking-wider" style={{ color: TEAL }}>Simple Pricing</p>
@@ -479,7 +483,7 @@ export default function PlatformLandingPage() {
               <ul className="space-y-1.5 text-sm text-muted-foreground">
                 <li><Link href="/platform/pricing" className="hover:text-foreground transition-colors" data-testid="link-pricing">Pricing</Link></li>
                 <li><a href="#features" className="hover:text-foreground transition-colors" data-testid="link-features">Features</a></li>
-                <li><button onClick={() => setDemoAccessDialogOpen(true)} className="hover:text-foreground transition-colors" data-testid="link-demo">Live Demo</button></li>
+                <li><button data-acquisition-action="demo" onClick={() => setDemoAccessDialogOpen(true)} className="hover:text-foreground transition-colors" data-testid="link-demo">Live Demo</button></li>
               </ul>
             </div>
             
