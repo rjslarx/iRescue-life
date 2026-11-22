@@ -298,8 +298,23 @@ export default function PlatformLandingPage() {
             ))}
           </div>
 
+          <Card className="mt-5 p-6 sm:p-8" data-testid="feature-rescue-inbox">
+            <Badge variant="secondary" className="mb-3">Optional Twilio integration</Badge>
+            <h3 className="font-display font-semibold text-xl">
+              One rescue number. A shared team inbox.
+            </h3>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+              Connect your rescue’s Twilio account to manage texts, calls, and voicemail in the Rescue Inbox.
+              Route conversations to the right volunteers, answer common questions, and let team members
+              claim conversations to avoid duplicate replies.
+            </p>
+            <p className="mt-3 text-sm text-muted-foreground">
+              Optional integration. Twilio setup and usage charges apply.
+            </p>
+          </Card>
+
           <p className="mt-8 text-center text-sm font-medium text-muted-foreground">
-            Every plan includes all features and free email support.
+            Every plan includes all features and free email support. Optional third-party services require separate setup and may have additional costs.
           </p>
         </div>
       </section>
