@@ -188,7 +188,16 @@ let compiledWithContacts: ReturnType<typeof compile>;
 const dialect = new PgDialect();
 const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value));
 
-async function fixture(initialDonor: boolean, poolKind: "none" | "legacy" | "milestones" | "capped", realDb?: any) {
+type FailurePoint = "payment" | "donation" | "pool" | "campaign" | "commit";
+
+async function fixture(initialDonor: boolean, poolKind: "none" | "legacy" | "milestones" | "capped",
+  realDb?: any, failure?: FailurePoint) {
+  let pendingFailure = failure;
+  function failAt(point: FailurePoint) {
+    if (pendingFailure !== point) return;
+    pendingFailure = undefined;
+    throw new Error(`Injected failure after ${point}`);
+  }
   const tenant = { id: "tenant-test", name: "Synthetic Rescue", subdomain: "synthetic",
     stripeEnabled: true, autoSendTaxReceipts: true };
   const pool = poolKind === "none" ? undefined : {
@@ -235,6 +244,8 @@ async function fixture(initialDonor: boolean, poolKind: "none" | "legacy" | "mil
     insert(table: any) { return { values(value: any) {
       const record = { id: `${getTableName(table)}-${tableRows(table).length}`, ...value };
       tableRows(table).push(record);
+      if (table === schema.payments) failAt("payment");
+      if (table === schema.donations) failAt("donation");
       return { returning: async () => [record] };
     } }; },
     update(table: any) { return { set(value: any) { return { where: async (where: any) => {
@@ -244,6 +255,7 @@ async function fixture(initialDonor: boolean, poolKind: "none" | "legacy" | "mil
         assert.ok(pool);
         pool.total_matched_cents = value.totalMatchedCents;
         pool.status = value.status;
+        failAt("pool");
       }
       return found;
     } }; } }; },
@@ -261,9 +273,25 @@ async function fixture(initialDonor: boolean, poolKind: "none" | "legacy" | "mil
       assert.match(sql, /SET raised_amount_cents = raised_amount_cents \+ \$1/);
       assert.deepEqual(params.slice(1), ["campaign-test", tenant.id]);
       raised += Number(params[0]);
+      failAt("campaign");
       return { rows: [] };
     },
-    async transaction(fn: any) { transactions++; return fn(db); },
+    async transaction(fn: any) {
+      transactions++;
+      const beforeRows = [...rows].map(([table, values]) => [table, clone(values)] as const);
+      const beforePool = clone(pool ?? null);
+      const beforeRaised = raised;
+      try {
+        const result = await fn(db);
+        failAt("commit");
+        return result;
+      } catch (error) {
+        for (const [table, values] of beforeRows) rows.set(table, values);
+        if (pool) Object.assign(pool, beforePool);
+        raised = beforeRaised;
+        throw error;
+      }
+    },
   };
   // Drizzle update().where().returning() is thenable as well.
   const update = db.update;
@@ -306,7 +334,7 @@ async function fixture(initialDonor: boolean, poolKind: "none" | "legacy" | "mil
     EmailService: { forTenant: async () => ({ send: async (email: any) => { emails.push(email); return { success: true }; } }) },
     TenantFileStorage: class { async uploadFile(file: any) { backups.push(file); return { success: true }; } },
   });
-  async function deliver(session: any, eventId: string) {
+  async function deliver(session: any, eventId: string, expectedStatus = 200) {
     let status = 200, response: any;
     await module.exports.webhook({
       headers: { "stripe-signature": "synthetic-signature" },
@@ -317,13 +345,67 @@ async function fixture(initialDonor: boolean, poolKind: "none" | "legacy" | "mil
       status(code: number) { status = code; return this; },
       json(value: any) { response = value; }, send(value: any) { response = value; },
     });
-    assert.equal(status, 200, JSON.stringify({ response, errors }));
-    assert.deepEqual(errors, []);
+    assert.equal(status, expectedStatus, JSON.stringify({ response, errors }));
+    if (expectedStatus === 200) assert.deepEqual(errors, []);
+    else {
+      assert.match(String(errors.flat().join(" ")), /Injected failure after/);
+      errors.length = 0;
+    }
     return response;
   }
   return { rows, emails, backups, contacts, pdfText, deliver,
     snapshot: () => clone({ rows: [...rows.values()], raised, pool, transactions, emails, contacts, backupCount: backups.length }),
     counters: () => ({ raised, pool, transactions, verifications }) };
+}
+
+for (const failure of ["payment", "donation", "pool", "campaign", "commit"] as const) {
+  for (const initialDonor of [false, true]) {
+    for (const poolKind of ["legacy", "milestones", "capped"] as const) {
+      test(`expense settlement rolls back ${failure} failure and retries once: donor=${initialDonor}, pool=${poolKind}`, async () => {
+        const f = await fixture(initialDonor, poolKind, undefined, failure);
+        const session = { id: "cs_recovery", payment_intent: "pi_recovery", mode: "payment",
+          payment_status: "paid", amount_total: 3290, currency: "usd",
+          customer_email: "donor@example.test", customer_details: { name: "Synthetic Donor" },
+          metadata: { tenantId: "tenant-test", expenseCampaignId: "campaign-test",
+            baseAmount: "3000", feesCovered: "290", donorCoveredFees: "true" } };
+        const before = f.snapshot();
+        await f.deliver(session, "evt_interrupted", 400);
+        assert.deepEqual(f.snapshot(), { ...before, transactions: 1 },
+          "all financial writes roll back together; no email/contact/storage effects escape");
+        await f.deliver(session, "evt_retry");
+        const donation = f.rows.get(schema.donations)![0];
+        assert.equal(f.rows.get(schema.donations)!.length, 1);
+        assert.equal(f.rows.get(schema.payments)!.length, 1);
+        assert.equal(f.rows.get(schema.payments)![0].amount, 3290);
+        assert.equal(f.rows.get(schema.donors)!.length, 1);
+        assert.equal(f.rows.get(schema.donors)![0].totalDonated, (initialDonor ? 700 : 0) + 3000);
+        assert.equal(donation.amount, 3000);
+        assert.equal(f.counters().raised, 4200);
+        const matched = poolKind === "capped" ? 1500 : 3000;
+        assert.equal(donation.matchedAmountCents, matched);
+        assert.equal(f.counters().pool!.total_matched_cents, 1000 + matched);
+        if (poolKind === "milestones") assert.deepEqual(clone(donation.matchAllocations), [
+          { tierId: "sponsor-one", sponsorLabel: "First Sponsor", matchedCents: 1000 },
+          { tierId: "sponsor-two", sponsorLabel: "Second Sponsor", matchedCents: 2000 },
+        ]);
+        assert.equal(f.counters().pool!.status, poolKind === "capped" ? "exhausted" : "active");
+        assert.equal(f.emails.length, 2);
+        assert.equal(f.emails.filter(email => email.subject.startsWith("Official Tax Receipt")).length, 1);
+        assert.ok(donation.receiptNumber);
+        assert.ok(donation.receiptSentAt);
+        assert.equal(f.backups.length, 1);
+        assert.equal(f.contacts.length, 1);
+        const settled = f.snapshot();
+        for (const [id, replaySession] of [
+          ["evt_retry", session], ["evt_new_delivery", session],
+          ["evt_alias", { ...session, id: "cs_alias" }],
+        ] as const) {
+          assert.equal((await f.deliver(replaySession, id)).idempotent, true);
+          assert.deepEqual(f.snapshot(), settled);
+        }
+      });
+    }
+  }
 }
 
 for (const covered of [false, true]) {
@@ -347,7 +429,7 @@ for (const covered of [false, true]) {
         assert.equal(donation.feesCovered, covered);
         assert.equal(donation.matchedAmountCents, matched);
         assert.equal(f.counters().raised, 1200 + gift);
-        assert.equal(f.counters().transactions, 2);
+        assert.equal(f.counters().transactions, 1);
         if (poolKind !== "none") {
           assert.equal(f.counters().pool!.total_matched_cents, 1000 + matched);
           assert.equal(f.counters().pool!.status, poolKind === "capped" ? "exhausted" : "active");

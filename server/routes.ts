@@ -32956,71 +32956,59 @@ Submitted: ${new Date().toLocaleString()}
             ? parseInt(session.metadata.baseAmount, 10)
             : (session.amount_total || 0);
 
-          // Donor recognition and the unique payment claim must commit together.
-          // A concurrent loser must roll back its donor insert/update as well.
-          let donor: typeof donors.$inferSelect;
-          let paymentRecord: typeof payments.$inferSelect;
-          try {
-            ({ donor, paymentRecord } = await db.transaction(async (tx) => {
-              // Also serialize first-time donor creation (tenant/email is unique).
-              await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${JSON.stringify([tenant.id, customerEmail])}, 0))`);
-              let donor = await tx
-                .select()
-                .from(donors)
-                .where(and(eq(donors.tenantId, tenant.id), eq(donors.email, customerEmail)))
-                .limit(1)
-                .then(rows => rows[0]);
+          // The payment idempotency marker must commit with all expense-gift
+          // financial writes, never before them. Keep email outside the commit.
+          const persistCheckout = async (db: Pick<typeof import('./db').db, 'select' | 'insert' | 'update' | 'execute'>) => {
+          // Serialize recognition and first-time creation for this donor. The
+          // lock and unique payment claim share the full settlement transaction.
+          await db.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${JSON.stringify([tenant.id, customerEmail])}, 0))`);
+          let donor = await db
+            .select()
+            .from(donors)
+            .where(
+              and(
+                eq(donors.tenantId, tenant.id),
+                eq(donors.email, customerEmail)
+              )
+            )
+            .limit(1)
+            .then(rows => rows[0]);
 
-              if (!donor) {
-                [donor] = await tx.insert(donors).values({
-                  tenantId: tenant.id,
-                  email: customerEmail,
-                  name: customerName,
-                  stripeCustomerId: session.customer,
-                  totalDonated: recognizedAmountCents,
-                  lastDonationDate: new Date(),
-                }).returning();
-              } else {
-                [donor] = await tx
-                  .update(donors)
-                  .set({
-                    totalDonated: (donor.totalDonated || 0) + recognizedAmountCents,
-                    lastDonationDate: new Date(),
-                    stripeCustomerId: session.customer || donor.stripeCustomerId,
-                  })
-                  .where(eq(donors.id, donor.id))
-                  .returning();
-              }
-
-              // The partial unique session/intent indexes arbitrate concurrent
-              // redelivery. Let violations escape the transaction so recognition
-              // rolls back before acknowledging the duplicate below.
-              const [paymentRecord] = await tx.insert(payments).values({
-                tenantId: tenant.id,
-                donorId: donor.id,
-                stripePaymentIntentId: session.payment_intent,
-                stripeCheckoutSessionId: session.id,
-                amount: session.amount_total || 0,
-                currency: session.currency || 'usd',
-                status: paymentStatus,
-                paymentMethod: 'stripe',
-                isRecurring: session.mode === 'subscription',
-                message: session.metadata?.message,
-              }).returning();
-              return { donor, paymentRecord };
-            }));
-          } catch (err: unknown) {
-            // Drizzle may wrap the original PostgreSQL error in `cause`.
-            const outerErr = err as { code?: unknown; constraint?: unknown; cause?: unknown };
-            const dbErr = (outerErr.code ? outerErr : outerErr.cause || outerErr) as { code?: unknown; constraint?: unknown };
-            const code = typeof dbErr.code === 'string' ? dbErr.code : undefined;
-            const constraint = typeof dbErr.constraint === 'string' ? dbErr.constraint : undefined;
-            if (code === '23505' && constraint && constraint.startsWith('payments_tenant_stripe_')) {
-              console.log(`[Webhook] Checkout session ${session.id} (intent=${session.payment_intent || 'n/a'}) hit unique-violation on ${constraint} — concurrent redelivery, treating as idempotent`);
-              return res.status(200).json({ received: true, idempotent: true });
-            }
-            throw err;
+          if (!donor) {
+            [donor] = await db.insert(donors).values({
+              tenantId: tenant.id,
+              email: customerEmail,
+              name: customerName,
+              stripeCustomerId: session.customer,
+              totalDonated: recognizedAmountCents,
+              lastDonationDate: new Date(),
+            }).returning();
+            console.log(`[STRIPE-WEBHOOK] Created new donor ${donor.id} for ${customerEmail}`);
+          } else {
+            [donor] = await db
+              .update(donors)
+              .set({
+                totalDonated: (donor.totalDonated || 0) + recognizedAmountCents,
+                lastDonationDate: new Date(),
+                stripeCustomerId: session.customer || donor.stripeCustomerId,
+              })
+              .where(eq(donors.id, donor.id))
+              .returning();
+            console.log(`[STRIPE-WEBHOOK] Updated existing donor ${donor.id} for ${customerEmail}`);
           }
+
+          const [paymentRecord] = await db.insert(payments).values({
+              tenantId: tenant.id,
+              donorId: donor.id,
+              stripePaymentIntentId: session.payment_intent,
+              stripeCheckoutSessionId: session.id,
+              amount: session.amount_total || 0,
+              currency: session.currency || 'usd',
+              status: paymentStatus,
+              paymentMethod: 'stripe',
+              isRecurring: session.mode === 'subscription',
+              message: session.metadata?.message,
+            }).returning();
 
           console.log(`[STRIPE-WEBHOOK] Created payment record ${paymentRecord.id} for intent ${session.payment_intent}, amount: ${session.amount_total}, status: ${paymentStatus}`);
           
@@ -33053,6 +33041,7 @@ Submitted: ${new Date().toLocaleString()}
 
           // Create donation record for actual donations (including ACH-pending,
           // which gets rolled back by async_payment_failed if the bank rejects).
+          let donationRecord: typeof donations.$inferSelect | undefined;
           if (isDonation) {
             const feeNote = sessionMetadata.donorCoveredFees === 'true' && sessionMetadata.feesCovered
               ? ` (donor covered $${(parseInt(sessionMetadata.feesCovered, 10) / 100).toFixed(2)} in processing fees)`
@@ -33125,7 +33114,6 @@ Submitted: ${new Date().toLocaleString()}
               matchedAmountCents: 0,
             };
 
-            let donationRecord: typeof donations.$inferSelect;
             if (sessionMetadata.expenseCampaignId) {
               // Task #213 — Atomic: donation insert + match decrement + campaign
               // raised increment all in one transaction. `raised_amount_cents`
@@ -33147,7 +33135,7 @@ Submitted: ${new Date().toLocaleString()}
                 ends_at: string | Date | null;
                 tiers: import("@shared/matching-milestones").MatchingTier[] | null;
               };
-              donationRecord = await db.transaction(async (tx) => {
+              donationRecord = await (async (tx: typeof db) => {
                 const campaignRowsRes = await tx.execute(sql`
                   SELECT id FROM expense_campaigns
                   WHERE id = ${campaignId} AND tenant_id = ${tenant.id}
@@ -33208,12 +33196,33 @@ Submitted: ${new Date().toLocaleString()}
                   WHERE id = ${campaignId} AND tenant_id = ${tenant.id}
                 `);
                 return d;
-              });
+              })(db);
             } else {
               const [d] = await db.insert(donations).values(donationValuesBase).returning();
               donationRecord = d;
             }
+          }
+          return { donor, paymentRecord, donationRecord, isDonation, paymentTypeLabel, sessionMetadata };
+          };
 
+          let settled: Awaited<ReturnType<typeof persistCheckout>>;
+          try {
+            settled = await db.transaction(persistCheckout);
+          } catch (err: unknown) {
+            // Catch outside the transaction so a losing concurrent delivery
+            // also rolls back its donor recognition before being acknowledged.
+            // Drizzle may wrap the original PostgreSQL error in `cause`.
+            const outerErr = err as { code?: unknown; constraint?: unknown; cause?: unknown };
+            const dbErr = (outerErr.code ? outerErr : outerErr.cause || outerErr) as { code?: unknown; constraint?: unknown };
+            if (dbErr.code === '23505' && typeof dbErr.constraint === 'string'
+              && dbErr.constraint.startsWith('payments_tenant_stripe_')) {
+              return res.status(200).json({ received: true, idempotent: true });
+            }
+            throw err;
+          }
+          const { donor, paymentRecord, donationRecord, isDonation, paymentTypeLabel, sessionMetadata } = settled;
+
+          if (isDonation && donationRecord) {
             // Tasteful tribute acknowledgment email — never reveals the amount.
             // Skip for ACH-pending until the bank actually clears (handled in async_payment_succeeded).
             if (donationRecord && donationRecord.tributeKind && donationRecord.tributeRecipientEmail && !isAchPending && !donationRecord.tributeAcknowledgmentSentAt) {
@@ -33238,7 +33247,7 @@ Submitted: ${new Date().toLocaleString()}
               }
             }
             
-            console.log(`[STRIPE-WEBHOOK] Created donation record ${donationRecord.id} for Finance page, donor: ${customerName} (${donor.id}), amount: $${session.amount_total / 100}${feeNote}`);
+            console.log(`[STRIPE-WEBHOOK] Created donation record ${donationRecord.id} for Finance page, donor: ${customerName} (${donor.id}), amount: $${session.amount_total / 100}`);
 
             if (tenant.autoSendTaxReceipts && donationRecord.donorEmail) {
               if (isAchPending) {
