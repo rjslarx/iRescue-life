@@ -33,9 +33,16 @@ jobs:
           node-version: '22'
           cache: npm
       - name: Install locked dependencies
-        run: npm ci
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p generated-artifacts/marketing
+          npm ci 2>&1 | tee generated-artifacts/marketing/dependencies.log
       - name: Install matching browser binaries and Ubuntu dependencies
-        run: ./node_modules/.bin/playwright install --with-deps chromium firefox webkit
+        shell: bash
+        run: |
+          set -o pipefail
+          ./node_modules/.bin/playwright install --with-deps chromium firefox webkit 2>&1 | tee generated-artifacts/marketing/browser-install.log
       - name: Build and check all three engines
         shell: bash
         run: |
