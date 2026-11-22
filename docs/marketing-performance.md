@@ -42,6 +42,62 @@ Full network records are written to ignored `generated-artifacts/marketing/`.
 The existing 873,423-byte phone mockup still downloads on mobile and is the
 largest remaining first-party resource; it was deliberately unchanged.
 
+## Responsive hero image follow-up (2026-11-22)
+
+The hero now uses a `<picture>` desktop source matching Tailwind's `lg`
+breakpoint (1024px). Below that width, its fallback is an inline empty SVG:
+there is no phone-image HTTP request, even though the hidden element remains
+in the DOM. At desktop widths the same artwork, aspect ratio, alt text, rounded
+corners, and shadow remain. Explicit dimensions reserve the correct aspect ratio.
+
+Two WebP variants (704 × 384 and 1408 × 768) cover the maximum 532 CSS-pixel
+display width and high-density screens. They were generated from the existing
+PNG using Sharp `resize({ width }).webp({ quality: 85 })`, without metadata.
+Their file sizes are 20,254 and 50,500 bytes; transferred sizes include headers.
+WebP provides a substantial reduction without needing a second AVIF asset set.
+The original PNG is retained as the source artwork, but no longer imported here.
+
+Rebuilt the unchanged page before editing and repeated the same three cold runs
+per viewport after editing, using the existing production static middleware in
+both sets. Mobile conditions remain those above; desktop uses 1440 × 1000 with
+the same network/CPU throttling. Both use DPR 1. These are controlled anonymous
+fixtures with external requests blocked, not deployed-site measurements.
+
+| Measurement (identical bytes across all three runs) | Before | After |
+| --- | ---: | ---: |
+| Mobile image transfer | 873,423 bytes | **0 bytes** |
+| Mobile total same-origin transfer | 1,104,397 bytes | 231,233 bytes |
+| Desktop image transfer | 873,423 bytes | 20,600 bytes |
+| Desktop total same-origin transfer | 1,104,397 bytes | 251,833 bytes |
+| Initial JavaScript transfer, both viewports | 188,354 bytes | 188,613 bytes |
+
+Mobile total transfer fell 79.1%; desktop image transfer fell 97.6%.
+Median LCP was 2,480 → 2,456 ms on mobile and 6,843 → 2,633 ms on desktop.
+The primary mobile improvement is avoiding bytes, not a claimed paint-time gain.
+The earlier table above is a separate historical build baseline.
+
+Reproduce (each command uses three fresh browser contexts):
+
+```sh
+# Before changing the hero, build and capture:
+npm run build
+node scripts/measure-marketing.mjs hero-before-mobile
+node scripts/measure-marketing.mjs hero-before-desktop --desktop
+# After changing the hero, rebuild and capture/assert:
+npm run build
+node scripts/measure-marketing.mjs hero-after-mobile --verify-hero
+node scripts/measure-marketing.mjs hero-after-desktop --desktop --verify-hero
+```
+
+`--verify-hero` asserts no mobile mockup request, successful desktop WebP
+decoding, and correct visibility across 1023px, 1024px, and 390px resize checks.
+Byte totals are captured before those resize checks. Network records and
+first-run screenshots are saved under ignored `generated-artifacts/marketing/`.
+Production-build mobile and desktop screenshots were visually inspected; the
+desktop artwork remains visible and the mobile layout stays image-free.
+Development previews also rendered at both sizes after workflow restart.
+The production build, marketing asset tests, and chunk isolation test passed.
+
 ## Boundaries and verification
 
 - Route definitions, guards, provider ordering, and tenant resolution were

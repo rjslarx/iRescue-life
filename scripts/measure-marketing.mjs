@@ -8,6 +8,8 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 
 const label = process.argv[2] || 'measurement';
+const desktop = process.argv.includes('--desktop');
+const verifyHero = process.argv.includes('--verify-hero');
 await fs.mkdir('generated-artifacts/marketing', { recursive: true });
 await build({ entryPoints: ['server/vite.ts'], outfile: 'dist/perf-static.mjs', bundle: true, platform: 'node', format: 'esm', packages: 'external' });
 const { serveStatic } = await import('../dist/perf-static.mjs');
@@ -33,7 +35,7 @@ try {
   for (let run = 0; run < 3; run++) {
     const context = await browser.createBrowserContext();
     const page = await context.newPage();
-    await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1, isMobile: true, hasTouch: true });
+    await page.setViewport({ width: desktop ? 1440 : 390, height: desktop ? 1000 : 844, deviceScaleFactor: 1, isMobile: !desktop, hasTouch: !desktop });
     const cdp = await page.createCDPSession();
     await cdp.send('Network.enable');
     await cdp.send('Network.setCacheDisabled', { cacheDisabled: true });
@@ -64,10 +66,38 @@ try {
       title: document.querySelector('h1')?.textContent,
     }));
     const assets = [...requests.values()];
-    runs.push({ ...metrics, totalBytes: assets.reduce((s, a) => s + a.bytes, 0), scriptBytes: assets.filter(a => a.type === 'Script').reduce((s, a) => s + a.bytes, 0), assets });
+    const hero = await page.$eval('[data-testid="image-hero-mockup"]', img => ({
+      visible: img.getBoundingClientRect().width > 0,
+      loaded: img.complete && img.naturalWidth > 0,
+      source: img.currentSrc,
+    }));
+    const imageBytes = assets.filter(a => a.type === 'Image').reduce((s, a) => s + a.bytes, 0);
+    const mockupRequests = assets.filter(a => a.url.includes('dual_phone'));
+    if (verifyHero) {
+      if (hero.visible !== desktop || !hero.loaded) throw new Error(`Unexpected hero rendering: ${JSON.stringify(hero)}`);
+      if (!desktop && mockupRequests.length) throw new Error('Hidden hero downloaded on mobile');
+      if (desktop && !hero.source.endsWith('.webp')) throw new Error('Desktop did not select WebP');
+    }
+    runs.push({ ...metrics, hero, imageBytes, totalBytes: assets.reduce((s, a) => s + a.bytes, 0), scriptBytes: assets.filter(a => a.type === 'Script').reduce((s, a) => s + a.bytes, 0), assets });
+    if (run === 0) {
+      await page.screenshot({ path: `generated-artifacts/marketing/${label}.png` });
+      if (verifyHero) {
+        // Check both sides of the exact Tailwind lg breakpoint, including resize.
+        for (const width of [1023, 1024, 390]) {
+          // Keep mobile/touch emulation unchanged; toggling it reloads the page.
+          await page.setViewport({ width, height: 844, deviceScaleFactor: 1, isMobile: !desktop, hasTouch: !desktop });
+          await page.waitForFunction(visible => {
+            const img = document.querySelector('[data-testid="image-hero-mockup"]');
+            return (img.getBoundingClientRect().width > 0) === visible &&
+              img.complete && img.naturalWidth > 0 &&
+              (!visible || img.currentSrc.endsWith('.webp'));
+          }, {}, width >= 1024);
+        }
+      }
+    }
     await context.close();
   }
-  const result = { label, conditions: '390x844, CPU 4x, 1.6 Mbps down, 150ms latency, cold cache, fixed anonymous API fixtures, external requests blocked', runs };
+  const result = { label, conditions: `${desktop ? '1440x1000' : '390x844'}, DPR 1, CPU 4x, 1.6 Mbps down, 150ms latency, cold cache, fixed anonymous API fixtures, external requests blocked`, runs };
   await fs.writeFile(`generated-artifacts/marketing/${label}.json`, JSON.stringify(result, null, 2));
   console.log(JSON.stringify({ label, runs: runs.map(({ assets, ...metrics }) => metrics) }, null, 2));
 } finally {

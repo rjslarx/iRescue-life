@@ -38,7 +38,8 @@ interface FeaturedRescue {
   logoUrl: string | null;
 }
 
-import dualPhoneMockup from "@assets/generated_images/dual_phone_app_mockup.png";
+import dualPhoneMockup from "@assets/generated_images/dual_phone_app_mockup-704.webp";
+import dualPhoneMockupRetina from "@assets/generated_images/dual_phone_app_mockup-1408.webp";
 
 const TEAL = "#2B8CA3";
 const TEAL_DARK = "#1F7189";
@@ -170,12 +171,24 @@ export default function PlatformLandingPage() {
             
             <div className="relative hidden lg:block">
               <div className="relative z-10">
-                <img 
-                  src={dualPhoneMockup}
-                  alt="iRescue.life mobile app showing animal management dashboard"
-                  className="w-full h-auto rounded-xl shadow-2xl"
-                  data-testid="image-hero-mockup"
-                />
+                <picture>
+                  {/* Match lg:block: hidden images still download unless source
+                      selection also excludes small viewports. */}
+                  <source
+                    media="(min-width: 1024px)"
+                    type="image/webp"
+                    srcSet={`${dualPhoneMockup} 704w, ${dualPhoneMockupRetina} 1408w`}
+                    sizes="(min-width: 1152px) 532px, calc((100vw - 88px) / 2)"
+                  />
+                  <img
+                    src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1408' height='768'/%3E"
+                    width={1408}
+                    height={768}
+                    alt="iRescue.life mobile app showing animal management dashboard"
+                    className="w-full h-auto rounded-xl shadow-2xl"
+                    data-testid="image-hero-mockup"
+                  />
+                </picture>
               </div>
               <div className="absolute -top-6 -right-6 h-48 w-48 rounded-full blur-3xl" style={{ backgroundColor: `${TEAL}15` }} />
               <div className="absolute -bottom-6 -left-6 h-36 w-36 rounded-full blur-3xl" style={{ backgroundColor: `${TEAL}15` }} />

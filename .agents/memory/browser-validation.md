@@ -32,3 +32,9 @@ Do not wait for Puppeteer's request event before releasing a response held insid
 **Why:** A deferred interception handler can delay `waitForRequest` resolution until interception finishes, creating a circular wait instead of observing the pending UI.
 
 **How to apply:** Observe pending controls and count requests inside the interception handler, or signal arrival explicitly from that handler. Release held responses in cleanup even if assertions fail.
+
+Preserve mobile and touch emulation flags when resizing a Puppeteer viewport.
+
+**Why:** Omitting them after an emulated mobile load resets their defaults and can reload the page, turning a media-query check into a navigation race.
+
+**How to apply:** Pass the original `isMobile` and `hasTouch` values on every resize when checking responsive source selection without navigation.
