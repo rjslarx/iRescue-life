@@ -78,10 +78,16 @@ export function serveStatic(app: Express) {
     );
   }
 
-  app.use(express.static(distPath));
+  app.use(express.static(distPath, {
+    setHeaders(res) {
+      // HTML and unhashed files must revalidate; never mark them immutable.
+      if (!res.hasHeader("Cache-Control")) res.setHeader("Cache-Control", "no-cache");
+    },
+  }));
 
   // fall through to index.html if the file doesn't exist
   app.use("*", (req, res, next) => {
+    if (!res.hasHeader("Cache-Control")) res.setHeader("Cache-Control", "no-cache");
     const file = path.resolve(distPath, "index.html");
     if (!/\/phone\/?(?:\?|$)/.test(req.originalUrl)) return res.sendFile(file);
     fs.promises.readFile(file, "utf-8").then(html => {

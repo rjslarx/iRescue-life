@@ -13,6 +13,7 @@ import { smsSuppressionSchemaSql } from "./lib/sms-suppression-schema";
 import { registerRoutes } from "./routes";
 import { pauseResalePages } from "./middleware/resale-pause";
 import { setupVite, serveStatic, log } from "./vite";
+import { servePublicAssets } from "./lib/public-assets";
 import { sessionMiddleware, authenticateUser } from "./middleware/auth";
 import { resolveTenant, redactTrainingTokenFromUrl } from "./middleware/tenant";
 import { injectOGTags, ogImageRouter } from "./middleware/og-tags";
@@ -197,6 +198,9 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 
 // Security headers
 app.use(helmetConfig);
+if (process.env.NODE_ENV === 'production') {
+  servePublicAssets(app, path.resolve(process.cwd(), 'dist/public/assets'));
+}
 // Only the public, data-free vending cabinet may be framed by this site.
 // Keep dashboard and other application pages protected by DENY.
 app.use('/rescue-vend', express.static(
