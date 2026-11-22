@@ -1,0 +1,52 @@
+name: Marketing hero cross-browser
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - 'marketing-hero-ci/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: marketing-hero-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hero:
+    name: Chromium, Firefox and WebKit hero checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      # Puppeteer is used only by the separate historical performance lab.
+      PUPPETEER_SKIP_DOWNLOAD: 'true'
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.cache/ms-playwright
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Install matching browser binaries and Ubuntu dependencies
+        run: ./node_modules/.bin/playwright install --with-deps chromium firefox webkit
+      - name: Build and check all three engines
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p generated-artifacts/marketing
+          npm run validate:marketing-hero 2>&1 | tee generated-artifacts/marketing/validation.log
+      - name: Retain reports and per-engine screenshots, including failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: marketing-hero-${{ github.run_id }}-${{ github.run_attempt }}
+          path: generated-artifacts/marketing/
+          if-no-files-found: error
+          retention-days: 30
