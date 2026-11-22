@@ -1,4 +1,6 @@
 import type { Express } from "express";
+import { isSitemapTenantSlug } from "@shared/platform-seo";
+import { createSitemapWriter } from "./lib/sitemap-xml";
 import { assertAnimalVaccine } from "./lib/cat-vaccine-guard";
 import { isCatSpecies, assertCatVaccineCompatible } from "@shared/vaccine-species";
 import { adoptionContractForSpecies } from "@shared/adoption-contract-species";
@@ -716,14 +718,10 @@ Crawl-delay: 1
       const PLATFORM_DOMAIN = 'irescue.life';
       const hostname = (req.get('host') || '').split(':')[0].replace(/^www\./i, '').toLowerCase();
       const tenant = req.tenant;
-      const today = new Date().toISOString().split('T')[0];
       const protocol = 'https';
 
-      const xmlUrlFull = (loc: string, changefreq: string, priority: string) =>
-        `  <url>\n    <loc>${loc}</loc>\n    <lastmod>${today}</lastmod>\n    <changefreq>${changefreq}</changefreq>\n    <priority>${priority}</priority>\n  </url>\n`;
-
-      const xmlUrlBasic = (loc: string) =>
-        `  <url>\n    <loc>${loc}</loc>\n    <lastmod>${today}</lastmod>\n  </url>\n`;
+      const xmlUrlFull = createSitemapWriter();
+      const xmlUrlBasic = (loc: string) => xmlUrlFull(loc);
 
       // Helper: fetch all public dynamic URLs for a given tenant ID
       async function fetchTenantDynamicUrls(tenantId: string, base: string): Promise<string> {
@@ -824,7 +822,6 @@ Crawl-delay: 1
 
       const platformPages = [
         { loc: '/', priority: '1.0', changefreq: 'weekly' },
-        { loc: '/platform', priority: '1.0', changefreq: 'weekly' },
         { loc: '/platform/pricing', priority: '0.8', changefreq: 'monthly' },
         { loc: '/platform/privacy', priority: '0.3', changefreq: 'monthly' },
         { loc: '/platform/terms', priority: '0.3', changefreq: 'monthly' },
@@ -872,6 +869,7 @@ Crawl-delay: 1
       }
 
       for (const t of pathBasedTenants) {
+        if (!isSitemapTenantSlug(t.subdomain)) continue;
         const tenantBase = `${platformBase}/${t.subdomain}`;
         for (const p of tenantPublicPaths) {
           sitemap += xmlUrlFull(`${tenantBase}${p.path}`, p.changefreq, p.priority);

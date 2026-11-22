@@ -198,6 +198,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { usePageTracking } from "@/hooks/usePageTracking";
 import { useVisitTracking } from "@/hooks/useVisitTracking";
 import { isSensitiveVolunteerTrainingUrl, tokenFreeCanonical } from "@shared/sensitive-routes";
+import { platformCanonical } from "@shared/platform-seo";
 
 // Component to handle root path routing
 function RootHandler() {
@@ -221,7 +222,7 @@ function RootHandler() {
   
   // Show platform landing page for platform subdomain or root domain
   if (isPlatformSubdomain || isRootDomain) {
-    return <Redirect to="/platform" />;
+    return <PlatformLandingPage />;
   }
   
   // Otherwise show tenant home page (for tenant subdomains or custom domains)
@@ -611,7 +612,7 @@ function useCanonicalUrl() {
     if (sensitive && referrerMeta) referrerMeta.content = 'no-referrer';
     const canonicalLink = document.querySelector('link[rel="canonical"]') as HTMLLinkElement;
     if (canonicalLink) {
-      canonicalLink.setAttribute('href', tokenFreeCanonical(window.location.href, window.location.origin));
+      canonicalLink.setAttribute('href', platformCanonical(tokenFreeCanonical(window.location.href, window.location.origin)));
     }
   });
 }

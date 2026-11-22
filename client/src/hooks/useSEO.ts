@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { tokenFreeCanonical } from '@shared/sensitive-routes';
+import { platformCanonical } from '@shared/platform-seo';
 
 export interface SEOConfig {
   title: string;
@@ -28,7 +29,7 @@ export function useSEO(config: SEOConfig | null) {
     document.title = title;
 
     const currentUrl = typeof window !== 'undefined'
-      ? tokenFreeCanonical(url || window.location.href, window.location.origin)
+      ? platformCanonical(tokenFreeCanonical(url || window.location.href, window.location.origin))
       : (url || '');
     const defaultImage = typeof window !== 'undefined' 
       ? `${window.location.origin}/icon-512.png` 

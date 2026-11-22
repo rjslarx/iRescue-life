@@ -59,3 +59,4 @@
 - [Fundraiser email recovery](fundraiser-email-recovery.md) — retry definite failures only; historical paid orders and uncertain provider acceptance must not trigger duplicate confirmations.
 - [Isolated VM receipt tests](isolated-vm-receipts.md) — pdf-lib rejects cross-realm arrays and points; normalize inputs without replacing receipt generation.
 - [Acquisition analytics privacy](acquisition-privacy.md) — prefer coarse funnel dimensions over raw attribution URLs; review tracker-default context as well as custom properties.
+- [Platform marketing SEO](platform-marketing-seo.md) — root canonical choice, truthful sitemap dates, and tenant isolation when paths have been stripped.

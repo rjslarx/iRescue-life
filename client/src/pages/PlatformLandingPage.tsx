@@ -9,13 +9,12 @@ import { DemoRequestModal } from "@/components/DemoRequestModal";
 import { DemoAccessDialog } from "@/components/DemoAccessDialog";
 import { ContactFormModal } from "@/components/ContactFormModal";
 import { AboutUsModal } from "@/components/AboutUsModal";
-import { BlogModal } from "@/components/BlogModal";
 import { PrivacyPolicyModal } from "@/components/PrivacyPolicyModal";
 import { TermsOfServiceModal } from "@/components/TermsOfServiceModal";
 import { CookiePolicyModal } from "@/components/CookiePolicyModal";
 import { useSEO } from "@/hooks/useSEO";
 import { 
-  PawPrint, 
+  PawPrint,
   ArrowRight,
   Heart,
   Play,
@@ -53,7 +52,6 @@ export default function PlatformLandingPage() {
   const [demoAccessDialogOpen, setDemoAccessDialogOpen] = useState(false);
   const [contactModalOpen, setContactModalOpen] = useState(false);
   const [aboutUsModalOpen, setAboutUsModalOpen] = useState(false);
-  const [blogModalOpen, setBlogModalOpen] = useState(false);
   const [privacyPolicyModalOpen, setPrivacyPolicyModalOpen] = useState(false);
   const [termsOfServiceModalOpen, setTermsOfServiceModalOpen] = useState(false);
   const [cookiePolicyModalOpen, setCookiePolicyModalOpen] = useState(false);
@@ -491,7 +489,7 @@ export default function PlatformLandingPage() {
               <h4 className="font-semibold mb-3 text-sm" style={{ color: TEAL }}>Company</h4>
               <ul className="space-y-1.5 text-sm text-muted-foreground">
                 <li><button onClick={() => setAboutUsModalOpen(true)} className="hover:text-foreground transition-colors" data-testid="link-about">About Us</button></li>
-                <li><button onClick={() => setBlogModalOpen(true)} className="hover:text-foreground transition-colors" data-testid="link-blog">Blog</button></li>
+                <li><Link href="/platform/blog" className="hover:text-foreground transition-colors" data-testid="link-blog">Blog</Link></li>
                 <li><button onClick={() => setContactModalOpen(true)} className="hover:text-foreground transition-colors" data-testid="link-contact">Contact</button></li>
               </ul>
             </div>
@@ -521,11 +519,6 @@ export default function PlatformLandingPage() {
       <AboutUsModal 
         open={aboutUsModalOpen} 
         onOpenChange={setAboutUsModalOpen}
-        onStartTrial={() => setDemoModalOpen(true)}
-      />
-      <BlogModal 
-        open={blogModalOpen} 
-        onOpenChange={setBlogModalOpen}
         onStartTrial={() => setDemoModalOpen(true)}
       />
       <PrivacyPolicyModal 

@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction, Router } from 'express';
+import { isPlatformHost } from '@shared/platform-seo';
 import { rescuePhoneHtml } from '../lib/rescue-phone-html';
 import { db } from '../db';
 import { animals, calendars, tenants, donationLinks, shopProducts, customPages, peerCampaigns, votingContests, votingContestEntrants, type PageBlock } from '@shared/schema';
@@ -183,7 +184,7 @@ function buildPlatformPageNoscript(pathname: string): string | undefined {
   const w = (html: string) =>
     `<div style="font-family:system-ui,sans-serif;max-width:900px;margin:2rem auto;padding:1rem 2rem;line-height:1.7">${html}</div>`;
 
-  if (clean === '/platform' || clean === '') {
+  if (clean === '/platform' || clean === '/') {
     return w(`<h1>iRescue.life &mdash; Complete Animal Rescue Management Platform</h1>
 <p>All-in-one software platform designed for 501(c)(3) animal rescue organizations of all sizes. Manage adoptions, volunteers, finances, medical records, and more &mdash; in one place.</p>
 <h2>Core Features</h2>
@@ -201,7 +202,8 @@ function buildPlatformPageNoscript(pathname: string): string | undefined {
 <h2>Pricing</h2>
 <p><strong>Community Plan (Free):</strong> Full access with a small platform fee per adoption. Perfect for new or small rescues.</p>
 <p><strong>Scale Plan ($39/month):</strong> Flat monthly rate with zero platform fees per adoption. Best for established rescues processing multiple adoptions per month.</p>
-<p><a href="${PLATFORM_BASE_URL}/platform/pricing">View full pricing details</a></p>`);
+<p><a href="${PLATFORM_BASE_URL}/platform/pricing">View full pricing details</a></p>
+<p><a href="${PLATFORM_BASE_URL}/platform/blog">Read the iRescue blog</a></p>`);
   }
 
   if (clean === '/platform/pricing') {
@@ -369,12 +371,12 @@ const PLATFORM_SITE_NAME = 'iRescue.life';
 function getPlatformOGData(pathname: string): { title: string; description: string; image: string; canonical: string } | null {
   const clean = pathname.replace(/\?.*$/, '').replace(/\/$/, '') || '/';
 
-  if (clean === '/platform' || clean === '') {
+  if (clean === '/platform' || clean === '/') {
     return {
       title: `${PLATFORM_SITE_NAME} - Complete Animal Rescue Management Platform`,
       description: 'All-in-one platform for animal rescues. Manage adoptions, volunteers, finances, medical records, and more. Start free or upgrade to Scale ($39/mo) for zero platform fees.',
       image: PLATFORM_IMAGE,
-      canonical: `${PLATFORM_BASE_URL}/platform`,
+      canonical: `${PLATFORM_BASE_URL}/`,
     };
   }
   if (clean === '/platform/pricing') {
@@ -437,13 +439,7 @@ function getPlatformOGData(pathname: string): { title: string; description: stri
         canonical: `${PLATFORM_BASE_URL}/platform/blog/${slug}`,
       };
     }
-    // Unknown blog slug — generic fallback so at least the blog section is recognised
-    return {
-      title: `Blog - ${PLATFORM_SITE_NAME}`,
-      description: 'Tips, guides, and insights for animal rescue organizations.',
-      image: PLATFORM_IMAGE,
-      canonical: `${PLATFORM_BASE_URL}/platform/blog`,
-    };
+    return null;
   }
   return null;
 }
@@ -575,7 +571,20 @@ export async function injectOGTags(req: Request, res: Response, next: NextFuncti
   // Served to ALL requests (no UA gate) so search engines, AI crawlers, and
   // even plain HTTP clients receive real titles/descriptions on the first
   // response — not the generic SPA shell.
-  const platformData = getPlatformOGData(req.url);
+  // Tenant resolution may have stripped a path prefix to "/". Never intercept it.
+  const platformRequest = !req.tenant && !req.basePath && isPlatformHost(req.get('host') || '');
+  const platformData = platformRequest ? getPlatformOGData(req.url) : null;
+  if (platformRequest && req.path.startsWith('/platform/') && !platformData) {
+    const applicationPages = new Set(['signup', 'signup/success', 'dashboard', 'tenants', 'users',
+      'feature-flags', 'vip-game-pilot', 'community-resale', 'audit-logs', 'announcements',
+      'health', 'settings', 'global-content', 'video-scripts', 'stripe-economics',
+      'mfa-setup', 'login', 'forgot-password', 'reset-password']);
+    if (!applicationPages.has(req.path.replace(/^\/platform\//, '').replace(/\/$/, ''))) {
+      res.status(404).set('X-Robots-Tag', 'noindex').type('html').send(
+        '<!doctype html><html lang="en"><head><title>Page not found - iRescue.life</title><meta name="robots" content="noindex"></head><body><h1>Page not found</h1><p><a href="/platform/blog">Visit the blog</a> or <a href="/">return home</a>.</p></body></html>');
+      return;
+    }
+  }
   if (platformData) {
     const blogSlugMatch = req.url.match(/\/platform\/blog\/([a-z0-9-]+)/i);
     let jsonLd: object | undefined;
