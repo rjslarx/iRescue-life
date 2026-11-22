@@ -100,6 +100,26 @@ The production build, marketing asset tests, and chunk isolation test passed.
 
 ### Cross-browser hero regression checks
 
+#### Repeatable supported-host validation
+
+The `Marketing hero cross-browser` GitHub Actions workflow runs on Ubuntu 24.04
+with Node 22. It uses `npm ci`, then the locked local Playwright CLI to install
+Chromium, Firefox, WebKit and their OS dependencies together. It runs on pull
+requests, pushes to `main` or `marketing-hero-ci/**`, and manual dispatch.
+No deployment, application secrets, database, or production server is needed.
+
+The repeatable validation command is `npm run validate:marketing-hero`, which
+runs `npm run build` followed by the full command below. It deliberately does
+not accept an engine subset. Do not register this as a passing Nix-host check:
+run it on the supported CI host instead.
+
+Each run uploads `marketing-hero-<run-id>-<attempt>` for 30 days, including
+the combined per-engine JSON report, engine/case screenshots and validation
+log. Upload runs even on failure; a missing artifact is itself an error.
+The shell preserves the validation exit code through log capture. Installation,
+launch and assertion failures fail the job, rather than being skipped.
+Download artifacts before retention expires if longer-term evidence is needed.
+
 Install the package-lock dependencies and the matching Playwright browser binaries.
 On a supported Linux test runner, provision Playwright's OS dependencies too
 (`npx playwright install --with-deps chromium firefox webkit`); on macOS use
