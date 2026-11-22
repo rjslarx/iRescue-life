@@ -32956,67 +32956,63 @@ Submitted: ${new Date().toLocaleString()}
             ? parseInt(session.metadata.baseAmount, 10)
             : (session.amount_total || 0);
 
-          let donor = await db
-            .select()
-            .from(donors)
-            .where(
-              and(
-                eq(donors.tenantId, tenant.id),
-                eq(donors.email, customerEmail)
-              )
-            )
-            .limit(1)
-            .then(rows => rows[0]);
-
-          if (!donor) {
-            [donor] = await db.insert(donors).values({
-              tenantId: tenant.id,
-              email: customerEmail,
-              name: customerName,
-              stripeCustomerId: session.customer,
-              totalDonated: recognizedAmountCents,
-              lastDonationDate: new Date(),
-            }).returning();
-            console.log(`[STRIPE-WEBHOOK] Created new donor ${donor.id} for ${customerEmail}`);
-          } else {
-            [donor] = await db
-              .update(donors)
-              .set({
-                totalDonated: (donor.totalDonated || 0) + recognizedAmountCents,
-                lastDonationDate: new Date(),
-                stripeCustomerId: session.customer || donor.stripeCustomerId,
-              })
-              .where(eq(donors.id, donor.id))
-              .returning();
-            console.log(`[STRIPE-WEBHOOK] Updated existing donor ${donor.id} for ${customerEmail}`);
-          }
-
-          // Task #215: The SELECT-based idempotency check above can race under
-          // concurrent webhook redeliveries (Stripe's at-least-once delivery +
-          // 1h/2h/2h retry on non-2xx). Partial unique indexes on
-          // payments(tenant_id, stripe_checkout_session_id) and
-          // payments(tenant_id, stripe_payment_intent_id) are the DB-level
-          // backstop — catch the unique violation (Postgres SQLSTATE 23505)
-          // and treat it as "already processed" instead of erroring, exactly
-          // like the pre-check path. This also short-circuits the rest of the
-          // case (donation row, expense-campaign match credit, receipts) so
-          // none of the downstream side-effects double-fire either.
+          // Donor recognition and the unique payment claim must commit together.
+          // A concurrent loser must roll back its donor insert/update as well.
+          let donor: typeof donors.$inferSelect;
           let paymentRecord: typeof payments.$inferSelect;
           try {
-            [paymentRecord] = await db.insert(payments).values({
-              tenantId: tenant.id,
-              donorId: donor.id,
-              stripePaymentIntentId: session.payment_intent,
-              stripeCheckoutSessionId: session.id,
-              amount: session.amount_total || 0,
-              currency: session.currency || 'usd',
-              status: paymentStatus,
-              paymentMethod: 'stripe',
-              isRecurring: session.mode === 'subscription',
-              message: session.metadata?.message,
-            }).returning();
+            ({ donor, paymentRecord } = await db.transaction(async (tx) => {
+              // Also serialize first-time donor creation (tenant/email is unique).
+              await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${JSON.stringify([tenant.id, customerEmail])}, 0))`);
+              let donor = await tx
+                .select()
+                .from(donors)
+                .where(and(eq(donors.tenantId, tenant.id), eq(donors.email, customerEmail)))
+                .limit(1)
+                .then(rows => rows[0]);
+
+              if (!donor) {
+                [donor] = await tx.insert(donors).values({
+                  tenantId: tenant.id,
+                  email: customerEmail,
+                  name: customerName,
+                  stripeCustomerId: session.customer,
+                  totalDonated: recognizedAmountCents,
+                  lastDonationDate: new Date(),
+                }).returning();
+              } else {
+                [donor] = await tx
+                  .update(donors)
+                  .set({
+                    totalDonated: (donor.totalDonated || 0) + recognizedAmountCents,
+                    lastDonationDate: new Date(),
+                    stripeCustomerId: session.customer || donor.stripeCustomerId,
+                  })
+                  .where(eq(donors.id, donor.id))
+                  .returning();
+              }
+
+              // The partial unique session/intent indexes arbitrate concurrent
+              // redelivery. Let violations escape the transaction so recognition
+              // rolls back before acknowledging the duplicate below.
+              const [paymentRecord] = await tx.insert(payments).values({
+                tenantId: tenant.id,
+                donorId: donor.id,
+                stripePaymentIntentId: session.payment_intent,
+                stripeCheckoutSessionId: session.id,
+                amount: session.amount_total || 0,
+                currency: session.currency || 'usd',
+                status: paymentStatus,
+                paymentMethod: 'stripe',
+                isRecurring: session.mode === 'subscription',
+                message: session.metadata?.message,
+              }).returning();
+              return { donor, paymentRecord };
+            }));
           } catch (err: unknown) {
-            const dbErr = err as { code?: unknown; constraint?: unknown };
+            // Drizzle may wrap the original PostgreSQL error in `cause`.
+            const outerErr = err as { code?: unknown; constraint?: unknown; cause?: unknown };
+            const dbErr = (outerErr.code ? outerErr : outerErr.cause || outerErr) as { code?: unknown; constraint?: unknown };
             const code = typeof dbErr.code === 'string' ? dbErr.code : undefined;
             const constraint = typeof dbErr.constraint === 'string' ? dbErr.constraint : undefined;
             if (code === '23505' && constraint && constraint.startsWith('payments_tenant_stripe_')) {

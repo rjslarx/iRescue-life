@@ -1,7 +1,8 @@
 /**
  * Execute the actual /api/stripe/webhook callback and receipt service.
  * Only external boundaries are mocked; matching arithmetic and SQL expressions
- * come from production. No database, Stripe, storage, or email connection exists.
+ * come from production. Stripe, storage, and email never connect externally.
+ * RUN_EXPENSE_DB_TEST=1 also runs isolated PostgreSQL concurrency cases.
  * Run: scripts/run-tests.sh tests/expense-campaign-settlement.integration.test.ts
  */
 import test from "node:test";
@@ -12,6 +13,9 @@ import { runInNewContext } from "node:vm";
 import ts from "typescript";
 import { build } from "esbuild";
 import { PgDialect } from "drizzle-orm/pg-core";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { randomUUID } from "node:crypto";
+import { settlementDatabase, gate } from "./helpers/expense-settlement-db";
 import { getTableName } from "drizzle-orm";
 import * as schema from "../shared/schema";
 import * as pdfLib from "pdf-lib";
@@ -28,11 +32,117 @@ function visit(node: ts.Node) {
   }
   ts.forEachChild(node, visit);
 }
+
+for (const existing of [false, true]) {
+  for (const alias of [false, true]) {
+    for (const delayedDonorRead of [false, true]) {
+      test(`PostgreSQL simultaneous settlement: existing=${existing}, alias=${alias}, delayed donor read=${delayedDonorRead}`, {
+        skip: process.env.RUN_EXPENSE_DB_TEST !== "1", timeout: 25000,
+      }, async () => {
+        const database = await settlementDatabase();
+        const clients = await Promise.all([database.pool.connect(), database.pool.connect()]);
+        const tenantId = randomUUID(), campaignId = randomUUID();
+        const bothChecked = gate(), firstFinished = gate();
+        let prechecks = 0;
+        try {
+          const pids = await Promise.all(clients.map(c => c.query("SELECT pg_backend_pid() AS pid")));
+          assert.notEqual(pids[0].rows[0].pid, pids[1].rows[0].pid);
+          await database.db.insert(schema.tenants).values({
+            id: tenantId, name: "Synthetic Rescue", subdomain: "synthetic",
+            stripeEnabled: true, autoSendTaxReceipts: true,
+          });
+          await database.db.insert(schema.expenseCampaigns).values({
+            id: campaignId, tenantId, title: "Synthetic Campaign", slug: "synthetic",
+            goalAmountCents: 10000, raisedAmountCents: 1200,
+          });
+          await database.db.insert(schema.campaignMatchPools).values({
+            tenantId, expenseCampaignId: campaignId, internalSponsorName: "Synthetic Sponsor",
+            internalSponsorEmail: "sponsor@example.test", publicSponsorName: "Sponsor",
+            pledgedCapCents: 10000, totalMatchedCents: 1000,
+            tiers: [{ id: "sponsor-one", publicSponsorName: "Sponsor", showSponsorPublicly: true, pledgedCapCents: 10000 }],
+          });
+          if (existing) {
+            await database.db.insert(schema.donors).values({
+              tenantId, email: "donor@example.test", name: "Synthetic Donor", totalDonated: 700,
+            });
+            await database.db.insert(schema.contacts).values({
+              tenantId, email: "donor@example.test", name: "Synthetic Donor",
+              totalDonated: 700, donationCount: 1,
+            });
+          }
+          // Both deliveries must see the absent payment before either can write.
+          // The delayed schedule additionally reproduces a loser reading the
+          // winner's credited donor after passing the stale payment precheck.
+          clients.forEach((client, index) => {
+            const query = client.query.bind(client);
+            (client as any).query = async (...args: any[]) => {
+              const text = typeof args[0] === "string" ? args[0] : args[0].text;
+              if (index === 1 && delayedDonorRead && /^(begin|select .* from "donors")/i.test(text)) {
+                await firstFinished.promise;
+              }
+              const result = await (query as any)(...args);
+              if (/^select .* from "payments"/i.test(text) && prechecks < 2) {
+                if (++prechecks === 2) bothChecked.release();
+                await bothChecked.promise;
+              }
+              return result;
+            };
+          });
+          const f = await Promise.all(clients.map(c => fixture(existing, "milestones", drizzle(c))));
+          const session = {
+            id: "cs_synthetic", payment_intent: "pi_synthetic", mode: "payment",
+            payment_status: "paid", amount_total: 3290, currency: "usd",
+            customer_email: "donor@example.test", customer_details: { name: "Synthetic Donor" },
+            metadata: { tenantId, expenseCampaignId: campaignId, baseAmount: "3000",
+              feesCovered: "290", donorCoveredFees: "true" },
+          };
+          const results = await Promise.allSettled([
+            f[0].deliver(session, "evt_first").finally(firstFinished.release),
+            f[1].deliver({ ...session, id: alias ? "cs_alias" : session.id }, "evt_retry"),
+          ]);
+          for (const result of results) assert.equal(result.status, "fulfilled",
+            result.status === "rejected" ? String(result.reason) : "");
+          assert.equal(results.filter(r => r.status === "fulfilled" && r.value.idempotent).length, 1);
+          const donations = await database.db.select().from(schema.donations);
+          assert.equal(donations.length, 1);
+          assert.equal(donations[0].amount, 3000);
+          assert.equal(donations[0].grossAmount, 3290);
+          assert.equal(donations[0].matchedAmountCents, 3000);
+          assert.deepEqual(donations[0].matchAllocations, [
+            { tierId: "sponsor-one", sponsorLabel: "Sponsor", matchedCents: 3000 },
+          ]);
+          const payments = await database.db.select().from(schema.payments);
+          assert.equal(payments.length, 1);
+          assert.equal(payments[0].amount, 3290);
+          const donors = await database.db.select().from(schema.donors);
+          assert.equal(donors.length, 1);
+          assert.equal(donors[0].totalDonated, (existing ? 700 : 0) + 3000);
+          const contacts = await database.db.select().from(schema.contacts);
+          assert.equal(contacts.length, 1);
+          assert.equal(contacts[0].totalDonated, (existing ? 700 : 0) + 3000);
+          assert.equal(contacts[0].donationCount, (existing ? 1 : 0) + 1);
+          assert.equal((await database.db.select().from(schema.expenseCampaigns))[0].raisedAmountCents, 4200);
+          assert.equal((await database.db.select().from(schema.campaignMatchPools))[0].totalMatchedCents, 4000);
+          assert.ok(donations[0].receiptNumber);
+          assert.ok(donations[0].receiptSentAt);
+          assert.equal(f.flatMap(x => x.emails).filter(e => e.subject.startsWith("Official Tax Receipt")).length, 1);
+          assert.equal(f.flatMap(x => x.backups).length, 1);
+          assert.equal(f.flatMap(x => x.pdfText).filter(t => t.startsWith("Amount:")).length, 1);
+        } finally {
+          bothChecked.release();
+          firstFinished.release();
+          clients.forEach(c => c.release());
+          await database.close();
+        }
+      });
+    }
+  }
+}
 visit(source);
 assert.equal(handlers.length, 1);
 assert.ok(escapeHtml);
 
-const compiled = build({
+const compile = (realContacts = false) => build({
   stdin: { contents: `
     import {db} from './db';
     import {tenants} from '@shared/schema';
@@ -47,7 +157,8 @@ const compiled = build({
     setup(b) {
       b.onResolve({ filter: /.*/ }, args => {
         if (/^(drizzle-orm|zod)(\/|$)/.test(args.path)
-          || /expense-campaign-match|matching-milestones|donation-receipt-service|stripe-dispute-handling/.test(args.path)) return;
+          || /expense-campaign-match|matching-milestones|donation-receipt-service|stripe-dispute-handling/.test(args.path)
+          || (realContacts && args.path === "./services/contacts")) return;
         return { path: args.path, namespace: "isolated" };
       });
       b.onLoad({ filter: /.*/, namespace: "isolated" }, args => {
@@ -71,11 +182,13 @@ const compiled = build({
     },
   }],
 });
+const compiled = compile();
+let compiledWithContacts: ReturnType<typeof compile>;
 
 const dialect = new PgDialect();
 const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value));
 
-async function fixture(initialDonor: boolean, poolKind: "none" | "legacy" | "milestones" | "capped") {
+async function fixture(initialDonor: boolean, poolKind: "none" | "legacy" | "milestones" | "capped", realDb?: any) {
   const tenant = { id: "tenant-test", name: "Synthetic Rescue", subdomain: "synthetic",
     stripeEnabled: true, autoSendTaxReceipts: true };
   const pool = poolKind === "none" ? undefined : {
@@ -136,6 +249,7 @@ async function fixture(initialDonor: boolean, poolKind: "none" | "legacy" | "mil
     } }; } }; },
     async execute(statement: any) {
       const { sql, params } = dialect.sqlToQuery(statement);
+      if (/pg_advisory_xact_lock/.test(sql)) return { rows: [] };
       if (/SELECT id FROM expense_campaigns/.test(sql)) {
         assert.deepEqual(params, ["campaign-test", tenant.id]);
         return { rows: [{ id: "campaign-test" }] };
@@ -160,8 +274,8 @@ async function fixture(initialDonor: boolean, poolKind: "none" | "legacy" | "mil
   let verifications = 0;
   const module = { exports: {} as any };
   const require = createRequire(import.meta.url);
-  runInNewContext((await compiled).outputFiles[0].text, {
-    module, exports: module.exports, schema, db, Buffer,
+  runInNewContext((await (realDb ? (compiledWithContacts ??= compile(true)) : compiled)).outputFiles[0].text, {
+    module, exports: module.exports, schema, db: realDb || db, Buffer,
     pdfLib: { ...pdfLib, PDFDocument: { async create() {
       const doc = await pdfLib.PDFDocument.create();
       const addPage = doc.addPage.bind(doc);
@@ -233,7 +347,7 @@ for (const covered of [false, true]) {
         assert.equal(donation.feesCovered, covered);
         assert.equal(donation.matchedAmountCents, matched);
         assert.equal(f.counters().raised, 1200 + gift);
-        assert.equal(f.counters().transactions, 1);
+        assert.equal(f.counters().transactions, 2);
         if (poolKind !== "none") {
           assert.equal(f.counters().pool!.total_matched_cents, 1000 + matched);
           assert.equal(f.counters().pool!.status, poolKind === "capped" ? "exhausted" : "active");
