@@ -14,7 +14,7 @@ import {
 } from '@shared/schema';
 import { eq, and, gte, lt, sql, desc } from 'drizzle-orm';
 import { requireTenant } from '../middleware/tenant';
-import { requireAuth } from '../middleware/auth';
+import { requireAuth, requireRole } from '../middleware/auth';
 import { z } from 'zod';
 
 const router = Router();
@@ -32,11 +32,8 @@ const sacSettingsSchema = z.object({
  * GET /api/compliance/sac/settings
  * Get SAC settings including status mappings
  */
-router.get('/sac/settings', requireTenant, requireAuth, async (req, res, next) => {
+router.get('/sac/settings', requireTenant, requireAuth, requireRole('admin', 'manager'), async (req, res, next) => {
   try {
-    if (!['admin', 'manager'].includes(req.user!.activeRole || '')) {
-      return res.status(403).json({ error: 'Access denied' });
-    }
 
     const tenant = await db
       .select({ sacSettings: tenants.sacSettings })
@@ -89,11 +86,8 @@ router.get('/sac/settings', requireTenant, requireAuth, async (req, res, next) =
  * PUT /api/compliance/sac/settings
  * Update SAC settings including status mappings
  */
-router.put('/sac/settings', requireTenant, requireAuth, async (req, res, next) => {
+router.put('/sac/settings', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
   try {
-    if (req.user!.activeRole !== 'admin') {
-      return res.status(403).json({ error: 'Admin role required' });
-    }
 
     const result = sacSettingsSchema.safeParse(req.body);
     if (!result.success) {
@@ -125,11 +119,8 @@ router.put('/sac/settings', requireTenant, requireAuth, async (req, res, next) =
  * GET /api/compliance/sac/reports
  * Get list of generated SAC reports
  */
-router.get('/sac/reports', requireTenant, requireAuth, async (req, res, next) => {
+router.get('/sac/reports', requireTenant, requireAuth, requireRole('admin', 'manager'), async (req, res, next) => {
   try {
-    if (!['admin', 'manager'].includes(req.user!.activeRole || '')) {
-      return res.status(403).json({ error: 'Access denied' });
-    }
 
     const reports = await db
       .select()
@@ -148,11 +139,8 @@ router.get('/sac/reports', requireTenant, requireAuth, async (req, res, next) =>
  * POST /api/compliance/sac/generate
  * Generate SAC report for a specific month
  */
-router.post('/sac/generate', requireTenant, requireAuth, async (req, res, next) => {
+router.post('/sac/generate', requireTenant, requireAuth, requireRole('admin'), async (req, res, next) => {
   try {
-    if (req.user!.activeRole !== 'admin') {
-      return res.status(403).json({ error: 'Admin role required' });
-    }
 
     const { month, year } = req.body;
     if (!month || !year || month < 1 || month > 12 || year < 2000 || year > 2100) {
@@ -419,11 +407,8 @@ router.post('/sac/generate', requireTenant, requireAuth, async (req, res, next) 
  * GET /api/compliance/sac/export/:reportId
  * Export SAC report as CSV
  */
-router.get('/sac/export/:reportId', requireTenant, requireAuth, async (req, res, next) => {
+router.get('/sac/export/:reportId', requireTenant, requireAuth, requireRole('admin', 'manager'), async (req, res, next) => {
   try {
-    if (!['admin', 'manager'].includes(req.user!.activeRole || '')) {
-      return res.status(403).json({ error: 'Access denied' });
-    }
 
     const report = await db
       .select()
@@ -484,11 +469,8 @@ router.get('/sac/export/:reportId', requireTenant, requireAuth, async (req, res,
  * GET /api/compliance/sac/report/:id
  * Get a specific SAC report
  */
-router.get('/sac/report/:id', requireTenant, requireAuth, async (req, res, next) => {
+router.get('/sac/report/:id', requireTenant, requireAuth, requireRole('admin', 'manager'), async (req, res, next) => {
   try {
-    if (!['admin', 'manager'].includes(req.user!.activeRole || '')) {
-      return res.status(403).json({ error: 'Access denied' });
-    }
 
     const report = await db
       .select()

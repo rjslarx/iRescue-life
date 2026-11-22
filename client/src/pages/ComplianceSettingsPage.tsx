@@ -92,8 +92,14 @@ export default function ComplianceSettingsPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/compliance/sac/settings"] });
       toast({ title: "Settings saved", description: "SAC settings have been updated." });
     },
-    onError: () => {
-      toast({ title: "Error", description: "Failed to save settings.", variant: "destructive" });
+    onError: (error: Error & { status?: number }) => {
+      toast({
+        title: "Unable to save SAC settings",
+        description: error.status === 403
+          ? "SAC settings require an active admin, owner, or platform-admin role. Switch to an authorized role or ask your rescue administrator."
+          : error.message || "Failed to save settings. Please try again.",
+        variant: "destructive",
+      });
     },
   });
 
