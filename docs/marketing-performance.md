@@ -67,3 +67,97 @@ largest remaining first-party resource; it was deliberately unchanged.
 Changes are workspace-only until merged and released. Repeat measurement on the
 deployed origin after release, with real third parties and APIs, before drawing
 conclusions about visitors' actual Core Web Vitals.
+
+## Real-user collection (separate from acquisition)
+
+`marketing_web_vital` uses the existing hosted analytics tracker and the standard
+`web-vitals` library. No additional tracker, cookie, identifier or credential is
+created by this instrumentation. Payloads contain only tracker website routing,
+a fixed safe URL/title, empty referrer, and these dimensions:
+
+| Property | Meaning |
+| --- | --- |
+| schema | `v1`, this sampling policy |
+| route | Exact allowed marketing path; `/` groups with `/platform` |
+| device | Initial viewport: mobile <768px, tablet <1024px, otherwise desktop |
+| metric | LCP (ms), CLS (unitless), or INP (ms) |
+| value | Final reported value, milliseconds rounded; CLS to four decimals |
+
+Only production builds on `irescue.life`, `www.irescue.life`, and
+`platform.irescue.life` collect. Exact allowed routes are `/`, `/platform`,
+and `/platform/{pricing,integrations,security,privacy,terms,blog}`.
+Signup/forms, login, success pages, arbitrary blog slugs, tenant hosts/paths,
+and every other route are excluded. Query strings, fragments, titles, referrers,
+DOM entries/attribution, metric IDs, user/tenant IDs and tracker identity defaults
+are not forwarded. DNT and Global Privacy Control opt-outs suppress collection.
+This does not change existing automatic pageviews or signup funnel tracking;
+their privacy policies remain separate. The analytics provider still handles
+network metadata and its own session aggregation; these are not anonymous
+network requests merely because application payloads contain no user identity.
+
+### Sampling and limitations
+
+- At most one observation per metric per eligible initial document, using the
+  library's default finalization/first-background reporting. No sampling throttle.
+- Any history push/replace/pop or hash navigation permanently disqualifies
+  subsequent measurements for that document, even if the visitor returns.
+  Already emitted initial-page LCP remains valid. SPA navigations and back/forward
+  cache restores are **not** new samples. This deliberately favors isolation over
+  coverage; do not label this a complete site-wide or CrUX-equivalent result.
+- Unsupported APIs, blocked/missing trackers, failed sends, background termination,
+  and opt-outs cause missing observations, not zero values. INP requires a qualifying
+  interaction, so its sample count will differ from LCP and CLS. No queued replay.
+- Mobile means viewport group, not a claim about hardware or connection speed.
+  No raw user agent, network identifiers or device fingerprint is added.
+
+### Reporting and comparison
+
+Use `docs/marketing-field-query.sql` for a bounded 28-day report, adjusting the
+start date to the release date if newer. It pivots properties per event before
+counting, and reports **n and p75 separately for each route/device/metric**.
+Counts represent observations, not unique visitors. Below 100 observations per
+cell, label the result insufficient to draw conclusions; 100 is an internal
+reporting convention, not an official Google eligibility threshold. Never pool
+mobile and desktop to conceal sparse mobile coverage. Always state dates and
+missing groups; do not convert missing INP into a good score.
+
+Reference good thresholds at p75: LCP ≤2,500ms, CLS ≤0.1, INP ≤200ms.
+These are metric thresholds, not proof of passing Google's field assessment.
+Compare mobile `/platform` LCP directionally to the **2,648ms local median from
+three controlled runs** above, explicitly labeling p75 versus median, real
+connections/devices versus throttled Chromium, real APIs/third parties versus
+fixtures, and different collection periods. The lab report contains no comparable
+CLS or INP baseline; long-task time is not INP. Do not compute a field improvement
+percentage from the lab before/after figures.
+
+### Release verification and current status
+
+This branch has not been released. No field measurements from this implementation
+or deployed-header verification are claimed. A pre-release query cannot establish
+post-release performance, and zero observations do not mean zero visitors.
+
+On 2026-11-22, the last-seven-days event-count query returned no
+`marketing_web_vital` rows (0 recorded metric observations, not 0 visitors).
+The 28-day route/device/metric report also returned no rows. LCP, CLS and INP
+therefore have no reportable field percentiles yet. The report query was accepted
+by the analytics service.
+
+Workspace verification: all 9 focused performance/acquisition tests passed;
+production build passed; mobile `/platform` preview rendered after restart.
+The project-wide TypeScript check still produced 2,334 lines of existing errors,
+with none naming the changed performance modules or entry point.
+
+After a release containing these changes, obtain the verified published origin
+from deployment settings and run:
+
+```sh
+node scripts/verify-marketing-release.mjs https://VERIFIED-PUBLISHED-ORIGIN
+```
+
+The read-only check requests real HTML and its initial compiled JS/CSS through the
+deployment proxy. It asserts one-year immutable asset caching, negotiated br/gzip/
+identity, `Vary: Accept-Encoding`, no asset session cookies, non-immutable HTML, and
+an uncached missing-asset 404. A proxy that changes negotiation fails explicitly;
+investigate rather than substituting local headers. Record release date, execution
+date, output, and any CDN/proxy differences here. Then report field sample counts
+and p75 after sufficient real traffic; no release was performed from this task fork.
