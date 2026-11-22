@@ -6,10 +6,16 @@ import { build } from 'esbuild';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { chromium } from 'playwright';
+import { verifyMarketingHero } from './marketing-hero-checks.mjs';
 
 const label = process.argv[2] || 'measurement';
 const desktop = process.argv.includes('--desktop');
 const verifyHero = process.argv.includes('--verify-hero');
+const heroOnly = process.argv.includes('--hero-only');
+const engines = (process.argv.find(arg => arg.startsWith('--hero-browsers='))?.split('=')[1] || 'chromium,webkit,firefox').split(',');
+if (engines.some(engine => !['chromium', 'webkit', 'firefox'].includes(engine))) throw new Error('Use --hero-browsers=chromium,webkit,firefox');
+if (heroOnly && !verifyHero) throw new Error('--hero-only requires --verify-hero');
 await fs.mkdir('generated-artifacts/marketing', { recursive: true });
 await build({ entryPoints: ['server/vite.ts'], outfile: 'dist/perf-static.mjs', bundle: true, platform: 'node', format: 'esm', packages: 'external' });
 const { serveStatic } = await import('../dist/perf-static.mjs');
@@ -27,11 +33,15 @@ app.all('/api/*', (req, res) => {
 });
 serveStatic(app);
 const server = app.listen(8099, '127.0.0.1');
-const executablePath = process.env.CHROME_PATH ||
-  execFileSync('bash', ['-c', 'echo /nix/store/*chromium*/bin/chromium']).toString().trim().split(' ')[0];
-const browser = await puppeteer.launch({ executablePath, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
+const systemChromium = execFileSync('bash', ['-c', 'echo /nix/store/*chromium*/bin/chromium']).toString().trim().split(' ')[0];
+const executablePath = process.env.CHROMIUM_PATH || process.env.CHROME_PATH ||
+  (await fs.access(systemChromium).then(() => true, () => false) ? systemChromium : chromium.executablePath());
+let browser;
 const runs = [];
 try {
+  if (verifyHero) await verifyMarketingHero({ origin: 'http://127.0.0.1:8099', label, chromiumPath: executablePath, engines });
+  if (!heroOnly) {
+  browser = await puppeteer.launch({ executablePath, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
   for (let run = 0; run < 3; run++) {
     const context = await browser.createBrowserContext();
     const page = await context.newPage();
@@ -72,35 +82,17 @@ try {
       source: img.currentSrc,
     }));
     const imageBytes = assets.filter(a => a.type === 'Image').reduce((s, a) => s + a.bytes, 0);
-    const mockupRequests = assets.filter(a => a.url.includes('dual_phone'));
-    if (verifyHero) {
-      if (hero.visible !== desktop || !hero.loaded) throw new Error(`Unexpected hero rendering: ${JSON.stringify(hero)}`);
-      if (!desktop && mockupRequests.length) throw new Error('Hidden hero downloaded on mobile');
-      if (desktop && !hero.source.endsWith('.webp')) throw new Error('Desktop did not select WebP');
-    }
     runs.push({ ...metrics, hero, imageBytes, totalBytes: assets.reduce((s, a) => s + a.bytes, 0), scriptBytes: assets.filter(a => a.type === 'Script').reduce((s, a) => s + a.bytes, 0), assets });
     if (run === 0) {
       await page.screenshot({ path: `generated-artifacts/marketing/${label}.png` });
-      if (verifyHero) {
-        // Check both sides of the exact Tailwind lg breakpoint, including resize.
-        for (const width of [1023, 1024, 390]) {
-          // Keep mobile/touch emulation unchanged; toggling it reloads the page.
-          await page.setViewport({ width, height: 844, deviceScaleFactor: 1, isMobile: !desktop, hasTouch: !desktop });
-          await page.waitForFunction(visible => {
-            const img = document.querySelector('[data-testid="image-hero-mockup"]');
-            return (img.getBoundingClientRect().width > 0) === visible &&
-              img.complete && img.naturalWidth > 0 &&
-              (!visible || img.currentSrc.endsWith('.webp'));
-          }, {}, width >= 1024);
-        }
-      }
     }
     await context.close();
   }
   const result = { label, conditions: `${desktop ? '1440x1000' : '390x844'}, DPR 1, CPU 4x, 1.6 Mbps down, 150ms latency, cold cache, fixed anonymous API fixtures, external requests blocked`, runs };
   await fs.writeFile(`generated-artifacts/marketing/${label}.json`, JSON.stringify(result, null, 2));
   console.log(JSON.stringify({ label, runs: runs.map(({ assets, ...metrics }) => metrics) }, null, 2));
+  }
 } finally {
-  await browser.close();
+  await browser?.close();
   server.close();
 }

@@ -61,3 +61,4 @@
 - [Acquisition analytics privacy](acquisition-privacy.md) — prefer coarse funnel dimensions over raw attribution URLs; review tracker-default context as well as custom properties.
 - [Platform marketing SEO](platform-marketing-seo.md) — root canonical choice, truthful sitemap dates, and tenant isolation when paths have been stripped.
 - [Marketing field measurement](marketing-field-measurement.md) — isolate document metrics from later private SPA routes; report sample sizes and keep lab and field evidence distinct.
+- [Cross-browser lab environments](cross-browser-lab.md) — provision matching browser runtimes; do not mix arbitrary Nix libraries or call unavailable engines verified.

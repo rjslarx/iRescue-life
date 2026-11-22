@@ -89,14 +89,70 @@ node scripts/measure-marketing.mjs hero-after-mobile --verify-hero
 node scripts/measure-marketing.mjs hero-after-desktop --desktop --verify-hero
 ```
 
-`--verify-hero` asserts no mobile mockup request, successful desktop WebP
-decoding, and correct visibility across 1023px, 1024px, and 390px resize checks.
-Byte totals are captured before those resize checks. Network records and
-first-run screenshots are saved under ignored `generated-artifacts/marketing/`.
+`--verify-hero` now runs the cross-browser functional matrix described below
+before the historical Chromium lab measurement. Functional requests are isolated
+from the lab contexts and do not affect byte totals. Network records and
+screenshots are saved under ignored `generated-artifacts/marketing/`.
 Production-build mobile and desktop screenshots were visually inspected; the
 desktop artwork remains visible and the mobile layout stays image-free.
 Development previews also rendered at both sizes after workflow restart.
 The production build, marketing asset tests, and chunk isolation test passed.
+
+### Cross-browser hero regression checks
+
+Install the package-lock dependencies and the matching Playwright browser binaries.
+On a supported Linux test runner, provision Playwright's OS dependencies too
+(`npx playwright install --with-deps chromium firefox webkit`); on macOS use
+`npx playwright install chromium firefox webkit`. Nix workspaces need compatible
+Nix browser libraries/executables instead of the Linux apt-based installer.
+
+```sh
+npm run build
+# All three engines, functional checks only (no slow Chromium lab runs):
+node scripts/measure-marketing.mjs hero-cross-browser --verify-hero --hero-only
+# Explicit subset for diagnosis, NOT a passing full cross-browser check:
+node scripts/measure-marketing.mjs hero-chromium --verify-hero --hero-only --hero-browsers=chromium
+```
+
+The default engine list is `chromium,webkit,firefox`. `CHROME_PATH` retains its
+existing Chromium fallback; `CHROMIUM_PATH`, `WEBKIT_PATH`, and `FIREFOX_PATH`
+can select compatible Playwright executables. For Firefox/WebKit use patched
+Playwright binaries, not stock browser installations. WebKit is Safari's engine,
+but this does **not** certify shipping Safari or physical iPhones.
+
+Each engine opens four fresh contexts: 390px and 1023px at DPR 1, plus 1440px
+desktop at DPR 1 and DPR 2. All use a 1000px height and viewport emulation, not
+mobile-device emulation (Firefox does not implement Playwright's mobile mode).
+Checks require:
+
+- Cold narrow loads decode the inline SVG with **zero phone-mockup requests**,
+  including unsuccessful requests; visibility alone is insufficient.
+- Cold desktop loads visibly decode and request the 704px WebP at DPR 1 and
+  the 1408px WebP at DPR 2, without requesting the original PNG.
+- Each document resizes through 1023 → 1024 → 390 → 1024, switching visibility
+  and source appropriately. Shrinking must not request a hidden mockup.
+  A document token and main-frame navigation counter prove this happened
+  without reloading or navigating.
+
+Production static assets and fixed anonymous `/api/*` responses remain local.
+External origins are blocked, service workers are disabled, routing disables
+HTTP caching, and each case starts with empty browser storage. No application
+server, database, customer sessions, or background delivery jobs are started.
+
+These checks are **unthrottled functional assertions**, not comparable Safari/
+Firefox LCP or byte benchmarks. The original three-run Chromium CDP lab retains
+its documented CPU/network conditions when `--hero-only` is omitted.
+Per-engine versions, case results, selected sources, initial phone requests,
+and resize requests are saved in `<label>-hero.json`; screenshots include both
+engine and case names. A missing binary, missing system library, or assertion
+failure produces a failed engine record and a nonzero exit, never a silent skip.
+
+Workspace validation on 2026-11-22: production build passed; all four Chromium
+cases passed including DPR 2 and all resize steps. The full matrix was attempted,
+but Firefox and WebKit could not launch because this Nix workspace lacks their
+compatible runtime libraries. Those engines are **not verified here**; run the
+full command on a provisioned supported host before claiming cross-browser
+coverage. No production page or customer data was accessed.
 
 ## Boundaries and verification
 
